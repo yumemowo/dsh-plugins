@@ -1,0 +1,60 @@
+# 工作区布局：packages/ 下每个目录都是一个独立版本的 dsh 插件包。
+packages:
+  - packages/*
+
+# 所有插件开发期版本号的唯一来源。
+# 各包用 `"typescript": "catalog:"` 引用，而不是各自硬编码范围，
+# 因此升级工具链版本只需改这里一行。
+catalog:
+  # Cordis 是插件运行时。务必使用带 scope 的 @deepseek-ai/cordis：
+  # 不带 scope 的 `cordis` 是另一份模块身份，会破坏 Context 类型增强
+  #（ctx.tools 等类型会消失）。
+  '@deepseek-ai/cordis': ^4.0.2
+  '@deepseek-ai/dsh-llm': ^0.1.5-rc.2
+  '@deepseek-ai/dsh-system-prompt': ^0.1.5-rc.2
+  '@deepseek-ai/dsh-tools': ^0.1.5-rc.2
+  '@deepseek-ai/schemastery': ^3.18.2
+  '@types/node': ^26.5.1
+  typescript: ^5.9.3
+  vitest: ^5.0.0
+
+  # 浏览器半边：客户端包与 Web shell 共享同一份运行时实例，
+  # 因此 React 必须与 shell 基线一致（18.x），否则会出现两个 React 实例。
+  '@deepseek-ai/dsh-api-workspace-controller': ^0.1.5-rc.2
+  '@deepseek-ai/dsh-api-session-controller': ^0.1.5-rc.2
+  '@deepseek-ai/dsh-client-locale': ^0.1.5-rc.2
+  '@deepseek-ai/dsh-client-store': ^0.1.5-rc.2
+  '@deepseek-ai/dsh-client-ui-renderer': ^0.1.5-rc.2
+  '@deepseek-ai/dsh-client-ui-session': ^0.1.5-rc.2
+  '@deepseek-ai/dsh-client-ui-sidebar': ^0.1.5-rc.2
+  '@deepseek-ai/dsh-client-ui-slots': ^0.1.5-rc.2
+  '@deepseek-ai/dsh-session': ^0.1.5-rc.2
+  '@deepseek-ai/dsh-storage-domain': ^0.1.5-rc.2
+  '@types/react': ~18.3.1
+  esbuild: ^0.28.2
+  react: ^18.2.0
+  # 与 dsh-storage-domain 的依赖线一致。刻意钉住具体版本：pnpm 11 的
+  # minimumReleaseAge 门禁（24 小时）会拒绝刚发布的版本，浮动范围会在
+  # 上游发版后突然让安装失败。
+  zod: 4.6.2
+
+# pnpm 11 默认拒绝安装刚发布的包（24 小时冷静期）。这份列表留空，
+# 需要放行具体版本时再逐条添加。
+minimumReleaseAgeExclude: []
+
+# 强制全工作区使用同一份 zod。dsh-storage-domain 的 zod 范围是 ^4.4.3，
+# 浮动解析会取到刚发布的版本，进而撞上上面的冷静期门禁；钉住一个已过
+# 门禁的版本可以让安装可复现。
+overrides:
+  zod: 4.6.2
+
+# 本 checkout 所在的沙箱中 $HOME 是只读的，pnpm 默认的全局 store/cache
+#（~/.local/share/pnpm）不可写。把它们放在工作区内，`pnpm install` 在任何环境都能跑通。
+#
+# 在普通机器上可删除这两行，改用共享的全局 store 以节省磁盘。
+# 注意：pnpm 11 从本文件读取这两项，而不是从 .npmrc。
+storeDir: .pnpm-store
+cacheDir: .pnpm-cache
+allowBuilds:
+  # esbuild 需要执行安装脚本落地平台二进制；pnpm 11 默认拦截。
+  esbuild: true

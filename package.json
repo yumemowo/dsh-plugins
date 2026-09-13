@@ -1,0 +1,19 @@
+{
+  "name": "dsh-plugins",
+  "version": "0.0.0",
+  "private": true,
+  "description": "DeepSeek Harness（dsh）插件 monorepo。",
+  "type": "module",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present run build",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test",
+    "clean": "pnpm -r --if-present run clean && node -e \"require('node:fs').rmSync('.tmp',{recursive:true,force:true})\"",
+    "verify:mount": "node scripts/verify-profile-mount.mjs",
+    "check": "pnpm run build && pnpm run typecheck && pnpm run test && pnpm run verify:mount"
+  }
+}

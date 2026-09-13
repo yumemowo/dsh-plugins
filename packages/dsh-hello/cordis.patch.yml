@@ -1,0 +1,18 @@
+# Bundle patch：在 profile 根节点上插入一行宿主插件。
+#
+# profile 在 `dsh.profile.bundles` 中列出本包后，加载器会读取本文件并插入下面的行。
+# `name` 是**带 scope 的包名**，从 profile 自己的 node_modules 中解析
+#（由 `dsh plugin --profile <name> add <path>` 安装）。
+#
+# 注意这里有两个刻意区分的标识符：
+#   `name:` 承载完整的 npm 包身份，包含 scope；
+#   `id:`   保持简短且不带 scope，因为它是*覆盖契约* ——
+#           用户在自己的 patch 层中按它定位本行，它同时也是
+#           Web GUI 中的 client bundle id（`/plugins/<id>/client.js`）。
+# 重命名 `id` 会破坏所有按它定位的用户 patch。
+#
+# 后续各层 —— profile 的 cordis.patch.yml、$DSH_HOME/cordis.patch.yml
+# 以及任何 --patch 覆盖层 —— 都按 `id` 定位本行，且逐行以最后一层为准。
+- insert:
+    - id: hello
+      name: '@your-scope/dsh-hello'

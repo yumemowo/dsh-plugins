@@ -1,0 +1,18 @@
+# 依赖与构建产物
+node_modules/
+lib/
+*.tsbuildinfo
+
+# 工作区内的 pnpm store 与 cache（见 .npmrc）
+.pnpm-store/
+.pnpm-cache/
+
+# 临时目录与临时脚本：挂载校验的 .tmp/ 工作区，以及随手写的一次性探针
+#（如 .tmp-probe.mjs）。用前缀通配以同时覆盖目录与文件形态。
+.tmp*
+# 探针脚本写入的临时存储根
+wg-probe-store/
+
+# 日志与编辑器杂项
+*.log
+.DS_Store

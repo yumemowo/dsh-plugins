@@ -1,0 +1,12 @@
+# Bundle patch：在 profile 根节点上插入宿主与浏览器两半。
+#
+# 宿主半边（本包的 "." 入口）持有分组元数据的持久化与只读 RPC；
+# 浏览器半边由 package.json 的 dsh.client 声明，经 exports["./client"] 提供，
+# 注册进侧边栏 shell 的 `sidebar.workspaces` 区域。
+#
+# 注意 priority：该插槽是 single 类型，官方 ui-workspace 用默认优先级 0 占位。
+# single 插槽在同一优先级重复注册会直接抛错，且**数值更低者渲染**，
+# 因此这里必须用 -1 才能接替官方组件。
+- insert:
+    - id: workspace-groups
+      name: '@your-scope/dsh-workspace-groups'
