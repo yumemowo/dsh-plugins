@@ -99,6 +99,17 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     className?: string
   }) => ReactNode
 
+  /**
+   * 会话状态点原语：`ongoing` 画追光方阵，其余状态画实心圆点。
+   *
+   * `done` 与 `warning` 的颜色由原语自带的主题规则给出，调用方不设颜色。
+   */
+  export const StateDot: (props: {
+    state: 'ongoing' | 'done' | 'warning'
+    size?: number
+    className?: string
+  }) => ReactNode
+
   export const IconFolderClose16: IconComponent
   export const IconFolderOpen16: IconComponent
   export const IconTriangleRightFill14: IconComponent

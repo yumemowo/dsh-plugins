@@ -9,6 +9,7 @@ import type { ReactElement } from 'react'
 import { IconEllipsisOutline16, Menu } from '../runtime.ts'
 import { buildSessionMenuItems } from '../menus.tsx'
 import { SessionRowView } from './SessionRowView.tsx'
+import type { SessionStatus } from '../data/status.ts'
 import type { GroupSection, SessionRow } from '../data/types.ts'
 
 /** 会话行菜单用到的三处文案。 */
@@ -21,6 +22,8 @@ export interface SessionRowMenuLabels {
 export interface SessionRowMenuProps {
   row: SessionRow
   selected: boolean
+  /** 该行要显示的状态位；空闲时为 undefined。 */
+  status?: SessionStatus | undefined
   sections: readonly GroupSection[]
   /** 目标会话当前所属分组 id；空串表示未归组。 */
   currentGroupId: string
@@ -33,6 +36,7 @@ export interface SessionRowMenuProps {
 export function SessionRowMenu({
   row,
   selected,
+  status,
   sections,
   currentGroupId,
   onOpen,
@@ -44,6 +48,7 @@ export function SessionRowMenu({
     <SessionRowView
       row={row}
       selected={selected}
+      status={status}
       menuOpen={menuOpen}
       onOpen={onOpen}
       action={

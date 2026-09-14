@@ -7,6 +7,7 @@
  */
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { Group } from './remote.ts'
 import type { GroupChoice } from './data/types.ts'
 import type { RegionLabels } from './labels.ts'
@@ -23,6 +24,10 @@ export interface RegionDataHooks {
   useWorkspaces: (selector: (state: WorkspaceState) => unknown) => unknown
   /** 全局会话列表选择器。 */
   useSessions: (selector: (state: SessionListState) => unknown) => unknown
+  /** 会话级待交互快照选择器：等待审批 / 计划审阅 / 等待回答。 */
+  useSessionPendingInteraction: (
+    selector: (state: SessionPendingInteractionSnapshot) => unknown,
+  ) => unknown
 }
 
 /** 区域组件需要的动作与文案。 */

@@ -19,4 +19,5 @@ export {
   Input,
   Menu,
   Modal,
+  StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives'

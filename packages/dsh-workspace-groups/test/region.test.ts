@@ -12,7 +12,15 @@ import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/cl
 
 /** 造一行会话渲染数据。 */
 function row(id: string, title = id): SessionRow {
-  return { id, title, blank: false, running: false, completed: false, updatedAt: 0 }
+  return {
+    id,
+    title,
+    blank: false,
+    running: false,
+    runningSubagentCount: 0,
+    completed: false,
+    updatedAt: 0,
+  }
 }
 
 /** 造一个分组定义。 */
@@ -303,7 +311,13 @@ describe('straySessions', () => {
 describe('groupSessionsByWorkspace', () => {
   /** 造一份最小可用的会话列表状态。 */
   function listState(
-    rows: { id: string; origin?: 'subagent'; blank?: boolean }[],
+    rows: {
+      id: string
+      origin?: 'subagent'
+      blank?: boolean
+      parentId?: string
+      running?: boolean
+    }[],
     current?: string,
   ): SessionListState {
     const byId: Record<string, unknown> = {}
@@ -311,10 +325,11 @@ describe('groupSessionsByWorkspace', () => {
       byId[item.id] = {
         id: item.id,
         displayTitle: item.id,
-        running: false,
+        running: item.running === true,
         blank: item.blank === true,
         updatedAt: 0,
         ...(item.origin === undefined ? {} : { origin: item.origin }),
+        ...(item.parentId === undefined ? {} : { parentId: item.parentId }),
       }
     }
     return { ids: rows.map((r) => r.id), byId, current, phase: 'ready' } as unknown as SessionListState
@@ -394,5 +409,43 @@ describe('groupSessionsByWorkspace', () => {
     const grouped = groupSessionsByWorkspace(listState([{ id: 'a' }]), [workspace('w1', ['a', 'gone'])])
 
     expect(grouped.get('w1')?.map((s) => s.id)).toEqual(['a'])
+  })
+
+  it('counts a running subagent against its ancestor row', () => {
+    // 子代理行自己隐藏，但它运行时祖先行要亮起运行点。
+    const grouped = groupSessionsByWorkspace(
+      listState([{ id: 'a' }, { id: 'child', origin: 'subagent', parentId: 'a', running: true }]),
+      [workspace('w1', ['a'])],
+    )
+
+    expect(grouped.get('w1')?.[0]?.runningSubagentCount).toBe(1)
+  })
+
+  it('counts nested running subagents against every ancestor', () => {
+    const grouped = groupSessionsByWorkspace(
+      listState([
+        { id: 'a' },
+        { id: 'child', origin: 'subagent', parentId: 'a', running: true },
+        { id: 'grandchild', origin: 'subagent', parentId: 'child', running: true },
+      ]),
+      [workspace('w1', ['a'])],
+    )
+
+    expect(grouped.get('w1')?.[0]?.runningSubagentCount).toBe(2)
+  })
+
+  it('does not count a finished subagent against its ancestor row', () => {
+    const grouped = groupSessionsByWorkspace(
+      listState([{ id: 'a' }, { id: 'child', origin: 'subagent', parentId: 'a', running: false }]),
+      [workspace('w1', ['a'])],
+    )
+
+    expect(grouped.get('w1')?.[0]?.runningSubagentCount).toBe(0)
+  })
+
+  it('reports zero subagents for an ordinary session', () => {
+    const grouped = groupSessionsByWorkspace(listState([{ id: 'a' }]), [workspace('w1', ['a'])])
+
+    expect(grouped.get('w1')?.[0]?.runningSubagentCount).toBe(0)
   })
 })

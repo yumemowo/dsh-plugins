@@ -75,4 +75,41 @@ describe('client stylesheet', () => {
     }
     expect(reveal.some((s) => s.includes('wg-row-selected'))).toBe(false)
   })
+
+  it('indents each hierarchy level by one icon-column step', () => {
+    // 注释会连同其后的选择器一起落进 [^{}]+ 里，先把注释剥掉再解析规则。
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    /** 取某条选择器规则里的某个声明值。 */
+    const declared = (selector: string, property: string): string | undefined =>
+      [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+        .filter((m) => (m[1] ?? '').split(',').map((s) => s.trim()).includes(selector))
+        .map((m) => new RegExp(`${property}:\\s*([^;]+)`).exec(m[2] ?? '')?.[1]?.trim())
+        .find((value) => value !== undefined)
+
+    // 工作区行保持官方几何；分组层与组内会话各再让出一层，层级因此可读。
+    // padding 简写按「上 右 下 左」读，左边即该层的缩进量。
+    expect(declared('.wg-workspace-head', 'padding')).toBe('0 8px')
+    expect(declared('.wg-group-head', 'padding')).toBe('0 8px 0 24px')
+    expect(declared('.wg-workspace-body > .wg-sessions > .wg-row', 'padding-left')).toBe('24px')
+    expect(declared('.wg-group > .wg-sessions > .wg-row', 'padding-left')).toBe('40px')
+  })
+
+  it('draws one guide line per nested level at the parent icon column', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    /** 找出一条规则：选择器表含该选择器且声明块匹配。 */
+    const hasRule = (selector: string, pattern: RegExp): boolean =>
+      rules.some((rule) => rule.selectors.includes(selector) && pattern.test(rule.body))
+
+    // 引导线落在父级图标列的中心：工作区是 8 + 16/2，分组是 24 + 16/2。
+    expect(hasRule('.wg-workspace-body::before', /left:\s*16px/)).toBe(true)
+    expect(hasRule('.wg-group > .wg-sessions::before', /left:\s*32px/)).toBe(true)
+    // 线要跟着主题走，不能写死颜色。
+    expect(hasRule('.wg-workspace-body::before', /background:\s*var\(--dsw-alias-border-l1\)/)).toBe(
+      true,
+    )
+  })
 })

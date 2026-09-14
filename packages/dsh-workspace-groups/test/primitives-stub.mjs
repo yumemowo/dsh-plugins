@@ -12,6 +12,9 @@ export const Button = nullComponent
 export const Modal = nullComponent
 export const Input = nullComponent
 
+/** 状态点替身：把状态原样暴露成可断言的文本。 */
+export const StateDot = ({ state }) => `StateDot:${state}`
+
 /** 图标替身：返回元素名，测试据此断言渲染了哪个官方图标。 */
 const icon = (name) => () => name
 
@@ -29,6 +32,7 @@ export default {
   Button,
   Modal,
   Input,
+  StateDot,
   IconFolderClose16,
   IconFolderOpen16,
   IconTriangleRightFill14,

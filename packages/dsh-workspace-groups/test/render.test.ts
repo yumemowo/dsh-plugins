@@ -67,7 +67,7 @@ function menuItems(out: { menus: unknown[] }): string[][] {
   )
 }
 
-function props(wide: boolean): WorkspaceGroupsProps {
+function props(wide: boolean, options: { pending?: Map<unknown, unknown> } = {}): WorkspaceGroupsProps {
   const byId: Record<string, unknown> = {
     a: { id: 'a', displayTitle: 'A', running: false, blank: false, updatedAt: 0 },
     orphan: { id: 'orphan', displayTitle: 'Orphan', running: false, blank: false, updatedAt: 0 },
@@ -89,6 +89,8 @@ function props(wide: boolean): WorkspaceGroupsProps {
       select({ items: workspaces, archivedSessionIds: [] })) as never,
     useSessions: ((select: (s: unknown) => unknown) =>
       select({ ids: ['a', 'orphan'], byId, current: undefined, phase: 'ready' })) as never,
+    useSessionPendingInteraction: ((select: (s: unknown) => unknown) =>
+      select(options.pending ?? new Map())) as never,
     openSession: () => {},
     startSession: () => {},
     loadGroups: async () => ({ w1: [{ id: 'g1', name: '前端', sessionIds: [] }] }),
@@ -120,6 +122,14 @@ function props(wide: boolean): WorkspaceGroupsProps {
       sessionActions: '会话操作',
       moveToGroup: '分组',
       ungroup: '取消分组',
+      status: {
+        running: '进行中',
+        subagentsRunning: (n: number) => `${n} 个子代理运行中`,
+        waitingApproval: '等待审批',
+        planReview: '计划待审',
+        waitingAnswer: '等待回答',
+        completed: '已完成',
+      },
       compareTabDescription: '对照',
       empty: '暂无会话',
       unimplemented: '实验特性',
@@ -154,5 +164,22 @@ describe('WorkspaceGroupsRegion render', () => {
 
     // 只有工作区行与归组会话行带菜单；stray 行没有可用的归组操作。
     expect(menuItems(out)).toHaveLength(2)
+  })
+
+  it('renders no status dot for idle session rows', () => {
+    const out = { menus: [] as unknown[], text: [] as string[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
+
+    // 空闲行不画点，但槽位仍在，标题因此不位移。
+    expect(out.text.filter((t) => t.startsWith('StateDot:'))).toEqual([])
+  })
+
+  it('renders a warning dot for a session awaiting user interaction', () => {
+    const out = { menus: [] as unknown[], text: [] as string[] }
+    const pending = new Map([['orphan', { kind: 'approval' }]])
+    render(React.createElement(WorkspaceGroupsRegion, props(true, { pending })), out)
+
+    // 待交互压过其他状态：orphan 静置但仍在等用户审批。
+    expect(out.text).toContain('StateDot:warning')
   })
 })

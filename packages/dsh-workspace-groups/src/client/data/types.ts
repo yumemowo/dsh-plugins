@@ -10,6 +10,8 @@ export interface SessionRow {
   title: string
   blank: boolean
   running: boolean
+  /** 沿子代理来源脉络接续下来的运行中子代理数；状态点据此亮起。 */
+  runningSubagentCount: number
   completed: boolean
   updatedAt: number
 }

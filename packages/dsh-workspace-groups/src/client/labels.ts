@@ -32,6 +32,13 @@ export const DICTIONARIES = {
     sessionActions: '会话操作',
     moveToGroup: '分组',
     ungroup: '取消分组',
+    statusRunning: '进行中',
+    statusSubagentsRunningOne: '{n} 个子代理运行中',
+    statusSubagentsRunningOther: '{n} 个子代理运行中',
+    statusWaitingApproval: '等待审批',
+    statusPlanReview: '计划待审',
+    statusWaitingAnswer: '等待回答',
+    statusCompleted: '已完成',
     compareTabDescription: '分组区域的对照视图（左侧为官方工作区列表）',
     empty: '暂无会话',
     unimplemented: '分组为实验特性：搜索、归档、拖拽暂未提供。',
@@ -59,6 +66,13 @@ export const DICTIONARIES = {
     sessionActions: 'Session actions',
     moveToGroup: 'Group',
     ungroup: 'Ungroup',
+    statusRunning: 'Running',
+    statusSubagentsRunningOne: '{n} subagent running',
+    statusSubagentsRunningOther: '{n} subagents running',
+    statusWaitingApproval: 'Waiting for approval',
+    statusPlanReview: 'Plan awaiting review',
+    statusWaitingAnswer: 'Waiting for answer',
+    statusCompleted: 'Completed',
     compareTabDescription: 'Grouping region for side-by-side comparison with the official list',
     empty: 'No sessions',
     unimplemented: 'Groups are experimental: search, archive and drag are not available yet.',
@@ -75,6 +89,22 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     'workspace-groups': keyof (typeof DICTIONARIES)['zh']
   }
+}
+
+/** 会话状态位的无障碍文案。 */
+export interface SessionStatusLabels {
+  /** 本会话正在运行。 */
+  running: string
+  /** 有 n 个运行中的子代理；中英文的复数形态一致。 */
+  subagentsRunning: (n: number) => string
+  /** 等待用户审批工具调用。 */
+  waitingApproval: string
+  /** 等待用户审阅计划。 */
+  planReview: string
+  /** 等待用户回答问题。 */
+  waitingAnswer: string
+  /** 本轮已完成、尚未打开（绿色提醒点）。 */
+  completed: string
 }
 
 /** 区域组件消费的文案表。 */
@@ -119,6 +149,8 @@ export interface RegionLabels {
   moveToGroup: string
   /** 「取消分组」一级菜单项文案。 */
   ungroup: string
+  /** 会话状态位的无障碍文案。 */
+  status: SessionStatusLabels
   /** 对照 tab 在 better-sidebar 里的一行说明。 */
   compareTabDescription: string
   /** 工作区内没有任何会话时的占位文案。 */
@@ -154,6 +186,16 @@ export function regionLabels(t: TranslateNS<typeof LOCALE_NAMESPACE>): RegionLab
     sessionActions: t('sessionActions'),
     moveToGroup: t('moveToGroup'),
     ungroup: t('ungroup'),
+    status: {
+      running: t('statusRunning'),
+      // 官方对单复数各有一条文案；中文两份相同，这里按 n 选键保持同一契约。
+      subagentsRunning: (n: number) =>
+        n === 1 ? t('statusSubagentsRunningOne', { n }) : t('statusSubagentsRunningOther', { n }),
+      waitingApproval: t('statusWaitingApproval'),
+      planReview: t('statusPlanReview'),
+      waitingAnswer: t('statusWaitingAnswer'),
+      completed: t('statusCompleted'),
+    },
     compareTabDescription: t('compareTabDescription'),
     empty: t('empty'),
     unimplemented: t('unimplemented'),

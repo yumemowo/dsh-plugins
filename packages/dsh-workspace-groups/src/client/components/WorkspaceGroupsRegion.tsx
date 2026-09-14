@@ -19,11 +19,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactElement } from 'react'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { Group } from '../remote.ts'
 import type { RegionActions, RegionDataHooks } from '../actions.ts'
 import { buildLayout, containsSession, groupIdOfSession } from '../data/layout.ts'
 import { groupSessionsByWorkspace, straySessions } from '../data/sessions.ts'
+import { sessionStatus } from '../data/status.ts'
+import type { SessionStatus } from '../data/status.ts'
 import type { GroupNameDraft, SessionRow, WorkspaceNameDraft } from '../data/types.ts'
 import { SessionRowMenu } from './SessionRowMenu.tsx'
 import { SessionRowView } from './SessionRowView.tsx'
@@ -52,6 +56,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     expandSidebar,
     useWorkspaces,
     useSessions,
+    useSessionPendingInteraction,
     openSession,
     startSession,
     onReady,
@@ -72,6 +77,11 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     (state) => state.archivedSessionIds,
   ) as readonly string[]
   const sessions = useSessions((state) => state) as SessionListState
+  // 待交互快照与会话列表是两个独立事实源：等待审批/回答时会话可能并不在
+  // running，因此必须单独读，不能从会话摘要里推。
+  const pendingInteractions = useSessionPendingInteraction(
+    (state) => state,
+  ) as SessionPendingInteractionSnapshot
   const [groups, setGroups] = useState<Record<string, Group[]>>({})
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Record<string, boolean>>({})
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
@@ -89,6 +99,16 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   } | null>(null)
 
   const currentSessionId = sessions.current === undefined ? undefined : String(sessions.current)
+
+  /**
+   * 一个会话行要显示的状态位。
+   *
+   * 待交互种类从快照里按会话 id 取；空闲返回 undefined，槽位仍占位。
+   * @param row - 会话渲染行。
+   * @returns 状态位或 undefined。
+   */
+  const statusOf = (row: SessionRow): SessionStatus | undefined =>
+    sessionStatus(row, pendingInteractions.get(row.id as SessionId)?.kind, labels.status)
 
   const reload = useCallback(() => {
     let cancelled = false
@@ -246,6 +266,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
               key={row.id}
               row={row}
               selected={row.id === currentSessionId}
+              status={statusOf(row)}
               sections={layout.groups}
               currentGroupId={groupIdOfSession(layout.groups, row.id)}
               onOpen={() => openSession(row.id)}
@@ -310,6 +331,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
                       key={row.id}
                       row={row}
                       selected={row.id === currentSessionId}
+                      status={statusOf(row)}
                       onOpen={() => openSession(row.id)}
                     />
                   ))}

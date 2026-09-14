@@ -14,6 +14,7 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import type { ReactElement } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionPendingInteractionSnapshot, UiSession } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { RegionActions, WorkspaceState } from './actions.ts'
 import { WorkspaceGroupsRegion } from './components/WorkspaceGroupsRegion.tsx'
 
@@ -74,6 +75,9 @@ function CompareTabBody({ ctx, actions }: { ctx: Context; actions: RegionActions
   const workspaces = ctx.get('workspaces') as
     | { list: SnapshotSource<WorkspaceState> }
     | undefined
+  // 待交互快照归 ui-session 所有，不挂在 sessions 控制器上；对照模式没有
+  // shell 的标准 hook 注入，因此这里自己把它的源包成同形的选择器。
+  const uiSession = ctx.get('uiSession') as UiSession | undefined
 
   const useSessions = useMemo(
     () => useSnapshotSelector(sessions?.list ?? EMPTY_SESSIONS),
@@ -82,6 +86,10 @@ function CompareTabBody({ ctx, actions }: { ctx: Context; actions: RegionActions
   const useWorkspaces = useMemo(
     () => useSnapshotSelector(workspaces?.list ?? EMPTY_WORKSPACES),
     [workspaces],
+  )
+  const useSessionPendingInteraction = useMemo(
+    () => useSnapshotSelector(uiSession?.pendingInteractions ?? EMPTY_PENDING),
+    [uiSession],
   )
 
   return (
@@ -93,6 +101,7 @@ function CompareTabBody({ ctx, actions }: { ctx: Context; actions: RegionActions
         expandSidebar={() => {}}
         useWorkspaces={useWorkspaces}
         useSessions={useSessions}
+        useSessionPendingInteraction={useSessionPendingInteraction}
       />
     </div>
   )
@@ -101,6 +110,7 @@ function CompareTabBody({ ctx, actions }: { ctx: Context; actions: RegionActions
 /** 依赖缺失时的空快照，保证 hook 调用次数恒定且渲染不炸。 */
 const EMPTY_SESSION_STATE = { ids: [], byId: {}, phase: 'ready' } as unknown as SessionListState
 const EMPTY_WORKSPACE_STATE: WorkspaceState = { items: [], archivedSessionIds: [] }
+const EMPTY_PENDING_STATE: SessionPendingInteractionSnapshot = new Map()
 
 // getSnapshot 必须返回稳定引用：useSyncExternalStore 用 Object.is 比较，
 // 每次新建对象会被判定为"一直在变"，直接渲染死循环。
@@ -111,6 +121,11 @@ const EMPTY_SESSIONS: SnapshotSource<SessionListState> = {
 
 const EMPTY_WORKSPACES: SnapshotSource<WorkspaceState> = {
   getSnapshot: () => EMPTY_WORKSPACE_STATE,
+  subscribe: () => () => {},
+}
+
+const EMPTY_PENDING: SnapshotSource<SessionPendingInteractionSnapshot> = {
+  getSnapshot: () => EMPTY_PENDING_STATE,
   subscribe: () => () => {},
 }
 

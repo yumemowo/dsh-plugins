@@ -95,11 +95,40 @@ const CSS = `
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 8px;
+  /* 行自身参与定位：引导线要落在行的悬停底色之下。 */
+  position: relative;
   height: 34px;
 }
 .wg-workspace-head:hover,
 .wg-group-head:hover { background: var(--dsw-alias-interactive-bg-hover); }
+
+/* 层级缩进：工作区行（第 0 层）保持官方的 8px，以下每层再让出 16px，因此
+   子级内容落在 8 + 16 × 深度上。深度只有三层且固定，直接按结构写死选择器，
+   比在 JSX 里逐行下发内联 style 更好读，也不给行组件添 props。
+   —— 分组头 24px、分组内会话 40px、工作区直接子会话 24px。 */
+.wg-workspace-head { padding: 0 8px; }
+.wg-group-head { padding: 0 8px 0 24px; }
+.wg-workspace-body > .wg-sessions > .wg-row { padding-left: 24px; }
+.wg-group > .wg-sessions > .wg-row { padding-left: 40px; }
+
+/* 竖向引导线：落在父级图标列的中心（工作区 8 + 16/2 = 16，分组 24 + 16/2 = 32），
+   把「这组行属于上一行」画出来。行本身是 position: relative 的定位元素，按树序
+   排在容器伪元素之后绘制，因此悬停/选中的行底色会盖住它，不会出现线穿过高亮
+   底色的割裂感。 */
+.wg-workspace-body,
+.wg-group > .wg-sessions { position: relative; }
+.wg-workspace-body::before,
+.wg-group > .wg-sessions::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: var(--dsw-alias-border-l1);
+  pointer-events: none;
+}
+.wg-workspace-body::before { left: 16px; }
+.wg-group > .wg-sessions::before { left: 32px; }
 
 /* 字号与行高成对写在叶子上（官方 .title 即如此），根节点不设 line-height。 */
 .wg-workspace-title,
@@ -153,6 +182,8 @@ const CSS = `
   align-items: center;
   gap: 0;
   padding: 0 8px;
+  /* 与容器行同理：行要盖住所在层级的引导线。 */
+  position: relative;
 }
 .wg-row:hover,
 .wg-row-selected { background: var(--dsw-alias-interactive-bg-hover); }

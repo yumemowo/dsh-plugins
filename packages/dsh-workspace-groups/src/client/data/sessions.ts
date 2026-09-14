@@ -31,13 +31,47 @@ function isSessionVisible(
   return summary.blank !== true || String(summary.id) === current
 }
 
+/**
+ * 沿子代理来源脉络统计每个会话名下的运行中子代理数。
+ *
+ * 子代理行本身在侧边栏隐藏，但它运行时祖先行要亮起运行点，因此这里把它们
+ * 逐个归到脉络上的每一个祖先。只有「整条脉络都是子代理」才继续上溯，与
+ * 官方一致；`seen` 防的是元数据自相矛盾（父指针成环）时死循环。
+ * @param byId - 会话摘要表。
+ * @returns 每个「可能是父级」的会话 id 对应的运行中子代理数。
+ */
+function indexRunningSubagents(
+  byId: Record<string, SessionSummary | undefined>,
+): Map<string, number> {
+  const running = new Map<string, number>()
+  for (const descendant of Object.values(byId)) {
+    if (descendant === undefined || !isSubagent(descendant) || descendant.running !== true) {
+      continue
+    }
+    const seen = new Set<string>()
+    let ancestorId = descendant.parentId === undefined ? undefined : String(descendant.parentId)
+    while (ancestorId !== undefined && !seen.has(ancestorId)) {
+      seen.add(ancestorId)
+      running.set(ancestorId, (running.get(ancestorId) ?? 0) + 1)
+      const ancestor = byId[ancestorId]
+      ancestorId =
+        ancestor !== undefined && isSubagent(ancestor) && ancestor.parentId !== undefined
+          ? String(ancestor.parentId)
+          : undefined
+    }
+  }
+  return running
+}
+
 /** 把一个会话摘要投影成渲染行。 */
-function toRow(summary: SessionSummary): SessionRow {
+function toRow(summary: SessionSummary, runningSubagents: Map<string, number>): SessionRow {
+  const id = String(summary.id)
   return {
-    id: String(summary.id),
+    id,
     title: summary.displayTitle,
     blank: summary.blank === true,
     running: summary.running === true,
+    runningSubagentCount: runningSubagents.get(id) ?? 0,
     completed: summary.completed === true,
     updatedAt: summary.updatedAt,
   }
@@ -48,17 +82,21 @@ interface VisibilityInput {
   byId: Record<string, SessionSummary | undefined>
   archived: Set<string>
   current: string | undefined
+  /** 每个会话名下的运行中子代理数；供状态位使用。 */
+  runningSubagents: Map<string, number>
 }
 
-/** 从会话列表快照里取出三份反复使用的派生值。 */
+/** 从会话列表快照里取出反复使用的派生值。 */
 function visibilityInput(
   sessions: SessionListState,
   archivedSessionIds: readonly string[],
 ): VisibilityInput {
+  const byId = sessions.byId as Record<string, SessionSummary | undefined>
   return {
-    byId: sessions.byId as Record<string, SessionSummary | undefined>,
+    byId,
     archived: new Set(archivedSessionIds.map(String)),
     current: sessions.current === undefined ? undefined : String(sessions.current),
+    runningSubagents: indexRunningSubagents(byId),
   }
 }
 
@@ -77,7 +115,7 @@ export function groupSessionsByWorkspace(
   archivedSessionIds: readonly string[] = [],
 ): Map<string, SessionRow[]> {
   const result = new Map<string, SessionRow[]>()
-  const { byId, archived, current } = visibilityInput(sessions, archivedSessionIds)
+  const { byId, archived, current, runningSubagents } = visibilityInput(sessions, archivedSessionIds)
 
   for (const workspace of workspaces) {
     const rows = workspace.sessionIds
@@ -85,7 +123,7 @@ export function groupSessionsByWorkspace(
       .filter((s): s is SessionSummary =>
         s !== undefined && isSessionVisible(s, current, archived)
       )
-      .map(s => toRow(s))
+      .map(s => toRow(s, runningSubagents))
     result.set(String(workspace.workspaceId), rows)
   }
 
@@ -108,7 +146,7 @@ export function straySessions(
   workspaces: readonly WorkspaceView[],
   archivedSessionIds: readonly string[] = [],
 ): SessionRow[] {
-  const { byId, archived, current } = visibilityInput(sessions, archivedSessionIds)
+  const { byId, archived, current, runningSubagents } = visibilityInput(sessions, archivedSessionIds)
 
   // 工作区认领过的会话即便不可见（归档等）也不算无所属，否则归档会话会
   // 从工作区里「掉」进未分组桶。
@@ -126,7 +164,7 @@ export function straySessions(
     const summary = byId[key]
     if (summary === undefined || accounted.has(key)) continue
     if (!isSessionVisible(summary, current, archived)) continue
-    rows.push(toRow(summary))
+    rows.push(toRow(summary, runningSubagents))
   }
   return rows
 }
