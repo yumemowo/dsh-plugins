@@ -8,7 +8,6 @@ import {
   IconEllipsisOutline16,
   IconFolderClose16,
   IconFolderOpen16,
-  IconNewChatOutline16,
   IconPanelLeftOutline16,
   IconPlusOutline16,
   IconTrashOutline16,
@@ -88,17 +87,10 @@ interface GroupNameDraft {
   value: string
 }
 
-/** 分组名对话框与删除确认框需要的文案。 */
-interface GroupDialogLabels {
-  newGroup: string
-  renameGroup: string
-  groupNamePrompt: string
-  confirmLabel: string
-  cancelLabel: string
-  closeLabel: string
-  deleteGroup: string
-  /** 删除分组的说明文案；分组名由调用方传入，模板里的 `{name}` 由语言包替换。 */
-  confirmDeleteGroup: (name: string) => string
+/** 一个待编辑的工作区名，指名编辑对象与当前草稿。 */
+interface WorkspaceNameDraft {
+  workspaceId: string
+  value: string
 }
 
 /** 把一个会话摘要投影成渲染行。 */
@@ -171,9 +163,6 @@ export function containsSession(rows: readonly SessionRow[], currentSessionId: s
 /** 一个会话行在分组选择器里的取值：分组 id，或空串表示不属于任何分组。 */
 export type GroupChoice = string
 
-/** 会话行的分组选择器回调。 */
-export type MoveHandler = (sessionId: string, groupId: GroupChoice) => void
-
 /** 会话「更多操作」菜单里分组项的选项集。 */
 export interface GroupMenuInput {
   /** 按工作区视图顺序排列的全部分组（未过滤）。 */
@@ -226,6 +215,53 @@ export function buildSessionMenuItems(input: GroupMenuInput): readonly MenuItem[
   return items
 }
 
+/** 工作区行「更多操作」菜单的条目文案。 */
+export interface WorkspaceMenuInput {
+  /** 「新建分组」项文案。 */
+  newGroupLabel: string
+  /** 「重命名工作区」项文案。 */
+  renameLabel: string
+  /** 「删除工作区」项文案。 */
+  deleteLabel: string
+}
+
+/** 工作区菜单条目 id；与 `WorkspaceRow` 的分派一一对应。 */
+const WORKSPACE_MENU = {
+  newGroup: 'new-group',
+  rename: 'rename',
+  delete: 'delete',
+} as const
+
+/**
+ * 构造工作区「更多操作」菜单的条目。
+ *
+ * 两项官方操作的相对顺序与官方一致（重命名在前、删除在后）；本包自有的
+ * 「新建分组」排在最前，它是三项里唯一的建造型操作。删除项带 `danger`
+ * 标记，与官方删除工作区一样由菜单原语渲染危险语义。
+ * @param input - 三项文案。
+ * @returns Menu items 列表。
+ */
+export function buildWorkspaceMenuItems(input: WorkspaceMenuInput): readonly MenuItem[] {
+  return [
+    {
+      id: WORKSPACE_MENU.newGroup,
+      label: input.newGroupLabel,
+      icon: React.createElement(IconPlusOutline16, {}),
+    },
+    {
+      id: WORKSPACE_MENU.rename,
+      label: input.renameLabel,
+      icon: React.createElement(IconEditOutline16, {}),
+    },
+    {
+      id: WORKSPACE_MENU.delete,
+      label: input.deleteLabel,
+      icon: React.createElement(IconTrashOutline16, {}),
+      danger: true,
+    },
+  ]
+}
+
 /** 会话行「更多操作」菜单的文案。 */
 interface SessionRowMenuLabels {
   sessionActions: string
@@ -234,7 +270,56 @@ interface SessionRowMenuLabels {
 }
 
 /**
- * 带菜单的会话行。
+ * 会话行的外壳：状态位列、标题与可选的行尾操作位。
+ *
+ * 官方会话行首列放状态点；本包暂不渲染状态，只保留同宽的占位列，
+ * 这样标题与工作区标题的横向关系与官方一致。`action` 缺省时不渲染行尾
+ * 操作位——未分组桶里的会话不属于任何工作区，没有可用的归组操作。
+ */
+function SessionRowView(props: {
+  row: SessionRow
+  selected: boolean
+  menuOpen?: boolean
+  action?: React.ReactNode
+  onOpen: () => void
+}): React.ReactElement {
+  const { row, selected, action, onOpen } = props
+  return React.createElement(
+    'div',
+    {
+      // 菜单展开时行上挂标记：锚点按钮只靠 :hover 显示，菜单还开着时
+      // 指针一旦移开按钮就会消失，标记让样式把它留住。
+      className:
+        'wg-row' +
+        (selected ? ' wg-row-selected' : '') +
+        (props.menuOpen === true ? ' wg-row-menu-open' : ''),
+      role: 'button',
+      tabIndex: 0,
+      title: row.title,
+      onClick: onOpen,
+      onKeyDown: (event: React.KeyboardEvent) => {
+        // 只有行自身获得焦点时才响应；否则行内按钮上的 Enter/Space
+        // 会先触发按钮动作、再冒泡到这里把会话也打开。
+        if (event.target !== event.currentTarget) return
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        onOpen()
+      },
+    },
+    React.createElement('span', { className: 'wg-slot' }),
+    React.createElement('span', { className: 'wg-row-title' }, row.title),
+    action === undefined
+      ? null
+      : React.createElement(
+          'span',
+          { className: 'wg-slot', onClick: (event: React.MouseEvent) => event.stopPropagation() },
+          action,
+        ),
+  )
+}
+
+/**
+ * 带「更多操作」菜单的会话行。
  *
  * 菜单开合状态收敛在本组件内：行组件在 map 回调里生成，把 useState 留在
  * 行内会让每行无条件多挂一组 hook 状态，独立组件则按需挂载。
@@ -250,68 +335,45 @@ function SessionRowMenu(props: {
 }): React.ReactElement {
   const { row, selected, sections, currentGroupId, onOpen, onSelect, labels } = props
   const [menuOpen, setMenuOpen] = React.useState(false)
-  return React.createElement(
-    'div',
-    {
-      // 菜单展开时行上挂标记：锚点按钮只靠 :hover 显示，菜单还开着时
-      // 指针一旦移开按钮就会消失，标记让样式把它留住。
-      className:
-        'wg-row' + (selected ? ' wg-row-selected' : '') + (menuOpen ? ' wg-row-menu-open' : ''),
-      role: 'button',
-      tabIndex: 0,
-      title: row.title,
-      onClick: onOpen,
-      onKeyDown: (event: React.KeyboardEvent) => {
-        // 只有行自身获得焦点时才响应；否则行内按钮上的 Enter/Space
-        // 会先触发按钮动作、再冒泡到这里把会话也打开。
-        if (event.target !== event.currentTarget) return
-        if (event.key !== 'Enter' && event.key !== ' ') return
-        event.preventDefault()
-        onOpen()
+  return React.createElement(SessionRowView, {
+    row,
+    selected,
+    menuOpen,
+    onOpen,
+    action: React.createElement(Menu, {
+      open: menuOpen,
+      onClose: () => setMenuOpen(false),
+      onSelect: (id: string) => {
+        setMenuOpen(false)
+        onSelect(id)
       },
-    },
-    // 官方会话行首列放状态点；本包暂不渲染状态，只保留同宽的占位列，
-    // 这样标题与工作区标题的横向关系与官方一致。
-    React.createElement('span', { className: 'wg-slot' }),
-    React.createElement('span', { className: 'wg-row-title' }, row.title),
-    React.createElement(
-      'span',
-      { className: 'wg-slot', onClick: (event: React.MouseEvent) => event.stopPropagation() },
-      React.createElement(Menu, {
-        open: menuOpen,
-        onClose: () => setMenuOpen(false),
-        onSelect: (id: string) => {
-          setMenuOpen(false)
-          onSelect(id)
-        },
-        // portal 进 document.body：本区域的列表容器 overflow 裁剪会把
-        // 就近渲染的菜单裁掉。二级面板的方向由宿主挂的 body 标记控制
-        // （见 index.ts），这里不感知宿主差异。
-        portal: true,
-        closeOnPointerLeave: true,
-        anchor: React.createElement(
-          'button',
-          {
-            type: 'button',
-            className: 'wg-row-action',
-            title: labels.sessionActions,
-            'aria-label': labels.sessionActions,
-            onClick: (event: React.MouseEvent) => {
-              event.stopPropagation()
-              setMenuOpen((v) => !v)
-            },
+      // portal 进 document.body：本区域的列表容器 overflow 裁剪会把
+      // 就近渲染的菜单裁掉。二级面板的方向由宿主挂的 body 标记控制
+      // （见 index.ts），这里不感知宿主差异。
+      portal: true,
+      closeOnPointerLeave: true,
+      anchor: React.createElement(
+        'button',
+        {
+          type: 'button',
+          className: 'wg-row-action',
+          title: labels.sessionActions,
+          'aria-label': labels.sessionActions,
+          onClick: (event: React.MouseEvent) => {
+            event.stopPropagation()
+            setMenuOpen((v) => !v)
           },
-          React.createElement(IconEllipsisOutline16, {}),
-        ),
-        items: buildSessionMenuItems({
-          sections,
-          currentGroupId,
-          label: labels.moveToGroup,
-          ungroupLabel: labels.ungroup,
-        }),
+        },
+        React.createElement(IconEllipsisOutline16, {}),
+      ),
+      items: buildSessionMenuItems({
+        sections,
+        currentGroupId,
+        label: labels.moveToGroup,
+        ungroupLabel: labels.ungroup,
       }),
-    ),
-  )
+    }),
+  })
 }
 
 /**
@@ -339,6 +401,131 @@ function IconButton(props: {
       },
     },
     props.icon,
+  )
+}
+
+/** 工作区标题行的文案与无障碍标签。 */
+interface WorkspaceRowLabels {
+  /** 工作区「更多操作」按钮的无障碍标签，取工作区名。 */
+  actions: (name: string) => string
+  /** 新建会话按钮的无障碍标签，取工作区名。 */
+  newSession: (name: string) => string
+  /** 菜单里的「新建分组」项。 */
+  newGroup: string
+  /** 菜单里的「重命名工作区」项。 */
+  rename: string
+  /** 菜单里的「删除工作区」项。 */
+  delete: string
+}
+
+/**
+ * 一个工作区标题行。
+ *
+ * 行内操作与官方工作区行同形：`...` 打开管理菜单（新建分组 / 重命名 /
+ * 删除），`+` 直接在该工作区新建会话。静止时显示文件夹（开/闭随展开态），
+ * 悬停时让位给三角箭头，两个槽常驻同一 16px 列，因此切换时标题不位移。
+ *
+ * 「新建分组」不像「新建会话」那样高频，因此不占行内位置，收进菜单。
+ *
+ * 未分组桶没有工作区归属，四个回调都不传，行尾操作位整体不渲染。
+ */
+function WorkspaceRow(props: {
+  title: string
+  collapsed: boolean
+  folderActive: boolean
+  onToggle: () => void
+  onCreateSession?: () => void
+  onNewGroup?: () => void
+  onRename?: () => void
+  onDelete?: () => void
+  labels: WorkspaceRowLabels
+}): React.ReactElement {
+  const { title, collapsed, folderActive, labels } = props
+  const [menuOpen, setMenuOpen] = React.useState(false)
+  const manageable =
+    props.onNewGroup !== undefined || props.onRename !== undefined || props.onDelete !== undefined
+
+  const actions: React.ReactNode[] = []
+  if (manageable) {
+    actions.push(
+      React.createElement(Menu, {
+        key: 'menu',
+        open: menuOpen,
+        onClose: () => setMenuOpen(false),
+        onSelect: (id: string) => {
+          setMenuOpen(false)
+          if (id === WORKSPACE_MENU.newGroup) props.onNewGroup?.()
+          else if (id === WORKSPACE_MENU.rename) props.onRename?.()
+          else if (id === WORKSPACE_MENU.delete) props.onDelete?.()
+        },
+        portal: true,
+        closeOnPointerLeave: true,
+        anchor: React.createElement(
+          'button',
+          {
+            type: 'button',
+            className: 'wg-row-action',
+            title: labels.actions(title),
+            'aria-label': labels.actions(title),
+            onClick: (event: React.MouseEvent) => {
+              event.stopPropagation()
+              setMenuOpen((v) => !v)
+            },
+          },
+          React.createElement(IconEllipsisOutline16, {}),
+        ),
+        items: buildWorkspaceMenuItems({
+          newGroupLabel: labels.newGroup,
+          renameLabel: labels.rename,
+          deleteLabel: labels.delete,
+        }),
+      }),
+    )
+  }
+  if (props.onCreateSession !== undefined) {
+    actions.push(
+      React.createElement(IconButton, {
+        key: 'new-session',
+        title: labels.newSession(title),
+        icon: React.createElement(IconPlusOutline16, {}),
+        onClick: props.onCreateSession,
+      }),
+    )
+  }
+
+  return React.createElement(
+    'div',
+    {
+      className: 'wg-workspace-head' + (menuOpen ? ' wg-row-menu-open' : ''),
+      role: 'button',
+      tabIndex: 0,
+      onClick: props.onToggle,
+      onKeyDown: (event: React.KeyboardEvent) => {
+        // 只响应行自身；行内按钮上的 Enter/Space 不应连带折叠工作区。
+        if (event.target !== event.currentTarget) return
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        props.onToggle()
+      },
+    },
+    React.createElement(
+      'span',
+      { className: `wg-slot wg-folder${folderActive ? ' wg-folder-active' : ''}` },
+      collapsed
+        ? React.createElement(IconFolderClose16, {})
+        : React.createElement(IconFolderOpen16, {}),
+    ),
+    React.createElement(
+      'span',
+      { className: 'wg-slot wg-chevron' },
+      React.createElement(IconTriangleRightFill14, {
+        className: `wg-arrow${collapsed ? '' : ' wg-arrow-open'}`,
+      }),
+    ),
+    React.createElement('span', { className: 'wg-workspace-title' }, title),
+    actions.length === 0
+      ? null
+      : React.createElement('span', { className: 'wg-row-actions' }, ...actions),
   )
 }
 
@@ -373,11 +560,16 @@ export interface WorkspaceGroupsProps {
   deleteGroup: (workspaceId: string, groupId: string) => Promise<void>
   /** 把会话移入分组；空串表示移出分组。 */
   moveSession: (workspaceId: string, sessionId: string, groupId: GroupChoice) => Promise<void>
+  /** 重命名工作区。 */
+  renameWorkspace: (workspaceId: string, title: string) => Promise<void>
+  /** 删除工作区注册；文件夹与会话记录保留。 */
+  deleteWorkspace: (workspaceId: string) => Promise<void>
   /** 界面文案。 */
   labels: {
     title: string
     newGroup: string
-    newSession: string
+    /** 新建会话按钮的无障碍标签；工作区名由调用方传入。 */
+    newSessionIn: (name: string) => string
     /** 分组名输入框的占位与无障碍标签。 */
     groupNamePrompt: string
     /** 分组名对话框的标题（重命名时用）。 */
@@ -397,6 +589,20 @@ export interface WorkspaceGroupsProps {
     moveToGroup: string
     /** 「取消分组」一级菜单项文案。 */
     ungroup: string
+    /** 工作区「更多操作」按钮的无障碍标签；工作区名由调用方传入。 */
+    workspaceActions: (name: string) => string
+    /** 「重命名工作区」菜单项与对话框标题。 */
+    renameWorkspace: string
+    /** 「删除工作区」菜单项、对话框标题与确认按钮。 */
+    deleteWorkspace: string
+    /** 删除工作区的说明文案；工作区名由调用方传入。 */
+    confirmDeleteWorkspace: (name: string) => string
+    /** 工作区名输入框的占位与无障碍标签。 */
+    workspaceNamePrompt: string
+    /** 与既有工作区重名时的提示；名称由调用方传入。 */
+    workspaceConflict: (name: string) => string
+    /** 无工作区归属的会话区段标题。 */
+    ungrouped: string
     /** 对照 tab 在 better-sidebar 里的一行说明。 */
     compareTabDescription: string
     empty: string
@@ -405,48 +611,53 @@ export interface WorkspaceGroupsProps {
 }
 
 /**
- * 分组名对话框：新建与重命名共用。
+ * 单行输入对话框：建组、改名与工作区重命名共用。
  *
  * 输入法组合期间的 Enter 属于候选词确认，不能当提交用。
  */
-function GroupNameDialog(props: {
-  draft: GroupNameDraft
-  onDraftChange: (value: string) => void
+function NameDialog(props: {
+  title: string
+  value: string
+  placeholder: string
+  confirmLabel: string
+  cancelLabel: string
+  closeLabel: string
+  confirmDisabled: boolean
+  error?: React.ReactNode
+  onValueChange: (value: string) => void
   onConfirm: () => void
   onClose: () => void
-  labels: GroupDialogLabels
 }): React.ReactElement {
   const composing = React.useRef(false)
-  const { draft, labels } = props
   return React.createElement(
     Modal,
     {
       open: true,
       onClose: props.onClose,
-      closeLabel: labels.closeLabel,
-      title: draft.groupId === '' ? labels.newGroup : labels.renameGroup,
+      closeLabel: props.closeLabel,
+      title: props.title,
       footer: React.createElement(
         React.Fragment,
         null,
-        React.createElement(Button, { variant: 'outline', onClick: props.onClose }, labels.cancelLabel),
+        React.createElement(Button, { variant: 'outline', onClick: props.onClose }, props.cancelLabel),
         React.createElement(
           Button,
           {
             variant: 'primary',
-            disabled: draft.value.trim() === '',
+            disabled: props.confirmDisabled,
             onClick: props.onConfirm,
           },
-          labels.confirmLabel,
+          props.confirmLabel,
         ),
       ),
     },
     React.createElement(Input, {
-      value: draft.value,
-      'aria-label': labels.groupNamePrompt,
-      placeholder: labels.groupNamePrompt,
+      value: props.value,
+      'aria-label': props.placeholder,
+      placeholder: props.placeholder,
       autoFocus: true,
       onFocus: (event) => event.target.select(),
-      onChange: (event) => props.onDraftChange(event.currentTarget.value),
+      onChange: (event) => props.onValueChange(event.currentTarget.value),
       onCompositionStart: () => {
         composing.current = true
       },
@@ -459,35 +670,41 @@ function GroupNameDialog(props: {
         props.onConfirm()
       },
     }),
+    props.error === undefined || props.error === null
+      ? null
+      : React.createElement('div', { className: 'wg-dialog-error', role: 'alert' }, props.error),
   )
 }
 
 /**
- * 删除分组确认。
+ * 破坏性操作的确认框。
  *
- * 用普通 `Modal` 而不是 `RiskConfirmation`：后者带警告图标与勾选框，而删除
- * 分组只解散分组、不动会话本身，达不到需要勾选确认的破坏级别。危险语义由
- * 确认按钮的 `wg-danger-action` 承载（错误色 token，同官方删除按钮做法）。
+ * 用普通 `Modal` 而不是 `RiskConfirmation`：后者带警告图标与勾选框，而
+ * 删除分组只解散分组、删除工作区只移除注册，都达不到需要勾选确认的破坏
+ * 级别。危险语义由确认按钮的 `wg-danger-action` 承载（错误色 token，
+ * 同官方删除按钮做法）。
  */
-function GroupDeleteDialog(props: {
-  label: string
+function DeleteDialog(props: {
+  title: string
+  description?: string
+  confirmLabel: string
+  cancelLabel: string
+  closeLabel: string
   onConfirm: () => void
   onClose: () => void
-  labels: GroupDialogLabels
 }): React.ReactElement {
-  const { labels } = props
   return React.createElement(
     Modal,
     {
       open: true,
       onClose: props.onClose,
-      closeLabel: labels.closeLabel,
-      title: labels.deleteGroup,
-      description: labels.confirmDeleteGroup(props.label),
+      closeLabel: props.closeLabel,
+      title: props.title,
+      ...(props.description === undefined ? {} : { description: props.description }),
       footer: React.createElement(
         React.Fragment,
         null,
-        React.createElement(Button, { variant: 'outline', onClick: props.onClose }, labels.cancelLabel),
+        React.createElement(Button, { variant: 'outline', onClick: props.onClose }, props.cancelLabel),
         React.createElement(
           Button,
           {
@@ -495,12 +712,15 @@ function GroupDeleteDialog(props: {
             className: 'wg-danger-action',
             onClick: props.onConfirm,
           },
-          labels.deleteGroup,
+          props.confirmLabel,
         ),
       ),
     },
   )
 }
+
+/** 未分组桶在工作区状态表里占用的键；它没有真实的 workspaceId。 */
+const UNGROUPED_KEY = ''
 
 /**
  * 侧边栏的工作区浏览区域。
@@ -512,6 +732,10 @@ function GroupDeleteDialog(props: {
  * 只有用户创建的分组才有分组头；未归组的会话直接平铺在工作区下，
  * 与原生会话列表一致。折叠状态按「工作区」与「工作区+分组」分别记录，
  * 因此不同工作区、不同分组之间互不影响。
+ *
+ * 不属于任何工作区的会话（例如工作区被删除后遗留的会话）收进末尾一个
+ * 隐式的「未分组」区段——那是工作区一级的容器，与本包在工作区内刻意
+ * 不造「未分组分组」的取舍无关。
  */
 export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactElement | null {
   const {
@@ -527,9 +751,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
     renameGroup,
     deleteGroup,
     moveSession,
+    renameWorkspace,
+    deleteWorkspace,
     labels,
   } = props
-  // `moveSession` 由会话行菜单的分组/取消分组项调用；这里不需要额外渲染出口。
 
   const workspaces = useWorkspaces((state) => state.items) as readonly WorkspaceView[]
   // 归档集是注册表全局的：归档会话仍留在工作区的 sessionIds 里，
@@ -543,7 +768,9 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
   const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({})
   // 建组与改名共用一个对话框：groupId 为空串时是新建。
   const [nameDraft, setNameDraft] = React.useState<GroupNameDraft | null>(null)
-  const [deleteTarget, setDeleteTarget] = React.useState<{ workspaceId: string; groupId: string; label: string } | null>(null)
+  const [groupDelete, setGroupDelete] = React.useState<{ workspaceId: string; groupId: string; label: string } | null>(null)
+  const [workspaceRename, setWorkspaceRename] = React.useState<WorkspaceNameDraft | null>(null)
+  const [workspaceDelete, setWorkspaceDelete] = React.useState<{ workspaceId: string; label: string } | null>(null)
 
   const currentSessionId = sessions.current === undefined ? undefined : String(sessions.current)
 
@@ -592,25 +819,78 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
     )
   }
 
-  const closeDeleteDialog = (): void => setDeleteTarget(null)
+  const closeGroupDelete = (): void => setGroupDelete(null)
 
-  const commitDelete = (): void => {
-    const target = deleteTarget
+  const commitGroupDelete = (): void => {
+    const target = groupDelete
     if (target === null) return
-    closeDeleteDialog()
+    closeGroupDelete()
     apply(deleteGroup(target.workspaceId, target.groupId))
   }
 
-  const dialogLabels: GroupDialogLabels = {
-    newGroup: labels.newGroup,
-    renameGroup: labels.renameGroup,
-    groupNamePrompt: labels.groupNamePrompt,
-    confirmLabel: labels.confirmLabel,
-    cancelLabel: labels.cancelLabel,
-    closeLabel: labels.closeLabel,
-    deleteGroup: labels.deleteGroup,
-    confirmDeleteGroup: labels.confirmDeleteGroup,
+  const closeWorkspaceRename = (): void => setWorkspaceRename(null)
+
+  /** 工作区当前的名字；用于判断改名是否真的改变了内容。 */
+  const renamedFrom = (draft: WorkspaceNameDraft): string => {
+    const workspace = workspaces.find((item) => String(item.workspaceId) === draft.workspaceId)
+    return workspace === undefined ? '' : workspace.title
   }
+
+  const commitWorkspaceRename = (): void => {
+    const draft = workspaceRename
+    if (draft === null) return
+    const name = draft.value.trim()
+    if (name === '' || name === renamedFrom(draft)) return
+    closeWorkspaceRename()
+    apply(renameWorkspace(draft.workspaceId, name))
+  }
+
+  const closeWorkspaceDelete = (): void => setWorkspaceDelete(null)
+
+  /**
+   * 删除工作区。
+   *
+   * 先删注册再清分组元数据：工作区没了，它名下的分组再也不会被渲染，
+   * 留着就是读不到的记录；反过来的话，删组成功而删工作区失败会把分组
+   * 提前丢掉。清理由既有的 `deleteGroup` 承担，不新增宿主接口。
+   */
+  const commitWorkspaceDelete = (): void => {
+    const target = workspaceDelete
+    if (target === null) return
+    closeWorkspaceDelete()
+    const orphanGroups = groups[target.workspaceId] ?? []
+    apply(
+      deleteWorkspace(target.workspaceId).then(async () => {
+        for (const group of orphanGroups) await deleteGroup(target.workspaceId, group.id)
+      }),
+    )
+  }
+
+  /** 待改的工作区名是否与另一个工作区撞名。 */
+  const renameConflict =
+    workspaceRename === null
+      ? undefined
+      : workspaces.find(
+          (item) =>
+            String(item.workspaceId) !== workspaceRename.workspaceId &&
+            item.title === workspaceRename.value.trim(),
+        )?.title
+
+  const renameName = workspaceRename === null ? '' : workspaceRename.value.trim()
+  const renameDisabled =
+    workspaceRename === null ||
+    renameName === '' ||
+    renameName === renamedFrom(workspaceRename) ||
+    renameConflict !== undefined
+
+  const workspaceRowLabels: WorkspaceRowLabels = {
+    actions: labels.workspaceActions,
+    newSession: labels.newSessionIn,
+    newGroup: labels.newGroup,
+    rename: labels.renameWorkspace,
+    delete: labels.deleteWorkspace,
+  }
+
   // 窄栏只保留展开入口，与官方组件的 rail 行为一致。
   if (!wide) {
     return React.createElement(
@@ -631,6 +911,62 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
   }
 
   const rowsByWorkspace = groupSessionsByWorkspace(sessions, workspaces, archivedSessionIds)
+  // 不属于任何工作区的会话；只有存在时才渲染末尾的「未分组」区段。
+  const stray = straySessions(sessions, workspaces, archivedSessionIds)
+
+  const sessionMenuLabels: SessionRowMenuLabels = {
+    sessionActions: labels.sessionActions,
+    moveToGroup: labels.moveToGroup,
+    ungroup: labels.ungroup,
+  }
+
+  /** 工作区内带归组菜单的会话行。 */
+  const sessionRow = (workspaceId: string, sections: readonly GroupSection[]) =>
+    (row: SessionRow): React.ReactElement =>
+      React.createElement(SessionRowMenu, {
+        key: row.id,
+        row,
+        selected: row.id === currentSessionId,
+        sections,
+        currentGroupId: groupIdOfSession(sections, row.id),
+        onOpen: () => openSession(row.id),
+        onSelect: (id: string) => {
+          if (id === 'ungroup') {
+            apply(moveSession(workspaceId, row.id, ''))
+            return
+          }
+          if (id.startsWith('group:')) {
+            apply(moveSession(workspaceId, row.id, id.slice('group:'.length)))
+          }
+        },
+        labels: sessionMenuLabels,
+      })
+
+  /** 折叠状态取反；默认展开，因此只有显式 true 才算折叠。 */
+  const toggleCollapsed = (key: string): void =>
+    setCollapsedWorkspaces((prev) => ({ ...prev, [key]: prev[key] !== true }))
+
+  const workspaceHead = (workspace: WorkspaceView): React.ReactElement => {
+    const workspaceId = String(workspace.workspaceId)
+    const collapsed = collapsedWorkspaces[workspaceId] === true
+    return React.createElement(WorkspaceRow, {
+      title: workspace.title,
+      collapsed,
+      // 官方只在「展开且含当前会话」时把文件夹染成强调色。
+      folderActive:
+        !collapsed && containsSession(rowsByWorkspace.get(workspaceId) ?? [], currentSessionId),
+      onToggle: () => toggleCollapsed(workspaceId),
+      onCreateSession: () => {
+        // 官方在新建前展开工作区，否则新会话会落在折叠区里看不见。
+        setCollapsedWorkspaces((prev) => ({ ...prev, [workspaceId]: false }))
+        startSession(workspaceId)
+      },
+      onNewGroup: () => setNameDraft({ workspaceId, groupId: '', value: '' }),
+      onRename: () => setWorkspaceRename({ workspaceId, value: workspace.title }),
+      onDelete: () => setWorkspaceDelete({ workspaceId, label: workspace.title }),
+      labels: workspaceRowLabels,
+    })
+  }
 
   return React.createElement(
     'div',
@@ -642,92 +978,15 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
         const workspaceId = String(workspace.workspaceId)
         const workspaceGroups = groups[workspaceId] ?? []
         const layout = buildLayout(rowsByWorkspace.get(workspaceId) ?? [], workspaceGroups)
-        const workspaceCollapsed = collapsedWorkspaces[workspaceId] === true
+        const collapsed = collapsedWorkspaces[workspaceId] === true
         const hasAnyRow = layout.groups.length > 0 || layout.loose.length > 0
-        // 官方只在「展开且含当前会话」时把文件夹染成强调色。
-        const folderActive =
-          !workspaceCollapsed &&
-          containsSession(rowsByWorkspace.get(workspaceId) ?? [], currentSessionId)
+        const looseRow = sessionRow(workspaceId, layout.groups)
 
-        const sessionRow = (row: SessionRow): React.ReactElement => {
-          const currentGroupId = groupIdOfSession(layout.groups, row.id)
-          return React.createElement(SessionRowMenu, {
-            key: row.id,
-            row,
-            selected: row.id === currentSessionId,
-            sections: layout.groups,
-            currentGroupId,
-            onOpen: () => openSession(row.id),
-            onSelect: (id: string) => {
-              if (id === 'ungroup') {
-                apply(moveSession(workspaceId, row.id, ''))
-                return
-              }
-              if (id.startsWith('group:')) {
-                apply(moveSession(workspaceId, row.id, id.slice('group:'.length)))
-              }
-            },
-            labels: {
-              sessionActions: labels.sessionActions,
-              moveToGroup: labels.moveToGroup,
-              ungroup: labels.ungroup,
-            },
-          })
-        }
         return React.createElement(
           'section',
           { key: workspaceId, className: 'wg-workspace' },
-          React.createElement(
-            'div',
-            {
-              className: 'wg-workspace-head',
-              role: 'button',
-              tabIndex: 0,
-              onClick: () =>
-                setCollapsedWorkspaces((prev) => ({ ...prev, [workspaceId]: prev[workspaceId] !== true })),
-              onKeyDown: (event: React.KeyboardEvent) => {
-                // 只响应行自身；行内按钮上的 Enter/Space 不应连带折叠工作区。
-                if (event.target !== event.currentTarget) return
-                if (event.key !== 'Enter' && event.key !== ' ') return
-                event.preventDefault()
-                setCollapsedWorkspaces((prev) => ({
-                  ...prev,
-                  [workspaceId]: prev[workspaceId] !== true,
-                }))
-              },
-            },
-            // 静止时显示文件夹（开/闭随展开态），悬停时让位给三角箭头；
-            // 两个槽都常驻同一 16px 列，切换时标题不位移。
-            React.createElement(
-              'span',
-              {
-                className: `wg-slot wg-folder${folderActive ? ' wg-folder-active' : ''}`,
-              },
-              workspaceCollapsed
-                ? React.createElement(IconFolderClose16, {})
-                : React.createElement(IconFolderOpen16, {}),
-            ),
-            React.createElement(
-              'span',
-              { className: 'wg-slot wg-chevron' },
-              React.createElement(IconTriangleRightFill14, {
-                className: `wg-arrow${workspaceCollapsed ? '' : ' wg-arrow-open'}`,
-              }),
-            ),
-            React.createElement('span', { className: 'wg-workspace-title' }, workspace.title),
-            React.createElement(IconButton, {
-              title: labels.newSession,
-              icon: React.createElement(IconNewChatOutline16, {}),
-              onClick: () => startSession(workspaceId),
-            }),
-            React.createElement(IconButton, {
-              title: labels.newGroup,
-              icon: React.createElement(IconPlusOutline16, {}),
-              onClick: () =>
-                setNameDraft({ workspaceId, groupId: '', value: '' }),
-            }),
-          ),
-          workspaceCollapsed
+          workspaceHead(workspace),
+          collapsed
             ? null
             : React.createElement(
                 'div',
@@ -745,8 +1004,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
                         className: 'wg-group-head',
                         role: 'button',
                         tabIndex: 0,
-                        onClick: () =>
-                          setCollapsedGroups((prev) => ({ ...prev, [key]: prev[key] !== true })),
+                        onClick: () => setCollapsedGroups((prev) => ({ ...prev, [key]: prev[key] !== true })),
                         onKeyDown: (event: React.KeyboardEvent) => {
                           // 同上：忽略行内按钮冒泡上来的按键。
                           if (event.target !== event.currentTarget) return
@@ -777,7 +1035,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
                         title: labels.deleteGroup,
                         icon: React.createElement(IconTrashOutline16, {}),
                         onClick: () =>
-                          setDeleteTarget({
+                          setGroupDelete({
                             workspaceId,
                             groupId: section.id,
                             label: section.label,
@@ -789,44 +1047,109 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
                       : React.createElement(
                           'div',
                           { className: 'wg-sessions' },
-                          ...section.sessions.map(sessionRow),
+                          ...section.sessions.map(looseRow),
                         ),
                   )
                 }),
                 // 未归组的会话平铺在工作区下，不套任何分组头。
                 layout.loose.length === 0
                   ? null
-                  : React.createElement(
-                      'div',
-                      { className: 'wg-sessions' },
-                      ...layout.loose.map(sessionRow),
-                    ),
+                  : React.createElement('div', { className: 'wg-sessions' }, ...layout.loose.map(looseRow)),
                 hasAnyRow
                   ? null
                   : React.createElement('div', { className: 'wg-empty' }, labels.empty),
               ),
         )
       }),
+      // 未分组桶排在全部工作区之后，与官方一致；空则整段不渲染。
+      stray.length === 0
+        ? null
+        : React.createElement(
+            'section',
+            { key: UNGROUPED_KEY, className: 'wg-workspace' },
+            React.createElement(WorkspaceRow, {
+              title: labels.ungrouped,
+              collapsed: collapsedWorkspaces[UNGROUPED_KEY] === true,
+              folderActive:
+                collapsedWorkspaces[UNGROUPED_KEY] !== true &&
+                containsSession(stray, currentSessionId),
+              onToggle: () => toggleCollapsed(UNGROUPED_KEY),
+              labels: workspaceRowLabels,
+            }),
+            collapsedWorkspaces[UNGROUPED_KEY] === true
+              ? null
+              : React.createElement(
+                  'div',
+                  { className: 'wg-workspace-body' },
+                  React.createElement(
+                    'div',
+                    { className: 'wg-sessions' },
+                    // 这些会话不属于任何工作区，没有可用的归组操作，故不带行尾菜单。
+                    ...stray.map((row) =>
+                      React.createElement(SessionRowView, {
+                        key: row.id,
+                        row,
+                        selected: row.id === currentSessionId,
+                        onOpen: () => openSession(row.id),
+                      }),
+                    ),
+                  ),
+                ),
+          ),
       React.createElement('div', { className: 'wg-note' }, labels.unimplemented),
     ),
-    // 对话框挂在列表之外：两个都是 portal 到 body 的浮层，放进 overflow
+    // 对话框挂在列表之外：它们都是 portal 到 body 的浮层，放进 overflow
     // 容器只会多一层无用的裁剪上下文。
     nameDraft === null
       ? null
-      : React.createElement(GroupNameDialog, {
-          draft: nameDraft,
-          onDraftChange: (value) => setNameDraft({ ...nameDraft, value }),
+      : React.createElement(NameDialog, {
+          title: nameDraft.groupId === '' ? labels.newGroup : labels.renameGroup,
+          value: nameDraft.value,
+          placeholder: labels.groupNamePrompt,
+          confirmLabel: labels.confirmLabel,
+          cancelLabel: labels.cancelLabel,
+          closeLabel: labels.closeLabel,
+          confirmDisabled: nameDraft.value.trim() === '',
+          onValueChange: (value) => setNameDraft({ ...nameDraft, value }),
           onConfirm: commitNameDraft,
           onClose: closeNameDialog,
-          labels: dialogLabels,
         }),
-    deleteTarget === null
+    workspaceRename === null
       ? null
-      : React.createElement(GroupDeleteDialog, {
-          label: deleteTarget.label,
-          onConfirm: commitDelete,
-          onClose: closeDeleteDialog,
-          labels: dialogLabels,
+      : React.createElement(NameDialog, {
+          title: labels.renameWorkspace,
+          value: workspaceRename.value,
+          placeholder: labels.workspaceNamePrompt,
+          confirmLabel: labels.confirmLabel,
+          cancelLabel: labels.cancelLabel,
+          closeLabel: labels.closeLabel,
+          confirmDisabled: renameDisabled,
+          error: renameConflict === undefined ? null : labels.workspaceConflict(renameConflict),
+          onValueChange: (value) => setWorkspaceRename({ ...workspaceRename, value }),
+          onConfirm: commitWorkspaceRename,
+          onClose: closeWorkspaceRename,
+        }),
+    groupDelete === null
+      ? null
+      : React.createElement(DeleteDialog, {
+          title: labels.deleteGroup,
+          description: labels.confirmDeleteGroup(groupDelete.label),
+          confirmLabel: labels.deleteGroup,
+          cancelLabel: labels.cancelLabel,
+          closeLabel: labels.closeLabel,
+          onConfirm: commitGroupDelete,
+          onClose: closeGroupDelete,
+        }),
+    workspaceDelete === null
+      ? null
+      : React.createElement(DeleteDialog, {
+          title: labels.deleteWorkspace,
+          description: labels.confirmDeleteWorkspace(workspaceDelete.label),
+          confirmLabel: labels.deleteWorkspace,
+          cancelLabel: labels.cancelLabel,
+          closeLabel: labels.closeLabel,
+          onConfirm: commitWorkspaceDelete,
+          onClose: closeWorkspaceDelete,
         }),
   )
 }
@@ -862,6 +1185,47 @@ export function groupSessionsByWorkspace(
     result.set(String(workspace.workspaceId), rows)
   }
 
-  // 不属于任何工作区的会话没有侧边栏归属，保持隐藏而不是塞进某个工作区。
   return result
+}
+
+/**
+ * 收集不属于任何工作区的会话行。
+ *
+ * 删除工作区只移除注册，会话记录会原样保留；官方把这些无所属的会话收进
+ * 末尾一个隐式的「未分组」区段，这里取同一做法，避免删除工作区后会话在
+ * 侧边栏彻底消失。可见性过滤与工作区内一致：子代理、已归档与非当前的空白
+ * 会话都不出现。
+ * @param sessions - 会话列表快照。
+ * @param workspaces - 全部工作区视图。
+ * @param archivedSessionIds - 注册表全局的归档会话集合。
+ * @returns 按会话列表顺序排列的无所属会话行。
+ */
+export function straySessions(
+  sessions: SessionListState,
+  workspaces: readonly WorkspaceView[],
+  archivedSessionIds: readonly string[] = [],
+): SessionRow[] {
+  const byId = sessions.byId as Record<string, SessionSummary | undefined>
+  const archived = new Set(archivedSessionIds.map(String))
+  const current = sessions.current === undefined ? undefined : String(sessions.current)
+
+  // 工作区认领过的会话即便不可见（归档等）也不算无所属，否则归档会话会
+  // 从工作区里「掉」进未分组桶。
+  const accounted = new Set<string>()
+  for (const workspace of workspaces) {
+    for (const id of workspace.sessionIds) {
+      const key = String(id)
+      if (byId[key] !== undefined) accounted.add(key)
+    }
+  }
+
+  const rows: SessionRow[] = []
+  for (const id of sessions.ids) {
+    const key = String(id)
+    const summary = byId[key]
+    if (summary === undefined || accounted.has(key)) continue
+    if (!isSessionVisible(summary, current, archived)) continue
+    rows.push(toRow(summary))
+  }
+  return rows
 }

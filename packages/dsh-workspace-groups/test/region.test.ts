@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   buildLayout,
   buildSessionMenuItems,
+  buildWorkspaceMenuItems,
   containsSession,
   groupIdOfSession,
   groupSessionsByWorkspace,
+  straySessions,
 } from '../src/client/region.ts'
 import type { SessionRow } from '../src/client/region.ts'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -184,6 +186,119 @@ describe('buildSessionMenuItems', () => {
 
     const groupItem = items[0] as { disabled?: boolean }
     expect(groupItem.disabled).toBe(true)
+  })
+})
+
+describe('buildWorkspaceMenuItems', () => {
+  const labels = {
+    newGroupLabel: '新建分组',
+    renameLabel: '重命名工作区',
+    deleteLabel: '删除工作区',
+  }
+
+  it('offers new group, rename and delete in that order', () => {
+    const items = buildWorkspaceMenuItems(labels)
+
+    // 官方管理菜单是「重命名、删除」；本包自有的建组项排在最前。
+    expect(items.map((item) => (item as { id?: string }).id)).toEqual(['new-group', 'rename', 'delete'])
+  })
+
+  it('marks only the delete entry as dangerous', () => {
+    const items = buildWorkspaceMenuItems(labels) as readonly { id: string; danger?: boolean }[]
+
+    expect(items.filter((item) => item.danger === true).map((item) => item.id)).toEqual(['delete'])
+  })
+
+  it('keeps new group out of the row and inside the menu', () => {
+    const items = buildWorkspaceMenuItems(labels)
+
+    // 「新建分组」不是高频操作，因此不占行内位置（行内只有 `...` 与 `+`）。
+    expect(items[0]).toMatchObject({ id: 'new-group', label: '新建分组' })
+  })
+})
+
+describe('straySessions', () => {
+  /** 造一份最小可用的会话列表状态。 */
+  function listState(
+    rows: { id: string; origin?: 'subagent'; blank?: boolean }[],
+    current?: string,
+  ): SessionListState {
+    const byId: Record<string, unknown> = {}
+    for (const item of rows) {
+      byId[item.id] = {
+        id: item.id,
+        displayTitle: item.id,
+        running: false,
+        blank: item.blank === true,
+        updatedAt: 0,
+        ...(item.origin === undefined ? {} : { origin: item.origin }),
+      }
+    }
+    return { ids: rows.map((r) => r.id), byId, current, phase: 'ready' } as unknown as SessionListState
+  }
+
+  /** 造一个工作区视图。 */
+  function workspace(id: string, sessionIds: string[]): WorkspaceView {
+    return {
+      workspaceId: id,
+      path: `/tmp/${id}`,
+      title: id,
+      sessionIds,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    } as unknown as WorkspaceView
+  }
+
+  it('reports no stray rows when every session has a workspace', () => {
+    const stray = straySessions(
+      listState([{ id: 'a' }, { id: 'b' }]),
+      [workspace('w1', ['a']), workspace('w2', ['b'])],
+    )
+
+    // 平时每个会话都有归属，隐式「未分组」区段因此不出现。
+    expect(stray).toEqual([])
+  })
+
+  it('collects a session left behind by a deleted workspace', () => {
+    // 删除工作区只移除注册：会话记录还在，但不再属于任何工作区。
+    const stray = straySessions(listState([{ id: 'orphan' }]), [])
+
+    expect(stray.map((row) => row.id)).toEqual(['orphan'])
+  })
+
+  it('keeps a workspace member out of the ungrouped bucket even when hidden', () => {
+    // 归档会话仍在 workspace.sessionIds 里，不能因为「不可见」就掉进未分组桶。
+    const stray = straySessions(
+      listState([{ id: 'archived' }]),
+      [workspace('w1', ['archived'])],
+      ['archived'],
+    )
+
+    expect(stray).toEqual([])
+  })
+
+  it('hides subagent-origin strays', () => {
+    const stray = straySessions(listState([{ id: 'child', origin: 'subagent' }]), [])
+
+    expect(stray).toEqual([])
+  })
+
+  it('hides archived strays', () => {
+    const stray = straySessions(listState([{ id: 'gone' }]), [], ['gone'])
+
+    expect(stray).toEqual([])
+  })
+
+  it('keeps only the selected blank stray as the provisional row', () => {
+    const stray = straySessions(listState([{ id: 'blank', blank: true }], 'blank'), [])
+
+    expect(stray.map((row) => row.id)).toEqual(['blank'])
+  })
+
+  it('preserves session list order', () => {
+    const stray = straySessions(listState([{ id: 'a' }, { id: 'b' }, { id: 'c' }]), [workspace('w1', ['b'])])
+
+    expect(stray.map((row) => row.id)).toEqual(['a', 'c'])
   })
 })
 

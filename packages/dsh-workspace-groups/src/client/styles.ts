@@ -191,13 +191,32 @@ const CSS = `
 }
 .wg-row-action:hover { color: var(--dsw-alias-label-primary); }
 
+/* 工作区行尾的操作位容器：官方 .rowActions 的 gap:12px 与 20px 行高。
+   本包的操作按钮始终参与布局、只切换不透明度，因此悬停时标题不会位移。 */
+.wg-row-actions {
+  flex: none;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
 /* 显示路径只有三条：所在行悬停、菜单展开期间（否则锚点按钮会在菜单还开着时
-   消失）、以及键盘聚焦。 */
+   消失）、以及键盘聚焦。工作区行与分组行各有自己的行类，因此悬停选择器
+   要分别列出。 */
 .wg-row:hover .wg-row-action,
 .wg-workspace-head:hover .wg-row-action,
 .wg-group-head:hover .wg-row-action,
 .wg-row-menu-open .wg-row-action,
 .wg-row-action:focus-visible { opacity: 1; pointer-events: auto; }
+
+/* 对话框内的错误提示（如工作区重名）：只上错误色，几何走官方 Modal。 */
+.wg-dialog-error {
+  color: var(--dsw-alias-state-error-primary);
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
 
 /* 官方二级菜单面板固定向右展开（left: calc(100% + 10px)）。对照模式下
    区域挂在右侧栏、贴近窗口右缘，面板会开出屏幕外：宿主在 body 上挂

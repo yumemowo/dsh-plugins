@@ -45,7 +45,14 @@ const DICTIONARIES = {
   zh: {
     title: '工作区',
     newGroup: '新建分组',
-    newSession: '新建会话',
+    newSessionIn: '在「{name}」中新建会话',
+    workspaceActions: '工作区「{name}」的操作',
+    renameWorkspace: '重命名工作区',
+    deleteWorkspace: '删除工作区',
+    confirmDeleteWorkspace: '删除工作区「{name}」？文件夹与会话记录会保留，其会话将移入「未分组」。',
+    workspaceNamePrompt: '工作区名称',
+    workspaceConflict: '已存在名为「{name}」的工作区。',
+    ungrouped: '未分组',
     groupNamePrompt: '分组名称',
     renameGroup: '重命名分组',
     deleteGroup: '删除分组',
@@ -63,7 +70,15 @@ const DICTIONARIES = {
   en: {
     title: 'Workspaces',
     newGroup: 'New group',
-    newSession: 'New session',
+    newSessionIn: 'New session in {name}',
+    workspaceActions: 'Workspace actions for {name}',
+    renameWorkspace: 'Rename workspace',
+    deleteWorkspace: 'Delete workspace',
+    confirmDeleteWorkspace:
+      'Delete workspace "{name}"? The folder and session logs are kept; its sessions move to Ungrouped.',
+    workspaceNamePrompt: 'Workspace name',
+    workspaceConflict: 'A workspace named "{name}" already exists.',
+    ungrouped: 'Ungrouped',
     groupNamePrompt: 'Group name',
     renameGroup: 'Rename group',
     deleteGroup: 'Delete group',
@@ -104,7 +119,14 @@ function buildLabels(
   return {
     title: t('title'),
     newGroup: t('newGroup'),
-    newSession: t('newSession'),
+    newSessionIn: (name: string) => t('newSessionIn', { name }),
+    workspaceActions: (name: string) => t('workspaceActions', { name }),
+    renameWorkspace: t('renameWorkspace'),
+    deleteWorkspace: t('deleteWorkspace'),
+    confirmDeleteWorkspace: (name: string) => t('confirmDeleteWorkspace', { name }),
+    workspaceNamePrompt: t('workspaceNamePrompt'),
+    workspaceConflict: (name: string) => t('workspaceConflict', { name }),
+    ungrouped: t('ungrouped'),
     groupNamePrompt: t('groupNamePrompt'),
     renameGroup: t('renameGroup'),
     deleteGroup: t('deleteGroup'),
@@ -200,6 +222,8 @@ export function apply(ctx: Context): void {
         renameGroup: async () => {},
         deleteGroup: async () => {},
         moveSession: async () => {},
+        renameWorkspace: async () => {},
+        deleteWorkspace: async () => {},
         labels,
       }
     }
@@ -227,6 +251,11 @@ export function apply(ctx: Context): void {
           sessionId,
           groupId === '' ? null : groupId,
         ]).then(() => undefined),
+      // 工作区自身的改名与删除直接走官方工作区控制器，不另造 RPC：
+      // 删除只移除注册，文件夹与会话记录都由宿主保留。
+      renameWorkspace: (workspaceId, title) =>
+        workspaces.rename(workspaceId as never, title).then(() => undefined),
+      deleteWorkspace: (workspaceId) => workspaces.delete(workspaceId as never),
       labels,
     }
   }
