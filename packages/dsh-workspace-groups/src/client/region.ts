@@ -1,6 +1,8 @@
 import * as React from 'react'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { MenuActionItem, MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Menu } from './runtime.ts'
 import type { Group } from './remote.ts'
 
 /**
@@ -154,6 +156,140 @@ export type GroupChoice = string
 /** 会话行的分组选择器回调。 */
 export type MoveHandler = (sessionId: string, groupId: GroupChoice) => void
 
+/** 会话「更多操作」菜单里分组项的选项集。 */
+export interface GroupMenuInput {
+  /** 按工作区视图顺序排列的全部分组（未过滤）。 */
+  sections: readonly GroupSection[]
+  /** 目标会话当前所属分组 id；空串表示未归组。 */
+  currentGroupId: string
+  /** 「分组」一级项文案。 */
+  label: string
+  /** 「取消分组」文案。 */
+  ungroupLabel: string
+}
+
+/**
+ * 构造会话「更多操作」菜单里的分组一级项。
+ *
+ * 二级子菜单保持传入（即工作区视图）的分组顺序，并剔除当前会话所在的
+ * 分组——把自己移动到自己是无意义的操作。没有任何可选项时该项禁用。
+ * @param input - 分组选项集。
+ * @returns 可放进 Menu items 的分组项；分组不存在时也返回占位项以稳定菜单独纬度。
+ */
+export function buildGroupMenuItem(input: GroupMenuInput): MenuActionItem {
+  const { sections, currentGroupId, label } = input
+  const candidates = sections
+    .filter((section) => section.id !== currentGroupId)
+    .map((section) => ({ id: `group:${section.id}`, label: section.label }))
+  return {
+    id: 'group',
+    label,
+    disabled: candidates.length === 0,
+    submenu: candidates,
+  }
+}
+
+/**
+ * 构造会话「更多操作」菜单的完整条目。
+ *
+ * 一级菜单为：分组（二级展开）、其下的「取消分组」（仅当会话已归组）。
+ * 分组没有任何可选项时「分组」仍占位但禁用，菜单结构不因数据为空而跳动。
+ * @param input - 分组选项集。
+ * @returns Menu items 列表。
+ */
+export function buildSessionMenuItems(input: GroupMenuInput): readonly MenuItem[] {
+  const items: MenuItem[] = [buildGroupMenuItem(input)]
+  if (input.currentGroupId !== '') {
+    items.push({
+      id: 'ungroup',
+      label: input.ungroupLabel,
+    })
+  }
+  return items
+}
+
+/** 会话行「更多操作」菜单的文案。 */
+interface SessionRowMenuLabels {
+  sessionActions: string
+  moveToGroup: string
+  ungroup: string
+}
+
+/**
+ * 带菜单的会话行。
+ *
+ * 菜单开合状态收敛在本组件内：行组件在 map 回调里生成，把 useState 留在
+ * 行内会让每行无条件多挂一组 hook 状态，独立组件则按需挂载。
+ */
+function SessionRowMenu(props: {
+  row: SessionRow
+  selected: boolean
+  sections: readonly GroupSection[]
+  currentGroupId: string
+  onOpen: () => void
+  onSelect: (id: string) => void
+  labels: SessionRowMenuLabels
+}): React.ReactElement {
+  const { row, selected, sections, currentGroupId, onOpen, onSelect, labels } = props
+  const [menuOpen, setMenuOpen] = React.useState(false)
+  return React.createElement(
+    'div',
+    {
+      className: 'wg-row' + (selected ? ' wg-row-selected' : ''),
+      role: 'button',
+      tabIndex: 0,
+      title: row.title,
+      onClick: onOpen,
+      onKeyDown: (event: React.KeyboardEvent) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        onOpen()
+      },
+    },
+    // 官方会话行首列放状态点；本包暂不渲染状态，只保留同宽的占位列，
+    // 这样标题与工作区标题的横向关系与官方一致。
+    React.createElement('span', { className: 'wg-slot' }),
+    React.createElement('span', { className: 'wg-row-title' }, row.title),
+    React.createElement(
+      'span',
+      { className: 'wg-slot wg-row-action', onClick: (event: React.MouseEvent) => event.stopPropagation() },
+      React.createElement(Menu, {
+        open: menuOpen,
+        onClose: () => setMenuOpen(false),
+        onSelect: (id: string) => {
+          setMenuOpen(false)
+          onSelect(id)
+        },
+        // portal 进 document.body：本区域的列表容器 overflow 裁剪会把
+        // 就近渲染的菜单裁掉。二级面板的方向由宿主挂的 body 标记控制
+        // （见 index.ts），这里不感知宿主差异。
+        portal: true,
+        closeOnPointerLeave: true,
+        anchor: React.createElement(
+          'button',
+          {
+            type: 'button',
+            className: 'wg-icon-button',
+            title: labels.sessionActions,
+            'aria-label': labels.sessionActions,
+            onClick: (event: React.MouseEvent) => {
+              event.stopPropagation()
+              setMenuOpen((v) => !v)
+            },
+          },
+          React.createElement(FilledIcon, { paths: ELLIPSIS_PATHS }),
+        ),
+        items: buildSessionMenuItems({
+          sections,
+          currentGroupId,
+          label: labels.moveToGroup,
+          ungroupLabel: labels.ungroup,
+        }),
+      }),
+    ),
+  )
+}
+
 /** 16px 线性图标，颜色继承自父级。 */
 function Icon({ path }: { path: string }): React.ReactElement {
   return React.createElement(
@@ -281,6 +417,8 @@ export interface WorkspaceGroupsProps {
   startSession: (workspaceId: string) => void
   /** 读取分组快照。 */
   loadGroups: () => Promise<Record<string, Group[]>>
+  /** 远程数据面就绪后回调一次；返回反注册函数。 */
+  onReady: (listener: () => void) => () => void
   /** 新建分组。 */
   createGroup: (workspaceId: string, name: string) => Promise<void>
   /** 重命名分组。 */
@@ -300,6 +438,10 @@ export interface WorkspaceGroupsProps {
     confirmDeleteGroup: string
     /** 会话行尾操作位的无障碍标签。 */
     sessionActions: string
+    /** 「分组」一级菜单项文案。 */
+    moveToGroup: string
+    /** 「取消分组」一级菜单项文案。 */
+    ungroup: string
     /** 对照 tab 在 better-sidebar 里的一行说明。 */
     compareTabDescription: string
     empty: string
@@ -326,14 +468,15 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
     useSessions,
     openSession,
     startSession,
+    onReady,
     loadGroups,
     createGroup,
     renameGroup,
     deleteGroup,
+    moveSession,
     labels,
   } = props
-  // `moveSession` 暂时没有渲染出口：会话行尾先只放省略号占位，
-  // 归组入口回到产品内菜单时再接上，宿主接口与 props 契约保持不动。
+  // `moveSession` 由会话行菜单的分组/取消分组项调用；这里不需要额外渲染出口。
 
   const workspaces = useWorkspaces((state) => state.items) as readonly WorkspaceView[]
   // 归档集是注册表全局的：归档会话仍留在工作区的 sessionIds 里，
@@ -364,6 +507,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
   }, [loadGroups])
 
   React.useEffect(() => reload(), [reload])
+
+  // 首次拉取可能早于远程数据面就绪（requireApi 抛错被上面的 catch 吞掉），
+  // 就绪信号到达时重拉一次，否则已落盘的分组要等下一次改动才会出现。
+  React.useEffect(() => onReady(() => reload()), [onReady, reload])
 
   /** 执行一次改动并刷新本地快照。 */
   const apply = React.useCallback(
@@ -410,40 +557,31 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
           !workspaceCollapsed &&
           containsSession(rowsByWorkspace.get(workspaceId) ?? [], currentSessionId)
 
-        const sessionRow = (row: SessionRow): React.ReactElement =>
-          React.createElement(
-            'div',
-            {
-              key: row.id,
-              className: 'wg-row' + (row.id === currentSessionId ? ' wg-row-selected' : ''),
-              role: 'button',
-              tabIndex: 0,
-              title: row.title,
-              onClick: () => openSession(row.id),
-              onKeyDown: (event: React.KeyboardEvent) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return
-                event.preventDefault()
-                openSession(row.id)
-              },
+        const sessionRow = (row: SessionRow): React.ReactElement => {
+          const currentGroupId = groupIdOfSession(layout.groups, row.id)
+          return React.createElement(SessionRowMenu, {
+            key: row.id,
+            row,
+            selected: row.id === currentSessionId,
+            sections: layout.groups,
+            currentGroupId,
+            onOpen: () => openSession(row.id),
+            onSelect: (id: string) => {
+              if (id === 'ungroup') {
+                apply(moveSession(workspaceId, row.id, ''))
+                return
+              }
+              if (id.startsWith('group:')) {
+                apply(moveSession(workspaceId, row.id, id.slice('group:'.length)))
+              }
             },
-            // 官方会话行首列放状态点；本包暂不渲染状态，只保留同宽的占位列，
-            // 这样标题与工作区标题的横向关系与官方一致。
-            React.createElement('span', { className: 'wg-slot' }),
-            React.createElement('span', { className: 'wg-row-title' }, row.title),
-            // 行尾操作位：目前只有省略号占位，分组下拉框暂不出现。
-            React.createElement(
-              'button',
-              {
-                type: 'button',
-                className: 'wg-slot wg-row-action',
-                title: labels.sessionActions,
-                'aria-label': labels.sessionActions,
-                onClick: (event: React.MouseEvent) => event.stopPropagation(),
-              },
-              React.createElement(FilledIcon, { paths: ELLIPSIS_PATHS }),
-            ),
-          )
-
+            labels: {
+              sessionActions: labels.sessionActions,
+              moveToGroup: labels.moveToGroup,
+              ungroup: labels.ungroup,
+            },
+          })
+        }
         return React.createElement(
           'section',
           { key: workspaceId, className: 'wg-workspace' },

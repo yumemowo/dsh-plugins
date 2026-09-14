@@ -8,6 +8,7 @@ function actions(): RegionActions {
   return {
     openSession: () => {},
     startSession: () => {},
+    onReady: () => () => {},
     loadGroups: async () => ({}),
     createGroup: async () => {},
     renameGroup: async () => {},
@@ -22,6 +23,8 @@ function actions(): RegionActions {
       deleteGroup: '删除分组',
       confirmDeleteGroup: '删除该分组？',
       sessionActions: '会话操作',
+      moveToGroup: '分组',
+      ungroup: '取消分组',
       compareTabDescription: '对照视图',
       empty: '暂无会话',
       unimplemented: '实验特性',

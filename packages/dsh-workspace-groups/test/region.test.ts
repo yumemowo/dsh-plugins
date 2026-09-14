@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildLayout,
+  buildSessionMenuItems,
   containsSession,
   groupIdOfSession,
   groupSessionsByWorkspace,
@@ -128,6 +129,61 @@ describe('containsSession', () => {
 
   it('reports false for an empty workspace', () => {
     expect(containsSession([], 'a')).toBe(false)
+  })
+})
+
+describe('buildSessionMenuItems', () => {
+  /** 造菜单输入；分组顺序即传入顺序。 */
+  function menuInput(currentGroupId: string) {
+    return {
+      sections: [
+        { id: 'g1', label: '前端', sessions: [] },
+        { id: 'g2', label: '后端', sessions: [] },
+        { id: 'g3', label: '工具', sessions: [] },
+      ],
+      currentGroupId,
+      label: '分组',
+      ungroupLabel: '取消分组',
+    }
+  }
+
+  it('keeps submenu groups in workspace view order', () => {
+    const items = buildSessionMenuItems(menuInput(''))
+
+    const groupItem = items[0] as { submenu?: { id: string }[] }
+    expect(groupItem.submenu?.map((entry) => entry.id)).toEqual(['group:g1', 'group:g2', 'group:g3'])
+  })
+
+  it('hides the session own group from the submenu', () => {
+    const items = buildSessionMenuItems(menuInput('g2'))
+
+    const groupItem = items[0] as { submenu?: { id: string }[] }
+    expect(groupItem.submenu?.map((entry) => entry.id)).toEqual(['group:g1', 'group:g3'])
+  })
+
+  it('shows the ungroup action right below the group item when grouped', () => {
+    const items = buildSessionMenuItems(menuInput('g2'))
+
+    expect(items.map((item) => (item as { id?: string }).id)).toEqual(['group', 'ungroup'])
+  })
+
+  it('omits the ungroup action when the session is loose', () => {
+    const items = buildSessionMenuItems(menuInput(''))
+
+    expect(items.map((item) => (item as { id?: string }).id)).toEqual(['group'])
+  })
+
+  it('disables the group item when no other group exists', () => {
+    const input = {
+      sections: [{ id: 'g1', label: '前端', sessions: [] }],
+      currentGroupId: 'g1',
+      label: '分组',
+      ungroupLabel: '取消分组',
+    }
+    const items = buildSessionMenuItems(input)
+
+    const groupItem = items[0] as { disabled?: boolean }
+    expect(groupItem.disabled).toBe(true)
   })
 })
 

@@ -18,7 +18,13 @@ const outFile = join(packageDir, 'lib/client.js')
 
 // shell 会把这些模块从平台基线表里解析；打进产物会出现第二份实例。
 // 类型专用导入会被 esbuild 当作无副作用而消除，因此这里只需列出值导入。
-const EXTERNAL = ['react', 'react-dom', 'react/jsx-runtime', 'react-dom/client']
+const EXTERNAL = [
+  'react',
+  'react-dom',
+  'react/jsx-runtime',
+  'react-dom/client',
+  '@deepseek-ai/dsh-client-ui-primitives',
+]
 
 mkdirSync(dirname(outFile), { recursive: true })
 

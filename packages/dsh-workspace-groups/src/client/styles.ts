@@ -186,6 +186,19 @@ const CSS = `
 .wg-group-head:hover .wg-hover-action,
 .wg-group-head:focus-within .wg-hover-action { opacity: 1; }
 
+/* 官方二级菜单面板固定向右展开（left: calc(100% + 10px)）。对照模式下
+   区域挂在右侧栏、贴近窗口右缘，面板会开出屏幕外：宿主在 body 上挂
+   data-wg-menu-flip 标记（由 COMPARE_MODE 决定），样式只在该标记下把
+   面板翻到列表左侧，不依赖官方 hash 类名。 */
+body[data-wg-menu-flip] [role='menu'] [role='menu'] {
+  left: auto;
+  right: calc(100% + 10px);
+}
+body[data-wg-menu-flip] [role='menu'] [role='menu']::before {
+  left: auto;
+  right: -10px;
+}
+
 .wg-empty {
   color: var(--dsw-alias-label-tertiary);
   padding: 16px 12px;

@@ -51,6 +51,8 @@ const DICTIONARIES = {
     deleteGroup: '删除分组',
     confirmDeleteGroup: '删除该分组？组内会话会移出分组，会话本身不受影响。',
     sessionActions: '会话操作',
+    moveToGroup: '分组',
+    ungroup: '取消分组',
     compareTabDescription: '分组区域的对照视图（左侧为官方工作区列表）',
     empty: '暂无会话',
     unimplemented: '分组为实验特性：搜索、归档、拖拽暂未提供。',
@@ -65,6 +67,8 @@ const DICTIONARIES = {
     confirmDeleteGroup:
       'Delete this group? Its sessions leave the group; the sessions themselves are unaffected.',
     sessionActions: 'Session actions',
+    moveToGroup: 'Group',
+    ungroup: 'Ungroup',
     compareTabDescription: 'Grouping region for side-by-side comparison with the official list',
     empty: 'No sessions',
     unimplemented: 'Groups are experimental: search, archive and drag are not available yet.',
@@ -84,6 +88,7 @@ const NS = 'workspace-groups'
  * 之所以是编译期常量而不是配置项：这是开发期的对照开关，
  * 不是要交付给用户的能力，配置化反而要多一套 schema 与文档。
  */
+//const COMPARE_MODE = false
 const COMPARE_MODE = true
 
 /** 把翻译函数绑定成组件需要的文案表。 */
@@ -99,6 +104,8 @@ function buildLabels(
     deleteGroup: t('deleteGroup'),
     confirmDeleteGroup: t('confirmDeleteGroup'),
     sessionActions: t('sessionActions'),
+    moveToGroup: t('moveToGroup'),
+    ungroup: t('ungroup'),
     compareTabDescription: t('compareTabDescription'),
     empty: t('empty'),
     unimplemented: t('unimplemented'),
@@ -121,6 +128,25 @@ export function apply(ctx: Context): void {
     'workspace-groups: dictionaries',
   )
 
+  /**
+   * 远程命名空间就绪信号。
+   *
+   * 区域组件的首次拉取可能早于 `$mount` 完成；就绪时这里发布一次，
+   * 订阅者借此重试此前被就绪性拒绝的加载。
+   */
+  const readyListeners = new Set<() => void>()
+  const onReady = (listener: () => void): (() => void) => {
+    // 先挂订阅再看状态，避免「检查时未就绪、发布前刚就绪」的窗口漏报。
+    if (groupsApi !== undefined) {
+      listener()
+      return () => {}
+    }
+    readyListeners.add(listener)
+    return () => {
+      readyListeners.delete(listener)
+    }
+  }
+
   /** 挂载本包自己的 remote 命名空间；成功后取回可调用的方法表。 */
   let groupsApi: Record<string, (...args: never[]) => Promise<never>> | undefined
   ctx.effect(
@@ -131,6 +157,8 @@ export function apply(ctx: Context): void {
         // 服务键按 descriptor 的 namespace 注册（remote.<namespace>），
         // 不是包名——typert 网关以 namespace 归组安装方法表。
         groupsApi = ctx.get(`remote.${SERVICE}`) as typeof groupsApi
+        for (const listener of [...readyListeners]) listener()
+        readyListeners.clear()
       })
       return () => {
         disposed = true
@@ -157,6 +185,7 @@ export function apply(ctx: Context): void {
       return {
         openSession: () => {},
         startSession: () => {},
+        onReady: () => () => {},
         loadGroups: async () => ({}),
         createGroup: async () => {},
         renameGroup: async () => {},
@@ -174,6 +203,7 @@ export function apply(ctx: Context): void {
           sessions.open(created)
         })
       },
+      onReady,
       loadGroups,
       createGroup: (workspaceId, name) =>
         callRemote(requireApi(), 'createGroup', [workspaceId, name]).then(() => undefined),
@@ -194,6 +224,25 @@ export function apply(ctx: Context): void {
 
   // 样式随插件挂载注入；卸载由模块系统的样式记账处理，无需显式移除。
   insertStyles()
+
+  /**
+   * 二级菜单面板的展开方向标记。
+   *
+   * 对照模式下区域在右侧栏、贴近窗口右缘，官方 Menu 的二级面板固定
+   * 向右展开会开出屏幕外，样式表只在该标记下把面板翻向左侧。
+   * 用编译期常量做参考而不是运行期测量：宿主列由 COMPARE_MODE 唯一
+   * 决定，插件卸载时 effect 收尾会摘掉标记。
+   */
+  ctx.effect(
+    () => {
+      if (typeof document === 'undefined' || !COMPARE_MODE) return () => {}
+      document.body.setAttribute('data-wg-menu-flip', '')
+      return () => {
+        document.body.removeAttribute('data-wg-menu-flip')
+      }
+    },
+    'workspace-groups: menu flip marker',
+  )
 
   // 对照模式：把左侧 `sidebar.workspaces` 交还官方 ui-workspace，
   // 本区域改挂进 dsh-better-sidebar 的右侧栏 tab，好和官方渲染同屏比对。
