@@ -5,5 +5,5 @@
     "jsx": "react-jsx",
     "lib": ["es2023", "dom", "dom.iterable"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx", "vitest.config.ts"]
 }

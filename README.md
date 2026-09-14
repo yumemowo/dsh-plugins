@@ -96,7 +96,10 @@ dsh 的 profile 是在空插件树之上叠加的 **patch 层栈**。一个插�
 │       │   ├── typert.ts          # Host 面 Remote 清单
 │       │   └── client/            # 浏览器半边
 │       │       ├── index.ts       # 注册 sidebar.workspaces（priority: -1）
-│       │       ├── region.ts      # 分组树渲染
+│       │       ├── labels.ts      # 文案表与 RegionLabels 契约
+│       │       ├── actions.ts     # 组件消费的动作 / 数据 hook 契约
+│       │       ├── data/          # 纯逻辑：布局切分与会话投影
+│       │       ├── components/    # 组件：区域、工作区、分组、会话行与对话框
 │       │       └── remote.ts      # 客户端 Remote 贡献
 │       ├── scripts/build-client.mjs  # esbuild 打包 __ModuleLoader__ bundle
 │       ├── test/

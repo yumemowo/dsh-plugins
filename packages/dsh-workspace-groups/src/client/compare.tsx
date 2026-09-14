@@ -10,21 +10,15 @@
  *
  * @module @your-scope/dsh-workspace-groups/client/compare
  */
-import * as React from 'react'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import type { ReactElement } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import { WorkspaceGroupsRegion } from './region.ts'
-import type { WorkspaceGroupsProps } from './region.ts'
+import type { RegionActions, WorkspaceState } from './actions.ts'
+import { WorkspaceGroupsRegion } from './components/WorkspaceGroupsRegion.tsx'
 
 /** 注册进 better-sidebar 的 tab 身份，同时也是 `openTab` 的 `type`。 */
 export const COMPARE_TAB_ID = 'workspace-groups:compare'
-
-/** 区域组件需要的、由外部注入的动作与文案（不含两侧数据 hook 与宽窄状态）。 */
-export type RegionActions = Omit<
-  WorkspaceGroupsProps,
-  'wide' | 'expandSidebar' | 'useWorkspaces' | 'useSessions'
->
 
 /**
  * better-sidebar 的 tab 描述符（结构声明，只取本包用到的字段）。
@@ -38,7 +32,7 @@ interface CompareTabDescriptor {
   description?: string | (() => string)
   order?: number
   single?: boolean
-  component: (props: { ctx: Context }) => React.ReactNode
+  component: (props: { ctx: Context }) => ReactElement
 }
 
 /** better-sidebar 暴露给外部插件的服务面（结构声明）。 */
@@ -51,12 +45,6 @@ interface BetterSidebarLike {
 interface SnapshotSource<T> {
   getSnapshot(): T
   subscribe(listener: () => void): () => void
-}
-
-/** 区域需要的两侧快照形状，取自官方插槽原有的数据来源。 */
-type WorkspaceState = {
-  items: readonly WorkspaceView[]
-  archivedSessionIds: readonly string[]
 }
 
 /**
@@ -72,41 +60,41 @@ type WorkspaceState = {
 function useSnapshotSelector<T>(source: SnapshotSource<T>): <S>(select: (state: T) => S) => S {
   return function useSelector<S>(select: (state: T) => S): S {
     // 订阅与读取都包一层箭头函数：快照源的这两个方法可能是类的实例方法
-    // （依赖 this），直接把方法引用交给 React 会丢失接收者。
-    const subscribe = React.useCallback((onChange: () => void) => source.subscribe(onChange), [source])
-    const getSnapshot = React.useCallback(() => source.getSnapshot(), [source])
-    const state = React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+    //（依赖 this），直接把方法引用交给 React 会丢失接收者。
+    const subscribe = useCallback((onChange: () => void) => source.subscribe(onChange), [source])
+    const getSnapshot = useCallback(() => source.getSnapshot(), [source])
+    const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
     return select(state)
   }
 }
 
 /** 右侧栏 tab 的 tab 体：套上与侧边栏一致的内边距后渲染区域。 */
-function CompareTabBody(props: { ctx: Context; actions: RegionActions }): React.ReactElement {
-  const sessions = props.ctx.get('sessions') as { list: SnapshotSource<SessionListState> } | undefined
-  const workspaces = props.ctx.get('workspaces') as
+function CompareTabBody({ ctx, actions }: { ctx: Context; actions: RegionActions }): ReactElement {
+  const sessions = ctx.get('sessions') as { list: SnapshotSource<SessionListState> } | undefined
+  const workspaces = ctx.get('workspaces') as
     | { list: SnapshotSource<WorkspaceState> }
     | undefined
 
-  const useSessions = React.useMemo(
+  const useSessions = useMemo(
     () => useSnapshotSelector(sessions?.list ?? EMPTY_SESSIONS),
     [sessions],
   )
-  const useWorkspaces = React.useMemo(
+  const useWorkspaces = useMemo(
     () => useSnapshotSelector(workspaces?.list ?? EMPTY_WORKSPACES),
     [workspaces],
   )
 
-  return React.createElement(
-    'div',
-    { className: 'wg-tab' },
-    React.createElement(WorkspaceGroupsRegion, {
-      ...props.actions,
-      // 右侧栏没有 shell 的折叠态：始终按宽栏渲染，展开请求是空操作。
-      wide: true,
-      expandSidebar: () => {},
-      useWorkspaces,
-      useSessions,
-    } as unknown as WorkspaceGroupsProps),
+  return (
+    <div className="wg-tab">
+      <WorkspaceGroupsRegion
+        {...actions}
+        // 右侧栏没有 shell 的折叠态：始终按宽栏渲染，展开请求是空操作。
+        wide
+        expandSidebar={() => {}}
+        useWorkspaces={useWorkspaces}
+        useSessions={useSessions}
+      />
+    </div>
   )
 }
 
@@ -154,7 +142,7 @@ export function registerCompareTab(ctx: Context, actions: RegionActions): () => 
       description: () => actions.labels.compareTabDescription,
       order: 200,
       single: true,
-      component: (tabProps) => React.createElement(CompareTabBody, { ctx: tabProps.ctx, actions }),
+      component: (tabProps) => <CompareTabBody ctx={tabProps.ctx} actions={actions} />,
     })
 
     // 挂载后尝试直接打开：没有活动会话时 openTab 会静默返回，

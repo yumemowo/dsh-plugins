@@ -21,127 +21,27 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import { REMOTE_CONTRIBUTION, SERVICE, callRemote } from './remote.ts'
 import type { Group, WorkspaceGroupsSnapshot } from './remote.ts'
-import { registerCompareTab } from './compare.ts'
-import type { RegionActions } from './compare.ts'
-import { WorkspaceGroupsRegion } from './region.ts'
+import { registerCompareTab } from './compare.tsx'
+import { DICTIONARIES, LOCALE_NAMESPACE, regionLabels } from './labels.ts'
+import type { RegionActions } from './actions.ts'
+import { WorkspaceGroupsRegion } from './components/WorkspaceGroupsRegion.tsx'
 import { insertStyles } from './styles.ts'
-
-/**
- * 声明本包占用的插槽与语言包键域。
- *
- * 这两个合并只有在本模块被引入后才会生效，因此上面的类型导入不可省略。
- */
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface LocaleNamespaceMap {
-    'workspace-groups': keyof (typeof DICTIONARIES)['zh']
-  }
-}
 
 /** 浏览器半边声明的服务依赖。 */
 export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'remote']
-
-/** 界面文案，中英各一份。 */
-const DICTIONARIES = {
-  zh: {
-    title: '工作区',
-    newGroup: '新建分组',
-    newSessionIn: '在「{name}」中新建会话',
-    workspaceActions: '工作区「{name}」的操作',
-    renameWorkspace: '重命名工作区',
-    deleteWorkspace: '删除工作区',
-    confirmDeleteWorkspace: '删除工作区「{name}」？文件夹与会话记录会保留，其会话将移入「未分组」。',
-    workspaceNamePrompt: '工作区名称',
-    workspaceConflict: '已存在名为「{name}」的工作区。',
-    ungrouped: '未分组',
-    groupNamePrompt: '分组名称',
-    renameGroup: '重命名分组',
-    deleteGroup: '删除分组',
-    confirmDeleteGroup: '删除分组「{name}」？组内会话会移出分组，会话本身不受影响。',
-    confirmLabel: '确定',
-    cancelLabel: '取消',
-    closeLabel: '关闭',
-    sessionActions: '会话操作',
-    moveToGroup: '分组',
-    ungroup: '取消分组',
-    compareTabDescription: '分组区域的对照视图（左侧为官方工作区列表）',
-    empty: '暂无会话',
-    unimplemented: '分组为实验特性：搜索、归档、拖拽暂未提供。',
-  },
-  en: {
-    title: 'Workspaces',
-    newGroup: 'New group',
-    newSessionIn: 'New session in {name}',
-    workspaceActions: 'Workspace actions for {name}',
-    renameWorkspace: 'Rename workspace',
-    deleteWorkspace: 'Delete workspace',
-    confirmDeleteWorkspace:
-      'Delete workspace "{name}"? The folder and session logs are kept; its sessions move to Ungrouped.',
-    workspaceNamePrompt: 'Workspace name',
-    workspaceConflict: 'A workspace named "{name}" already exists.',
-    ungrouped: 'Ungrouped',
-    groupNamePrompt: 'Group name',
-    renameGroup: 'Rename group',
-    deleteGroup: 'Delete group',
-    confirmDeleteGroup:
-      'Delete group "{name}"? Its sessions leave the group; the sessions themselves are unaffected.',
-    confirmLabel: 'Confirm',
-    cancelLabel: 'Cancel',
-    closeLabel: 'Close',
-    sessionActions: 'Session actions',
-    moveToGroup: 'Group',
-    ungroup: 'Ungroup',
-    compareTabDescription: 'Grouping region for side-by-side comparison with the official list',
-    empty: 'No sessions',
-    unimplemented: 'Groups are experimental: search, archive and drag are not available yet.',
-  },
-}
-
-/** 语言包命名空间。 */
-const NS = 'workspace-groups'
 
 /**
  * 对照模式开关。
  *
  * `true` 时左侧 `sidebar.workspaces` 交还官方 ui-workspace，本区域改挂进
  * `dsh-better-sidebar` 的右侧栏 tab，便于和官方渲染同屏比对；
- * `false`（默认）时维持 `priority: -1` 接替左侧区域。
+ * `false` 时维持 `priority: -1` 接替左侧区域。
  *
  * 之所以是编译期常量而不是配置项：这是开发期的对照开关，
  * 不是要交付给用户的能力，配置化反而要多一套 schema 与文档。
  */
 //const COMPARE_MODE = false
 const COMPARE_MODE = true
-
-/** 把翻译函数绑定成组件需要的文案表。 */
-function buildLabels(
-  t: (key: keyof (typeof DICTIONARIES)['zh'], params?: Record<string, unknown>) => string,
-): RegionActions['labels'] {
-  return {
-    title: t('title'),
-    newGroup: t('newGroup'),
-    newSessionIn: (name: string) => t('newSessionIn', { name }),
-    workspaceActions: (name: string) => t('workspaceActions', { name }),
-    renameWorkspace: t('renameWorkspace'),
-    deleteWorkspace: t('deleteWorkspace'),
-    confirmDeleteWorkspace: (name: string) => t('confirmDeleteWorkspace', { name }),
-    workspaceNamePrompt: t('workspaceNamePrompt'),
-    workspaceConflict: (name: string) => t('workspaceConflict', { name }),
-    ungrouped: t('ungrouped'),
-    groupNamePrompt: t('groupNamePrompt'),
-    renameGroup: t('renameGroup'),
-    deleteGroup: t('deleteGroup'),
-    confirmDeleteGroup: (name: string) => t('confirmDeleteGroup', { name }),
-    confirmLabel: t('confirmLabel'),
-    cancelLabel: t('cancelLabel'),
-    closeLabel: t('closeLabel'),
-    sessionActions: t('sessionActions'),
-    moveToGroup: t('moveToGroup'),
-    ungroup: t('ungroup'),
-    compareTabDescription: t('compareTabDescription'),
-    empty: t('empty'),
-    unimplemented: t('unimplemented'),
-  }
-}
 
 /**
  * 插件入口。
@@ -155,7 +55,7 @@ export function apply(ctx: Context): void {
 
   // 两种注册形式：带类型合并的整表形式按内置语言 id 传字典。
   ctx.effect(
-    () => locale.register(NS, { zh: DICTIONARIES.zh, en: DICTIONARIES.en }),
+    () => locale.register(LOCALE_NAMESPACE, { zh: DICTIONARIES.zh, en: DICTIONARIES.en }),
     'workspace-groups: dictionaries',
   )
 
@@ -209,8 +109,7 @@ export function apply(ctx: Context): void {
   }
 
   const injected = (): RegionActions => {
-    const t = locale.bind(NS)
-    const labels = buildLabels(t)
+    const labels = regionLabels(locale.bind(LOCALE_NAMESPACE))
     if (sessions === undefined || workspaces === undefined) {
       // 依赖缺失时给出空实现：组件仍可渲染，只是没有可操作的动作。
       return {
@@ -292,7 +191,7 @@ export function apply(ctx: Context): void {
   // 接替模式：priority: -1 —— 覆盖官方 ui-workspace（其优先级为默认 0）。
   ctx.slots.inject('sidebar.workspaces', () =>
     ctx.slots.register(
-      { name: 'sidebar.workspaces', priority: -1, inject: injected, locale: NS },
+      { name: 'sidebar.workspaces', priority: -1, inject: injected, locale: LOCALE_NAMESPACE },
       WorkspaceGroupsRegion as never,
     ),
   )

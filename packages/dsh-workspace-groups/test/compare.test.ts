@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { COMPARE_TAB_ID, registerCompareTab } from '../src/client/compare.ts'
-import type { RegionActions } from '../src/client/compare.ts'
+import { COMPARE_TAB_ID, registerCompareTab } from '../src/client/compare.tsx'
+import type { RegionActions } from '../src/client/actions.ts'
 import type { Context } from '@deepseek-ai/cordis'
 
 /** 造一份最小可用的注入动作与文案。 */

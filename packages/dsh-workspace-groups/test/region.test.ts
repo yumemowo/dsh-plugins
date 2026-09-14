@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildLayout,
-  buildSessionMenuItems,
-  buildWorkspaceMenuItems,
   containsSession,
   groupIdOfSession,
-  groupSessionsByWorkspace,
-  straySessions,
-} from '../src/client/region.ts'
-import type { SessionRow } from '../src/client/region.ts'
+} from '../src/client/data/layout.ts'
+import { groupSessionsByWorkspace, straySessions } from '../src/client/data/sessions.ts'
+import { buildSessionMenuItems, buildWorkspaceMenuItems } from '../src/client/menus.tsx'
+import type { SessionRow } from '../src/client/data/types.ts'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 

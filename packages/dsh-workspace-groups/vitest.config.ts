@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    include: ['test/**/*.test.ts'],
+    include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
     environment: 'node',
   },
   // @deepseek-ai/dsh-client-ui-primitives 只存在于客户端基线模块表，

@@ -244,6 +244,42 @@ dsh --profile web --dump-config | grep -A2 '== @your-scope/dsh-workspace-groups'
 pnpm run build          # tsc（宿主）+ esbuild（浏览器 bundle）
 ```
 
+## 客户端代码结构
+
+浏览器半边按「入口 / 契约 / 数据 / 组件」分层，每个模块只做一件事；组件
+用 `.tsx` 写 JSX，纯逻辑留在 `.ts`（tsconfig 与 vitest 都已包含 `**/*.tsx`）。
+
+```
+src/client/
+├── index.ts                    插件入口：语言包注册、remote 挂载、插槽注册、对照开关
+├── labels.ts                   中英文案表、RegionLabels 契约、命名空间声明
+├── actions.ts                  RegionActions / RegionDataHooks（组件与宿主的接口）
+├── compare.tsx                 对照模式：挂进 better-sidebar 右侧栏 tab
+├── remote.ts                   Remote 贡献声明与调用封装
+├── runtime.ts                  primitives 值导入的唯一出口（external）
+├── styles.ts                   本包样式表
+├── data/                       无 React 依赖的纯逻辑
+│   ├── types.ts                SessionRow / GroupSection / WorkspaceLayout / 草稿类型
+│   ├── layout.ts               分组元数据 → 渲染布局
+│   └── sessions.ts             会话快照 → 渲染行（含可见性过滤、未分组收集）
+└── components/
+    ├── WorkspaceGroupsRegion.tsx   区域容器：状态与编排
+    ├── WorkspaceSection.tsx        一个工作区区块（标题 + 折叠体 + 空态）
+    ├── WorkspaceRow.tsx            工作区标题行（文件夹/箭头、`...`、`+`）
+    ├── GroupSection.tsx            一个分组（分组头 + 组内会话）
+    ├── SessionRowView.tsx          会话行外壳（状态位列、标题、可选操作位）
+    ├── SessionRowMenu.tsx          带归组菜单的会话行
+    ├── WorkspaceRail.tsx           窄栏展开入口
+    ├── IconButton.tsx              16px 行内图标按钮
+    ├── rowKeyboard.ts              Enter/Space 行激活（忽略行内按钮冒泡）
+    └── dialogs/
+        ├── NameDialog.tsx          建组 / 改名 / 重命名工作区共用的单行输入框
+        └── DeleteDialog.tsx        破坏性操作确认框
+```
+
+状态的归属只有一处：折叠态与四个对话框草稿留在 `WorkspaceGroupsRegion`，
+菜单开合留在持有锚点的行组件内，行的外观组件保持无状态。
+
 ## 构建产物
 
 | 产物 | 内容 |

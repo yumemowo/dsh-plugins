@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as React from 'react'
-import { WorkspaceGroupsRegion } from '../src/client/region.ts'
-import type { WorkspaceGroupsProps } from '../src/client/region.ts'
+import { WorkspaceGroupsRegion } from '../src/client/components/WorkspaceGroupsRegion.tsx'
+import type { WorkspaceGroupsProps } from '../src/client/components/WorkspaceGroupsRegion.tsx'
 
 /**
  * 区域组件的渲染冒烟。
