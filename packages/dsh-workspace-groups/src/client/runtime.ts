@@ -6,4 +6,18 @@
  * external 由宿主解析，类型由 ambient 声明（primitives-env.d.ts）提供。
  */
 
-export { Menu } from '@deepseek-ai/dsh-client-ui-primitives'
+export {
+  Button,
+  IconEditOutline16,
+  IconEllipsisOutline16,
+  IconFolderClose16,
+  IconFolderOpen16,
+  IconNewChatOutline16,
+  IconPanelLeftOutline16,
+  IconPlusOutline16,
+  IconTrashOutline16,
+  IconTriangleRightFill14,
+  Input,
+  Menu,
+  Modal,
+} from '@deepseek-ai/dsh-client-ui-primitives'

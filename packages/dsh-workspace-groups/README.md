@@ -76,7 +76,8 @@
 - 待交互警示点、Schedule 告警标记
 
 当前界面会在区域底部显示一行说明，提示这是实验版本。
-建组与改名的输入框目前用浏览器原生 `prompt`，阶段二会替换为产品内组件。
+建组与改名的输入框、删除确认、以及全部图标都走官方
+`@deepseek-ai/dsh-client-ui-primitives`（见下节）。
 
 ### 样式对齐
 
@@ -95,6 +96,18 @@
 | 滚动条留白 | `--dsh-session-list-scrollbar-width` / `-offset` |
 | 过渡 | `--ds-ease-in-out`，并遵守 `prefers-reduced-motion` |
 
+文字层级与官方逐条对齐：
+
+- **工作区标题与会话标题同色同字号**：都是 `--dsw-alias-label-primary`
+  14px / 20px，且都**不加字重**。官方 `ui-workspace` 的 `.title` 是两者共用的类，
+  层级只由行高（34px vs 32px）承担——这里以前误用了更暗的 `label-secondary`
+  加 `font-weight: 500`，与官方不一致。
+- 容器行（官方 `projectRow`）底色是 `label-primary`，`label-tertiary` 只属于
+  其中的图标槽。分组标题是官方没有的层级，刻意保留 `label-tertiary`
+  以示「比工作区低一级」。
+- 字号与行高成对写在叶子上（官方 `.title` 即如此）；根节点只设 `font-size: 14px`，
+  **不设 `line-height`**，与官方侧栏根一致。
+
 两处结构性对齐，都是照官方 DOM 复刻的：
 
 - **工作区行**：静止时显示文件夹（展开/收起两态），行悬停时文件夹隐藏、
@@ -102,12 +115,39 @@
 - **会话行**：行首保留一个同宽的图标占位列（官方放状态点，本包暂不渲染状态），
   行尾是操作位。标题因此落在工作区标题的同一横向线上，与官方几何一致。
 
-图标路径数据内联自官方 `@deepseek-ai/dsh-client-ui-primitives`
-（`IconFolderClose16` / `IconFolderOpen16` / `IconTriangleRightFill14` /
-`IconEllipsisOutline16`）：shell 的基线模块表里虽然有那个命名空间，
-但本包不引它的值导出，内联同一份路径可以避免多一份实例。
-
 行内操作按钮默认隐藏，悬停或键盘聚焦时才显示，避免常驻噪音。
+
+### 复用官方原子组件
+
+按官方 [Web UI 样式参考](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/web-styling.zh.md)
+「重新设计控件样式之前先复用控件」的要求，本包不再自绘这些控件：
+
+| 位置 | 用的官方原语 |
+| --- | --- |
+| 建组 / 改名 | `Modal` + `Input` + `Button`（`outline` / `primary`） |
+| 删除分组 | `Modal` + `Button`（`outline`，确认按钮着错误色） |
+| 文件夹、三角、省略号 | `IconFolderClose16` / `IconFolderOpen16` / `IconTriangleRightFill14` / `IconEllipsisOutline16` |
+| 新建会话、新建分组、改名、删除 | `IconNewChatOutline16` / `IconPlusOutline16` / `IconEditOutline16` / `IconTrashOutline16` |
+| 窄栏展开入口 | `IconPanelLeftOutline16`（与官方侧栏折叠按钮同一字形） |
+
+原语的样式属于 ui-theme / ui-primitives：本包不为它们写颜色、阈值或高亮，
+只在 `styles.ts` 里保留自己的布局约定。
+
+两处刻意的取舍：
+
+- **删除分组用普通 `Modal`，不用 `RiskConfirmation`。** 后者自带警告图标与
+  「须勾选确认」的复选框，而删除分组只解散分组、不动会话本身，达不到那个
+  破坏级别。危险语义改由确认按钮的错误色承载（`.wg-danger-action` 设
+  `--dsw-alias-state-error-primary`）——这与官方 `ui-workspace` 的删除按钮
+  是同一做法：`Button` 没有 `danger` variant，改色就靠传 `className`。
+- **行内 16px 图标按钮保留自绘。** 官方 `ui-workspace` 的行内按钮也是它自己的
+  CSS Module（16px 命中区、4px 圆角、悬停提亮文字色），primitives 没有等价的
+  16px 行内按钮；换成 primitives 的 `Button`（28px 高、带悬停底色）会让行外观
+  明显偏离官方。因此几何保留同一份 16px 约定，图标取原语。
+
+primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标成 external
+由宿主从基线模块表解析；它是 shell 静态模块表的成员，不会多出第二份实例。
+
 
 ### 为什么不能只做增量扩展
 

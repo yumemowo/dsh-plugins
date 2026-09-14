@@ -49,7 +49,10 @@ const DICTIONARIES = {
     groupNamePrompt: '分组名称',
     renameGroup: '重命名分组',
     deleteGroup: '删除分组',
-    confirmDeleteGroup: '删除该分组？组内会话会移出分组，会话本身不受影响。',
+    confirmDeleteGroup: '删除分组「{name}」？组内会话会移出分组，会话本身不受影响。',
+    confirmLabel: '确定',
+    cancelLabel: '取消',
+    closeLabel: '关闭',
     sessionActions: '会话操作',
     moveToGroup: '分组',
     ungroup: '取消分组',
@@ -65,7 +68,10 @@ const DICTIONARIES = {
     renameGroup: 'Rename group',
     deleteGroup: 'Delete group',
     confirmDeleteGroup:
-      'Delete this group? Its sessions leave the group; the sessions themselves are unaffected.',
+      'Delete group "{name}"? Its sessions leave the group; the sessions themselves are unaffected.',
+    confirmLabel: 'Confirm',
+    cancelLabel: 'Cancel',
+    closeLabel: 'Close',
     sessionActions: 'Session actions',
     moveToGroup: 'Group',
     ungroup: 'Ungroup',
@@ -93,7 +99,7 @@ const COMPARE_MODE = true
 
 /** 把翻译函数绑定成组件需要的文案表。 */
 function buildLabels(
-  t: (key: keyof (typeof DICTIONARIES)['zh']) => string,
+  t: (key: keyof (typeof DICTIONARIES)['zh'], params?: Record<string, unknown>) => string,
 ): RegionActions['labels'] {
   return {
     title: t('title'),
@@ -102,7 +108,10 @@ function buildLabels(
     groupNamePrompt: t('groupNamePrompt'),
     renameGroup: t('renameGroup'),
     deleteGroup: t('deleteGroup'),
-    confirmDeleteGroup: t('confirmDeleteGroup'),
+    confirmDeleteGroup: (name: string) => t('confirmDeleteGroup', { name }),
+    confirmLabel: t('confirmLabel'),
+    cancelLabel: t('cancelLabel'),
+    closeLabel: t('closeLabel'),
     sessionActions: t('sessionActions'),
     moveToGroup: t('moveToGroup'),
     ungroup: t('ungroup'),

@@ -2,7 +2,21 @@ import * as React from 'react'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { MenuActionItem, MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
-import { Menu } from './runtime.ts'
+import {
+  Button,
+  IconEditOutline16,
+  IconEllipsisOutline16,
+  IconFolderClose16,
+  IconFolderOpen16,
+  IconNewChatOutline16,
+  IconPanelLeftOutline16,
+  IconPlusOutline16,
+  IconTrashOutline16,
+  IconTriangleRightFill14,
+  Input,
+  Menu,
+  Modal,
+} from './runtime.ts'
 import type { Group } from './remote.ts'
 
 /**
@@ -64,23 +78,27 @@ function isSessionVisible(
 }
 
 /**
- * 向用户询问一段文本。
+ * 一个待编辑的分组名，指名编辑对象与当前草稿。
  *
- * 阶段一用最朴素的 `prompt`，不引入产品内的对话框组件。
- * @param message - 提示语。
- * @param initial - 预填值。
- * @returns 用户输入，取消时返回 null。
+ * 新建时 `groupId` 为空串，确认后走 `createGroup`；否则走 `renameGroup`。
  */
-function askText(message: string, initial?: string): string | null {
-  const fn = (globalThis as { prompt?: (text: string, value?: string) => string | null }).prompt
-  if (typeof fn !== 'function') return null
-  return initial === undefined ? fn(message) : fn(message, initial)
+interface GroupNameDraft {
+  workspaceId: string
+  groupId: string
+  value: string
 }
 
-/** 向用户确认一次破坏性操作。 */
-function confirmAction(message: string): boolean {
-  const fn = (globalThis as { confirm?: (text: string) => boolean }).confirm
-  return typeof fn === 'function' ? fn(message) : false
+/** 分组名对话框与删除确认框需要的文案。 */
+interface GroupDialogLabels {
+  newGroup: string
+  renameGroup: string
+  groupNamePrompt: string
+  confirmLabel: string
+  cancelLabel: string
+  closeLabel: string
+  deleteGroup: string
+  /** 删除分组的说明文案；分组名由调用方传入，模板里的 `{name}` 由语言包替换。 */
+  confirmDeleteGroup: (name: string) => string
 }
 
 /** 把一个会话摘要投影成渲染行。 */
@@ -252,7 +270,7 @@ function SessionRowMenu(props: {
     React.createElement('span', { className: 'wg-row-title' }, row.title),
     React.createElement(
       'span',
-      { className: 'wg-slot wg-row-action', onClick: (event: React.MouseEvent) => event.stopPropagation() },
+      { className: 'wg-slot', onClick: (event: React.MouseEvent) => event.stopPropagation() },
       React.createElement(Menu, {
         open: menuOpen,
         onClose: () => setMenuOpen(false),
@@ -269,7 +287,7 @@ function SessionRowMenu(props: {
           'button',
           {
             type: 'button',
-            className: 'wg-icon-button',
+            className: 'wg-row-action',
             title: labels.sessionActions,
             'aria-label': labels.sessionActions,
             onClick: (event: React.MouseEvent) => {
@@ -277,7 +295,7 @@ function SessionRowMenu(props: {
               setMenuOpen((v) => !v)
             },
           },
-          React.createElement(FilledIcon, { paths: ELLIPSIS_PATHS }),
+          React.createElement(IconEllipsisOutline16, {}),
         ),
         items: buildSessionMenuItems({
           sections,
@@ -290,93 +308,15 @@ function SessionRowMenu(props: {
   )
 }
 
-/** 16px 线性图标，颜色继承自父级。 */
-function Icon({ path }: { path: string }): React.ReactElement {
-  return React.createElement(
-    'svg',
-    {
-      width: 16,
-      height: 16,
-      viewBox: '0 0 16 16',
-      fill: 'none',
-      stroke: 'currentColor',
-      strokeWidth: 1.5,
-      strokeLinecap: 'round',
-      strokeLinejoin: 'round',
-      'aria-hidden': true,
-    },
-    React.createElement('path', { d: path }),
-  )
-}
-
 /**
- * 填充式图标，取自官方 `@deepseek-ai/dsh-client-ui-primitives`
- *（shell 的基线模块表里有这个命名空间，但本包不引它的值导出，
- * 因此在这里内联同一份路径数据，避免多一份实例）。
+ * `aria-label` 与 tooltip 共用一个文案的 16px 行内按钮。
+ *
+ * 官方行内按钮几何来自 ui-workspace 的 CSS Module，primitives 没有等价的
+ * 16px 行内按钮，因此保留本地 16px 几何；图标本身取 primitives 导出。
  */
-function FilledIcon(props: {
-  paths: readonly string[]
-  size?: number
-  opacity?: readonly number[]
-  className?: string
-}): React.ReactElement {
-  const size = props.size ?? 16
-  return React.createElement(
-    'svg',
-    {
-      width: size,
-      height: size,
-      viewBox: `0 0 ${size} ${size}`,
-      fill: 'none',
-      className: props.className,
-      'aria-hidden': true,
-    },
-    ...props.paths.map((d, index) =>
-      React.createElement('path', {
-        key: index,
-        d,
-        fill: 'currentColor',
-        ...(props.opacity?.[index] === undefined ? {} : { opacity: props.opacity[index] }),
-      }),
-    ),
-  )
-}
-
-const PLUS_PATH = 'M8 3.5v9M3.5 8h9'
-const PENCIL_PATH = 'M11.5 3.5l1 1-7 7-1.5.5.5-1.5 7-7z'
-const CROSS_PATH = 'M4.5 4.5l7 7M11.5 4.5l-7 7'
-// 会话用气泡图标，与「新建分组」的加号区分开。
-const NEW_SESSION_PATH = 'M3 4.5h10v6.5H7.5L4.5 13.5v-2.5H3z'
-// 窄栏展开入口用线性箭头，与行内的实心三角区分。
-const CHEVRON_PATH = 'M6 3.5L10.5 8L6 12.5'
-
-/** 官方 `IconFolderClose16` 的路径数据。 */
-const FOLDER_CLOSE_PATHS = [
-  'M5.05582 0.518756L4.50669 0.86654L5.05582 0.518756ZM13 9.4837L13.65 9.4837L13.65 3.53962L13 3.53962L12.35 3.53962L12.35 9.4837L13 9.4837ZM11.3264 1.86603L11.3264 1.21603L6.52313 1.21603L6.52313 1.86603L6.52313 2.51603L11.3264 2.51603L11.3264 1.86603ZM5.58054 1.34727L6.12968 0.999489L5.60495 0.170972L5.05582 0.518756L4.50669 0.86654L5.03141 1.69506L5.58054 1.34727ZM4.11323 1.23058e-13L4.11323 -0.65L1.67359 -0.65L1.67359 5.00699e-14L1.67359 0.65L4.11323 0.65L4.11323 1.23058e-13ZM0 1.67359L-0.65 1.67359L-0.65 9.4837L0 9.4837L0.65 9.4837L0.65 1.67359L0 1.67359ZM11.3264 11.1573L11.3264 10.5073L1.67359 10.5073L1.67359 11.1573L1.67359 11.8073L11.3264 11.8073L11.3264 11.1573ZM0 9.4837L-0.65 9.4837C-0.65 10.767 0.390308 11.8073 1.67359 11.8073L1.67359 11.1573L1.67359 10.5073C1.10828 10.5073 0.65 10.049 0.65 9.4837L0 9.4837ZM1.67359 5.00699e-14L1.67359 -0.65C0.390307 -0.65 -0.65 0.390309 -0.65 1.67359L0 1.67359L0.65 1.67359C0.65 1.10828 1.10828 0.65 1.67359 0.65L1.67359 5.00699e-14ZM5.05582 0.518756L5.60495 0.170972C5.28121 -0.340193 4.71829 -0.65 4.11323 -0.65L4.11323 1.23058e-13L4.11323 0.65C4.27282 0.65 4.4213 0.731715 4.50669 0.86654L5.05582 0.518756ZM6.52313 1.86603L6.52313 1.21603C6.36354 1.21603 6.21507 1.13431 6.12968 0.999489L5.58054 1.34727L5.03141 1.69506C5.35515 2.20622 5.91808 2.51603 6.52313 2.51603L6.52313 1.86603ZM13 3.53962L13.65 3.53962C13.65 2.25634 12.6097 1.21603 11.3264 1.21603L11.3264 1.86603L11.3264 2.51603C11.8917 2.51603 12.35 2.97431 12.35 3.53962L13 3.53962ZM13 9.4837L12.35 9.4837C12.35 10.049 11.8917 10.5073 11.3264 10.5073L11.3264 11.1573L11.3264 11.8073C12.6097 11.8073 13.65 10.767 13.65 9.4837L13 9.4837Z',
-]
-
-/** 官方 `IconFolderOpen16` 的路径数据；第二条是 0.2 透明度的内层封面。 */
-const FOLDER_OPEN_PATHS = [
-  'M5.19629 1.57104C5.81144 1.5711 6.38623 1.8786 6.72754 2.39038L7.19922 3.09839C7.28454 3.22635 7.42824 3.30344 7.58203 3.30347H12.1699C13.5039 3.30348 14.5859 4.38548 14.5859 5.71948V6.62671C15.2694 7.02689 15.6605 7.85012 15.4385 8.68726L14.3848 12.658C14.1037 13.7164 13.1449 14.4527 12.0498 14.4529H2.91699C1.51651 14.4529 0.451662 13.2814 0.501954 11.9519V3.98706C0.501954 2.65305 1.58396 1.57104 2.91797 1.57104H5.19629ZM3.7793 7.75562C3.30994 7.75562 2.89883 8.07153 2.77832 8.52515L1.91602 11.7722C1.74167 12.4291 2.23734 13.073 2.91699 13.073H12.0498C12.5191 13.0728 12.9304 12.757 13.0508 12.3035L14.1045 8.33374C14.1819 8.04202 13.9619 7.756 13.6602 7.75562H3.7793ZM2.91797 2.9519C2.34625 2.9519 1.88281 3.41534 1.88281 3.98706V7.2937C2.33068 6.7269 3.02249 6.37476 3.7793 6.37476H13.2051V5.71948C13.2051 5.14777 12.7416 4.68434 12.1699 4.68433H7.58203C6.96675 4.6843 6.39209 4.37595 6.05078 3.86401L5.5791 3.15601C5.49379 3.02821 5.34995 2.95196 5.19629 2.9519H2.91797Z',
-  'M13.6602 7.75525C13.9618 7.7556 14.1815 8.04179 14.1045 8.33337L13.0508 12.3031C12.9304 12.7567 12.5191 13.0725 12.0498 13.0726H2.91701C2.23744 13.0725 1.7417 12.4287 1.91603 11.7719L2.77834 8.52478C2.89898 8.07146 3.31018 7.75532 3.77931 7.75525H13.6602ZM5.1963 2.95154C5.34985 2.95159 5.49377 3.02803 5.57912 3.15564L6.0508 3.86365C6.39205 4.37553 6.96685 4.68385 7.58205 4.68396H12.1699C12.7416 4.68396 13.2049 5.14754 13.2051 5.71912V6.37439H3.77931C3.02267 6.37444 2.33067 6.72671 1.88283 7.29333V3.98669C1.88299 3.4152 2.34649 2.95168 2.91798 2.95154H5.1963Z',
-]
-
-/** 官方 `IconTriangleRightFill14` 的路径数据。 */
-const TRIANGLE_RIGHT_PATHS = [
-  'M4.25 2.82782L4.25 11.1722C4.25 11.6622 4.84243 11.9076 5.18891 11.5611L9.36109 7.38891C9.57588 7.17412 9.57588 6.82588 9.36109 6.61109L5.18891 2.43891C4.84243 2.09243 4.25 2.33782 4.25 2.82782Z',
-]
-
-/** 官方 `IconEllipsisOutline16` 的三个圆点。 */
-const ELLIPSIS_PATHS = [
-  'M4.55146 8.00001C4.55146 8.63513 4.03659 9.15001 3.40146 9.15001C2.76634 9.15001 2.25146 8.63513 2.25146 8.00001C2.25146 7.36488 2.76634 6.85001 3.40146 6.85001C4.03659 6.85001 4.55146 7.36488 4.55146 8.00001Z',
-  'M9.1476 8.00001C9.1476 8.63513 8.63273 9.15001 7.9976 9.15001C7.36248 9.15001 6.8476 8.63513 6.8476 8.00001C6.8476 7.36488 7.36248 6.85001 7.9976 6.85001C8.63273 6.85001 9.1476 7.36488 9.1476 8.00001Z',
-  'M13.7486 8.00001C13.7486 8.63513 13.2338 9.15001 12.5986 9.15001C11.9635 9.15001 11.4486 8.63513 11.4486 8.00001C11.4486 7.36488 11.9635 6.85001 12.5986 6.85001C13.2338 6.85001 13.7486 7.36488 13.7486 8.00001Z',
-]
-
-/** 28px 圆形图标按钮，悬停显示。 */
 function IconButton(props: {
   title: string
-  path: string
+  icon: React.ReactElement
   onClick: () => void
   className?: string
 }): React.ReactElement {
@@ -384,7 +324,7 @@ function IconButton(props: {
     'button',
     {
       type: 'button',
-      className: `wg-icon-button${props.className === undefined ? '' : ` ${props.className}`}`,
+      className: `wg-row-action${props.className === undefined ? '' : ` ${props.className}`}`,
       title: props.title,
       'aria-label': props.title,
       onClick: (event: React.MouseEvent) => {
@@ -392,7 +332,7 @@ function IconButton(props: {
         props.onClick()
       },
     },
-    React.createElement(Icon, { path: props.path }),
+    props.icon,
   )
 }
 
@@ -432,10 +372,19 @@ export interface WorkspaceGroupsProps {
     title: string
     newGroup: string
     newSession: string
+    /** 分组名输入框的占位与无障碍标签。 */
     groupNamePrompt: string
+    /** 分组名对话框的标题（重命名时用）。 */
     renameGroup: string
+    /** 对话框确认按钮。 */
+    confirmLabel: string
+    /** 对话框取消按钮。 */
+    cancelLabel: string
+    /** 对话框关闭按钮的无障碍标签。 */
+    closeLabel: string
     deleteGroup: string
-    confirmDeleteGroup: string
+    /** 删除分组的说明文案；分组名由调用方传入，模板里的 `{name}` 由语言包替换。 */
+    confirmDeleteGroup: (name: string) => string
     /** 会话行尾操作位的无障碍标签。 */
     sessionActions: string
     /** 「分组」一级菜单项文案。 */
@@ -447,6 +396,104 @@ export interface WorkspaceGroupsProps {
     empty: string
     unimplemented: string
   }
+}
+
+/**
+ * 分组名对话框：新建与重命名共用。
+ *
+ * 输入法组合期间的 Enter 属于候选词确认，不能当提交用。
+ */
+function GroupNameDialog(props: {
+  draft: GroupNameDraft
+  onDraftChange: (value: string) => void
+  onConfirm: () => void
+  onClose: () => void
+  labels: GroupDialogLabels
+}): React.ReactElement {
+  const composing = React.useRef(false)
+  const { draft, labels } = props
+  return React.createElement(
+    Modal,
+    {
+      open: true,
+      onClose: props.onClose,
+      closeLabel: labels.closeLabel,
+      title: draft.groupId === '' ? labels.newGroup : labels.renameGroup,
+      footer: React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(Button, { variant: 'outline', onClick: props.onClose }, labels.cancelLabel),
+        React.createElement(
+          Button,
+          {
+            variant: 'primary',
+            disabled: draft.value.trim() === '',
+            onClick: props.onConfirm,
+          },
+          labels.confirmLabel,
+        ),
+      ),
+    },
+    React.createElement(Input, {
+      value: draft.value,
+      'aria-label': labels.groupNamePrompt,
+      placeholder: labels.groupNamePrompt,
+      autoFocus: true,
+      onFocus: (event) => event.target.select(),
+      onChange: (event) => props.onDraftChange(event.currentTarget.value),
+      onCompositionStart: () => {
+        composing.current = true
+      },
+      onCompositionEnd: () => {
+        composing.current = false
+      },
+      onKeyDown: (event) => {
+        if (event.key !== 'Enter' || composing.current) return
+        event.preventDefault()
+        props.onConfirm()
+      },
+    }),
+  )
+}
+
+/**
+ * 删除分组确认。
+ *
+ * 用普通 `Modal` 而不是 `RiskConfirmation`：后者带警告图标与勾选框，而删除
+ * 分组只解散分组、不动会话本身，达不到需要勾选确认的破坏级别。危险语义由
+ * 确认按钮的 `wg-danger-action` 承载（错误色 token，同官方删除按钮做法）。
+ */
+function GroupDeleteDialog(props: {
+  label: string
+  onConfirm: () => void
+  onClose: () => void
+  labels: GroupDialogLabels
+}): React.ReactElement {
+  const { labels } = props
+  return React.createElement(
+    Modal,
+    {
+      open: true,
+      onClose: props.onClose,
+      closeLabel: labels.closeLabel,
+      title: labels.deleteGroup,
+      description: labels.confirmDeleteGroup(props.label),
+      footer: React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(Button, { variant: 'outline', onClick: props.onClose }, labels.cancelLabel),
+        React.createElement(
+          Button,
+          {
+            variant: 'outline',
+            className: 'wg-danger-action',
+            onClick: props.onConfirm,
+          },
+          labels.deleteGroup,
+        ),
+      ),
+    },
+  )
 }
 
 /**
@@ -488,6 +535,9 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
   const [groups, setGroups] = React.useState<Record<string, Group[]>>({})
   const [collapsedWorkspaces, setCollapsedWorkspaces] = React.useState<Record<string, boolean>>({})
   const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({})
+  // 建组与改名共用一个对话框：groupId 为空串时是新建。
+  const [nameDraft, setNameDraft] = React.useState<GroupNameDraft | null>(null)
+  const [deleteTarget, setDeleteTarget] = React.useState<{ workspaceId: string; groupId: string; label: string } | null>(null)
 
   const currentSessionId = sessions.current === undefined ? undefined : String(sessions.current)
 
@@ -520,6 +570,41 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
     [reload],
   )
 
+  const closeNameDialog = (): void => setNameDraft(null)
+
+  /** 提交建组或改名；空名与取消都不写。 */
+  const commitNameDraft = (): void => {
+    const draft = nameDraft
+    if (draft === null) return
+    const name = draft.value.trim()
+    if (name === '') return
+    setNameDraft(null)
+    apply(
+      draft.groupId === ''
+        ? createGroup(draft.workspaceId, name)
+        : renameGroup(draft.workspaceId, draft.groupId, name),
+    )
+  }
+
+  const closeDeleteDialog = (): void => setDeleteTarget(null)
+
+  const commitDelete = (): void => {
+    const target = deleteTarget
+    if (target === null) return
+    closeDeleteDialog()
+    apply(deleteGroup(target.workspaceId, target.groupId))
+  }
+
+  const dialogLabels: GroupDialogLabels = {
+    newGroup: labels.newGroup,
+    renameGroup: labels.renameGroup,
+    groupNamePrompt: labels.groupNamePrompt,
+    confirmLabel: labels.confirmLabel,
+    cancelLabel: labels.cancelLabel,
+    closeLabel: labels.closeLabel,
+    deleteGroup: labels.deleteGroup,
+    confirmDeleteGroup: labels.confirmDeleteGroup,
+  }
   // 窄栏只保留展开入口，与官方组件的 rail 行为一致。
   if (!wide) {
     return React.createElement(
@@ -531,9 +616,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
           type: 'button',
           className: 'wg-rail-button',
           title: labels.title,
+          'aria-label': labels.title,
           onClick: expandSidebar,
         },
-        React.createElement(Icon, { path: CHEVRON_PATH }),
+        React.createElement(IconPanelLeftOutline16, {}),
       ),
     )
   }
@@ -609,36 +695,30 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
               {
                 className: `wg-slot wg-folder${folderActive ? ' wg-folder-active' : ''}`,
               },
-              React.createElement(FilledIcon, {
-                paths: workspaceCollapsed ? FOLDER_CLOSE_PATHS : FOLDER_OPEN_PATHS,
-                ...(workspaceCollapsed ? {} : { opacity: [1, 0.2] }),
-              }),
+              workspaceCollapsed
+                ? React.createElement(IconFolderClose16, {})
+                : React.createElement(IconFolderOpen16, {}),
             ),
             React.createElement(
               'span',
               { className: 'wg-slot wg-chevron' },
-              React.createElement(FilledIcon, {
-                paths: TRIANGLE_RIGHT_PATHS,
-                size: 14,
+              React.createElement(IconTriangleRightFill14, {
                 className: `wg-arrow${workspaceCollapsed ? '' : ' wg-arrow-open'}`,
               }),
             ),
             React.createElement('span', { className: 'wg-workspace-title' }, workspace.title),
             React.createElement(IconButton, {
               title: labels.newSession,
-              path: NEW_SESSION_PATH,
+              icon: React.createElement(IconNewChatOutline16, {}),
               className: 'wg-hover-action',
               onClick: () => startSession(workspaceId),
             }),
             React.createElement(IconButton, {
               title: labels.newGroup,
-              path: PLUS_PATH,
+              icon: React.createElement(IconPlusOutline16, {}),
               className: 'wg-hover-action',
-              onClick: () => {
-                const name = askText(labels.groupNamePrompt)
-                if (name === null || name.trim() === '') return
-                apply(createGroup(workspaceId, name.trim()))
-              },
+              onClick: () =>
+                setNameDraft({ workspaceId, groupId: '', value: '' }),
             }),
           ),
           workspaceCollapsed
@@ -670,9 +750,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
                       React.createElement(
                         'span',
                         { className: 'wg-slot' },
-                        React.createElement(FilledIcon, {
-                          paths: TRIANGLE_RIGHT_PATHS,
-                          size: 14,
+                        React.createElement(IconTriangleRightFill14, {
                           className: `wg-arrow${sectionCollapsed ? '' : ' wg-arrow-open'}`,
                         }),
                       ),
@@ -683,22 +761,21 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
                       ),
                       React.createElement(IconButton, {
                         title: labels.renameGroup,
-                        path: PENCIL_PATH,
+                        icon: React.createElement(IconEditOutline16, {}),
                         className: 'wg-hover-action',
-                        onClick: () => {
-                          const name = askText(labels.renameGroup, section.label)
-                          if (name === null || name.trim() === '') return
-                          apply(renameGroup(workspaceId, section.id, name.trim()))
-                        },
+                        onClick: () =>
+                          setNameDraft({ workspaceId, groupId: section.id, value: section.label }),
                       }),
                       React.createElement(IconButton, {
                         title: labels.deleteGroup,
-                        path: CROSS_PATH,
+                        icon: React.createElement(IconTrashOutline16, {}),
                         className: 'wg-hover-action',
-                        onClick: () => {
-                          if (!confirmAction(`${labels.confirmDeleteGroup}\n\n${section.label}`)) return
-                          apply(deleteGroup(workspaceId, section.id))
-                        },
+                        onClick: () =>
+                          setDeleteTarget({
+                            workspaceId,
+                            groupId: section.id,
+                            label: section.label,
+                          }),
                       }),
                     ),
                     sectionCollapsed
@@ -726,6 +803,25 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
       }),
       React.createElement('div', { className: 'wg-note' }, labels.unimplemented),
     ),
+    // 对话框挂在列表之外：两个都是 portal 到 body 的浮层，放进 overflow
+    // 容器只会多一层无用的裁剪上下文。
+    nameDraft === null
+      ? null
+      : React.createElement(GroupNameDialog, {
+          draft: nameDraft,
+          onDraftChange: (value) => setNameDraft({ ...nameDraft, value }),
+          onConfirm: commitNameDraft,
+          onClose: closeNameDialog,
+          labels: dialogLabels,
+        }),
+    deleteTarget === null
+      ? null
+      : React.createElement(GroupDeleteDialog, {
+          label: deleteTarget.label,
+          onConfirm: commitDelete,
+          onClose: closeDeleteDialog,
+          labels: dialogLabels,
+        }),
   )
 }
 
