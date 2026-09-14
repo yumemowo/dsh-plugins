@@ -49,7 +49,7 @@ export function GroupSection({
         <IconButton title={labels.rename} icon={<IconEditOutline16 />} onClick={onRename} />
         <IconButton title={labels.delete} icon={<IconTrashOutline16 />} onClick={onDelete} />
       </div>
-      {collapsed ? null : <div className="wg-sessions">{children}</div>}
+      {collapsed || section.sessions.length <= 0 ? null : <div className="wg-sessions">{children}</div>}
     </div>
   )
 }
