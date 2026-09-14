@@ -135,6 +135,19 @@ export function groupIdOfSession(sections: readonly GroupSection[], sessionId: s
   return ''
 }
 
+/**
+ * 判定一组会话行里是否有当前选中的那条。
+ *
+ * 官方用它决定展开状态下的工作区文件夹是否染成强调色。
+ * @param rows - 该工作区可见的会话行。
+ * @param currentSessionId - 当前选中的会话 id。
+ * @returns 是否包含当前会话。
+ */
+export function containsSession(rows: readonly SessionRow[], currentSessionId: string | undefined): boolean {
+  if (currentSessionId === undefined) return false
+  return rows.some((row) => row.id === currentSessionId)
+}
+
 /** 一个会话行在分组选择器里的取值：分组 id，或空串表示不属于任何分组。 */
 export type GroupChoice = string
 
@@ -160,12 +173,69 @@ function Icon({ path }: { path: string }): React.ReactElement {
   )
 }
 
-const CHEVRON_PATH = 'M6 3.5L10.5 8L6 12.5'
+/**
+ * 填充式图标，取自官方 `@deepseek-ai/dsh-client-ui-primitives`
+ *（shell 的基线模块表里有这个命名空间，但本包不引它的值导出，
+ * 因此在这里内联同一份路径数据，避免多一份实例）。
+ */
+function FilledIcon(props: {
+  paths: readonly string[]
+  size?: number
+  opacity?: readonly number[]
+  className?: string
+}): React.ReactElement {
+  const size = props.size ?? 16
+  return React.createElement(
+    'svg',
+    {
+      width: size,
+      height: size,
+      viewBox: `0 0 ${size} ${size}`,
+      fill: 'none',
+      className: props.className,
+      'aria-hidden': true,
+    },
+    ...props.paths.map((d, index) =>
+      React.createElement('path', {
+        key: index,
+        d,
+        fill: 'currentColor',
+        ...(props.opacity?.[index] === undefined ? {} : { opacity: props.opacity[index] }),
+      }),
+    ),
+  )
+}
+
 const PLUS_PATH = 'M8 3.5v9M3.5 8h9'
 const PENCIL_PATH = 'M11.5 3.5l1 1-7 7-1.5.5.5-1.5 7-7z'
 const CROSS_PATH = 'M4.5 4.5l7 7M11.5 4.5l-7 7'
 // 会话用气泡图标，与「新建分组」的加号区分开。
 const NEW_SESSION_PATH = 'M3 4.5h10v6.5H7.5L4.5 13.5v-2.5H3z'
+// 窄栏展开入口用线性箭头，与行内的实心三角区分。
+const CHEVRON_PATH = 'M6 3.5L10.5 8L6 12.5'
+
+/** 官方 `IconFolderClose16` 的路径数据。 */
+const FOLDER_CLOSE_PATHS = [
+  'M5.05582 0.518756L4.50669 0.86654L5.05582 0.518756ZM13 9.4837L13.65 9.4837L13.65 3.53962L13 3.53962L12.35 3.53962L12.35 9.4837L13 9.4837ZM11.3264 1.86603L11.3264 1.21603L6.52313 1.21603L6.52313 1.86603L6.52313 2.51603L11.3264 2.51603L11.3264 1.86603ZM5.58054 1.34727L6.12968 0.999489L5.60495 0.170972L5.05582 0.518756L4.50669 0.86654L5.03141 1.69506L5.58054 1.34727ZM4.11323 1.23058e-13L4.11323 -0.65L1.67359 -0.65L1.67359 5.00699e-14L1.67359 0.65L4.11323 0.65L4.11323 1.23058e-13ZM0 1.67359L-0.65 1.67359L-0.65 9.4837L0 9.4837L0.65 9.4837L0.65 1.67359L0 1.67359ZM11.3264 11.1573L11.3264 10.5073L1.67359 10.5073L1.67359 11.1573L1.67359 11.8073L11.3264 11.8073L11.3264 11.1573ZM0 9.4837L-0.65 9.4837C-0.65 10.767 0.390308 11.8073 1.67359 11.8073L1.67359 11.1573L1.67359 10.5073C1.10828 10.5073 0.65 10.049 0.65 9.4837L0 9.4837ZM1.67359 5.00699e-14L1.67359 -0.65C0.390307 -0.65 -0.65 0.390309 -0.65 1.67359L0 1.67359L0.65 1.67359C0.65 1.10828 1.10828 0.65 1.67359 0.65L1.67359 5.00699e-14ZM5.05582 0.518756L5.60495 0.170972C5.28121 -0.340193 4.71829 -0.65 4.11323 -0.65L4.11323 1.23058e-13L4.11323 0.65C4.27282 0.65 4.4213 0.731715 4.50669 0.86654L5.05582 0.518756ZM6.52313 1.86603L6.52313 1.21603C6.36354 1.21603 6.21507 1.13431 6.12968 0.999489L5.58054 1.34727L5.03141 1.69506C5.35515 2.20622 5.91808 2.51603 6.52313 2.51603L6.52313 1.86603ZM13 3.53962L13.65 3.53962C13.65 2.25634 12.6097 1.21603 11.3264 1.21603L11.3264 1.86603L11.3264 2.51603C11.8917 2.51603 12.35 2.97431 12.35 3.53962L13 3.53962ZM13 9.4837L12.35 9.4837C12.35 10.049 11.8917 10.5073 11.3264 10.5073L11.3264 11.1573L11.3264 11.8073C12.6097 11.8073 13.65 10.767 13.65 9.4837L13 9.4837Z',
+]
+
+/** 官方 `IconFolderOpen16` 的路径数据；第二条是 0.2 透明度的内层封面。 */
+const FOLDER_OPEN_PATHS = [
+  'M5.19629 1.57104C5.81144 1.5711 6.38623 1.8786 6.72754 2.39038L7.19922 3.09839C7.28454 3.22635 7.42824 3.30344 7.58203 3.30347H12.1699C13.5039 3.30348 14.5859 4.38548 14.5859 5.71948V6.62671C15.2694 7.02689 15.6605 7.85012 15.4385 8.68726L14.3848 12.658C14.1037 13.7164 13.1449 14.4527 12.0498 14.4529H2.91699C1.51651 14.4529 0.451662 13.2814 0.501954 11.9519V3.98706C0.501954 2.65305 1.58396 1.57104 2.91797 1.57104H5.19629ZM3.7793 7.75562C3.30994 7.75562 2.89883 8.07153 2.77832 8.52515L1.91602 11.7722C1.74167 12.4291 2.23734 13.073 2.91699 13.073H12.0498C12.5191 13.0728 12.9304 12.757 13.0508 12.3035L14.1045 8.33374C14.1819 8.04202 13.9619 7.756 13.6602 7.75562H3.7793ZM2.91797 2.9519C2.34625 2.9519 1.88281 3.41534 1.88281 3.98706V7.2937C2.33068 6.7269 3.02249 6.37476 3.7793 6.37476H13.2051V5.71948C13.2051 5.14777 12.7416 4.68434 12.1699 4.68433H7.58203C6.96675 4.6843 6.39209 4.37595 6.05078 3.86401L5.5791 3.15601C5.49379 3.02821 5.34995 2.95196 5.19629 2.9519H2.91797Z',
+  'M13.6602 7.75525C13.9618 7.7556 14.1815 8.04179 14.1045 8.33337L13.0508 12.3031C12.9304 12.7567 12.5191 13.0725 12.0498 13.0726H2.91701C2.23744 13.0725 1.7417 12.4287 1.91603 11.7719L2.77834 8.52478C2.89898 8.07146 3.31018 7.75532 3.77931 7.75525H13.6602ZM5.1963 2.95154C5.34985 2.95159 5.49377 3.02803 5.57912 3.15564L6.0508 3.86365C6.39205 4.37553 6.96685 4.68385 7.58205 4.68396H12.1699C12.7416 4.68396 13.2049 5.14754 13.2051 5.71912V6.37439H3.77931C3.02267 6.37444 2.33067 6.72671 1.88283 7.29333V3.98669C1.88299 3.4152 2.34649 2.95168 2.91798 2.95154H5.1963Z',
+]
+
+/** 官方 `IconTriangleRightFill14` 的路径数据。 */
+const TRIANGLE_RIGHT_PATHS = [
+  'M4.25 2.82782L4.25 11.1722C4.25 11.6622 4.84243 11.9076 5.18891 11.5611L9.36109 7.38891C9.57588 7.17412 9.57588 6.82588 9.36109 6.61109L5.18891 2.43891C4.84243 2.09243 4.25 2.33782 4.25 2.82782Z',
+]
+
+/** 官方 `IconEllipsisOutline16` 的三个圆点。 */
+const ELLIPSIS_PATHS = [
+  'M4.55146 8.00001C4.55146 8.63513 4.03659 9.15001 3.40146 9.15001C2.76634 9.15001 2.25146 8.63513 2.25146 8.00001C2.25146 7.36488 2.76634 6.85001 3.40146 6.85001C4.03659 6.85001 4.55146 7.36488 4.55146 8.00001Z',
+  'M9.1476 8.00001C9.1476 8.63513 8.63273 9.15001 7.9976 9.15001C7.36248 9.15001 6.8476 8.63513 6.8476 8.00001C6.8476 7.36488 7.36248 6.85001 7.9976 6.85001C8.63273 6.85001 9.1476 7.36488 9.1476 8.00001Z',
+  'M13.7486 8.00001C13.7486 8.63513 13.2338 9.15001 12.5986 9.15001C11.9635 9.15001 11.4486 8.63513 11.4486 8.00001C11.4486 7.36488 11.9635 6.85001 12.5986 6.85001C13.2338 6.85001 13.7486 7.36488 13.7486 8.00001Z',
+]
 
 /** 28px 圆形图标按钮，悬停显示。 */
 function IconButton(props: {
@@ -228,8 +298,10 @@ export interface WorkspaceGroupsProps {
     renameGroup: string
     deleteGroup: string
     confirmDeleteGroup: string
-    moveTo: string
-    ungroupedOption: string
+    /** 会话行尾操作位的无障碍标签。 */
+    sessionActions: string
+    /** 对照 tab 在 better-sidebar 里的一行说明。 */
+    compareTabDescription: string
     empty: string
     unimplemented: string
   }
@@ -258,9 +330,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
     createGroup,
     renameGroup,
     deleteGroup,
-    moveSession,
     labels,
   } = props
+  // `moveSession` 暂时没有渲染出口：会话行尾先只放省略号占位，
+  // 归组入口回到产品内菜单时再接上，宿主接口与 props 契约保持不动。
 
   const workspaces = useWorkspaces((state) => state.items) as readonly WorkspaceView[]
   // 归档集是注册表全局的：归档会话仍留在工作区的 sessionIds 里，
@@ -332,12 +405,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
         const layout = buildLayout(rowsByWorkspace.get(workspaceId) ?? [], workspaceGroups)
         const workspaceCollapsed = collapsedWorkspaces[workspaceId] === true
         const hasAnyRow = layout.groups.length > 0 || layout.loose.length > 0
-
-        /** 每个会话的分组选择项：不属于任何分组 + 本工作区全部分组。 */
-        const options = [
-          { id: '', label: labels.ungroupedOption },
-          ...workspaceGroups.map((group) => ({ id: group.id, label: group.name })),
-        ]
+        // 官方只在「展开且含当前会话」时把文件夹染成强调色。
+        const folderActive =
+          !workspaceCollapsed &&
+          containsSession(rowsByWorkspace.get(workspaceId) ?? [], currentSessionId)
 
         const sessionRow = (row: SessionRow): React.ReactElement =>
           React.createElement(
@@ -355,23 +426,21 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
                 openSession(row.id)
               },
             },
+            // 官方会话行首列放状态点；本包暂不渲染状态，只保留同宽的占位列，
+            // 这样标题与工作区标题的横向关系与官方一致。
+            React.createElement('span', { className: 'wg-slot' }),
             React.createElement('span', { className: 'wg-row-title' }, row.title),
-            // 归组入口：沿用原生 select 语义，样式上只在行悬停/聚焦时出现。
+            // 行尾操作位：目前只有省略号占位，分组下拉框暂不出现。
             React.createElement(
-              'select',
+              'button',
               {
-                className: 'wg-assign',
-                title: labels.moveTo,
-                'aria-label': labels.moveTo,
-                value: groupIdOfSession(layout.groups, row.id),
+                type: 'button',
+                className: 'wg-slot wg-row-action',
+                title: labels.sessionActions,
+                'aria-label': labels.sessionActions,
                 onClick: (event: React.MouseEvent) => event.stopPropagation(),
-                onChange: (event: React.ChangeEvent<HTMLSelectElement>) => {
-                  apply(moveSession(workspaceId, row.id, event.target.value))
-                },
               },
-              ...options.map((option) =>
-                React.createElement('option', { key: option.id, value: option.id }, option.label),
-              ),
+              React.createElement(FilledIcon, { paths: ELLIPSIS_PATHS }),
             ),
           )
 
@@ -395,12 +464,26 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
                 }))
               },
             },
+            // 静止时显示文件夹（开/闭随展开态），悬停时让位给三角箭头；
+            // 两个槽都常驻同一 16px 列，切换时标题不位移。
             React.createElement(
               'span',
               {
-                className: `wg-chevron${workspaceCollapsed ? '' : ' wg-chevron-open'}`,
+                className: `wg-slot wg-folder${folderActive ? ' wg-folder-active' : ''}`,
               },
-              React.createElement(Icon, { path: CHEVRON_PATH }),
+              React.createElement(FilledIcon, {
+                paths: workspaceCollapsed ? FOLDER_CLOSE_PATHS : FOLDER_OPEN_PATHS,
+                ...(workspaceCollapsed ? {} : { opacity: [1, 0.2] }),
+              }),
+            ),
+            React.createElement(
+              'span',
+              { className: 'wg-slot wg-chevron' },
+              React.createElement(FilledIcon, {
+                paths: TRIANGLE_RIGHT_PATHS,
+                size: 14,
+                className: `wg-arrow${workspaceCollapsed ? '' : ' wg-arrow-open'}`,
+              }),
             ),
             React.createElement('span', { className: 'wg-workspace-title' }, workspace.title),
             React.createElement(IconButton, {
@@ -448,10 +531,12 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
                       },
                       React.createElement(
                         'span',
-                        {
-                          className: `wg-chevron${sectionCollapsed ? '' : ' wg-chevron-open'}`,
-                        },
-                        React.createElement(Icon, { path: CHEVRON_PATH }),
+                        { className: 'wg-slot' },
+                        React.createElement(FilledIcon, {
+                          paths: TRIANGLE_RIGHT_PATHS,
+                          size: 14,
+                          className: `wg-arrow${sectionCollapsed ? '' : ' wg-arrow-open'}`,
+                        }),
                       ),
                       React.createElement(
                         'span',

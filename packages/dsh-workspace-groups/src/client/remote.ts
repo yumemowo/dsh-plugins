@@ -26,7 +26,8 @@ const codec = (typeSymbol: string, schema: z.ZodType) => ({
 
 /** 与宿主 `./typert` 清单的方法集合一一对应。 */
 const PACKAGE = '@your-scope/dsh-workspace-groups'
-const SERVICE = 'workspaceGroups'
+/** 网关按此 namespace 归组方法表，客户端用 `remote.<namespace>` 取服务。 */
+export const SERVICE = 'workspaceGroups'
 
 const snapshot = codec('WorkspaceGroupsSnapshot', snapshotSchema)
 const str = (name: string) => codec(name, z.string())

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildLayout, groupIdOfSession, groupSessionsByWorkspace } from '../src/client/region.ts'
+import {
+  buildLayout,
+  containsSession,
+  groupIdOfSession,
+  groupSessionsByWorkspace,
+} from '../src/client/region.ts'
 import type { SessionRow } from '../src/client/region.ts'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -104,6 +109,25 @@ describe('groupIdOfSession', () => {
     const layout = buildLayout([row('a')], [])
 
     expect(groupIdOfSession(layout.groups, 'a')).toBe('')
+  })
+})
+
+describe('containsSession', () => {
+  it('reports whether the current session is among the rows', () => {
+    expect(containsSession([row('a'), row('b')], 'b')).toBe(true)
+  })
+
+  it('reports false when the current session is not among the rows', () => {
+    expect(containsSession([row('a'), row('b')], 'c')).toBe(false)
+  })
+
+  it('reports false while no session is selected', () => {
+    // 没有选中会话时不应把文件夹染成强调色。
+    expect(containsSession([row('a')], undefined)).toBe(false)
+  })
+
+  it('reports false for an empty workspace', () => {
+    expect(containsSession([], 'a')).toBe(false)
   })
 })
 

@@ -19,10 +19,11 @@ import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // 仅用于引入 sidebar 的插槽声明增强（sidebar.workspaces 的 SlotMap 条目）。
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
-import { REMOTE_CONTRIBUTION, callRemote } from './remote.ts'
+import { REMOTE_CONTRIBUTION, SERVICE, callRemote } from './remote.ts'
 import type { Group, WorkspaceGroupsSnapshot } from './remote.ts'
+import { registerCompareTab } from './compare.ts'
+import type { RegionActions } from './compare.ts'
 import { WorkspaceGroupsRegion } from './region.ts'
-import type { WorkspaceGroupsProps } from './region.ts'
 import { insertStyles } from './styles.ts'
 
 /**
@@ -49,8 +50,8 @@ const DICTIONARIES = {
     renameGroup: '重命名分组',
     deleteGroup: '删除分组',
     confirmDeleteGroup: '删除该分组？组内会话会移出分组，会话本身不受影响。',
-    moveTo: '移动到分组',
-    ungroupedOption: '未分组',
+    sessionActions: '会话操作',
+    compareTabDescription: '分组区域的对照视图（左侧为官方工作区列表）',
     empty: '暂无会话',
     unimplemented: '分组为实验特性：搜索、归档、拖拽暂未提供。',
   },
@@ -63,8 +64,8 @@ const DICTIONARIES = {
     deleteGroup: 'Delete group',
     confirmDeleteGroup:
       'Delete this group? Its sessions leave the group; the sessions themselves are unaffected.',
-    moveTo: 'Move to group',
-    ungroupedOption: 'No group',
+    sessionActions: 'Session actions',
+    compareTabDescription: 'Grouping region for side-by-side comparison with the official list',
     empty: 'No sessions',
     unimplemented: 'Groups are experimental: search, archive and drag are not available yet.',
   },
@@ -73,8 +74,22 @@ const DICTIONARIES = {
 /** 语言包命名空间。 */
 const NS = 'workspace-groups'
 
+/**
+ * 对照模式开关。
+ *
+ * `true` 时左侧 `sidebar.workspaces` 交还官方 ui-workspace，本区域改挂进
+ * `dsh-better-sidebar` 的右侧栏 tab，便于和官方渲染同屏比对；
+ * `false`（默认）时维持 `priority: -1` 接替左侧区域。
+ *
+ * 之所以是编译期常量而不是配置项：这是开发期的对照开关，
+ * 不是要交付给用户的能力，配置化反而要多一套 schema 与文档。
+ */
+const COMPARE_MODE = true
+
 /** 把翻译函数绑定成组件需要的文案表。 */
-function buildLabels(t: (key: keyof (typeof DICTIONARIES)['zh']) => string): WorkspaceGroupsProps['labels'] {
+function buildLabels(
+  t: (key: keyof (typeof DICTIONARIES)['zh']) => string,
+): RegionActions['labels'] {
   return {
     title: t('title'),
     newGroup: t('newGroup'),
@@ -83,8 +98,8 @@ function buildLabels(t: (key: keyof (typeof DICTIONARIES)['zh']) => string): Wor
     renameGroup: t('renameGroup'),
     deleteGroup: t('deleteGroup'),
     confirmDeleteGroup: t('confirmDeleteGroup'),
-    moveTo: t('moveTo'),
-    ungroupedOption: t('ungroupedOption'),
+    sessionActions: t('sessionActions'),
+    compareTabDescription: t('compareTabDescription'),
     empty: t('empty'),
     unimplemented: t('unimplemented'),
   }
@@ -113,7 +128,9 @@ export function apply(ctx: Context): void {
       let disposed = false
       void ctx.remote.$mount(REMOTE_CONTRIBUTION as never).then(() => {
         if (disposed) return
-        groupsApi = ctx.get(`remote.${REMOTE_CONTRIBUTION.package}`) as typeof groupsApi
+        // 服务键按 descriptor 的 namespace 注册（remote.<namespace>），
+        // 不是包名——typert 网关以 namespace 归组安装方法表。
+        groupsApi = ctx.get(`remote.${SERVICE}`) as typeof groupsApi
       })
       return () => {
         disposed = true
@@ -132,8 +149,9 @@ export function apply(ctx: Context): void {
     return snapshot.byWorkspace
   }
 
-  const injected = () => {
+  const injected = (): RegionActions => {
     const t = locale.bind(NS)
+    const labels = buildLabels(t)
     if (sessions === undefined || workspaces === undefined) {
       // 依赖缺失时给出空实现：组件仍可渲染，只是没有可操作的动作。
       return {
@@ -144,13 +162,10 @@ export function apply(ctx: Context): void {
         renameGroup: async () => {},
         deleteGroup: async () => {},
         moveSession: async () => {},
-        labels: buildLabels(t),
+        labels,
       }
     }
-    const props: Omit<
-      WorkspaceGroupsProps,
-      'wide' | 'expandSidebar' | 'useWorkspaces' | 'useSessions'
-    > = {
+    return {
       openSession: (sessionId: string) => {
         sessions.open(sessionId as never)
       },
@@ -173,15 +188,21 @@ export function apply(ctx: Context): void {
           sessionId,
           groupId === '' ? null : groupId,
         ]).then(() => undefined),
-      labels: buildLabels(t),
+      labels,
     }
-    return props
   }
 
   // 样式随插件挂载注入；卸载由模块系统的样式记账处理，无需显式移除。
   insertStyles()
 
-  // priority: -1 —— 覆盖官方 ui-workspace（其优先级为默认 0）。
+  // 对照模式：把左侧 `sidebar.workspaces` 交还官方 ui-workspace，
+  // 本区域改挂进 dsh-better-sidebar 的右侧栏 tab，好和官方渲染同屏比对。
+  if (COMPARE_MODE) {
+    ctx.effect(() => registerCompareTab(ctx, injected()), 'workspace-groups: compare tab')
+    return
+  }
+
+  // 接替模式：priority: -1 —— 覆盖官方 ui-workspace（其优先级为默认 0）。
   ctx.slots.inject('sidebar.workspaces', () =>
     ctx.slots.register(
       { name: 'sidebar.workspaces', priority: -1, inject: injected, locale: NS },
