@@ -168,12 +168,15 @@ const CSS = `
   line-height: 20px;
 }
 
-/* 行尾操作位：16px 图标按钮，悬停或键盘聚焦该行时才出现。
-   官方行内按钮几何来自 ui-workspace 的 CSS Module，primitives 没有等价的
-   16px 行内按钮，因此这里保留同一份几何；图标取 primitives 导出。 */
+/* 行内操作按钮：默认隐藏，仅在该行悬停、菜单展开、或键盘聚焦时出现。
+   不用 :focus / :focus-within / 选中态——鼠标点过之后焦点仍留在按钮或行上，
+   会让按钮一直可见；:focus-visible 只在键盘导航时命中，既去掉鼠标残留，
+   又保留清晰可见的键盘焦点。
+   隐藏时一并禁用指针事件：否则会留下一个看不见却能点中的 16px 热区。 */
 .wg-row-action {
   flex: none;
   opacity: 0;
+  pointer-events: none;
   cursor: pointer;
   width: 16px;
   height: 16px;
@@ -187,17 +190,14 @@ const CSS = `
   justify-content: center;
 }
 .wg-row-action:hover { color: var(--dsw-alias-label-primary); }
-.wg-row:hover .wg-row-action,
-.wg-row-selected .wg-row-action,
-.wg-row:focus-within .wg-row-action,
-.wg-row-action:focus { opacity: 1; }
 
-/* 行内操作按钮：悬停或聚焦该行时才显示，避免常驻噪音。 */
-.wg-hover-action { opacity: 0; }
-.wg-workspace-head:hover .wg-hover-action,
-.wg-workspace-head:focus-within .wg-hover-action,
-.wg-group-head:hover .wg-hover-action,
-.wg-group-head:focus-within .wg-hover-action { opacity: 1; }
+/* 显示路径只有三条：所在行悬停、菜单展开期间（否则锚点按钮会在菜单还开着时
+   消失）、以及键盘聚焦。 */
+.wg-row:hover .wg-row-action,
+.wg-workspace-head:hover .wg-row-action,
+.wg-group-head:hover .wg-row-action,
+.wg-row-menu-open .wg-row-action,
+.wg-row-action:focus-visible { opacity: 1; pointer-events: auto; }
 
 /* 官方二级菜单面板固定向右展开（left: calc(100% + 10px)）。对照模式下
    区域挂在右侧栏、贴近窗口右缘，面板会开出屏幕外：宿主在 body 上挂

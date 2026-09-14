@@ -253,12 +253,18 @@ function SessionRowMenu(props: {
   return React.createElement(
     'div',
     {
-      className: 'wg-row' + (selected ? ' wg-row-selected' : ''),
+      // 菜单展开时行上挂标记：锚点按钮只靠 :hover 显示，菜单还开着时
+      // 指针一旦移开按钮就会消失，标记让样式把它留住。
+      className:
+        'wg-row' + (selected ? ' wg-row-selected' : '') + (menuOpen ? ' wg-row-menu-open' : ''),
       role: 'button',
       tabIndex: 0,
       title: row.title,
       onClick: onOpen,
       onKeyDown: (event: React.KeyboardEvent) => {
+        // 只有行自身获得焦点时才响应；否则行内按钮上的 Enter/Space
+        // 会先触发按钮动作、再冒泡到这里把会话也打开。
+        if (event.target !== event.currentTarget) return
         if (event.key !== 'Enter' && event.key !== ' ') return
         event.preventDefault()
         onOpen()
@@ -313,18 +319,18 @@ function SessionRowMenu(props: {
  *
  * 官方行内按钮几何来自 ui-workspace 的 CSS Module，primitives 没有等价的
  * 16px 行内按钮，因此保留本地 16px 几何；图标本身取 primitives 导出。
+ * 显隐由 `.wg-row-action` 统一负责，调用方不需要再传额外类名。
  */
 function IconButton(props: {
   title: string
   icon: React.ReactElement
   onClick: () => void
-  className?: string
 }): React.ReactElement {
   return React.createElement(
     'button',
     {
       type: 'button',
-      className: `wg-row-action${props.className === undefined ? '' : ` ${props.className}`}`,
+      className: 'wg-row-action',
       title: props.title,
       'aria-label': props.title,
       onClick: (event: React.MouseEvent) => {
@@ -680,6 +686,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
               onClick: () =>
                 setCollapsedWorkspaces((prev) => ({ ...prev, [workspaceId]: prev[workspaceId] !== true })),
               onKeyDown: (event: React.KeyboardEvent) => {
+                // 只响应行自身；行内按钮上的 Enter/Space 不应连带折叠工作区。
+                if (event.target !== event.currentTarget) return
                 if (event.key !== 'Enter' && event.key !== ' ') return
                 event.preventDefault()
                 setCollapsedWorkspaces((prev) => ({
@@ -710,13 +718,11 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
             React.createElement(IconButton, {
               title: labels.newSession,
               icon: React.createElement(IconNewChatOutline16, {}),
-              className: 'wg-hover-action',
               onClick: () => startSession(workspaceId),
             }),
             React.createElement(IconButton, {
               title: labels.newGroup,
               icon: React.createElement(IconPlusOutline16, {}),
-              className: 'wg-hover-action',
               onClick: () =>
                 setNameDraft({ workspaceId, groupId: '', value: '' }),
             }),
@@ -742,6 +748,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
                         onClick: () =>
                           setCollapsedGroups((prev) => ({ ...prev, [key]: prev[key] !== true })),
                         onKeyDown: (event: React.KeyboardEvent) => {
+                          // 同上：忽略行内按钮冒泡上来的按键。
+                          if (event.target !== event.currentTarget) return
                           if (event.key !== 'Enter' && event.key !== ' ') return
                           event.preventDefault()
                           setCollapsedGroups((prev) => ({ ...prev, [key]: prev[key] !== true }))
@@ -762,14 +770,12 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): React.ReactE
                       React.createElement(IconButton, {
                         title: labels.renameGroup,
                         icon: React.createElement(IconEditOutline16, {}),
-                        className: 'wg-hover-action',
                         onClick: () =>
                           setNameDraft({ workspaceId, groupId: section.id, value: section.label }),
                       }),
                       React.createElement(IconButton, {
                         title: labels.deleteGroup,
                         icon: React.createElement(IconTrashOutline16, {}),
-                        className: 'wg-hover-action',
                         onClick: () =>
                           setDeleteTarget({
                             workspaceId,

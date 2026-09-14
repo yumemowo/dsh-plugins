@@ -48,4 +48,31 @@ describe('client stylesheet', () => {
       expect(hasGapRule(`.${container} > * + *`), `missing 2px gap rule for .${container}`).toBe(true)
     }
   })
+
+  it('reveals row actions on hover, menu-open, or keyboard focus only', () => {
+    // 先剥注释：注释里的示例选择器不该参与断言。
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+
+    // 隐藏的按钮必须同时关掉指针事件，否则会留下一个看不见却能点中的热区。
+    const base = [...css.matchAll(/\.wg-row-action\s*\{([^{}]*)\}/g)].map((m) => m[1] ?? '')
+    expect(base.length).toBeGreaterThan(0)
+    expect(base.some((body) => /opacity:\s*0/.test(body))).toBe(true)
+    expect(base.some((body) => /pointer-events:\s*none/.test(body))).toBe(true)
+
+    // 只保留悬停 / 菜单展开 / 键盘焦点三条显示路径。
+    const reveal = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter((m) => /\.wg-row-action/.test(m[1] ?? '') && /opacity:\s*1/.test(m[2] ?? ''))
+      .flatMap((m) => (m[1] ?? '').split(',').map((s) => s.trim()))
+
+    expect(reveal).toContain('.wg-row-action:focus-visible')
+    expect(reveal.some((s) => s.includes(':hover'))).toBe(true)
+    expect(reveal).toContain('.wg-row-menu-open .wg-row-action')
+
+    // 这些写法会让按钮在鼠标点过之后常驻：:focus / :focus-within 在点击后
+    // 持续为真，而选中态与点击无关（当前会话一直是选中的）。
+    for (const bad of ['.wg-row-action:focus', '.wg-row:focus-within .wg-row-action']) {
+      expect(reveal, `${bad} makes actions stick after a click`).not.toContain(bad)
+    }
+    expect(reveal.some((s) => s.includes('wg-row-selected'))).toBe(false)
+  })
 })
