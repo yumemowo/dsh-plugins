@@ -5,10 +5,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Group } from '../src/spec.ts'
 
 /**
- * 一个内存版的存储域替身。
+ * 一个内存版的存储域替身
  *
  * 只实现服务实际用到的那部分契约（`open` / `table` / `effect`），
- * 这样测试聚焦分组逻辑本身，而不是存储后端的持久化细节。
+ * 这样测试聚焦分组逻辑本身，而不是存储后端的持久化细节
  */
 function createFakeContext(): { ctx: Context; records: Map<string, { groups: Group[] }> } {
   const records = new Map<string, { groups: Group[] }>()
@@ -132,7 +132,7 @@ describe('workspace groups service', () => {
     const snapshot = await service.deleteGroup('w1', groupId)
 
     // 最后一个分组被删除后整条工作区记录一并消失，
-    // 因此该工作区回到「没有任何分组」，其会话即未分组。
+    // 因此该工作区回到「没有任何分组」，其会话即未分组
     const remaining = snapshot.byWorkspace['w1'] ?? []
     expect(remaining).toEqual([])
     expect(remaining.some((group) => group.sessionIds.includes('s1'))).toBe(false)
@@ -146,7 +146,7 @@ describe('workspace groups service', () => {
 
     await service.deleteGroup('w1', groupId)
 
-    // 空记录不该留在存储里，否则未分组的工作区会不断堆积死数据。
+    // 空记录不该留在存储里，否则未分组的工作区会不断堆积死数据
     expect(records.has('w1')).toBe(false)
   })
 

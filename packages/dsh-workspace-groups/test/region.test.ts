@@ -7,10 +7,12 @@ import {
 import { groupSessionsByWorkspace, straySessions } from '../src/client/data/sessions.ts'
 import { buildSessionMenuItems, buildWorkspaceMenuItems } from '../src/client/menus.tsx'
 import type { SessionRow } from '../src/client/data/types.ts'
+import { officialSessionLabels } from '../src/client/official.ts'
+import { workspaceTranslate } from './locale-stub.ts'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 
-/** 造一行会话渲染数据。 */
+/** 造一行会话渲染数据 */
 function row(id: string, title = id): SessionRow {
   return {
     id,
@@ -23,7 +25,7 @@ function row(id: string, title = id): SessionRow {
   }
 }
 
-/** 造一个分组定义。 */
+/** 造一个分组定义 */
 function group(id: string, name: string, sessionIds: string[]) {
   return { id, name, sessionIds }
 }
@@ -40,7 +42,7 @@ describe('buildLayout', () => {
   it('creates no group at all when the user has created none', () => {
     const layout = buildLayout([row('a'), row('b')], [])
 
-    // 没有用户分组时不应凭空出现分组结构，会话直接平铺。
+    // 没有用户分组时不应凭空出现分组结构，会话直接平铺
     expect(layout.groups).toEqual([])
     expect(layout.loose.map((s) => s.id)).toEqual(['a', 'b'])
   })
@@ -73,7 +75,7 @@ describe('buildLayout', () => {
 
     expect(layout.groups[0]?.sessions.map((s) => s.id)).toEqual(['a'])
     expect(layout.groups[1]?.sessions).toEqual([])
-    // 被分组认领过的会话不会再出现在平铺区，避免重复渲染。
+    // 被分组认领过的会话不会再出现在平铺区，避免重复渲染
     expect(layout.loose).toEqual([])
   })
 
@@ -89,7 +91,7 @@ describe('buildLayout', () => {
     const first = buildLayout([row('a')], groups)
     const second = buildLayout([row('a')], groups)
 
-    // 分组 id 必须逐次一致，否则展开折叠状态会每次都重置。
+    // 分组 id 必须逐次一致，否则展开折叠状态会每次都重置
     expect(first.groups.map((s) => s.id)).toEqual(second.groups.map((s) => s.id))
   })
 })
@@ -104,7 +106,7 @@ describe('groupIdOfSession', () => {
   it('reports an empty id for a session outside every group', () => {
     const layout = buildLayout([row('a'), row('b')], [group('g1', '前端', ['a'])])
 
-    // 空串对应选择器里的「未分组」选项。
+    // 空串对应选择器里的「未分组」选项
     expect(groupIdOfSession(layout.groups, 'b')).toBe('')
   })
 
@@ -131,7 +133,7 @@ describe('containsSession', () => {
   })
 
   it('reports false while no session is selected', () => {
-    // 没有选中会话时不应把文件夹染成强调色。
+    // 没有选中会话时不应把文件夹染成强调色
     expect(containsSession([row('a')], undefined)).toBe(false)
   })
 
@@ -141,7 +143,7 @@ describe('containsSession', () => {
 })
 
 describe('buildSessionMenuItems', () => {
-  /** 造分组段输入；分组顺序即传入顺序。 */
+  /** 造分组段输入；分组顺序即传入顺序 */
   function grouping(currentGroupId: string) {
     return {
       sections: [
@@ -155,21 +157,13 @@ describe('buildSessionMenuItems', () => {
     }
   }
 
-  /** 官方三项操作的文案（取自官方 workspace 语言包）。 */
-  const official = {
-    rename: '重命名',
-    renameTitle: '重命名会话',
-    sessionNamePrompt: '会话名称',
-    fork: '分叉会话',
-    archive: '归档会话',
-    closeLabel: '关闭',
-    cancelLabel: '取消',
-  }
+  /** 官方三项操作的文案（取自官方 workspace 命名空间） */
+  const official = officialSessionLabels(workspaceTranslate())
 
   it('lists the official three actions before the package own group item', () => {
     const items = buildSessionMenuItems({ grouping: grouping(''), official })
 
-    // 官方三项在前（它们是会话本身的操作），分组项是叠加其上的归类操作。
+    // 官方三项在前（它们是会话本身的操作），分组项是叠加其上的归类操作
     expect(items.map((item) => (item as { id?: string }).id)).toEqual([
       'rename',
       'fork',
@@ -182,7 +176,7 @@ describe('buildSessionMenuItems', () => {
   it('separates the official actions from the group item', () => {
     const items = buildSessionMenuItems({ grouping: grouping(''), official })
 
-    // 两类操作之间必须有分隔线，否则会混成一个列表。
+    // 两类操作之间必须有分隔线，否则会混成一个列表
     const separator = items.find((item) => (item as { id?: string }).id === 'separator')
     expect(separator).toMatchObject({ type: 'separator' })
   })
@@ -191,21 +185,21 @@ describe('buildSessionMenuItems', () => {
     const onlyOfficial = buildSessionMenuItems({ official })
     const onlyGrouping = buildSessionMenuItems({ grouping: grouping('') })
 
-    // 分隔线是用来分两段的；只有一段时它是多余的空行。
+    // 分隔线是用来分两段的；只有一段时它是多余的空行
     for (const items of [onlyOfficial, onlyGrouping]) {
       expect(items.some((item) => (item as { type?: string }).type === 'separator')).toBe(false)
     }
   })
 
   it('keeps the official actions for a row without grouping context', () => {
-    // 「未分组」桶里的会话没有分组可归，但官方三项照常可用。
+    // 「未分组」桶里的会话没有分组可归，但官方三项照常可用
     const items = buildSessionMenuItems({ official })
 
     expect(items.map((item) => (item as { id?: string }).id)).toEqual(['rename', 'fork', 'archive'])
   })
 
   it('falls back to the group item alone when official services are absent', () => {
-    // 宿主未加载官方 ui-workspace 时不留点不动的死按钮。
+    // 宿主未加载官方 ui-workspace 时不留点不动的死按钮
     const items = buildSessionMenuItems({ grouping: grouping('') })
 
     expect(items.map((item) => (item as { id?: string }).id)).toEqual(['group'])
@@ -267,7 +261,7 @@ describe('buildWorkspaceMenuItems', () => {
   it('offers new group, rename and delete in that order', () => {
     const items = buildWorkspaceMenuItems(labels)
 
-    // 官方管理菜单是「重命名、删除」；本包自有的建组项排在最前。
+    // 官方管理菜单是「重命名、删除」；本包自有的建组项排在最前
     expect(items.map((item) => (item as { id?: string }).id)).toEqual(['new-group', 'rename', 'delete'])
   })
 
@@ -280,13 +274,13 @@ describe('buildWorkspaceMenuItems', () => {
   it('keeps new group out of the row and inside the menu', () => {
     const items = buildWorkspaceMenuItems(labels)
 
-    // 「新建分组」不是高频操作，因此不占行内位置（行内只有 `...` 与 `+`）。
+    // 「新建分组」不是高频操作，因此不占行内位置（行内只有 `...` 与 `+`）
     expect(items[0]).toMatchObject({ id: 'new-group', label: '新建分组' })
   })
 })
 
 describe('straySessions', () => {
-  /** 造一份最小可用的会话列表状态。 */
+  /** 造一份最小可用的会话列表状态 */
   function listState(
     rows: { id: string; origin?: 'subagent'; blank?: boolean }[],
     current?: string,
@@ -305,7 +299,7 @@ describe('straySessions', () => {
     return { ids: rows.map((r) => r.id), byId, current, phase: 'ready' } as unknown as SessionListState
   }
 
-  /** 造一个工作区视图。 */
+  /** 造一个工作区视图 */
   function workspace(id: string, sessionIds: string[]): WorkspaceView {
     return {
       workspaceId: id,
@@ -371,7 +365,7 @@ describe('straySessions', () => {
 })
 
 describe('groupSessionsByWorkspace', () => {
-  /** 造一份最小可用的会话列表状态。 */
+  /** 造一份最小可用的会话列表状态 */
   function listState(
     rows: {
       id: string
@@ -397,7 +391,7 @@ describe('groupSessionsByWorkspace', () => {
     return { ids: rows.map((r) => r.id), byId, current, phase: 'ready' } as unknown as SessionListState
   }
 
-  /** 造一个工作区视图。 */
+  /** 造一个工作区视图 */
   function workspace(id: string, sessionIds: string[]): WorkspaceView {
     return {
       workspaceId: id,

@@ -1,8 +1,8 @@
 /**
- * `@deepseek-ai/dsh-client-ui-primitives` 的 node 测试替身。
+ * `@deepseek-ai/dsh-client-ui-primitives` 的 node 测试替身
  *
  * node 环境不渲染组件：测试只断言菜单条目数据、图标引用与注册行为，
- * 因此这里的组件一律返回 null、图标返回一个可断言的标记元素。
+ * 因此这里的组件一律返回 null、图标返回一个可断言的标记元素
  */
 
 const nullComponent = () => null
@@ -12,10 +12,10 @@ export const Button = nullComponent
 export const Modal = nullComponent
 export const Input = nullComponent
 
-/** 状态点替身：把状态原样暴露成可断言的文本。 */
+/** 状态点替身：把状态原样暴露成可断言的文本 */
 export const StateDot = ({ state }) => `StateDot:${state}`
 
-/** 图标替身：返回元素名，测试据此断言渲染了哪个官方图标。 */
+/** 图标替身：返回元素名，测试据此断言渲染了哪个官方图标 */
 const icon = (name) => () => name
 
 export const IconFolderClose16 = icon('IconFolderClose16')
@@ -31,7 +31,7 @@ export const IconArchiveOutline20 = icon('IconArchiveOutline20')
 
 /**
  * 相对时间替身：分桶规则与本包 `official.ts` 的契约一致，文案由调用方决定。
- * 这里只需覆盖断言用到的分桶。
+ * 这里只需覆盖断言用到的分桶
  */
 export const relativeTime = (from, to) => {
   const delta = Math.max(0, to - from)

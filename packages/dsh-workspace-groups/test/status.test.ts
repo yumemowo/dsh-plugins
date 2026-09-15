@@ -3,7 +3,7 @@ import { sessionStatus } from '../src/client/data/status.ts'
 import type { SessionStatusLabels } from '../src/client/labels.ts'
 import type { SessionRow } from '../src/client/data/types.ts'
 
-/** 造一行会话渲染数据；只覆盖用例关心的字段。 */
+/** 造一行会话渲染数据；只覆盖用例关心的字段 */
 function row(overrides: Partial<SessionRow> = {}): SessionRow {
   return {
     id: 's1',

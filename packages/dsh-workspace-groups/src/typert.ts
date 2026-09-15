@@ -2,11 +2,11 @@ import { z } from 'zod'
 import { snapshotSchema } from './spec.ts'
 
 /**
- * Host 面 Typert 清单。
+ * Host 面 Typert 清单
  *
  * typert-loader 按 package.json 的 `exports["./typert"]` 自动发现并注册本对象，
  * 客户端据此通过 `remote.workspaceGroups.*` 调用宿主方法。
- * 所有 codec 必须是 zod v4 实例，且为 strict 形态。
+ * 所有 codec 必须是 zod v4 实例，且为 strict 形态
  */
 
 const snapshotCodec = {
@@ -39,7 +39,7 @@ const nameCodec = {
   schema: z.string(),
 }
 
-/** 可空分组 id：null 表示「移出到未分组」。 */
+/** 可空分组 id：null 表示「移出到未分组」 */
 const nullableGroupIdCodec = {
   mode: 'strict',
   typeSymbol: '@your-scope/dsh-workspace-groups#NullableGroupId',
@@ -49,7 +49,7 @@ const nullableGroupIdCodec = {
 const PACKAGE = '@your-scope/dsh-workspace-groups'
 const SERVICE = 'workspaceGroups'
 
-/** 构造一条 direct 调用的描述，减少重复。 */
+/** 构造一条 direct 调用的描述，减少重复 */
 function direct(
   method: string,
   parameters: readonly {

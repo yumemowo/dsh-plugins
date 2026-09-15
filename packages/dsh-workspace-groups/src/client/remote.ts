@@ -1,11 +1,11 @@
 import { z } from 'zod'
 
 /**
- * 客户端侧的 Remote 贡献声明。
+ * 客户端侧的 Remote 贡献声明
  *
  * 宿主把 `./typert` 清单注册进 typert 注册表；浏览器这一侧则必须显式
  * `ctx.remote.$mount(...)` 自己需要的命名空间，网关才会响应调用。
- * 这里的 codec 同样必须是 zod v4 的 strict 实例。
+ * 这里的 codec 同样必须是 zod v4 的 strict 实例
  */
 
 const groupSchema = z.object({
@@ -24,15 +24,15 @@ const codec = (typeSymbol: string, schema: z.ZodType) => ({
   schema,
 })
 
-/** 与宿主 `./typert` 清单的方法集合一一对应。 */
+/** 与宿主 `./typert` 清单的方法集合一一对应 */
 const PACKAGE = '@your-scope/dsh-workspace-groups'
-/** 网关按此 namespace 归组方法表，客户端用 `remote.<namespace>` 取服务。 */
+/** 网关按此 namespace 归组方法表，客户端用 `remote.<namespace>` 取服务 */
 export const SERVICE = 'workspaceGroups'
 
 const snapshot = codec('WorkspaceGroupsSnapshot', snapshotSchema)
 const str = (name: string) => codec(name, z.string())
 
-/** 构造一条 direct 调用描述，避免逐条重复 id/service/namespace。 */
+/** 构造一条 direct 调用描述，避免逐条重复 id/service/namespace */
 function descriptor(
   method: string,
   parameters: { name: string; codec: unknown }[],
@@ -78,7 +78,7 @@ export const REMOTE_CONTRIBUTION = {
   ],
 }
 
-/** 分组快照的形状，与宿主 `spec.ts` 保持一致。 */
+/** 分组快照的形状，与宿主 `spec.ts` 保持一致 */
 export interface Group {
   id: string
   name: string
@@ -89,14 +89,14 @@ export interface WorkspaceGroupsSnapshot {
   byWorkspace: Record<string, Group[]>
 }
 
-/** 走网关调用时返回的 Remote 结果信封。 */
+/** 走网关调用时返回的 Remote 结果信封 */
 export interface RemoteEnvelope<T> {
   ok: boolean
   value?: T
   error?: { message?: string }
 }
 
-/** 调用一个宿主方法并在失败时抛出可读错误。 */
+/** 调用一个宿主方法并在失败时抛出可读错误 */
 export async function callRemote<T>(
   namespace: Record<string, (...args: never[]) => Promise<RemoteEnvelope<T>>>,
   method: string,

@@ -106,10 +106,10 @@
 - 动作调用官方既有面 —— 分叉/归档走 `ctx.uiWorkspace` 服务，重命名走
   `ctx.sessions.binding(id).session.rename()`。这三处正是官方会话菜单内部调的
   同一批接口，因此官方改行为时本包**自动跟随**，不需要重新对齐。
-- 文案与图标取官方 —— 绑官方 `workspace` 语言包（`rename` / `menu.fork` /
-  `menu.archiveSession` / `rename.session.title` / `field.sessionName`，通用词
-  `close` / `cancel` 走该语言包的 `common` 回退链），图标取 primitives 的
-  `IconEditOutline16` / `IconBranchOutline16` / `IconArchiveOutline20`。
+- 文案与图标取官方 —— 绑官方 `workspace` 命名空间（`rename` / `menu.fork` /
+  `menu.archiveSession` / `rename.session.title` / `field.sessionName`），图标取
+  primitives 的 `IconEditOutline16` / `IconBranchOutline16` / `IconArchiveOutline20`。
+  重命名对话框的「取消 / 关闭」是通用词，走官方 `common` 命名空间的回退链。
 - **只在类型层依赖官方包**：`package.json` 把 `dsh-client-ui-workspace` 列为
   peer + dev 依赖，但只 import type。因此官方一旦改键名或改服务签名，
   `tsc` 会直接报错，而不是运行期静默显示成原始键名。运行期产物里不含官方
@@ -126,7 +126,7 @@
 
 格式化完全复用官方：分桶交给 primitives 的 `relativeTime`（官方
 `ui-workspace` 的 `timeLabel` 用的同一个函数），文案交给官方 `workspace`
-语言包的 `time.now` / `time.minutes` / … 键。基准时刻与官方一样在渲染时取
+命名空间的 `time.now` / `time.minutes` / … 键。基准时刻与官方一样在渲染时取
 `Date.now()`，官方没有 ticker，本包也不自造一个：分钟级的精度跟着其他重渲染
 刷新足够。空白（新建中）会话行不显示时间，与官方一致。
 
@@ -285,6 +285,50 @@
 primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标成 external
 由宿主从基线模块表解析；它是 shell 静态模块表的成员，不会多出第二份实例。
 
+### 语言包
+
+文案分两层，都是官方包的结构：
+
+| 模块 | 内容 |
+| --- | --- |
+| `locales.ts` | 命名空间名 `NS`、`zh` / `en` 字典、键域类型，以及 `LocaleNamespaceMap` 声明 |
+| `labels.ts` | 只有投影：`regionLabels(t)` 把翻译函数绑成 `RegionLabels` 契约 |
+
+命名空间取短名 `workspaceGroups`（官方插件的命名空间都是短名：`workspace` /
+`sidebar` / `goal` / `reference` …），不是包名。
+
+**官方已有的文案不复制，直接读官方命名空间**：区域标题、工作区改名/删除、
+会话行标签、状态点、空态这些 `workspace` 命名空间已有的词，`regionLabels`
+逐键取官方（`section.workspaces` / `actions.workspace.aria` /
+`actions.session.aria` / `rename.workspace.title` / `delete.desc` /
+`status.*` 等），本包字典里不存副本。这样官方改措辞时本包自动跟随，两处同屏
+也不会出现两套说法。这也是官方的既有做法：`ui-attachment` 就注册自己的
+命名空间，却用 `locale: "conversation"` 读 `ui-conversation` 的文案。
+
+本包字典只剩官方没有对应词的 9 个键：`newGroup` / `renameGroup` /
+`deleteGroup` / `groupNamePrompt` / `delete.desc.group` / `moveToGroup` /
+`ungroup` / `compareTabDescription` / `unimplemented`。
+`locales.test.ts` 会断言字典里没有任何与官方重合的键，避免以后又抄回来。
+
+两个命名空间的取用方式不同：
+
+- 本包自己的 `workspaceGroups` 由插件入口 `ctx.locale.register(NS, { zh, en })`
+  注册，字典键域由 `LocaleNamespaceMap` 声明，因此 tsc 会拒绝漏键或错键；
+  组件侧走插槽的 `locale: NS` 座位。
+- 官方 `workspace` 由官方包自己注册，本包只**读**：`locale.bind('workspace')`
+  取翻译函数后随 inject 结果传下去。`bind` 返回稳定引用且**调用时才读当前
+  语言**，因此既不必占用插槽座位，也不会冻结在注册那一刻。
+
+通用词（`ok` / `cancel` / `close`）不在本包字典里：它们走官方 `common`
+命名空间，由拿到 `t` 座位的对话框组件直接解析，查找链在命名空间未命中后
+回退到 `common`。
+
+必须分清「缓存的是函数还是文案表」：渲染器会缓存 inject 结果整个注册周期，
+因此**投影后的文案表**不能放进 inject（会冻结在首次渲染那一刻），而
+`locale.bind` 返回的**翻译函数**可以——它调用时才读当前语言。因此
+`regionLabels(t, tWorkspace)` 在组件渲染期现算，`t` 走插槽座位、`tWorkspace`
+随 inject 传入。
+
 
 ### 为什么不能只做增量扩展
 
@@ -342,7 +386,8 @@ pnpm run build          # tsc（宿主）+ esbuild（浏览器 bundle）
 ```
 src/client/
 ├── index.ts                    插件入口：语言包注册、remote 挂载、插槽注册、对照开关
-├── labels.ts                   本包中英文案表、RegionLabels 契约、命名空间声明
+├── locales.ts                  命名空间声明与中英字典（键名取官方叫法）
+├── labels.ts                   文案契约与投影（TranslateNS → RegionLabels）
 ├── official.ts                 官方 workspace 语言包与相对时间的复用面
 ├── actions.ts                  RegionActions / RegionDataHooks（组件与宿主的接口）
 ├── compare.tsx                 对照模式：挂进 better-sidebar 右侧栏 tab

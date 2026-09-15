@@ -1,17 +1,17 @@
 /**
- * `@deepseek-ai/dsh-client-ui-primitives` 的 ambient 模块声明。
+ * `@deepseek-ai/dsh-client-ui-primitives` 的 ambient 模块声明
  *
  * 该包没有独立安装形态（客户端把它编进基线静态模块表，运行期由模块
  * 系统解析）。本文件必须是全局脚本形态（无顶层 import/export），
- * declare module 才是环境声明而不是模块扩充。
+ * declare module 才是环境声明而不是模块扩充
  *
- * 只声明本包实际用到的导出；props 只列本包会传的字段。
+ * 只声明本包实际用到的导出；props 只列本包会传的字段
  */
 
 declare module '@deepseek-ai/dsh-client-ui-primitives' {
   import type { ReactNode } from 'react'
 
-  /** 一级菜单里的普通项；`submenu` 存在时悬停展开二级菜单。 */
+  /** 一级菜单里的普通项；`submenu` 存在时悬停展开二级菜单 */
   export interface MenuActionItem {
     id: string
     label: ReactNode
@@ -34,21 +34,21 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
 
   export type MenuItem = MenuActionItem | MenuSeparatorItem | MenuLabelItem
 
-  /** 官方菜单原语：支持分隔线/标签/二级子菜单，样式走 DSH 主题。 */
+  /** 官方菜单原语：支持分隔线/标签/二级子菜单，样式走 DSH 主题 */
   export const Menu: (props: {
     open: boolean
     anchor: ReactNode
     items: readonly MenuItem[]
     onSelect?: (id: string) => void
     onClose?: () => void
-    /** 渲染进 document.body；关闭时菜单相对锚点就近渲染。 */
+    /** 渲染进 document.body；关闭时菜单相对锚点就近渲染 */
     portal?: boolean
-    /** end：列表右缘对齐锚点右缘（贴近窗口右缘时向左展开）。 */
+    /** end：列表右缘对齐锚点右缘（贴近窗口右缘时向左展开） */
     align?: 'start' | 'end'
     closeOnPointerLeave?: boolean
   }) => ReactNode
 
-  /** 通用按钮；variant 决定填充、悬停与边框。 */
+  /** 通用按钮；variant 决定填充、悬停与边框 */
   export const Button: (props: {
     variant?: 'primary' | 'ghost' | 'outline' | 'toolbar'
     size?: 'md' | 'sm'
@@ -61,12 +61,12 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     type?: 'button' | 'submit' | 'reset'
   }) => ReactNode
 
-  /** 居中对话框；页脚按钮由调用方组装。 */
+  /** 居中对话框；页脚按钮由调用方组装 */
   export const Modal: (props: {
     open: boolean
     onClose: () => void
     title: ReactNode
-    /** 关闭按钮的无障碍标签。 */
+    /** 关闭按钮的无障碍标签 */
     closeLabel: string
     description?: ReactNode
     children?: ReactNode
@@ -75,12 +75,12 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     contentClassName?: string
   }) => ReactNode
 
-  /** 单行文本输入；带边框与聚焦态。 */
+  /** 单行文本输入；带边框与聚焦态 */
   export const Input: (props: {
     value: string
     onChange?: (event: { currentTarget: { value: string } }) => void
     onKeyDown?: (event: { key: string; preventDefault: () => void }) => void
-    /** 输入法组合期间为真，用于让 Enter 不抢组合键。 */
+    /** 输入法组合期间为真，用于让 Enter 不抢组合键 */
     onCompositionStart?: () => void
     onCompositionEnd?: () => void
     onFocus?: (event: { target: { select: () => void } }) => void
@@ -93,16 +93,16 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     icon?: ReactNode
   }) => ReactNode
 
-  /** 16px 图标原语；颜色继承自父级。 */
+  /** 16px 图标原语；颜色继承自父级 */
   export type IconComponent = (props: {
     size?: number
     className?: string
   }) => ReactNode
 
   /**
-   * 会话状态点原语：`ongoing` 画追光方阵，其余状态画实心圆点。
+   * 会话状态点原语：`ongoing` 画追光方阵，其余状态画实心圆点
    *
-   * `done` 与 `warning` 的颜色由原语自带的主题规则给出，调用方不设颜色。
+   * `done` 与 `warning` 的颜色由原语自带的主题规则给出，调用方不设颜色
    */
   export const StateDot: (props: {
     state: 'ongoing' | 'done' | 'warning'
@@ -112,9 +112,9 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
 
   /**
    * 相对时间分桶：把时间差归到 `now` / `minutes` / `hours` / `days` /
-   * `months` / `years` 之一并给出数量，文案由调用方的语言包决定。
-   * @param from - 起点（epoch ms）。
-   * @param to - 终点（epoch ms），通常是当前时刻。
+   * `months` / `years` 之一并给出数量，文案由调用方的语言包决定
+   * @param from - 起点（epoch ms）
+   * @param to - 终点（epoch ms），通常是当前时刻
    */
   export const relativeTime: (
     from: number,
@@ -129,8 +129,8 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const IconEditOutline16: IconComponent
   export const IconTrashOutline16: IconComponent
   export const IconPanelLeftOutline16: IconComponent
-  /** 官方会话菜单「分叉」项用的图标。 */
+  /** 官方会话菜单「分叉」项用的图标 */
   export const IconBranchOutline16: IconComponent
-  /** 官方会话菜单「归档」项用的图标；官方传 size=16。 */
+  /** 官方会话菜单「归档」项用的图标；官方传 size=16 */
   export const IconArchiveOutline20: IconComponent
 }

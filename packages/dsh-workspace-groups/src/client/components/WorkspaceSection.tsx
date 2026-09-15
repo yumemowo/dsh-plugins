@@ -1,8 +1,8 @@
 /**
- * 一个工作区区块：标题行 + 折叠体（分组、平铺的未归组会话、空态）。
+ * 一个工作区区块：标题行 + 折叠体（分组、平铺的未归组会话、空态）
  *
  * 折叠状态由区域组件按 key 持有，这里只消费布尔值，因此不同工作区、
- * 不同分组之间的开合互不影响。
+ * 不同分组之间的开合互不影响
  */
 import type { ReactElement, ReactNode } from 'react'
 import { GroupSection } from './GroupSection.tsx'
@@ -15,12 +15,12 @@ export interface WorkspaceSectionProps {
   collapsed: boolean
   folderActive: boolean
   layout: WorkspaceLayout
-  /** 分组的折叠态查询；折叠键的构成由区域组件持有。 */
+  /** 分组的折叠态查询；折叠键的构成由区域组件持有 */
   isGroupCollapsed: (groupId: string) => boolean
-  /** 分组头与工作区行共用的文案。 */
+  /** 分组头与工作区行共用的文案 */
   labels: WorkspaceRowLabels
   emptyLabel: string
-  /** 分组头两个按钮的文案。 */
+  /** 分组头两个按钮的文案 */
   groupActionLabels: { rename: string; delete: string }
   onToggle: () => void
   onCreateSession: () => void
@@ -30,7 +30,7 @@ export interface WorkspaceSectionProps {
   onToggleGroup: (groupId: string) => void
   onRenameGroup: (section: { id: string; label: string }) => void
   onDeleteGroup: (section: { id: string; label: string }) => void
-  /** 把一个会话行渲染成元素；渲染方式由区域组件决定（是否带归组菜单）。 */
+  /** 把一个会话行渲染成元素；渲染方式由区域组件决定（是否带归组菜单） */
   renderSession: (row: SessionRow) => ReactNode
 }
 
@@ -69,7 +69,7 @@ export function WorkspaceSection({
       />
       {collapsed ? null : (
         <div className="wg-workspace-body">
-          {/* 只有用户建过分组时才渲染分组结构。 */}
+          {/* 只有用户建过分组时才渲染分组结构 */}
           {layout.groups.map((section) => (
             <GroupSection
               key={section.id}
@@ -83,7 +83,7 @@ export function WorkspaceSection({
               {section.sessions.map(renderSession)}
             </GroupSection>
           ))}
-          {/* 未归组的会话平铺在工作区下，不套任何分组头。 */}
+          {/* 未归组的会话平铺在工作区下，不套任何分组头 */}
           {layout.loose.length === 0 ? null : (
             <div className="wg-sessions">{layout.loose.map(renderSession)}</div>
           )}

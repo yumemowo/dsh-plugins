@@ -2,15 +2,17 @@ import { describe, expect, it } from 'vitest'
 import * as React from 'react'
 import { WorkspaceGroupsRegion } from '../src/client/components/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/components/WorkspaceGroupsRegion.tsx'
+import { officialSessionLabels, timeLabel } from '../src/client/official.ts'
+import { regionTranslate, translateWith, workspaceTranslate } from './locale-stub.ts'
 
 /**
- * 区域组件的渲染冒烟。
+ * 区域组件的渲染冒烟
  *
  * node 环境没有 react-dom，这里用一个最小 dispatcher 直接调用函数组件，
  * 验证渲染期不抛错、关键结构（工作区菜单、隐式「未分组」区段、行尾菜单
- * 数量）符合预期。类型检查看不到 hook 调用次序与结构分支这类问题。
+ * 数量）符合预期。类型检查看不到 hook 调用次序与结构分支这类问题
  *
- * 测试替身把 Menu 渲染成 null，因此按 props 形状识别菜单元素而不下钻。
+ * 测试替身把 Menu 渲染成 null，因此按 props 形状识别菜单元素而不下钻
  */
 const internals = (React as unknown as {
   __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED: { ReactCurrentDispatcher: { current: unknown } }
@@ -24,7 +26,7 @@ const dispatcher = {
   useMemo: (fn: () => unknown) => fn(),
 }
 
-/** 渲染整棵树；Menu 元素被收集起来而不下钻（stub 返回 null）。 */
+/** 渲染整棵树；Menu 元素被收集起来而不下钻（stub 返回 null） */
 function render(node: unknown, out: { menus: unknown[]; text: string[] }): void {
   const walk = (n: unknown): void => {
     if (n === null || n === undefined || typeof n === 'boolean') return
@@ -39,7 +41,7 @@ function render(node: unknown, out: { menus: unknown[]; text: string[] }): void 
     if (!React.isValidElement(n)) return
     const el = n as React.ReactElement & { type: unknown; props: Record<string, unknown> }
     if (typeof el.type === 'function') {
-      // 测试替身把 Menu 渲染成 null，因此按 props 形状识别，而不是函数名。
+      // 测试替身把 Menu 渲染成 null，因此按 props 形状识别，而不是函数名
       if (Array.isArray(el.props.items) && el.props.anchor !== undefined) {
         out.menus.push(el)
         return
@@ -60,7 +62,29 @@ function render(node: unknown, out: { menus: unknown[]; text: string[] }): void 
   walk(node)
 }
 
-/** 把所有已渲染 Menu 的条目 id 读出来。 */
+/**
+ * 把所有已渲染 Menu 的条目文案读出来。
+ *
+ * Menu 在测试替身里渲染成 null，锚点按钮与条目都只存在于它的 props 上，
+ * 因此文案要从捕获的 Menu 元素里取。
+ */
+function menuLabels(out: { menus: unknown[] }): string[] {
+  return out.menus.flatMap((m) =>
+    (m as { props: { items: { label?: unknown }[] } }).props.items
+      .map((item) => item.label)
+      .filter((label): label is string => typeof label === 'string'),
+  )
+}
+
+/** 把所有行内操作按钮的无障碍标签读出来（工作区行与会话行的锚点） */
+function actionLabels(out: { menus: unknown[] }): string[] {
+  return out.menus
+    .map((m) => (m as { props: { anchor?: { props?: Record<string, unknown> } } }).props.anchor)
+    .map((anchor) => anchor?.props?.['aria-label'])
+    .filter((label): label is string => typeof label === 'string')
+}
+
+/** 把所有已渲染 Menu 的条目 id 读出来 */
 function menuItems(out: { menus: unknown[] }): string[][] {
   return out.menus.map((m) =>
     ((m as { props: { items: { id: string }[] } }).props.items).map((item) => item.id),
@@ -110,40 +134,9 @@ function props(
     moveSession: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
-    labels: {
-      title: '工作区',
-      newGroup: '新建分组',
-      newSessionIn: (n) => `在「${n}」中新建会话`,
-      workspaceActions: (n) => `工作区「${n}」的操作`,
-      renameWorkspace: '重命名工作区',
-      deleteWorkspace: '删除工作区',
-      confirmDeleteWorkspace: (n) => `删除工作区「${n}」？`,
-      workspaceNamePrompt: '工作区名称',
-      workspaceConflict: (n) => `已存在名为「${n}」的工作区。`,
-      ungrouped: '未分组',
-      groupNamePrompt: '分组名称',
-      renameGroup: '重命名分组',
-      deleteGroup: '删除分组',
-      confirmDeleteGroup: (n) => `删除分组「${n}」？`,
-      confirmLabel: '确定',
-      cancelLabel: '取消',
-      closeLabel: '关闭',
-      sessionActions: '会话操作',
-      moveToGroup: '分组',
-      ungroup: '取消分组',
-      status: {
-        running: '进行中',
-        subagentsRunning: (n: number) => `${n} 个子代理运行中`,
-        waitingApproval: '等待审批',
-        planReview: '计划待审',
-        waitingAnswer: '等待回答',
-        completed: '已完成',
-      },
-      compareTabDescription: '对照',
-      empty: '暂无会话',
-      unimplemented: '实验特性',
-    },
-    // 官方三项操作与相对时间：缺省不给，用于验证降级路径。
+    t: regionTranslate(),
+    tWorkspace: workspaceTranslate(),
+    // 官方三项操作与相对时间：缺省不给，用于验证降级路径
     ...(options.official === false
       ? {}
       : {
@@ -151,16 +144,8 @@ function props(
             renameSession: async () => {},
             forkSession: () => {},
             archiveSession: async () => {},
-            labels: {
-              rename: '重命名',
-              renameTitle: '重命名会话',
-              sessionNamePrompt: '会话名称',
-              fork: '分叉会话',
-              archive: '归档会话',
-              closeLabel: '关闭',
-              cancelLabel: '取消',
-            },
-            relativeTime: () => '5分钟',
+            labels: officialSessionLabels(workspaceTranslate()),
+            relativeTime: (updatedAt, now) => timeLabel(updatedAt, now, workspaceTranslate()),
           }),
         }),
   }
@@ -171,14 +156,14 @@ describe('WorkspaceGroupsRegion render', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     expect(() => render(React.createElement(WorkspaceGroupsRegion, props(true)), out)).not.toThrow()
 
-    // 每个工作区行一个菜单；未分组区段的会话行没有菜单。
+    // 每个工作区行一个菜单；未分组区段的会话行没有菜单
     expect(menuItems(out)).toContainEqual(['new-group', 'rename', 'delete'])
   })
 
   it('renders an ungrouped section only when a stray session exists', () => {
     const withStray = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), withStray)
-    // 孤会话（无所属工作区）应落在「未分组」区段里。
+    // 孤会话（无所属工作区）应落在「未分组」区段里
     expect(withStray.text).toContain('未分组')
     expect(withStray.text).toContain('Orphan')
 
@@ -191,7 +176,7 @@ describe('WorkspaceGroupsRegion render', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
-    // 工作区行自己的菜单 + 归组会话行的菜单。
+    // 工作区行自己的菜单 + 归组会话行的菜单
     expect(menuItems(out)).toContainEqual(['new-group', 'rename', 'delete'])
     expect(menuItems(out)).toContainEqual(['rename', 'fork', 'archive', 'separator', 'group'])
   })
@@ -200,7 +185,7 @@ describe('WorkspaceGroupsRegion render', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
-    // stray 会话没有分组可归，但官方三项照常可用。
+    // stray 会话没有分组可归，但官方三项照常可用
     expect(menuItems(out)).toContainEqual(['rename', 'fork', 'archive'])
   })
 
@@ -208,7 +193,7 @@ describe('WorkspaceGroupsRegion render', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true, { official: false })), out)
 
-    // 官方缺失时会话行只剩归组菜单；stray 行两项都没有，因此完全不挂菜单。
+    // 官方缺失时会话行只剩归组菜单；stray 行两项都没有，因此完全不挂菜单
     expect(menuItems(out)).toContainEqual(['group'])
     expect(menuItems(out)).toHaveLength(2)
   })
@@ -217,7 +202,7 @@ describe('WorkspaceGroupsRegion render', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
-    // 行尾时间来自官方格式化（替身固定返回 5分钟）。
+    // 行尾时间来自官方格式化（替身固定返回 5分钟）
     expect(out.text).toContain('5分钟')
   })
 
@@ -225,15 +210,56 @@ describe('WorkspaceGroupsRegion render', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true, { official: false })), out)
 
-    // 时间文案也归官方语言包，缺失时整列不渲染。
+    // 时间文案也归官方语言包，缺失时整列不渲染
     expect(out.text).not.toContain('5分钟')
+  })
+
+  it('reads the package-owned copy from the seat at render time', () => {
+    const first = { menus: [] as unknown[], text: [] as string[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), first)
+
+    // 同一个组件、换一个翻译座位重新渲染：自有文案跟着换。inject 结果被
+    // 渲染器缓存整个注册周期，因此文案投影必须在渲染期做，不能放进 inject。
+    const second = { menus: [] as unknown[], text: [] as string[] }
+    render(
+      React.createElement(WorkspaceGroupsRegion, {
+        ...props(true),
+        t: translateWith({ newGroup: 'New group' }) as never,
+      }),
+      second,
+    )
+
+    expect(menuLabels(first)).toContain('新建分组')
+    expect(menuLabels(second)).toContain('New group')
+    expect(menuLabels(second)).not.toContain('新建分组')
+  })
+
+  it('takes the official copy from the official translate function, not our dictionary', () => {
+    const out = { menus: [] as unknown[], text: [] as string[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
+
+    // 官方已有的文案由官方命名空间提供：本包自己的座位里没有这些键，
+    // 拿不到就只能显示原始键名。
+    expect(actionLabels(out)).toContain('工作区“W1”的操作')
+    expect(actionLabels(out)).toContain('会话“A”的操作')
+    expect(out.text).toContain('未分组')
+  })
+
+  it('labels the session row action button with the official aria key', () => {
+    const out = { menus: [] as unknown[], text: [] as string[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
+
+    // 会话行的「...」用官方 actions.session.aria，取会话标题；工作区行用
+    // actions.workspace.aria，取工作区标题。
+    expect(actionLabels(out)).toContain('会话“A”的操作')
+    expect(actionLabels(out)).toContain('工作区“W1”的操作')
   })
 
   it('renders no status dot for idle session rows', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
-    // 空闲行不画点，但槽位仍在，标题因此不位移。
+    // 空闲行不画点，但槽位仍在，标题因此不位移
     expect(out.text.filter((t) => t.startsWith('StateDot:'))).toEqual([])
   })
 
@@ -242,7 +268,7 @@ describe('WorkspaceGroupsRegion render', () => {
     const pending = new Map([['orphan', { kind: 'approval' }]])
     render(React.createElement(WorkspaceGroupsRegion, props(true, { pending })), out)
 
-    // 待交互压过其他状态：orphan 静置但仍在等用户审批。
+    // 待交互压过其他状态：orphan 静置但仍在等用户审批
     expect(out.text).toContain('StateDot:warning')
   })
 })

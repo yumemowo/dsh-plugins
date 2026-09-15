@@ -1,22 +1,22 @@
 /**
- * 本包浏览器半边的样式。
+ * 本包浏览器半边的样式
  *
  * 取值对齐官方侧边栏组件（`dsh-client-ui-sidebar` 与 `dsh-client-ui-workspace`
  * 0.1.5-rc.2）的实际规则：工作区/分组行 34px、会话行 32px、圆角 8px、行内
  * 水平内边距 8px、图标列 16px、悬停用 `--dsw-alias-interactive-bg-hover`、
  * 文字色走 `--dsw-alias-label-primary/secondary/tertiary`，滚动条留白复用
- * shell 提供的 `--dsh-sidebar-inline-padding`。
+ * shell 提供的 `--dsh-sidebar-inline-padding`
  *
  * 文字层级照官方照搬：容器行（`projectRow`）与其中的标题一律
  * `label-primary` 14px/20px，且都**不加字重**——官方工作区标题与会话标题
  * 同色同字号，只靠行高（34px vs 32px）区分层级。字号与行高成对写在叶子上，
- * 根节点不设 line-height（官方 `.empty` 等就这样吃浏览器默认值）。
+ * 根节点不设 line-height（官方 `.empty` 等就这样吃浏览器默认值）
  *
  * 通过带 `data-plugin` / `data-plugin-css` 标记的 `<style>` 标签注入：
- * 客户端模块系统按这两个属性认领样式标签并做 HMR 记账。
+ * 客户端模块系统按这两个属性认领样式标签并做 HMR 记账
  */
 
-/** 样式表内容的唯一标识；重复挂载时用它去重。 */
+/** 样式表内容的唯一标识；重复挂载时用它去重 */
 const STYLE_TAG_ID = '@your-scope/dsh-workspace-groups/src/client/region.css'
 
 const CSS = `
@@ -30,7 +30,7 @@ const CSS = `
   font-size: 14px;
 }
 
-/* 右侧栏对照 tab 的外壳：把区域撑满 tab 体并留出与侧边栏一致的水平内边距。 */
+/* 右侧栏对照 tab 的外壳：把区域撑满 tab 体并留出与侧边栏一致的水平内边距 */
 .wg-tab {
   box-sizing: border-box;
   height: 100%;
@@ -49,7 +49,7 @@ const CSS = `
   background: 0 0;
   border: none;
   border-radius: 50%;
-  /* 正圆必须配对 round，否则会被主题的全局超级椭圆磨成方圆角。 */
+  /* 正圆必须配对 round，否则会被主题的全局超级椭圆磨成方圆角 */
   corner-shape: round;
   display: inline-flex;
   align-items: center;
@@ -72,7 +72,7 @@ const CSS = `
 .wg-workspace { position: relative; display: flex; flex-direction: column; }
 .wg-workspace + .wg-workspace { margin-top: 4px; }
 
-/* 图标列：工作区的文件夹/箭头、分组的箭头、会话的状态位共用同一列宽。 */
+/* 图标列：工作区的文件夹/箭头、分组的箭头、会话的状态位共用同一列宽 */
 .wg-slot {
   width: 16px;
   height: 20px;
@@ -84,7 +84,7 @@ const CSS = `
 }
 
 /* 容器行底色取官方 projectRow 的 label-primary；图标槽自己显式设 tertiary，
-   所以这里的颜色只影响直接继承的行内文字。 */
+   所以这里的颜色只影响直接继承的行内文字 */
 .wg-workspace-head,
 .wg-group-head {
   box-sizing: border-box;
@@ -95,7 +95,7 @@ const CSS = `
   display: flex;
   align-items: center;
   gap: 6px;
-  /* 行自身参与定位：引导线要落在行的悬停底色之下。 */
+  /* 行自身参与定位：引导线要落在行的悬停底色之下 */
   position: relative;
   height: 34px;
 }
@@ -105,7 +105,7 @@ const CSS = `
 /* 层级缩进：工作区行（第 0 层）保持官方的 8px，以下每层再让出 16px，因此
    子级内容落在 8 + 16 × 深度上。深度只有三层且固定，直接按结构写死选择器，
    比在 JSX 里逐行下发内联 style 更好读，也不给行组件添 props。
-   —— 分组头 24px、分组内会话 40px、工作区直接子会话 24px。 */
+   —— 分组头 24px、分组内会话 40px、工作区直接子会话 24px */
 .wg-workspace-head { padding: 0 8px; }
 .wg-group-head { padding: 0 8px 0 24px; }
 .wg-workspace-body > .wg-sessions > .wg-row { padding-left: 24px; }
@@ -114,7 +114,7 @@ const CSS = `
 /* 竖向引导线：落在父级图标列的中心（工作区 8 + 16/2 = 16，分组 24 + 16/2 = 32），
    把「这组行属于上一行」画出来。行本身是 position: relative 的定位元素，按树序
    排在容器伪元素之后绘制，因此悬停/选中的行底色会盖住它，不会出现线穿过高亮
-   底色的割裂感。 */
+   底色的割裂感 */
 .wg-workspace-body,
 .wg-group > .wg-sessions { position: relative; }
 .wg-workspace-body::before,
@@ -130,7 +130,7 @@ const CSS = `
 .wg-workspace-body::before { left: 16px; }
 .wg-group > .wg-sessions::before { left: 32px; }
 
-/* 字号与行高成对写在叶子上（官方 .title 即如此），根节点不设 line-height。 */
+/* 字号与行高成对写在叶子上（官方 .title 即如此），根节点不设 line-height */
 .wg-workspace-title,
 .wg-group-label {
   min-width: 0;
@@ -142,13 +142,13 @@ const CSS = `
   line-height: 20px;
 }
 /* 官方工作区标题即 label-primary 14px/20px，不加字重：与会话标题同色同字号，
-   层级只由行高（34px vs 32px）承担。 */
+   层级只由行高（34px vs 32px）承担 */
 .wg-workspace-title { color: var(--dsw-alias-label-primary); }
-/* 分组是工作区之下的一层，靠更暗的色阶表示「低一级」。 */
+/* 分组是工作区之下的一层，靠更暗的色阶表示「低一级」 */
 .wg-group-label { color: var(--dsw-alias-label-tertiary); }
 
 /* 工作区行静止时是文件夹，悬停时换成箭头：两个槽都在文档流里，
-   各自 16px，因此切换不会让标题横向跳动。悬停箭头的色阶同官方 .chevron。 */
+   各自 16px，因此切换不会让标题横向跳动。悬停箭头的色阶同官方 .chevron */
 .wg-folder-active { color: var(--dsw-alias-state-business-primary); }
 .wg-workspace-head .wg-chevron { display: none; color: var(--dsw-alias-label-caption); }
 .wg-workspace-head:hover .wg-chevron { display: inline-flex; }
@@ -161,7 +161,7 @@ const CSS = `
    「容器行 → 首个会话行」与「会话 → 会话」，因为那里的会话行是容器行的
    直接兄弟。本包把分组结构多包了 .wg-workspace-body / .wg-group / .wg-sessions
    三层，同一规则要在每层各写一次，分组头与首个会话行之间才会有间距。
-   各层都建成 flex 列容器：flex 容器的子项边距不合并，间距值所见即所得。 */
+   各层都建成 flex 列容器：flex 容器的子项边距不合并，间距值所见即所得 */
 .wg-workspace-body,
 .wg-group,
 .wg-sessions { display: flex; flex-direction: column; }
@@ -182,7 +182,7 @@ const CSS = `
   align-items: center;
   gap: 0;
   padding: 0 8px;
-  /* 与容器行同理：行要盖住所在层级的引导线。 */
+  /* 与容器行同理：行要盖住所在层级的引导线 */
   position: relative;
 }
 .wg-row:hover,
@@ -201,7 +201,7 @@ const CSS = `
 
 /* 行尾相对时间：官方 .time 的几何与色阶（12px/20px、label-tertiary）。
    悬停、菜单展开、键盘聚焦时让位给操作位——官方是同一处 CSS 互换
-   （time → ellipsis），本包把「键盘聚焦」也列为一条显隐路径。 */
+   （time → ellipsis），本包把「键盘聚焦」也列为一条显隐路径 */
 .wg-row-time {
   flex: none;
   color: var(--dsw-alias-label-tertiary);
@@ -213,11 +213,11 @@ const CSS = `
    展开成图标列宽。时间与操作按钮的右缘因此始终落在同一条竖线——官方靠
    .time/.rowActions 的 display 互换达到同一效果。
    这里不整格 display:none，是为了保留本包的键盘可达性：格子收成 0 宽时
-   按钮仍可 Tab 聚焦，:has 命中后连格子一起展开，焦点框才画得出来。
+   按钮仍可 Tab 聚焦，:has 命中后连格子一起展开，焦点框才画得出来
 
    overflow 不可省略，它担两件事：裁掉收起时溢出的 16px 按钮；以及把 flex
    项 min-width: auto 的自动最小尺寸归零——否则子项 16px 会把 width: 0
-   顶回去，本行修复失效（auto 最小尺寸仅在 overflow 非 visible 时才为 0）。 */
+   顶回去，本行修复失效（auto 最小尺寸仅在 overflow 非 visible 时才为 0） */
 .wg-row-action-slot {
   flex: none;
   width: 0;
@@ -228,7 +228,7 @@ const CSS = `
   overflow: hidden;
 }
 
-/* 时间与操作位共用同一组触发条件，保证任一时刻只有一方占据行尾。 */
+/* 时间与操作位共用同一组触发条件，保证任一时刻只有一方占据行尾 */
 .wg-row:hover .wg-row-time,
 .wg-row-menu-open .wg-row-time,
 .wg-row:has(.wg-row-action:focus-visible) .wg-row-time { display: none; }
@@ -241,7 +241,7 @@ const CSS = `
    不用 :focus / :focus-within / 选中态——鼠标点过之后焦点仍留在按钮或行上，
    会让按钮一直可见；:focus-visible 只在键盘导航时命中，既去掉鼠标残留，
    又保留清晰可见的键盘焦点。
-   隐藏时一并禁用指针事件：否则会留下一个看不见却能点中的 16px 热区。 */
+   隐藏时一并禁用指针事件：否则会留下一个看不见却能点中的 16px 热区 */
 .wg-row-action {
   flex: none;
   opacity: 0;
@@ -261,7 +261,7 @@ const CSS = `
 .wg-row-action:hover { color: var(--dsw-alias-label-primary); }
 
 /* 工作区行尾的操作位容器：官方 .rowActions 的 gap:12px 与 20px 行高。
-   本包的操作按钮始终参与布局、只切换不透明度，因此悬停时标题不会位移。 */
+   本包的操作按钮始终参与布局、只切换不透明度，因此悬停时标题不会位移 */
 .wg-row-actions {
   flex: none;
   height: 20px;
@@ -272,14 +272,14 @@ const CSS = `
 
 /* 显示路径只有三条：所在行悬停、菜单展开期间（否则锚点按钮会在菜单还开着时
    消失）、以及键盘聚焦。工作区行与分组行各有自己的行类，因此悬停选择器
-   要分别列出。 */
+   要分别列出 */
 .wg-row:hover .wg-row-action,
 .wg-workspace-head:hover .wg-row-action,
 .wg-group-head:hover .wg-row-action,
 .wg-row-menu-open .wg-row-action,
 .wg-row-action:focus-visible { opacity: 1; pointer-events: auto; }
 
-/* 对话框内的错误提示（如工作区重名）：只上错误色，几何走官方 Modal。 */
+/* 对话框内的错误提示（如工作区重名）：只上错误色，几何走官方 Modal */
 .wg-dialog-error {
   color: var(--dsw-alias-state-error-primary);
   margin-top: 8px;
@@ -290,7 +290,7 @@ const CSS = `
 /* 官方二级菜单面板固定向右展开（left: calc(100% + 10px)）。对照模式下
    区域挂在右侧栏、贴近窗口右缘，面板会开出屏幕外：宿主在 body 上挂
    data-wg-menu-flip 标记（由 COMPARE_MODE 决定），样式只在该标记下把
-   面板翻到列表左侧，不依赖官方 hash 类名。 */
+   面板翻到列表左侧，不依赖官方 hash 类名 */
 body[data-wg-menu-flip] [role='menu'] [role='menu'] {
   left: auto;
   right: calc(100% + 10px);
@@ -307,7 +307,7 @@ body[data-wg-menu-flip] [role='menu'] [role='menu']::before {
 }
 
 /* 危险操作的确认按钮：只换文字色，按钮几何仍由官方 Button 拥有。
-   与官方删除按钮同一做法（错误色 token --dsw-alias-state-error-primary）。 */
+   与官方删除按钮同一做法（错误色 token --dsw-alias-state-error-primary） */
 .wg-danger-action:not(:disabled) { color: var(--dsw-alias-state-error-primary); }
 
 .wg-note {
@@ -323,10 +323,10 @@ body[data-wg-menu-flip] [role='menu'] [role='menu']::before {
 `
 
 /**
- * 注入样式表；已注入过则跳过。
+ * 注入样式表；已注入过则跳过
  *
  * 客户端模块系统会给未标记的 style 标签打上当前插件的 `data-plugin`，
- * 这里显式标记以配合它的认领与去重。
+ * 这里显式标记以配合它的认领与去重
  */
 export function insertStyles(): void {
   if (typeof document === 'undefined') return

@@ -1,0 +1,128 @@
+import { describe, expect, it } from 'vitest'
+import { regionLabels } from '../src/client/labels.ts'
+import { NS, en, zh } from '../src/client/locales.ts'
+import { OFFICIAL_WORKSPACE_ZH, regionTranslate, translateFor, workspaceTranslate } from './locale-stub.ts'
+
+/**
+ * 文案分两个来源，这里同时固化这条边界：
+ *
+ * - 官方 `workspace` 已有的文案只从官方命名空间取，本包字典里不复制一份；
+ * - 只有官方没有对应词的自有文案才在本包字典里。
+ */
+describe('locales', () => {
+  it('keeps the English dictionary complete against the Chinese key set', () => {
+    expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort())
+  })
+
+  it('owns a short namespace name rather than the package name', () => {
+    // 官方插件的命名空间都是短名（workspace / sidebar / goal …）。
+    expect(NS).toBe('workspaceGroups')
+  })
+
+  it('holds only the copy the official namespace does not already have', () => {
+    // 键名与官方字典重合即意味着又复制了一份官方译文。
+    const duplicated = Object.keys(zh).filter((key) => key in OFFICIAL_WORKSPACE_ZH)
+
+    expect(duplicated).toEqual([])
+  })
+
+  it('lists every package-owned key explicitly', () => {
+    // 自有键不多，逐个列出；新增文案时这里会提醒重新确认它是否真的官方没有。
+    expect(Object.keys(zh).sort()).toEqual([
+      'compareTabDescription',
+      'delete.desc.group',
+      'deleteGroup',
+      'groupNamePrompt',
+      'moveToGroup',
+      'newGroup',
+      'renameGroup',
+      'ungroup',
+      'unimplemented',
+    ])
+  })
+})
+
+describe('regionLabels', () => {
+  const labels = regionLabels(regionTranslate(), workspaceTranslate())
+
+  it('reads the region title from the official section key', () => {
+    expect(labels.title).toBe('工作区')
+  })
+
+  it('reads the ungrouped bucket title from the official key', () => {
+    expect(labels.ungrouped).toBe('未分组')
+  })
+
+  it('reads the empty placeholder from the official key', () => {
+    expect(labels.empty).toBe('暂无会话')
+  })
+
+  it('reads the workspace name prompt and its conflict hint from the official keys', () => {
+    expect(labels.workspaceNamePrompt).toBe('工作区名称')
+    expect(labels.workspaceConflict('w1')).toBe('已存在名为“w1”的工作区。')
+  })
+
+  it('reads the workspace rename and delete copy from the official keys', () => {
+    expect(labels.renameWorkspace).toBe('重命名工作区')
+    expect(labels.deleteWorkspace).toBe('删除工作区')
+    expect(labels.confirmDeleteWorkspace('w1')).toBe(
+      '将把“w1”从工作区列表中移除。文件夹与会话记录会保留，其会话将显示在“未分组”下。',
+    )
+  })
+
+  it('interpolates the workspace name into the aria labels', () => {
+    expect(labels.workspaceActions('w1')).toBe('工作区“w1”的操作')
+    expect(labels.newSessionIn('w1')).toBe('在“w1”中新建会话')
+    expect(labels.sessionActions('S1')).toBe('会话“S1”的操作')
+  })
+
+  it('reads every session status label from the official status keys', () => {
+    expect(labels.status.running).toBe('进行中')
+    expect(labels.status.subagentsRunning(1)).toBe('1 个子代理运行中')
+    expect(labels.status.subagentsRunning(3)).toBe('3 个子代理运行中')
+    expect(labels.status.waitingApproval).toBe('等待审批')
+    expect(labels.status.planReview).toBe('计划待审')
+    expect(labels.status.waitingAnswer).toBe('等待回答')
+    expect(labels.status.completed).toBe('已完成')
+  })
+
+  it('keeps the package-owned group copy under its own keys', () => {
+    expect(labels.newGroup).toBe('新建分组')
+    expect(labels.renameGroup).toBe('重命名分组')
+    expect(labels.deleteGroup).toBe('删除分组')
+    expect(labels.groupNamePrompt).toBe('分组名称')
+    expect(labels.confirmDeleteGroup('g1')).toBe(
+      '删除分组“g1”？组内会话会移出分组，会话本身不受影响。',
+    )
+    expect(labels.moveToGroup).toBe('分组')
+    expect(labels.ungroup).toBe('取消分组')
+  })
+
+  it('resolves official copy through the official namespace, not our dictionary', () => {
+    // 本包自己的翻译函数里没有官方那些键（类型上也不允许传），运行期只能
+    // 拿到原始键名；因此这类文案必须由官方命名空间提供。
+    const ours = regionTranslate() as unknown as (key: string) => string
+    const official = workspaceTranslate() as unknown as (key: string) => string
+
+    expect(ours('section.workspaces')).toBe('section.workspaces')
+    expect(official('section.workspaces')).toBe('工作区')
+  })
+})
+
+describe('translateFor', () => {
+  it('dispatches by namespace like LocaleRuntime.bind does', () => {
+    const raw = translateFor as unknown as (ns: string) => (key: string) => string
+
+    expect(raw(NS)('newGroup')).toBe('新建分组')
+    expect(raw('workspace')('section.workspaces')).toBe('工作区')
+  })
+
+  it('falls back to the shared common vocabulary from both namespaces', () => {
+    // 确认/取消/关闭是通用词，两个命名空间的字典里都没有，查找链回退到 common。
+    for (const ns of [NS, 'workspace']) {
+      expect(translateFor(ns)('ok')).toBe('确定')
+      expect(translateFor(ns)('cancel')).toBe('取消')
+      expect(translateFor(ns)('close')).toBe('关闭')
+    }
+  })
+})
