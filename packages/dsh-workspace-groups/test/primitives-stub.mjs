@@ -26,6 +26,21 @@ export const IconPlusOutline16 = icon('IconPlusOutline16')
 export const IconEditOutline16 = icon('IconEditOutline16')
 export const IconTrashOutline16 = icon('IconTrashOutline16')
 export const IconPanelLeftOutline16 = icon('IconPanelLeftOutline16')
+export const IconBranchOutline16 = icon('IconBranchOutline16')
+export const IconArchiveOutline20 = icon('IconArchiveOutline20')
+
+/**
+ * 相对时间替身：分桶规则与本包 `official.ts` 的契约一致，文案由调用方决定。
+ * 这里只需覆盖断言用到的分桶。
+ */
+export const relativeTime = (from, to) => {
+  const delta = Math.max(0, to - from)
+  const minute = 60_000
+  if (delta < minute) return { unit: 'now', n: 0 }
+  if (delta < 60 * minute) return { unit: 'minutes', n: Math.floor(delta / minute) }
+  if (delta < 24 * 60 * minute) return { unit: 'hours', n: Math.floor(delta / (60 * minute)) }
+  return { unit: 'days', n: Math.floor(delta / (24 * 60 * minute)) }
+}
 
 export default {
   Menu,
@@ -33,6 +48,7 @@ export default {
   Modal,
   Input,
   StateDot,
+  relativeTime,
   IconFolderClose16,
   IconFolderOpen16,
   IconTriangleRightFill14,
@@ -41,4 +57,6 @@ export default {
   IconEditOutline16,
   IconTrashOutline16,
   IconPanelLeftOutline16,
+  IconBranchOutline16,
+  IconArchiveOutline20,
 }

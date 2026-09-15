@@ -4,8 +4,15 @@
  * 只产出菜单数据（id、文案、图标、禁用与危险标记），不关心菜单如何渲染与
  * 开合：渲染由 `Menu` 原语负责，开合状态由持有锚点的行组件负责。
  */
-import { IconEditOutline16, IconPlusOutline16, IconTrashOutline16 } from './runtime.ts'
+import {
+  IconArchiveOutline20,
+  IconBranchOutline16,
+  IconEditOutline16,
+  IconPlusOutline16,
+  IconTrashOutline16,
+} from './runtime.ts'
 import type { MenuActionItem, MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { OfficialSessionLabels } from './official.ts'
 import type { GroupSection } from './data/types.ts'
 
 /** 会话「更多操作」菜单里分组项的选项集。 */
@@ -15,9 +22,21 @@ export interface GroupMenuInput {
   /** 目标会话当前所属分组 id；空串表示未归组。 */
   currentGroupId: string
   /** 「分组」一级项文案。 */
-  label: string
+  groupLabel: string
   /** 「取消分组」文案。 */
   ungroupLabel: string
+}
+
+/**
+ * 会话菜单的构造输入：两段都可缺省。
+ *
+ * `grouping` 缺省表示该行没有分组可归（「未分组」桶）；`official` 缺省表示
+ * 宿主未提供官方会话操作。两段都缺时菜单为空——调用方此时应当直接渲染
+ * `SessionRowView` 而不挂菜单。
+ */
+export interface SessionMenuInput {
+  grouping?: GroupMenuInput | undefined
+  official?: OfficialSessionLabels | undefined
 }
 
 /**
@@ -29,13 +48,12 @@ export interface GroupMenuInput {
  * @returns 可放进 Menu items 的分组项；分组不存在时也返回占位项以稳定菜单维度。
  */
 export function buildGroupMenuItem(input: GroupMenuInput): MenuActionItem {
-  const { sections, currentGroupId, label } = input
-  const candidates = sections
-    .filter((section) => section.id !== currentGroupId)
+  const candidates = input.sections
+    .filter((section) => section.id !== input.currentGroupId)
     .map((section) => ({ id: `group:${section.id}`, label: section.label }))
   return {
     id: 'group',
-    label,
+    label: input.groupLabel,
     disabled: candidates.length === 0,
     submenu: candidates,
   }
@@ -44,18 +62,38 @@ export function buildGroupMenuItem(input: GroupMenuInput): MenuActionItem {
 /**
  * 构造会话「更多操作」菜单的完整条目。
  *
- * 一级菜单为：分组（二级展开）、其下的「取消分组」（仅当会话已归组）。
- * 分组没有任何可选项时「分组」仍占位但禁用，菜单结构不因数据为空而跳动。
- * @param input - 分组选项集。
+ * 排列依次是官方三项（重命名 / 分叉 / 归档）、一条分隔线、以及本包自有的
+ * 分组项（其下「取消分组」仅当会话已归组）。官方三项在前：它们作用于会话
+ * 本身，分组项是叠加在此之上的归类操作；分隔线把「官方能力」与「本包扩展」
+ * 分成两段，避免两类操作混成一个列表。
+ *
+ * 官方三项的文案与图标都取自官方 `ui-workspace`（见 `official.ts`）；宿主
+ * 未提供官方服务时整体省略，只留分组项，不留点不动的死按钮。反之「未分组」
+ * 桶里的会话没有分组上下文，只留官方三项。分隔线只在两段都存在时才画。
+ * @param input - 两段构造输入。
  * @returns Menu items 列表。
  */
-export function buildSessionMenuItems(input: GroupMenuInput): readonly MenuItem[] {
-  const items: MenuItem[] = [buildGroupMenuItem(input)]
-  if (input.currentGroupId !== '') {
-    items.push({
-      id: 'ungroup',
-      label: input.ungroupLabel,
-    })
+export function buildSessionMenuItems(input: SessionMenuInput): readonly MenuItem[] {
+  const items: MenuItem[] = []
+  const { grouping, official } = input
+
+  if (official !== undefined) {
+    items.push(
+      { id: 'rename', label: official.rename, icon: <IconEditOutline16 /> },
+      { id: 'fork', label: official.fork, icon: <IconBranchOutline16 /> },
+      { id: 'archive', label: official.archive, icon: <IconArchiveOutline20 size={16} /> },
+    )
+  }
+
+  if (official !== undefined && grouping !== undefined) {
+    items.push({ type: 'separator', id: 'separator' })
+  }
+
+  if (grouping !== undefined) {
+    items.push(buildGroupMenuItem(grouping))
+    if (grouping.currentGroupId !== '') {
+      items.push({ id: 'ungroup', label: grouping.ungroupLabel })
+    }
   }
   return items
 }

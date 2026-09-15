@@ -19,11 +19,16 @@ import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // 仅用于引入 sidebar 的插槽声明增强（sidebar.workspaces 的 SlotMap 条目）。
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
+// 仅用于引入官方 workspace 语言包的键域声明（LocaleNamespaceMap）与
+// ctx.uiWorkspace 的服务类型——本包复用官方文案与官方动作，靠这份声明让
+// 官方改键名时在 tsc 阶段就暴露，而不是运行期显示原始键名。
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { REMOTE_CONTRIBUTION, SERVICE, callRemote } from './remote.ts'
 import type { Group, WorkspaceGroupsSnapshot } from './remote.ts'
 import { registerCompareTab } from './compare.tsx'
 import { DICTIONARIES, LOCALE_NAMESPACE, regionLabels } from './labels.ts'
-import type { RegionActions } from './actions.ts'
+import { officialSessionLabels, relativeTimeLabel } from './official.ts'
+import type { RegionActions, OfficialSessionActions } from './actions.ts'
 import { WorkspaceGroupsRegion } from './components/WorkspaceGroupsRegion.tsx'
 import { insertStyles } from './styles.ts'
 
@@ -108,6 +113,47 @@ export function apply(ctx: Context): void {
     return snapshot.byWorkspace
   }
 
+  /**
+   * 官方三项会话操作的复用面。
+   *
+   * 文案绑官方 `workspace` 语言包，动作直接调官方服务（`ctx.uiWorkspace` 的
+   * 分叉/归档、`ctx.sessions` 绑定的重命名）——这三处正是官方会话菜单内部
+   * 调用的同一批接口，因此官方改行为或文案时本包自动跟随，不需要重新对齐。
+   *
+   * 官方 `ui-workspace` 不在场时返回 undefined：本包的区域本来就依赖它供的
+   * `useWorkspaces` 全局 hook，正常情况下它必然加载；真缺失时菜单里那三项与
+   * 行尾时间整体不渲染，不留点不动的入口。
+   * @returns 官方动作与文案；官方服务或控制器缺失时为 undefined。
+   */
+  const officialActions = (): OfficialSessionActions | undefined => {
+    const uiWorkspace = ctx.get('uiWorkspace') as
+      | {
+          forkSession: (sessionId: string) => Promise<void>
+          archiveSession: (sessionId: string) => Promise<void>
+        }
+      | undefined
+    if (uiWorkspace === undefined || sessions === undefined) return undefined
+
+    const labels = officialSessionLabels(locale.bind('workspace'))
+    return {
+      // 重命名没有走 uiWorkspace：官方把这条留在会话对象上，菜单里也是
+      // 同一个入口。走 binding 而不是另造 RPC，接受规范化与错误语义。
+      renameSession: async (sessionId, title) => {
+        const face = sessions.binding(sessionId as never)?.session
+        if (face === undefined) throw new Error(`unknown session "${sessionId}"`)
+        const result = await face.rename(title)
+        if (!result.ok) throw new Error(result.error.message)
+      },
+      // 官方菜单把 fork 的失败咽掉（分叉失败不该弹错），这里保持同一行为。
+      forkSession: (sessionId) => {
+        void uiWorkspace.forkSession(sessionId).catch(() => {})
+      },
+      archiveSession: (sessionId) => uiWorkspace.archiveSession(sessionId),
+      labels,
+      relativeTime: (updatedAt, now) => relativeTimeLabel(updatedAt, now, locale.bind('workspace')),
+    }
+  }
+
   const injected = (): RegionActions => {
     const labels = regionLabels(locale.bind(LOCALE_NAMESPACE))
     if (sessions === undefined || workspaces === undefined) {
@@ -156,6 +202,8 @@ export function apply(ctx: Context): void {
         workspaces.rename(workspaceId as never, title).then(() => undefined),
       deleteWorkspace: (workspaceId) => workspaces.delete(workspaceId as never),
       labels,
+      // 传解析器而不是值：渲染时才去读 ctx.uiWorkspace（见 RegionActions）。
+      official: officialActions,
     }
   }
 

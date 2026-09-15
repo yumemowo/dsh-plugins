@@ -110,6 +110,17 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     className?: string
   }) => ReactNode
 
+  /**
+   * 相对时间分桶：把时间差归到 `now` / `minutes` / `hours` / `days` /
+   * `months` / `years` 之一并给出数量，文案由调用方的语言包决定。
+   * @param from - 起点（epoch ms）。
+   * @param to - 终点（epoch ms），通常是当前时刻。
+   */
+  export const relativeTime: (
+    from: number,
+    to: number,
+  ) => { unit: 'now' | 'minutes' | 'hours' | 'days' | 'months' | 'years'; n: number }
+
   export const IconFolderClose16: IconComponent
   export const IconFolderOpen16: IconComponent
   export const IconTriangleRightFill14: IconComponent
@@ -118,4 +129,8 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const IconEditOutline16: IconComponent
   export const IconTrashOutline16: IconComponent
   export const IconPanelLeftOutline16: IconComponent
+  /** 官方会话菜单「分叉」项用的图标。 */
+  export const IconBranchOutline16: IconComponent
+  /** 官方会话菜单「归档」项用的图标；官方传 size=16。 */
+  export const IconArchiveOutline20: IconComponent
 }

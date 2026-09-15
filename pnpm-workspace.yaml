@@ -28,6 +28,9 @@ catalog:
   '@deepseek-ai/dsh-client-ui-session': ^0.1.5-rc.2
   '@deepseek-ai/dsh-client-ui-sidebar': ^0.1.5-rc.2
   '@deepseek-ai/dsh-client-ui-slots': ^0.1.5-rc.2
+  # 只取类型：本包复用官方 workspace 语言包与 ctx.uiWorkspace 服务，
+  # 需要官方的命名空间声明与动作契约，运行期由宿主解析、不打进产物。
+  '@deepseek-ai/dsh-client-ui-workspace': ^0.1.5-rc.2
   '@deepseek-ai/dsh-session': ^0.1.5-rc.2
   '@deepseek-ai/dsh-storage-domain': ^0.1.5-rc.2
   '@types/react': ~18.3.1

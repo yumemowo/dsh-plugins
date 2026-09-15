@@ -112,4 +112,37 @@ describe('client stylesheet', () => {
       true,
     )
   })
+
+  it('keeps the time and the action button on the same right edge', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    /** 命中该选择器的规则里，是否有一条声明了给定的属性值。 */
+    const hasRule = (selector: string, pattern: RegExp): boolean =>
+      rules.some((rule) => rule.selectors.includes(selector) && pattern.test(rule.body))
+
+    // 静止时操作位必须收成 0 宽，否则会把行尾时间顶到左侧，两者右缘错开
+    // 一个图标列宽——这正是本次修掉的观感问题。
+    expect(hasRule('.wg-row-action-slot', /width:\s*0/)).toBe(true)
+    expect(hasRule('.wg-row-action-slot', /overflow:\s*hidden/)).toBe(true)
+
+    // 时间隐藏与操作位展开必须由同一组触发条件驱动，任一时刻只有一方占行尾。
+    const triggers = ['hover', 'wg-row-menu-open', 'focus-visible']
+    for (const trigger of triggers) {
+      const hidesTime = rules.some(
+        (rule) =>
+          rule.selectors.some((s) => s.includes('.wg-row-time') && s.includes(trigger)) &&
+          /display:\s*none/.test(rule.body),
+      )
+      const expands = rules.some(
+        (rule) =>
+          rule.selectors.some((s) => s.includes('.wg-row-action-slot') && s.includes(trigger)) &&
+          /width:\s*16px/.test(rule.body),
+      )
+      expect(hidesTime, `time must yield on ${trigger}`).toBe(true)
+      expect(expands, `action slot must expand on ${trigger}`).toBe(true)
+    }
+  })
 })

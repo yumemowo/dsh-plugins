@@ -67,10 +67,19 @@ function menuItems(out: { menus: unknown[] }): string[][] {
   )
 }
 
-function props(wide: boolean, options: { pending?: Map<unknown, unknown> } = {}): WorkspaceGroupsProps {
+function props(
+  wide: boolean,
+  options: { pending?: Map<unknown, unknown>; official?: boolean } = {},
+): WorkspaceGroupsProps {
   const byId: Record<string, unknown> = {
-    a: { id: 'a', displayTitle: 'A', running: false, blank: false, updatedAt: 0 },
-    orphan: { id: 'orphan', displayTitle: 'Orphan', running: false, blank: false, updatedAt: 0 },
+    a: { id: 'a', displayTitle: 'A', running: false, blank: false, updatedAt: Date.now() - 300_000 },
+    orphan: {
+      id: 'orphan',
+      displayTitle: 'Orphan',
+      running: false,
+      blank: false,
+      updatedAt: Date.now() - 300_000,
+    },
   }
   const workspaces = [
     {
@@ -134,6 +143,26 @@ function props(wide: boolean, options: { pending?: Map<unknown, unknown> } = {})
       empty: '暂无会话',
       unimplemented: '实验特性',
     },
+    // 官方三项操作与相对时间：缺省不给，用于验证降级路径。
+    ...(options.official === false
+      ? {}
+      : {
+          official: () => ({
+            renameSession: async () => {},
+            forkSession: () => {},
+            archiveSession: async () => {},
+            labels: {
+              rename: '重命名',
+              renameTitle: '重命名会话',
+              sessionNamePrompt: '会话名称',
+              fork: '分叉会话',
+              archive: '归档会话',
+              closeLabel: '关闭',
+              cancelLabel: '取消',
+            },
+            relativeTime: () => '5分钟',
+          }),
+        }),
   }
 }
 
@@ -158,12 +187,46 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(none.text).not.toContain('未分组')
   })
 
-  it('gives the ungrouped row no more-actions menu', () => {
+  it('gives a workspace session row the official actions and the group item', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
-    // 只有工作区行与归组会话行带菜单；stray 行没有可用的归组操作。
+    // 工作区行自己的菜单 + 归组会话行的菜单。
+    expect(menuItems(out)).toContainEqual(['new-group', 'rename', 'delete'])
+    expect(menuItems(out)).toContainEqual(['rename', 'fork', 'archive', 'separator', 'group'])
+  })
+
+  it('gives the ungrouped row the official actions without a group item', () => {
+    const out = { menus: [] as unknown[], text: [] as string[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
+
+    // stray 会话没有分组可归，但官方三项照常可用。
+    expect(menuItems(out)).toContainEqual(['rename', 'fork', 'archive'])
+  })
+
+  it('renders no session menu at all when official services are absent', () => {
+    const out = { menus: [] as unknown[], text: [] as string[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true, { official: false })), out)
+
+    // 官方缺失时会话行只剩归组菜单；stray 行两项都没有，因此完全不挂菜单。
+    expect(menuItems(out)).toContainEqual(['group'])
     expect(menuItems(out)).toHaveLength(2)
+  })
+
+  it('renders the relative time on session rows when official services are present', () => {
+    const out = { menus: [] as unknown[], text: [] as string[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
+
+    // 行尾时间来自官方格式化（替身固定返回 5分钟）。
+    expect(out.text).toContain('5分钟')
+  })
+
+  it('renders no relative time when official services are absent', () => {
+    const out = { menus: [] as unknown[], text: [] as string[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true, { official: false })), out)
+
+    // 时间文案也归官方语言包，缺失时整列不渲染。
+    expect(out.text).not.toContain('5分钟')
   })
 
   it('renders no status dot for idle session rows', () => {

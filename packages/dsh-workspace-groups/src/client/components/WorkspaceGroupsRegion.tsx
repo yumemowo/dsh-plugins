@@ -68,6 +68,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     renameWorkspace,
     deleteWorkspace,
     labels,
+    official: resolveOfficial,
   } = props
 
   const workspaces = useWorkspaces((state) => state.items) as readonly WorkspaceView[]
@@ -100,6 +101,15 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
 
   const currentSessionId = sessions.current === undefined ? undefined : String(sessions.current)
 
+  // 行尾相对时间的基准时刻。官方在渲染时直接取 Date.now()（没有任何 ticker），
+  // 这里取同一做法：时间文案的精度是分钟级，跟着别的重渲染刷新足够。
+  const now = Date.now()
+
+  // 官方操作的解析时机放在渲染期：渲染器会缓存注册项的 inject 结果，
+  // 在 inject 里读服务会冻结在首次渲染那一刻，而官方 ui-workspace 的
+  // 加载顺序不受本包约束。
+  const official = resolveOfficial?.()
+
   /**
    * 一个会话行要显示的状态位。
    *
@@ -109,6 +119,16 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    */
   const statusOf = (row: SessionRow): SessionStatus | undefined =>
     sessionStatus(row, pendingInteractions.get(row.id as SessionId)?.kind, labels.status)
+
+  /**
+   * 一个会话行行尾要显示的相对时间。
+   *
+   * 官方对空白（新建中）会话行不显示时间，这里沿用同一取舍。
+   * @param row - 会话渲染行。
+   * @returns 相对时间文案；不显示时为 undefined。
+   */
+  const timeOf = (row: SessionRow): string | undefined =>
+    row.blank || official === undefined ? undefined : official.relativeTime(row.updatedAt, now)
 
   const reload = useCallback(() => {
     let cancelled = false
@@ -236,12 +256,6 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     delete: labels.deleteWorkspace,
   }
 
-  const sessionMenuLabels = {
-    sessionActions: labels.sessionActions,
-    moveToGroup: labels.moveToGroup,
-    ungroup: labels.ungroup,
-  }
-
   // 窄栏只保留展开入口，与官方组件的 rail 行为一致。
   if (!wide) {
     return <WorkspaceRail label={labels.title} onExpand={expandSidebar} />
@@ -260,18 +274,24 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
           const layout = buildLayout(rowsByWorkspace.get(workspaceId) ?? [], groups[workspaceId] ?? [])
           const collapsed = collapsedWorkspaces[workspaceId] === true
 
-          /** 工作区内带归组菜单的会话行。 */
+          /** 工作区内带会话操作菜单的会话行。 */
           const renderSession = (row: SessionRow): ReactElement => (
             <SessionRowMenu
               key={row.id}
               row={row}
               selected={row.id === currentSessionId}
               status={statusOf(row)}
-              sections={layout.groups}
-              currentGroupId={groupIdOfSession(layout.groups, row.id)}
+              time={timeOf(row)}
+              grouping={{
+                sections: layout.groups,
+                currentGroupId: groupIdOfSession(layout.groups, row.id),
+                groupLabel: labels.moveToGroup,
+                ungroupLabel: labels.ungroup,
+                onSelect: (id) => selectSessionGroup(workspaceId, row.id, id),
+              }}
+              official={official}
               onOpen={() => openSession(row.id)}
-              onSelect={(id) => selectSessionGroup(workspaceId, row.id, id)}
-              labels={sessionMenuLabels}
+              actionsLabel={labels.sessionActions}
             />
           )
 
@@ -324,17 +344,33 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             />
             {ungroupedCollapsed ? null : (
               <div className="wg-workspace-body">
-                {/* 这些会话不属于任何工作区，没有可用的归组操作，故不带行尾菜单。 */}
+                {/* 这些会话不属于任何工作区，没有分组可归，因此菜单里只有
+                    官方三项（归组项无处落）。宿主未提供官方服务时菜单会是
+                    空的，那时直接渲染无菜单的行，不留点不动的省略号。 */}
                 <div className="wg-sessions">
-                  {stray.map((row) => (
-                    <SessionRowView
-                      key={row.id}
-                      row={row}
-                      selected={row.id === currentSessionId}
-                      status={statusOf(row)}
-                      onOpen={() => openSession(row.id)}
-                    />
-                  ))}
+                  {stray.map((row) =>
+                    official === undefined ? (
+                      <SessionRowView
+                        key={row.id}
+                        row={row}
+                        selected={row.id === currentSessionId}
+                        status={statusOf(row)}
+                        time={timeOf(row)}
+                        onOpen={() => openSession(row.id)}
+                      />
+                    ) : (
+                      <SessionRowMenu
+                        key={row.id}
+                        row={row}
+                        selected={row.id === currentSessionId}
+                        status={statusOf(row)}
+                        time={timeOf(row)}
+                        official={official}
+                        onOpen={() => openSession(row.id)}
+                        actionsLabel={labels.sessionActions}
+                      />
+                    ),
+                  )}
                 </div>
               </div>
             )}

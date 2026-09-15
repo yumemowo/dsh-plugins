@@ -11,6 +11,7 @@ import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-
 import type { Group } from './remote.ts'
 import type { GroupChoice } from './data/types.ts'
 import type { RegionLabels } from './labels.ts'
+import type { OfficialSessionLabels } from './official.ts'
 
 /** 工作区状态快照里区域用到的部分。 */
 export interface WorkspaceState {
@@ -54,4 +55,39 @@ export interface RegionActions {
   deleteWorkspace: (workspaceId: string) => Promise<void>
   /** 界面文案。 */
   labels: RegionLabels
+  /**
+   * 官方三项会话操作与相对时间文案的解析器。
+   *
+   * 是函数而不是值：渲染器会把注册项的 inject 结果缓存整个注册生命周期，
+   * 在 inject 里读到的服务会冻结在首次渲染那一刻，而官方 `ui-workspace`
+   * 的加载顺序并不受本包约束。延迟到渲染时解析才能拿到真正在场的服务。
+   *
+   * 解析结果为空表示宿主没有加载官方 `ui-workspace`（本包用它供的
+   * `useWorkspaces` 等全局 hook，正常情况下必然在场）；此时菜单里那三项与
+   * 行尾时间整体不渲染，而不是留下点不动的入口。
+   */
+  official?: (() => OfficialSessionActions | undefined) | undefined
+}
+
+/**
+ * 官方 `ui-workspace` 提供的会话操作。
+ *
+ * 直接转调官方服务与控制器（`ctx.uiWorkspace` / `ctx.sessions`），不自行
+ * 实现：官方改行为时本包自动跟随。
+ */
+export interface OfficialSessionActions {
+  /** 官方菜单「重命名」；宿主负责弹出输入与提交。 */
+  renameSession: (sessionId: string, title: string) => Promise<void>
+  /** 官方菜单「分叉会话」；官方会打开分叉出的子会话。 */
+  forkSession: (sessionId: string) => void
+  /** 官方菜单「归档会话」。 */
+  archiveSession: (sessionId: string) => Promise<void>
+  /** 官方三项操作与相对时间的文案。 */
+  labels: OfficialSessionLabels
+  /**
+   * 格式化为官方风格的相对时间。
+   * @param updatedAt - 会话最近更新时间（epoch ms）。
+   * @param now - 当前时刻（epoch ms）。
+   */
+  relativeTime: (updatedAt: number, now: number) => string
 }

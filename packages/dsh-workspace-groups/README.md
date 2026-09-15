@@ -56,6 +56,10 @@
   空白会话只保留当前选中的那一条。
 - **会话状态点**：行首用官方 `StateDot` 原语显示状态，取值与官方
   `ui-workspace` 的 `sessionStatuses` 逐条一致（见下节）。
+- **会话重命名 / 分叉 / 归档**：会话行 `...` 菜单里直接复用官方接口与官方
+  文案（见「会话操作菜单」）。
+- **行尾最近更新时间**：官方风格的紧凑相对时间，格式化完全复用官方原语与
+  语言包（见「行尾最近更新时间」）。
 
 ### 工作区行的按钮形态
 
@@ -74,16 +78,57 @@
 的写法一致；官方菜单项的两个图标（`IconEditOutline16` / `IconTrashOutline16`）
 原样复用。
 
-**会话归组入口暂未渲染。** 会话行尾现在是 `...` 省略号占位按钮：
-外观、位置与悬停行为都对齐官方，但点击暂时没有动作。宿主侧的
-`moveSession` 接口与 props 契约原样保留，等阶段二换成产品内菜单再接上。
-因此目前虽然可以建组、改名、删组，但还**不能把会话放进分组**。
+**会话行尾的 `...` 打开会话操作菜单**：外观、位置与悬停行为都对齐官方，
+菜单里既有官方三项操作，也有本包的归组项（见下节）。
 
 **只有用户创建过分组，才会出现分组结构。** 没有分组时，会话直接平铺在工作区下，
 与原生列表一致；未归组的会话也平铺在工作区下，不会被塞进一个凭空造出来的
 「未分组」分组。
 
 一个会话至多属于一个分组：移入新分组时会自动从原分组摘除。
+
+### 会话操作菜单
+
+行尾 `...` 打开菜单，内容分两段：官方三项 + 一条分隔线 + 本包的归组项。
+
+| 段 | 项 | 行为 |
+| --- | --- | --- |
+| 官方 | 重命名 | 打开重命名对话框，提交走官方会话对象 |
+| 官方 | 分叉会话 | 官方 `ctx.uiWorkspace.forkSession`，分叉后打开子会话 |
+| 官方 | 归档会话 | 官方 `ctx.uiWorkspace.archiveSession` |
+| — | *分隔线* | 只在两段都存在时画 |
+| 本包 | 分组 ▸ | 二级菜单列出该工作区的其他分组 |
+| 本包 | 取消分组 | 仅当会话已归组 |
+
+**官方三项不抄官方实现，而是直接复用官方接口**（本仓库「优先复用官方既有接口」
+约定的延伸）：
+
+- 动作调用官方既有面 —— 分叉/归档走 `ctx.uiWorkspace` 服务，重命名走
+  `ctx.sessions.binding(id).session.rename()`。这三处正是官方会话菜单内部调的
+  同一批接口，因此官方改行为时本包**自动跟随**，不需要重新对齐。
+- 文案与图标取官方 —— 绑官方 `workspace` 语言包（`rename` / `menu.fork` /
+  `menu.archiveSession` / `rename.session.title` / `field.sessionName`，通用词
+  `close` / `cancel` 走该语言包的 `common` 回退链），图标取 primitives 的
+  `IconEditOutline16` / `IconBranchOutline16` / `IconArchiveOutline20`。
+- **只在类型层依赖官方包**：`package.json` 把 `dsh-client-ui-workspace` 列为
+  peer + dev 依赖，但只 import type。因此官方一旦改键名或改服务签名，
+  `tsc` 会直接报错，而不是运行期静默显示成原始键名。运行期产物里不含官方
+  代码（bundle 的 `require` 仍只有 primitives / react / react/jsx-runtime）。
+
+「未分组」桶里的会话没有工作区归属、没有分组可落，因此那里只留官方三项。
+宿主未加载官方 `ui-workspace` 时（本包的区域本来就依赖它供的 `useWorkspaces`
+等全局 hook），官方三项与行尾时间**整体不渲染**，不留点不动的死按钮。
+
+### 行尾最近更新时间
+
+会话行尾显示官方风格的紧凑相对时间（`刚刚` / `5分钟` / `2天`），悬停或菜单
+展开时让位给 `...` 按钮 —— 与官方同一处 CSS 互换（`time` → `ellipsis`）。
+
+格式化完全复用官方：分桶交给 primitives 的 `relativeTime`（官方
+`ui-workspace` 的 `timeLabel` 用的同一个函数），文案交给官方 `workspace`
+语言包的 `time.now` / `time.minutes` / … 键。基准时刻与官方一样在渲染时取
+`Date.now()`，官方没有 ticker，本包也不自造一个：分钟级的精度跟着其他重渲染
+刷新足够。空白（新建中）会话行不显示时间，与官方一致。
 
 ### 会话状态点
 
@@ -141,10 +186,12 @@
 - 新增工作区（Add workspace）
 - 搜索（含 Host 内容检索）
 - 拖拽排序（工作区与会话两级）
-- 归档会话、fork、重命名会话
 - 每工作区 5 条折叠与 Show more
 - manual / updated 两种排序
 - Schedule 告警标记（会话状态点已提供，见上节）
+
+会话的**重命名 / 分叉 / 归档**已通过复用官方接口提供（见「会话操作菜单」），
+不再是本包自己实现的功能。
 
 当前界面会在区域底部显示一行说明，提示这是实验版本。
 建组与改名的输入框、删除确认、以及全部图标都走官方
@@ -161,6 +208,7 @@
 | 会话行高 | `32px` |
 | 行内水平内边距 / 圆角 | `8px` / `8px` |
 | 图标列宽 | `16px`（`height: 20px`） |
+| 行尾相对时间 | `12px` / `20px`，`--dsw-alias-label-tertiary`（同官方 `.time`） |
 | 悬停与选中底色 | `--dsw-alias-interactive-bg-hover` |
 | 展开且含当前会话的文件夹 | `--dsw-alias-state-business-primary` |
 | 文本色阶 | `--dsw-alias-label-primary` / `-secondary` / `-tertiary` |
@@ -210,12 +258,14 @@
 
 | 位置 | 用的官方原语 |
 | --- | --- |
-| 建组 / 改名 / 工作区重命名 | `Modal` + `Input` + `Button`（`outline` / `primary`） |
+| 建组 / 改名 / 工作区重命名 / 会话重命名 | `Modal` + `Input` + `Button`（`outline` / `primary`） |
 | 删除分组 / 删除工作区 | `Modal` + `Button`（`outline`，确认按钮着错误色） |
 | 文件夹、三角、省略号 | `IconFolderClose16` / `IconFolderOpen16` / `IconTriangleRightFill14` / `IconEllipsisOutline16` |
 | 新建会话、新建分组、改名、删除 | `IconPlusOutline16` / `IconEditOutline16` / `IconTrashOutline16` |
+| 会话菜单的分叉 / 归档项 | `IconBranchOutline16` / `IconArchiveOutline20`（与官方会话菜单同字形） |
 | 窄栏展开入口 | `IconPanelLeftOutline16`（与官方侧栏折叠按钮同一字形） |
 | 会话状态点 | `StateDot`（运行态画追光方阵，其余画圆点；颜色由原语的主题规则给出） |
+| 行尾相对时间 | `relativeTime`（官方 `timeLabel` 用的同一个分桶函数，文案走官方语言包） |
 
 原语的样式属于 ui-theme / ui-primitives：本包不为它们写颜色、阈值或高亮，
 只在 `styles.ts` 里保留自己的布局约定。
@@ -292,11 +342,13 @@ pnpm run build          # tsc（宿主）+ esbuild（浏览器 bundle）
 ```
 src/client/
 ├── index.ts                    插件入口：语言包注册、remote 挂载、插槽注册、对照开关
-├── labels.ts                   中英文案表、RegionLabels 契约、命名空间声明
+├── labels.ts                   本包中英文案表、RegionLabels 契约、命名空间声明
+├── official.ts                 官方 workspace 语言包与相对时间的复用面
 ├── actions.ts                  RegionActions / RegionDataHooks（组件与宿主的接口）
 ├── compare.tsx                 对照模式：挂进 better-sidebar 右侧栏 tab
 ├── remote.ts                   Remote 贡献声明与调用封装
 ├── runtime.ts                  primitives 值导入的唯一出口（external）
+├── menus.tsx                   行内「更多操作」菜单的条目构造
 ├── styles.ts                   本包样式表
 ├── data/                       无 React 依赖的纯逻辑
 │   ├── types.ts                SessionRow / GroupSection / WorkspaceLayout / 草稿类型
@@ -308,8 +360,8 @@ src/client/
     ├── WorkspaceSection.tsx        一个工作区区块（标题 + 折叠体 + 空态）
     ├── WorkspaceRow.tsx            工作区标题行（文件夹/箭头、`...`、`+`）
     ├── GroupSection.tsx            一个分组（分组头 + 组内会话）
-    ├── SessionRowView.tsx          会话行外壳（状态位列、标题、可选操作位）
-    ├── SessionRowMenu.tsx          带归组菜单的会话行
+    ├── SessionRowView.tsx          会话行外壳（状态位列、标题、时间、操作位）
+    ├── SessionRowMenu.tsx          带会话操作菜单的会话行
     ├── WorkspaceRail.tsx           窄栏展开入口
     ├── IconButton.tsx              16px 行内图标按钮
     ├── rowKeyboard.ts              Enter/Space 行激活（忽略行内按钮冒泡）

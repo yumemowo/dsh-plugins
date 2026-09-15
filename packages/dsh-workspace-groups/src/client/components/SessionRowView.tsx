@@ -1,9 +1,10 @@
 /**
- * 会话行：状态点位列、标题与可选的行尾操作位。
+ * 会话行：状态点位列、标题、最近更新时间与可选的行尾操作位。
  *
  * 行首列放官方 `StateDot`：待交互、运行、完成未打开时显示，空闲时留空占位，
- * 因此标题与工作区标题的横向关系始终与官方一致。`action` 缺省时不渲染行尾
- * 操作位——未分组桶里的会话不属于任何工作区，没有可用的归组操作。
+ * 因此标题与工作区标题的横向关系始终与官方一致。行尾在操作位之前放官方风格
+ * 的相对时间，悬停时让位给操作位（与官方同为 CSS 切换）。`action` 缺省时不
+ * 渲染行尾操作位——未分组桶里的会话不属于任何工作区，没有可用的归组操作。
  */
 import type { ReactElement, ReactNode } from 'react'
 import { StateDot } from '../runtime.ts'
@@ -16,6 +17,12 @@ export interface SessionRowViewProps {
   selected: boolean
   /** 该行要显示的状态位；空闲时为 undefined，槽位仍占位。 */
   status?: SessionStatus | undefined
+  /**
+   * 行尾相对时间文案；缺省表示不显示（新建中的空白行与「未分组」桶）。
+   *
+   * 官方对空白会话行不显示时间，这里沿用同一取舍。
+   */
+  time?: string | undefined
   /** 菜单展开时行上挂标记：锚点按钮只靠 :hover 显示，菜单还开着时指针一旦
    * 移开按钮就会消失，标记让样式把它留住。 */
   menuOpen?: boolean
@@ -28,6 +35,7 @@ export function SessionRowView({
   row,
   selected,
   status,
+  time,
   menuOpen = false,
   action,
   onOpen,
@@ -51,8 +59,9 @@ export function SessionRowView({
         </span>
       )}
       <span className="wg-row-title">{row.title}</span>
+      {time === undefined ? null : <span className="wg-row-time">{time}</span>}
       {action === undefined ? null : (
-        <span className="wg-slot" onClick={(event) => event.stopPropagation()}>
+        <span className="wg-row-action-slot" onClick={(event) => event.stopPropagation()}>
           {action}
         </span>
       )}

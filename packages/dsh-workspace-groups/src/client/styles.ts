@@ -199,6 +199,44 @@ const CSS = `
   line-height: 20px;
 }
 
+/* 行尾相对时间：官方 .time 的几何与色阶（12px/20px、label-tertiary）。
+   悬停、菜单展开、键盘聚焦时让位给操作位——官方是同一处 CSS 互换
+   （time → ellipsis），本包把「键盘聚焦」也列为一条显隐路径。 */
+.wg-row-time {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+/* 操作位容器：静止时宽度收成 0，行尾时间因此贴住行的右内边距；随之显隐
+   展开成图标列宽。时间与操作按钮的右缘因此始终落在同一条竖线——官方靠
+   .time/.rowActions 的 display 互换达到同一效果。
+   这里不整格 display:none，是为了保留本包的键盘可达性：格子收成 0 宽时
+   按钮仍可 Tab 聚焦，:has 命中后连格子一起展开，焦点框才画得出来。
+
+   overflow 不可省略，它担两件事：裁掉收起时溢出的 16px 按钮；以及把 flex
+   项 min-width: auto 的自动最小尺寸归零——否则子项 16px 会把 width: 0
+   顶回去，本行修复失效（auto 最小尺寸仅在 overflow 非 visible 时才为 0）。 */
+.wg-row-action-slot {
+  flex: none;
+  width: 0;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* 时间与操作位共用同一组触发条件，保证任一时刻只有一方占据行尾。 */
+.wg-row:hover .wg-row-time,
+.wg-row-menu-open .wg-row-time,
+.wg-row:has(.wg-row-action:focus-visible) .wg-row-time { display: none; }
+
+.wg-row:hover .wg-row-action-slot,
+.wg-row-menu-open .wg-row-action-slot,
+.wg-row:has(.wg-row-action:focus-visible) .wg-row-action-slot { width: 16px; }
+
 /* 行内操作按钮：默认隐藏，仅在该行悬停、菜单展开、或键盘聚焦时出现。
    不用 :focus / :focus-within / 选中态——鼠标点过之后焦点仍留在按钮或行上，
    会让按钮一直可见；:focus-visible 只在键盘导航时命中，既去掉鼠标残留，
