@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { officialSessionLabels, timeLabel } from '../src/client/official.ts'
+import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { workspaceTranslate } from './locale-stub.ts'
 
 /**
@@ -21,8 +21,26 @@ describe('officialSessionLabels', () => {
   })
 })
 
-describe('timeLabel', () => {
-  const t = workspaceTranslate()
+describe('officialAddLabels', () => {
+  it('reads the header entry and the flow error copy from the official dictionary', () => {
+    expect(officialAddLabels(workspaceTranslate())).toEqual({
+      // header 入口用 workspace.add；menu.addWorkspace 是工作区列表菜单里的那一项
+      add: '添加工作区',
+      folderErrorTitle: '无法打开文件夹',
+      folderErrorRetry: '重新选择',
+      search: '搜索会话',
+      viewOptions: '视图选项',
+    })
+  })
+
+  it('does not confuse the header entry with the workspace menu item', () => {
+    // 两个键官方都提供，但语义不同：菜单项带省略号，表示还要再选一次
+    expect(workspaceTranslate()('workspace.add')).toBe('添加工作区')
+    expect(workspaceTranslate()('menu.addWorkspace')).toBe('添加工作区…')
+  })
+})
+
+describe('timeLabel', () => {  const t = workspaceTranslate()
   const now = 1_700_000_000_000
 
   it('labels sub-minute distances as the now bucket', () => {

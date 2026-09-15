@@ -27,6 +27,39 @@ export interface OfficialSessionLabels {
   archive: string
 }
 
+/** 官方 section header 与「添加工作区」流程的文案 */
+export interface OfficialAddLabels {
+  /** 「添加工作区」入口的 tooltip 与无障碍标签 */
+  add: string
+  /** 采纳选中目录失败时错误框的标题 */
+  folderErrorTitle: string
+  /** 错误框里的「重新选择」按钮 */
+  folderErrorRetry: string
+  /** 搜索入口的文案，同时是占位按钮的无障碍标签 */
+  search: string
+  /** 视图选项入口的文案，同时是占位按钮的无障碍标签 */
+  viewOptions: string
+}
+
+/**
+ * 把官方语言包绑成 header 与添加工作区流程的文案表
+ *
+ * 入口文案官方分两个键：header 按钮用 `workspace.add`（「添加工作区」），
+ * 工作区选择菜单里的那一项才是 `menu.addWorkspace`（「添加工作区…」）。
+ * 本包只有 header 入口这一种形态，因此取前者
+ * @param t - 官方 `workspace` 命名空间的翻译函数
+ * @returns 语义化字段的文案表
+ */
+export function officialAddLabels(t: WorkspaceTranslate): OfficialAddLabels {
+  return {
+    add: t('workspace.add'),
+    folderErrorTitle: t('folderError.title'),
+    folderErrorRetry: t('folderError.retry'),
+    search: t('search.sessions.aria'),
+    viewOptions: t('viewOptions.label'),
+  }
+}
+
 /**
  * 把官方语言包绑成三项操作的文案表
  *

@@ -14,7 +14,8 @@
  */
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
-import type { WorkspaceTranslate } from './official.ts'
+import { officialAddLabels } from './official.ts'
+import type { OfficialAddLabels, WorkspaceTranslate } from './official.ts'
 
 /** 会话状态位的无障碍文案 */
 export interface SessionStatusLabels {
@@ -82,6 +83,8 @@ export interface RegionLabels {
   ungroup: string
   /** 会话状态位的无障碍文案 */
   status: SessionStatusLabels
+  /** 「添加工作区」入口与失败错误框的文案 */
+  add: OfficialAddLabels
   /** 对照 tab 在 better-sidebar 里的一行说明 */
   compareTabDescription: string
   /** 工作区内没有任何会话时的占位文案 */
@@ -134,6 +137,7 @@ export function regionLabels(
       completed: tw('status.completed'),
     },
     compareTabDescription: t('compareTabDescription'),
+    add: officialAddLabels(tw),
     empty: tw('empty.none'),
     unimplemented: t('unimplemented'),
   }

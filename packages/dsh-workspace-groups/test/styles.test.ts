@@ -145,4 +145,100 @@ describe('client stylesheet', () => {
       expect(expands, `action slot must expand on ${trigger}`).toBe(true)
     }
   })
+
+  it('gives the region root the official right-side block inset', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const declared = (selector: string, property: string): string | undefined =>
+      [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+        .filter((m) => (m[1] ?? '').split(',').map((s) => s.trim()).includes(selector))
+        .map((m) => new RegExp(`${property}:\\s*([^;]+)`).exec(m[2] ?? '')?.[1]?.trim())
+        .find((value) => value !== undefined)
+
+    // 官方 WorkspaceBrowser 的根节点自己带整块右留白；官方那份定义随被接替的
+    // 组件一起没了，本包必须自己重新定义这三个量，header 与列表才能落回原位
+    expect(declared('.wg-root', '--dsh-session-list-edge-inset')).toBe(
+      'var(--dsh-sidebar-inline-padding, 12px)',
+    )
+    expect(declared('.wg-root', '--dsh-session-list-scrollbar-width')).toBe('8px')
+    expect(declared('.wg-root', '--dsh-session-list-scrollbar-offset')).toBe('2px')
+    expect(declared('.wg-root', 'padding-right')).toBe('var(--dsh-session-list-edge-inset)')
+
+    // 对照 tab 只补左侧：右侧一律由 .wg-root 给，否则两层各加 12px
+    expect(declared('.wg-tab', 'padding')).toBe('6px 0 0 12px')
+  })
+
+  it('keeps the header entry off the region edge like official does', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const declared = (selector: string, property: string): string | undefined =>
+      [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+        .filter((m) => (m[1] ?? '').split(',').map((s) => s.trim()).includes(selector))
+        .map((m) => new RegExp(`${property}:\\s*([^;]+)`).exec(m[2] ?? '')?.[1]?.trim())
+        .find((value) => value !== undefined)
+
+    // 官方 header 的 -4px 是相对「自带右留白」的根节点写的；本包根节点现在有
+    // 同一份留白，因此这一条照抄即可，相抵后按钮右缘离栏缘 8px，不贴边
+    expect(declared('.wg-header', 'margin-right')).toBe('-4px')
+    expect(declared('.wg-header', 'height')).toBe('36px')
+    expect(declared('.wg-header', 'gap')).toBe('4px')
+  })
+
+  it('lets the list cancel the root inset and re-derive its own right edge', () => {
+    // 官方 .listArea 用 -edge-inset 让列表靠到栏缘，再由 .list 推回到 edge-inset；
+    // 本包没有 .listArea，因此这两个值要折进 .wg-list 自己的 margin / padding
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const list = rules.find((rule) => rule.selectors.includes('.wg-list'))
+    expect(list).toBeDefined()
+
+    // 折进 -edge-inset：否则列表会被 .wg-root 的右留白再推一次，行右缘偏左
+    expect(list?.body).toMatch(
+      /margin-right:\s*calc\(\s*var\(--dsh-session-list-scrollbar-offset\)\s*-\s*var\(--dsh-session-list-edge-inset\)\s*\)/,
+    )
+    expect(list?.body).toMatch(/padding-right:\s*calc\(/)
+    expect(list?.body).toMatch(/--dsh-session-list-scrollbar-width/)
+    // 两边各 12px 会让内容整体缩进 24px——这正是本次修掉的观感问题
+    expect(list?.body).not.toMatch(/margin-right:\s*0/)
+  })
+
+  it('gives the header entry the official icon-button geometry', () => {
+    // 官方 header 图标按钮是 28px 正圆（.iconButton），与行内 16px 按钮
+    // 不是一套；本轮改动是按官方外观来的，尺寸不能被行内那套带跑
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const base = rules.find((rule) => rule.selectors.includes('.wg-header-action'))
+    expect(base).toBeDefined()
+    expect(base?.body).toMatch(/width:\s*28px/)
+    expect(base?.body).toMatch(/height:\s*28px/)
+    expect(base?.body).toMatch(/border-radius:\s*50%/)
+    // 正圆必须配对 round，否则会被主题的全局超级椭圆磨成方圆角
+    expect(base?.body).toMatch(/corner-shape:\s*round/)
+
+    // 未实现的入口渲染成 disabled 占位，且不能沿用悬停高亮——否则看起来仍可点
+    const hover = rules.find((rule) =>
+      rule.selectors.some((s) => s.includes('.wg-header-action:hover')),
+    )
+    expect(hover?.selectors.join()).toContain(':not(:disabled)')
+    expect(rules.some((rule) => rule.selectors.includes('.wg-header-action:disabled'))).toBe(true)
+  })
+
+  it('enlarges the header entry in the narrow rail like official does', () => {
+    // 官方 rail 下这个入口是 36px、label-primary；宽栏 28px、label-secondary
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const rail = rules.find((rule) =>
+      rule.selectors.includes('.wg-header-rail .wg-header-action'),
+    )
+    expect(rail?.body).toMatch(/width:\s*36px/)
+    expect(rail?.body).toMatch(/height:\s*36px/)
+    expect(rail?.body).toMatch(/--dsw-alias-label-primary/)
+  })
 })

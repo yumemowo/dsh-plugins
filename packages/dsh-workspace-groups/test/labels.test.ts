@@ -89,6 +89,16 @@ describe('regionLabels', () => {
     expect(labels.status.completed).toBe('已完成')
   })
 
+  it('reads the add-workspace copy from the official keys', () => {
+    // 入口、错误框标题与「重新选择」官方都有现成词，本包字典里不存副本
+    expect(labels.add.add).toBe('添加工作区')
+    expect(labels.add.folderErrorTitle).toBe('无法打开文件夹')
+    expect(labels.add.folderErrorRetry).toBe('重新选择')
+    // 两个未实现的入口也要有可读的无障碍标签，占位按钮才不会是无名按钮
+    expect(labels.add.search).toBe('搜索会话')
+    expect(labels.add.viewOptions).toBe('视图选项')
+  })
+
   it('keeps the package-owned group copy under its own keys', () => {
     expect(labels.newGroup).toBe('新建分组')
     expect(labels.renameGroup).toBe('重命名分组')

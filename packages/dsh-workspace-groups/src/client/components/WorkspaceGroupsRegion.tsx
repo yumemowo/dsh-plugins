@@ -33,6 +33,7 @@ import type { SessionStatus } from '../data/status.ts'
 import type { GroupNameDraft, SessionRow, WorkspaceNameDraft } from '../data/types.ts'
 import { SessionRowMenu } from './SessionRowMenu.tsx'
 import { SessionRowView } from './SessionRowView.tsx'
+import { RegionHeader, RegionRailHeader } from './RegionHeader.tsx'
 import { WorkspaceRail } from './WorkspaceRail.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
 import type { WorkspaceRowLabels } from './WorkspaceRow.tsx'
@@ -61,6 +62,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     useWorkspaces,
     useSessions,
     useSessionPendingInteraction,
+    useDirectoryFlow,
     openSession,
     startSession,
     onReady,
@@ -72,6 +74,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     renameWorkspace,
     deleteWorkspace,
     official: resolveOfficial,
+    addWorkspace: resolveAddWorkspace,
     tWorkspace,
     t,
   } = props
@@ -116,6 +119,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   // 在 inject 里读服务会冻结在首次渲染那一刻，而官方 ui-workspace 的加载
   // 顺序不受本包约束
   const official = resolveOfficial?.()
+  // 「添加工作区」同样延迟到渲染期解析：它要读官方 directoryFlow 洞的占用者，
+  // 而目录选择器插件的加载顺序不受本包约束。订阅占用情况让入口跟着占用者出现
+  const flowOccupied = useDirectoryFlow((occupied) => occupied) as boolean
+  const addWorkspace = flowOccupied ? resolveAddWorkspace?.() : undefined
 
   /**
    * 一个会话行要显示的状态位
@@ -288,9 +295,14 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     delete: labels.deleteWorkspace,
   }
 
-  // 窄栏只保留展开入口，与官方组件的 rail 行为一致
+  // 窄栏：官方在这里也只留「添加工作区」一个入口（外加 shell 的展开入口）
   if (!wide) {
-    return <WorkspaceRail label={labels.title} onExpand={expandSidebar} />
+    return (
+      <>
+        <RegionRailHeader addWorkspace={addWorkspace} t={t} />
+        <WorkspaceRail label={labels.title} onExpand={expandSidebar} />
+      </>
+    )
   }
 
   const rowsByWorkspace = groupSessionsByWorkspace(sessions, workspaces, archivedSessionIds)
@@ -300,6 +312,13 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
 
   return (
     <div className="wg-root">
+      <RegionHeader
+        title={labels.title}
+        addWorkspace={addWorkspace}
+        searchLabel={labels.add.search}
+        viewOptionsLabel={labels.add.viewOptions}
+        t={t}
+      />
       <div className="wg-list">
         {workspaces.map((workspace) => {
           const workspaceId = String(workspace.workspaceId)

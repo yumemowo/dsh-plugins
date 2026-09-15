@@ -5,16 +5,16 @@
  * 同一优先级重复注册会抛错，且**数值更低的优先级渲染**。官方 ui-workspace
  * 用默认优先级 0，本包以 `priority: -1` 成为渲染者
  *
- * 不声明任何子插槽：`sidebar.workspaces.directoryFlow` 已被 ui-workspace 声明，
- * 而一个插槽只能有一个声明者，重复声明会直接抛错。阶段一不提供
- * 「新增工作区」入口，因此也不需要那个洞
+ * 本包自己不声明任何子插槽：`sidebar.workspaces.directoryFlow` 已被
+ * ui-workspace 声明，而一个插槽只能有一个声明者，重复声明会直接抛错。
+ * 「添加工作区」因此复用官方那个洞：接替父插槽只是不再渲染官方组件，官方
+ * 那条注册仍留在 ledger 里，洞的声明与占用者（native / browse 目录选择器）
+ * 都还在，本包直接取它的占用者渲染
  *
  * 文案走两条官方路径：本包自己的 `workspaceGroups` 命名空间由
  * `locale.register` 注册，组件从插槽注入的 `t` 座位取用（渲染期绑定，
  * 语言切换后自动重新渲染）；会话行那三项官方操作的文案与相对时间直接绑
  * 官方 `workspace` 命名空间，官方改文案时本包逐键跟随
- *
- * @module @your-scope/dsh-workspace-groups/client
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { IWorkspaces } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -32,8 +32,9 @@ import { REMOTE_CONTRIBUTION, SERVICE, callRemote } from './remote.ts'
 import type { Group, WorkspaceGroupsSnapshot } from './remote.ts'
 import { registerCompareTab } from './compare.tsx'
 import { NS, en, zh } from './locales.ts'
-import { officialSessionLabels, timeLabel } from './official.ts'
-import type { RegionActions, OfficialSessionActions } from './actions.ts'
+import { officialAddLabels, officialSessionLabels, timeLabel } from './official.ts'
+import type { RegionActions, AddWorkspaceActions, OfficialSessionActions } from './actions.ts'
+import { directoryFlowOccupant, directoryFlowSource } from './directoryFlow.ts'
 import { WorkspaceGroupsRegion } from './components/WorkspaceGroupsRegion.tsx'
 import { insertStyles } from './styles.ts'
 
@@ -50,8 +51,8 @@ export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'remote']
  * 之所以是编译期常量而不是配置项：这是开发期的对照开关，
  * 不是要交付给用户的能力，配置化反而要多一套 schema 与文档
  */
-//const COMPARE_MODE = false
-const COMPARE_MODE = true
+const COMPARE_MODE = false
+//const COMPARE_MODE = true
 
 /**
  * 插件入口
@@ -165,7 +166,51 @@ export function apply(ctx: Context): void {
     }
   }
 
-  const injected = (): RegionActions => {
+  /**
+   * 「添加工作区」的复用面
+   *
+   * 采纳调官方工作区控制器的 `create`，选中后调官方 `uiWorkspace.startSession`
+   * 在新工作区里开会话——两处正是官方 WorkspaceBrowser 内部调的同一批接口。
+   * picking 交互整段借用官方 `sidebar.workspaces.directoryFlow` 洞的占用者：
+   * 本包接替父插槽并未清除官方那条注册，因此洞的声明与占用者都还在（见
+   * `directoryFlow.ts`）
+   *
+   * 与 `officialActions` 同为延迟到渲染期的解析器。解析结果为空表示本包没读到
+   * 占用者（宿主没装目录选择器插件）：此时入口按钮整体不渲染，不留点不动的
+   * 死按钮，回归本包阶段一的行为
+   * @returns 添加工作区的动作；控制器或洞占用者缺失时为 undefined
+   */
+  const addWorkspaceActions = (): AddWorkspaceActions | undefined => {
+    if (workspaces === undefined) return undefined
+    if (directoryFlowOccupant(ctx.slots) === undefined) return undefined
+    const uiWorkspace = ctx.get('uiWorkspace') as
+      | { startSession: (workspaceId: string) => void }
+      | undefined
+    return {
+      createWorkspace: (path) => workspaces.create({ path }),
+      // 官方在采纳成功后立刻在新工作区开会话；uiWorkspace 缺失时退化为只添加，
+      // 不替它找一个「差不多」的替代入口
+      startSession: (workspaceId) => uiWorkspace?.startSession(workspaceId as never),
+      // 传解析器而不是当次读数：占用者可能在两次渲染之间换人
+      occupant: () => directoryFlowOccupant(ctx.slots),
+      labels: officialAddLabels(tWorkspace),
+    }
+  }
+
+  /**
+   * 注入面
+   *
+   * 除动作外还带一个 `hooks` 隔间：渲染器会把里面的每个源绑成同名的选择器
+   * hook 交给组件（`directoryFlow` → `useDirectoryFlow`），官方
+   * `WorkspaceBrowserInjected` 用的就是这套机制。洞的占用情况因此是可订阅的，
+   * 目录选择器插件晚于本包加载时入口按钮照样会出现
+   */
+  type InjectedFace = RegionActions & {
+    hooks: { directoryFlow: ReturnType<typeof directoryFlowSource> }
+  }
+
+  const injected = (): InjectedFace => {
+    const hooks = { directoryFlow: directoryFlowSource(ctx.slots) }
     if (sessions === undefined || workspaces === undefined) {
       // 依赖缺失时给出空实现：组件仍可渲染，只是没有可操作的动作。
       return {
@@ -180,6 +225,7 @@ export function apply(ctx: Context): void {
         renameWorkspace: async () => {},
         deleteWorkspace: async () => {},
         tWorkspace,
+        hooks,
       }
     }
     return {
@@ -214,6 +260,9 @@ export function apply(ctx: Context): void {
       tWorkspace,
       // 传解析器而不是值：渲染时才去读 ctx.uiWorkspace（见 RegionActions）。
       official: officialActions,
+      // 同为解析器：它还要去读官方 directoryFlow 洞的占用者
+      addWorkspace: addWorkspaceActions,
+      hooks,
     }
   }
 

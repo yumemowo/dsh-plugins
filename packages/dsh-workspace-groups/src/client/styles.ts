@@ -4,8 +4,12 @@
  * 取值对齐官方侧边栏组件（`dsh-client-ui-sidebar` 与 `dsh-client-ui-workspace`
  * 0.1.5-rc.2）的实际规则：工作区/分组行 34px、会话行 32px、圆角 8px、行内
  * 水平内边距 8px、图标列 16px、悬停用 `--dsw-alias-interactive-bg-hover`、
- * 文字色走 `--dsw-alias-label-primary/secondary/tertiary`，滚动条留白复用
- * shell 提供的 `--dsh-sidebar-inline-padding`
+ * 文字色走 `--dsw-alias-label-primary/secondary/tertiary`
+ *
+ * 水平留白分左右两半，来源不同：左侧来自 shell（`--dsh-sidebar-inline-padding`
+ * 与 regionArea 的 -4/+4），右侧来自官方 WorkspaceBrowser 根节点自带的那块
+ * `--dsh-session-list-edge-inset`。官方那份定义随被接替的组件一起消失，因此
+ * 本包的 `.wg-root` 自己重新定义这三个量（见该规则处的注释）
  *
  * 文字层级照官方照搬：容器行（`projectRow`）与其中的标题一律
  * `label-primary` 14px/20px，且都**不加字重**——官方工作区标题与会话标题
@@ -20,7 +24,20 @@
 const STYLE_TAG_ID = '@your-scope/dsh-workspace-groups/src/client/region.css'
 
 const CSS = `
+/* 区域根：官方 WorkspaceBrowser 的根节点自己带整块右留白，本区域必须有同一份，
+   否则 header 的入口按钮与列表行都会贴到侧栏右缘
+ *
+ * 官方那份留白不走 shell 的 12px——shell 的 regionArea 用 margin-right:-12px
+ * 把它抵掉了，再由 WorkspaceBrowser 的根节点重新加回来。因此这里由 .wg-root
+ * 自己拥有：侧栏下 shell 只负责左侧 12px（regionArea 的 -4/+4），右侧由本节点
+ * 给；对照模式下 .wg-tab 给左侧、本节点给右侧，两种挂载点的右留白因此同源
+ *
+ * 官方把这三个量定义在自己的根节点上（--dsh-session-list-edge-inset 等），
+ * 而那些定义随官方组件一起被接替掉了，本包必须自己重新定义一遍 */
 .wg-root {
+  --dsh-session-list-edge-inset: var(--dsh-sidebar-inline-padding, 12px);
+  --dsh-session-list-scrollbar-width: 8px;
+  --dsh-session-list-scrollbar-offset: 2px;
   box-sizing: border-box;
   min-height: 0;
   flex: 1;
@@ -28,16 +45,104 @@ const CSS = `
   flex-direction: column;
   color: var(--dsw-alias-label-primary);
   font-size: 14px;
+  padding-right: var(--dsh-session-list-edge-inset);
 }
 
-/* 右侧栏对照 tab 的外壳：把区域撑满 tab 体并留出与侧边栏一致的水平内边距 */
+/* 右侧栏对照 tab 的外壳：只给左侧水平内边距与顶部间距——侧栏下左侧来自 shell，
+   对照模式下没有 shell，因此由这里补上；右侧一律由 .wg-root 给，避免两层叠加 */
 .wg-tab {
   box-sizing: border-box;
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 6px 12px 0;
+  padding: 6px 0 0 12px;
+}
+
+/* 区域 section header：几何照官方 WorkspaceBrowser 的 .sectionHeader
+   （36px 高、圆角 12px、左内边距 4px、控件间距 4px、下间距 4px）
+
+   margin-right 同样照官方取 -4px：官方那条负值是相对「自带整块右留白」的
+   根节点写的，本包 .wg-root 现在有同一份留白（见上），因此两者相抵后
+   header 的右缘与官方一样落在离栏缘 8px 处 */
+.wg-header {
+  box-sizing: border-box;
+  height: 36px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-bottom: 4px;
+  padding-left: 4px;
+  margin-top: 2px;
+  margin-right: -4px;
+  color: var(--dsw-alias-label-tertiary);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* 标题最多占 45%，给右侧入口留出空间（官方 .sectionLabel 同此约束） */
+.wg-header-label {
+  min-width: 0;
+  max-width: 45%;
+  flex: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.wg-header-actions {
+  max-width: 100%;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  overflow: hidden;
+}
+
+/* header 里的图标按钮：官方 .iconButton 的几何（28px 正圆、label-secondary、
+   悬停出底色）。与行内 16px 按钮分开，因为尺寸与命中区都不是一套 */
+.wg-header-action {
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+  background: 0 0;
+  border: none;
+  border-radius: 50%;
+  /* 正圆必须配对 round，否则会被主题的全局超级椭圆磨成方圆角 */
+  corner-shape: round;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.wg-header-action:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+/* 尚未实现的入口渲染成 disabled 占位：明确表达不可用，而不是敲下去没反应 */
+.wg-header-action:disabled {
+  cursor: default;
+  color: var(--dsw-alias-label-dimmed, var(--dsw-alias-label-tertiary));
+}
+
+/* 窄栏：官方 rail 下 header 只留一个 36px 的入口，标题与搜索都不渲染 */
+.wg-header-rail {
+  justify-content: flex-start;
+  gap: 0;
+  margin-bottom: 12px;
+  margin-top: 0;
+  margin-right: 0;
+  padding-left: 0;
+}
+.wg-header-rail .wg-header-action {
+  width: 36px;
+  height: 36px;
+  color: var(--dsw-alias-label-primary);
 }
 
 .wg-rail { box-sizing: border-box; display: flex; flex-direction: column; }
@@ -58,6 +163,12 @@ const CSS = `
 }
 .wg-rail-button:hover { background: var(--dsw-alias-interactive-bg-hover); }
 
+/* 列表：右侧折进官方 .listArea 与 .list 的两层偏移
+ *
+ * 官方把「留白」拆成两步：.listArea 用 -edge-inset 抵掉根节点的右留白，让列表
+ * 靠到栏缘；再由 .list 自己的 scrollbar-offset 与 padding-right 把内容推回到离
+ * 栏缘 edge-inset 处（scrollbar 沟槽 width + offset + padding-right）。
+ * 本包没有 .listArea 那一层，因此把它的 -edge-inset 折进这里的 margin-right */
 .wg-list {
   box-sizing: border-box;
   min-height: 0;
@@ -66,6 +177,13 @@ const CSS = `
   flex-direction: column;
   overflow-y: auto;
   scrollbar-gutter: stable;
+  margin-right: calc(
+    var(--dsh-session-list-scrollbar-offset) - var(--dsh-session-list-edge-inset)
+  );
+  padding-right: calc(
+    var(--dsh-session-list-edge-inset) - var(--dsh-session-list-scrollbar-width) -
+      var(--dsh-session-list-scrollbar-offset)
+  );
   padding-bottom: 16px;
 }
 

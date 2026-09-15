@@ -3,7 +3,7 @@ import * as React from 'react'
 import { GroupSection } from '../src/client/components/GroupSection.tsx'
 import { WorkspaceGroupsRegion } from '../src/client/components/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/components/WorkspaceGroupsRegion.tsx'
-import { officialSessionLabels, timeLabel } from '../src/client/official.ts'
+import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { regionTranslate, translateWith, workspaceTranslate } from './locale-stub.ts'
 
 /**
@@ -186,7 +186,14 @@ function renderGroupRow(onCreateSession?: () => void) {
 
 function props(
   wide: boolean,
-  options: { pending?: Map<unknown, unknown>; official?: boolean } = {},
+  options: {
+    pending?: Map<unknown, unknown>
+    official?: boolean
+    /** 缺省给官方「添加工作区」服务面；false 用于验证降级路径 */
+    add?: boolean
+    /** directoryFlow 洞是否被占用；缺省为已占用 */
+    flowOccupied?: boolean
+  } = {},
 ): WorkspaceGroupsProps {
   const byId: Record<string, unknown> = {
     a: { id: 'a', displayTitle: 'A', running: false, blank: false, updatedAt: Date.now() - 300_000 },
@@ -217,6 +224,8 @@ function props(
       select({ ids: ['a', 'orphan'], byId, current: undefined, phase: 'ready' })) as never,
     useSessionPendingInteraction: ((select: (s: unknown) => unknown) =>
       select(options.pending ?? new Map())) as never,
+    useDirectoryFlow: ((select: (occupied: boolean) => unknown) =>
+      select(options.flowOccupied ?? true)) as never,
     openSession: () => {},
     startSession: async () => '',
     loadGroups: async () => ({ w1: [{ id: 'g1', name: '前端', sessionIds: [] }] }),
@@ -239,6 +248,19 @@ function props(
             archiveSession: async () => {},
             labels: officialSessionLabels(workspaceTranslate()),
             relativeTime: (updatedAt, now) => timeLabel(updatedAt, now, workspaceTranslate()),
+          }),
+        }),
+    ...(options.add === false
+      ? {}
+      : {
+          addWorkspace: () => ({
+            createWorkspace: async (path: string) => ({ workspaceId: `w-${path}` }),
+            startSession: () => {},
+            occupant: () => ({
+              component: (() => null) as never,
+              inject: () => ({}),
+            }),
+            labels: officialAddLabels(workspaceTranslate()),
           }),
         }),
   }
@@ -436,5 +458,60 @@ describe('WorkspaceGroupsRegion render', () => {
 
     // 待交互压过其他状态：orphan 静置但仍在等用户审批
     expect(out.text).toContain('StateDot:warning')
+  })
+
+  it('renders the section header with the region title and the add entry', () => {
+    const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
+
+    // 标题取官方 section.workspaces；「添加工作区」入口的无障碍标签取 workspace.add
+    expect(out.text).toContain('工作区')
+    expect(rowButtons(out).map((b) => b.label)).toContain('添加工作区')
+  })
+
+  it('keeps the unimplemented header entries as disabled placeholders', () => {
+    const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
+
+    // 搜索与视图选项尚未实现：位置与字形对齐官方，但明说不可用，
+    // 而不是渲染成点下去没反应的死按钮
+    const search = (out.buttons ?? []).find(
+      (b) => (b as { props: Record<string, unknown> }).props['aria-label'] === '搜索会话',
+    )
+    const viewOptions = (out.buttons ?? []).find(
+      (b) => (b as { props: Record<string, unknown> }).props['aria-label'] === '视图选项',
+    )
+    expect((search as { props: Record<string, unknown> }).props['disabled']).toBe(true)
+    expect((viewOptions as { props: Record<string, unknown> }).props['disabled']).toBe(true)
+  })
+
+  it('drops the add entry when the directory flow hole is unoccupied', () => {
+    const occupied = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), occupied)
+    expect(rowButtons(occupied).map((b) => b.label)).toContain('添加工作区')
+
+    // 宿主没装目录选择器时洞是空的，入口整体不渲染，不留点不动的死按钮
+    const bare = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[] }
+    render(
+      React.createElement(WorkspaceGroupsRegion, props(true, { flowOccupied: false })),
+      bare,
+    )
+    expect(rowButtons(bare).map((b) => b.label)).not.toContain('添加工作区')
+  })
+
+  it('drops the add entry when the official services are absent', () => {
+    const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true, { add: false })), out)
+
+    // 服务面拿不到时同样不渲染入口
+    expect(rowButtons(out).map((b) => b.label)).not.toContain('添加工作区')
+  })
+
+  it('offers the add entry in the narrow rail as well', () => {
+    const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(false)), out)
+
+    // 官方窄栏也放这个入口（36px、label-primary），这里保持一致
+    expect(rowButtons(out).map((b) => b.label)).toContain('添加工作区')
   })
 })

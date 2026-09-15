@@ -42,12 +42,20 @@ export const relativeTime = (from, to) => {
   return { unit: 'days', n: Math.floor(delta / (24 * 60 * minute)) }
 }
 
+/** 悬停提示替身：只渲染子节点，label 另行断言 */
+export const Tooltip = ({ children }) => children
+
+export const IconProjectAddOutline16 = icon('IconProjectAddOutline16')
+export const IconSearchOutline16 = icon('IconSearchOutline16')
+export const IconPersonalizationOutline16 = icon('IconPersonalizationOutline16')
+
 export default {
   Menu,
   Button,
   Modal,
   Input,
   StateDot,
+  Tooltip,
   relativeTime,
   IconFolderClose16,
   IconFolderOpen16,
@@ -59,4 +67,7 @@ export default {
   IconPanelLeftOutline16,
   IconBranchOutline16,
   IconArchiveOutline20,
+  IconProjectAddOutline16,
+  IconSearchOutline16,
+  IconPersonalizationOutline16,
 }

@@ -7,8 +7,6 @@
  *
  * `dsh-better-sidebar` 是第三方包，不在本仓库的依赖图里，所以这里只按
  * 结构声明它的最小接口，不 import 它的类型——类型检查不需要装那个包
- *
- * @module @your-scope/dsh-workspace-groups/client/compare
  */
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import type { ReactElement } from 'react'
@@ -18,6 +16,7 @@ import type { SessionPendingInteractionSnapshot, UiSession } from '@deepseek-ai/
 import type { LocaleRuntime, LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
 import type { RegionActions, WorkspaceState } from './actions.ts'
 import { NS } from './locales.ts'
+import { directoryFlowSource } from './directoryFlow.ts'
 import { WorkspaceGroupsRegion } from './components/WorkspaceGroupsRegion.tsx'
 
 /** 注册进 better-sidebar 的 tab 身份，同时也是 `openTab` 的 `type` */
@@ -101,6 +100,9 @@ function CompareTabBody({
   // 待交互快照归 ui-session 所有，不挂在 sessions 控制器上；对照模式没有
   // shell 的标准 hook 注入，因此这里自己把它的源包成同形的选择器
   const uiSession = ctx.get('uiSession') as UiSession | undefined
+  // directoryFlow 洞的占用源在插槽注册表上；右侧栏 tab 同样没有 shell 注入的
+  // useDirectoryFlow，因此也自己包一层
+  const slots = ctx.get('slots') as Parameters<typeof directoryFlowSource>[0] | undefined
   // 文案座位在渲染期现取：插槽那条路径由 shell 注入，这里没有 shell，因此
   // 自己绑命名空间，并订阅语言快照让切换语言后重新渲染
   const useLocaleSource = useMemo(() => useSnapshotSelector(localeSource(locale)), [locale])
@@ -119,6 +121,14 @@ function CompareTabBody({
     () => useSnapshotSelector(uiSession?.pendingInteractions ?? EMPTY_PENDING),
     [uiSession],
   )
+  const useDirectoryFlowSource = useMemo(
+    () => useSnapshotSelector(slots === undefined ? EMPTY_FLOW : directoryFlowSource(slots)),
+    [slots],
+  )
+  const useDirectoryFlow = useCallback(
+    (selector: (occupied: boolean) => unknown) => useDirectoryFlowSource(selector),
+    [useDirectoryFlowSource],
+  )
 
   return (
     <div className="wg-tab">
@@ -131,6 +141,7 @@ function CompareTabBody({
         useWorkspaces={useWorkspaces}
         useSessions={useSessions}
         useSessionPendingInteraction={useSessionPendingInteraction}
+        useDirectoryFlow={useDirectoryFlow as never}
       />
     </div>
   )
@@ -155,6 +166,12 @@ const EMPTY_WORKSPACES: SnapshotSource<WorkspaceState> = {
 
 const EMPTY_PENDING: SnapshotSource<SessionPendingInteractionSnapshot> = {
   getSnapshot: () => EMPTY_PENDING_STATE,
+  subscribe: () => () => {},
+}
+
+// 插槽注册表缺失时的空占用源：恒为「没人占用」，入口按钮因此不渲染
+const EMPTY_FLOW: SnapshotSource<boolean> = {
+  getSnapshot: () => false,
   subscribe: () => () => {},
 }
 

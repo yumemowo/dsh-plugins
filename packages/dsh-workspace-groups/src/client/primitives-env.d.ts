@@ -61,6 +61,15 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     type?: 'button' | 'submit' | 'reset'
   }) => ReactNode
 
+  /** 悬停提示；`disabled` 为真时不显示 */
+  export const Tooltip: (props: {
+    label: ReactNode
+    side?: 'top' | 'bottom' | 'left' | 'right'
+    delayMs?: number
+    disabled?: boolean
+    children?: ReactNode
+  }) => ReactNode
+
   /** 居中对话框；页脚按钮由调用方组装 */
   export const Modal: (props: {
     open: boolean
@@ -129,6 +138,12 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const IconEditOutline16: IconComponent
   export const IconTrashOutline16: IconComponent
   export const IconPanelLeftOutline16: IconComponent
+  /** 「添加工作区」入口用的图标，与官方 header 同字形 */
+  export const IconProjectAddOutline16: IconComponent
+  /** 官方 header「搜索」入口的图标 */
+  export const IconSearchOutline16: IconComponent
+  /** 官方 header「视图选项」入口的图标 */
+  export const IconPersonalizationOutline16: IconComponent
   /** 官方会话菜单「分叉」项用的图标 */
   export const IconBranchOutline16: IconComponent
   /** 官方会话菜单「归档」项用的图标；官方传 size=16 */

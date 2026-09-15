@@ -17,6 +17,10 @@
 官方用默认优先级 `0`，因此本包以 **`priority: -1`** 注册成为渲染者，
 无需禁用官方那一行。官方组件仍留在注册表中，只是不再渲染。
 
+这条「官方注册仍在」不是无关紧要的实现细节，而是**添加工作区能复用它目录选择
+交互的原因**：官方那条注册声明了子插槽 `sidebar.workspaces.directoryFlow`，
+注册既然还在，洞的声明与注册进洞的占用者就都还在（见「目录选择器」一节）。
+
 **只影响这一个区域。** logo（`sidebar.brand.*`）、面板列表（`sidebar.panellist`）、
 设置与底部操作（`sidebar.settings` / `sidebar.footer.action`）都是并列的兄弟插槽，不受影响。
 `conversation.hero.workspace`（新会话页的工作区选择器）也仍由官方组件负责。
@@ -43,6 +47,8 @@
 
 ## 已提供的功能
 
+- **添加工作区**：区域 header 右侧的图标入口，借用官方目录选择交互选中一个
+  目录后登记为工作区，并在其中开一个新会话（见「添加工作区」）。
 - **新建分组**：工作区行右侧 `...` 菜单里的第一项，输入名称即可。
 - **重命名 / 删除工作区**：同一个 `...` 菜单里的后两项，与官方工作区菜单
   一致（重命名在前、删除在后）。两者都直接调用官方工作区控制器
@@ -193,19 +199,55 @@
 「未分组分组」——未归组的会话直接平铺在工作区下。工作区一级的「未分组」
 容器是另一个层级的概念。
 
-## 阶段一未提供的功能
+## 区域头部与添加工作区
+
+区域顶部有官方同形的 section header（36px）：左侧标题（官方 `section.workspaces`），
+右侧一组 28px 圆形图标按钮。
+
+| 入口 | 状态 |
+| --- | --- |
+| **添加工作区** | 已实现，见下节 |
+| 搜索 | 尚未实现，渲染成 **disabled 占位** |
+| 视图选项 | 尚未实现，渲染成 **disabled 占位** |
+
+两个未实现的入口保留官方的位置与字形，但带 `disabled` 语义、悬停无高亮：
+它们在界面上明说自己不可用，而不是渲染成一个点下去没反应的死按钮（后者正是
+本包在别处明确拒绝的形态）。无障碍标签取官方 `search.sessions.aria` /
+`viewOptions.label`，因此占位按钮不是无名按钮。
+
+窄栏（rail）下与官方一致：标题与搜索都不渲染，只留一个 36px 的「添加工作区」
+入口（`label-primary`）。
+
+### 添加工作区
+
+流程与官方 WorkspaceBrowser 逐段一致：
+
+1. 点入口 → 直接打开 picking 交互（官方在侧边栏用 `addOnly: true`，同样不先
+   弹工作区列表菜单）；
+2. 用户在交互里选中一个目录（或取消）；
+3. 选中后调官方 `ctx.workspaces.create({ path })` 采纳；
+4. 采纳成功 → 官方 `ctx.uiWorkspace.startSession(workspaceId)`，在新工作区里
+   开一个新会话并打开；
+5. 采纳失败 → 官方 `folderError.title` 错误框，`folderError.retry`（「重新选择」）
+   重开交互。
+
+picking 交互本身不重写：它整段来自官方 `sidebar.workspaces.directoryFlow` 洞的
+占用者（native / browse 两种组合都覆盖，见下节）。文案零新增——入口、错误框标题
+与「重新选择」都取官方 `workspace` 命名空间的既有键。
+
+## 未提供的功能
 
 以下原属于官方组件的功能**暂未实现**：
 
-- 新增工作区（Add workspace）
-- 搜索（含 Host 内容检索）
+- 搜索（含 Host 内容检索，只留 disabled 占位入口）
+- 视图选项（分组 / 排序，只留 disabled 占位入口）
 - 拖拽排序（工作区与会话两级）
 - 每工作区 5 条折叠与 Show more
 - manual / updated 两种排序
 - Schedule 告警标记（会话状态点已提供，见上节）
 
-会话的**重命名 / 分叉 / 归档**已通过复用官方接口提供（见「会话操作菜单」），
-不再是本包自己实现的功能。
+会话的**重命名 / 分叉 / 归档**、**添加工作区**都已通过复用官方接口提供
+（见「会话操作菜单」与「添加工作区」），不再是本包自己实现的功能。
 
 当前界面会在区域底部显示一行说明，提示这是实验版本。
 建组与改名的输入框、删除确认、以及全部图标都走官方
@@ -218,6 +260,10 @@
 
 | 项 | 取值 |
 | --- | --- |
+| 区域右侧整块留白 | `var(--dsh-session-list-edge-inset)`（侧栏里 = 12px，同官方根节点） |
+| 区域 section header 高 / 圆角 / 控件间距 | `36px` / `12px` / `4px`（同官方 `.sectionHeader`） |
+| header 图标按钮 | `28px` 正圆、`--dsw-alias-label-secondary`、悬停 `-hover`（同官方 `.iconButton`） |
+| 窄栏 header 图标按钮 | `36px` 正圆、`--dsw-alias-label-primary`（同官方 `.rail .iconButton`） |
 | 工作区与分组行高 | `34px` |
 | 会话行高 | `32px` |
 | 行内水平内边距 / 圆角 | `8px` / `8px` |
@@ -229,7 +275,21 @@
 | 滚动条留白 | `--dsh-session-list-scrollbar-width` / `-offset` |
 | 过渡 | `--ds-ease-in-out`，并遵守 `prefers-reduced-motion` |
 
-唯一不取自官方的数值是**层级缩进的步进量**（`16px`）与引导线：官方只有
+右侧那 12px 值得单说，它是最容易抄错的一处：**官方的右留白不由 shell 提供，
+而由 `WorkspaceBrowser` 的根节点自己拥有**——shell 的 `regionArea` 先把
+`margin-right` 设为 `-12px` 抵消掉，根节点再 `padding-right: 12px` 加回来。
+本包接替了这个根节点，就必须把那份留白连同三个自定义属性
+（`--dsh-session-list-edge-inset` / `-scrollbar-width` / `-scrollbar-offset`，
+官方定义在同一个根节点上、随它一起消失）一起重建，否则 header 的入口按钮与列表
+行都会一路贴到侧栏右缘。
+
+列表还要再折一层：官方 `.listArea` 用 `-edge-inset` 让列表靠到栏缘，再由 `.list`
+把内容推回到离栏缘 12px。本包没有 `.listArea`，因此这两个偏移折进 `.wg-list`
+自己的 `margin-right` / `padding-right`。窄栏下本包不渲染 `.wg-root`（只渲染两个
+入口），右缘因此落在 shell 折叠态的 10px 上，与官方 `.root.rail{padding-right:0}`
+一致。
+
+唯一不取自官方的数值仍是**层级缩进的步进量**（`16px`）与引导线：官方只有
 「工作区 → 会话」两级且两级都不缩进，本包多出的分组层没有可抄的先例，
 取生态内的既有做法（见上文「层级缩进」）。
 
@@ -278,12 +338,15 @@
 | --- | --- |
 | 建组 / 改名 / 工作区重命名 / 会话重命名 | `Modal` + `Input` + `Button`（`outline` / `primary`） |
 | 删除分组 / 删除工作区 | `Modal` + `Button`（`outline`，确认按钮着错误色） |
+| 添加工作区失败 | `Modal` + `Button`（同上，文案取官方 `folderError.*`） |
 | 文件夹、三角、省略号 | `IconFolderClose16` / `IconFolderOpen16` / `IconTriangleRightFill14` / `IconEllipsisOutline16` |
 | 新建会话、新建分组、改名、删除 | `IconPlusOutline16` / `IconEditOutline16` / `IconTrashOutline16` |
+| header 的添加工作区 / 搜索 / 视图选项 | `IconProjectAddOutline16` / `IconSearchOutline16` / `IconPersonalizationOutline16`（与官方 header 同字形） |
 | 会话菜单的分叉 / 归档项 | `IconBranchOutline16` / `IconArchiveOutline20`（与官方会话菜单同字形） |
 | 窄栏展开入口 | `IconPanelLeftOutline16`（与官方侧栏折叠按钮同一字形） |
 | 会话状态点 | `StateDot`（运行态画追光方阵，其余画圆点；颜色由原语的主题规则给出） |
 | 行尾相对时间 | `relativeTime`（官方 `timeLabel` 用的同一个分桶函数，文案走官方语言包） |
+| 「添加工作区」入口提示 | `Tooltip`（与官方 header 同一 `delayMs` 与展开方向） |
 
 原语的样式属于 ui-theme / ui-primitives：本包不为它们写颜色、阈值或高亮，
 只在 `styles.ts` 里保留自己的布局约定。
@@ -326,6 +389,11 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 本包字典只剩官方没有对应词的 10 个键：`actions.group.aria` / `newGroup` /
 `renameGroup` / `deleteGroup` / `groupNamePrompt` / `delete.desc.group` /
 `moveToGroup` / `ungroup` / `compareTabDescription` / `unimplemented`。
+「添加工作区」的文案因此一个键都不用加：入口取官方 `workspace.add`、错误框
+取 `folderError.title` 与 `folderError.retry`、两个占位入口取
+`search.sessions.aria` 与 `viewOptions.label`。注意入口是 `workspace.add`
+（「添加工作区」），不是 `menu.addWorkspace`（「添加工作区…」）——后者是工作区
+列表菜单里那一项，带省略号表示还要再选一次。
 `actions.group.aria` 是分组自己的无障碍标签（官方只有工作区与会话两个），
 分组 `+` 的标签则直接复用官方的 `actions.newSession.aria`——语义完全相同，
 不另造一个同义键。`labels.test.ts` 会断言字典里没有任何与官方重合的键，
@@ -386,13 +454,34 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 官方组件**没有**暴露会话行级别的插槽，因此无法在它内部追加分组。
 唯一的做法是接替整个区域。
 
-### 目录选择器为什么不能用
+### 目录选择器：复用官方的洞，而不是重开一个
 
 `ui-workspace` 声明了子插槽 `sidebar.workspaces.directoryFlow`，目录选择器插件
-（`directory-picker-browse` / `-native`）注册到那里。而**一个插槽只能有一个声明者**：
-被接替后该子插槽随之消失，本包再声明同名子插槽会直接抛错（已实测验证）。
+（`directory-picker-browse` / `-native`）注册到那里。**一个插槽只能有一个声明者**：
+本包再声明同名子插槽会直接抛错（已实测验证）。
 
-因此阶段一不声明该子插槽，也不提供新增工作区入口。
+但「不能重复声明」不等于「用不了」。**本包接替父插槽并不会清掉官方那条注册**：
+官方组件仍留在 ledger 里，它声明子插槽的那条 `children` 表因此仍然有效，洞的
+声明、以及注册进洞的目录选择器占用者，都原样还在（已用真实 `SlotCore` 实测：
+`spec()` 仍为已声明、`entriesOfSlot()` 仍返回占用者）。
+
+于是新增工作区走**借用**而非重建：
+
+| 环节 | 来源 |
+| --- | --- |
+| 入口按钮 | 本包自绘，几何与图标对齐官方 header（`IconProjectAddOutline16`） |
+| picking 交互 | 官方洞的占用者整段渲染（native 的 OS 选择器 / browse 的应用内对话框） |
+| 采纳 | 官方工作区控制器 `ctx.workspaces.create({ path })` |
+| 采纳成功后 | 官方 `ctx.uiWorkspace.startSession(workspaceId)`，与官方 `onPick` 一致 |
+
+占用者的 inject 面（native 的 `pick`、browse 的 `listDirectory` /
+`createDirectory` / `t`）由本包按渲染器传播插槽 inject 的同一套做法，随 props
+交给它，并按占用者注册项身份缓存——占用者因此不需要知道自己被谁渲染。
+
+**入口只在洞被占用时渲染**：宿主没装目录选择器插件时洞是空的，按钮随之消失，
+不留点不动的死按钮（与官方 `directoryFlowAvailable` 的守卫同一语义）。这条
+占用事实是可订阅的（`hooks.directoryFlow` → `useDirectoryFlow`），因此目录
+选择器插件晚于本包加载时按钮照样会出现。
 
 ## 数据存储
 
@@ -440,6 +529,7 @@ src/client/
 ├── locales.ts                  命名空间声明与中英字典（键名取官方叫法）
 ├── labels.ts                   文案契约与投影（TranslateNS → RegionLabels）
 ├── official.ts                 官方 workspace 语言包与相对时间的复用面
+├── directoryFlow.ts            官方 directoryFlow 洞的占用者读数（添加工作区的交互来源）
 ├── actions.ts                  RegionActions / RegionDataHooks（组件与宿主的接口）
 ├── compare.tsx                 对照模式：挂进 better-sidebar 右侧栏 tab
 ├── remote.ts                   Remote 贡献声明与调用封装
@@ -453,6 +543,8 @@ src/client/
 │   └── sessions.ts             会话快照 → 渲染行（含可见性过滤、未分组收集）
 └── components/
     ├── WorkspaceGroupsRegion.tsx   区域容器：状态与编排
+    ├── RegionHeader.tsx            区域 section header（标题 + 三个入口）
+    ├── AddWorkspaceControl.tsx     「添加工作区」入口与 picking 流程
     ├── WorkspaceSection.tsx        一个工作区区块（标题 + 折叠体 + 空态）
     ├── WorkspaceRow.tsx            工作区标题行（文件夹/箭头、`...`、`+`）
     ├── GroupSection.tsx            一个分组（分组头 + 组内会话）
