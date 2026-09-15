@@ -30,7 +30,15 @@ const dispatcher = {
 /** 渲染整棵树；Menu 元素被收集起来而不下钻（stub 返回 null） */
 function render(
   node: unknown,
-  out: { menus: unknown[]; text: string[]; buttons?: unknown[]; containers?: unknown[]; slots?: unknown[] },
+  out: {
+    menus: unknown[]
+    text: string[]
+    buttons?: unknown[]
+    containers?: unknown[]
+    slots?: unknown[]
+    counts?: unknown[]
+    order?: string[]
+  },
 ): void {
   const walk = (n: unknown): void => {
     if (n === null || n === undefined || typeof n === 'boolean') return
@@ -64,6 +72,12 @@ function render(
     // 行内按钮（如分组行的 `+`）、操作位容器与状态点槽位都是宿主元素，收集起来供断言
     if (el.props['className'] === 'wg-row-actions') out.containers?.push(el)
     if (el.props['className'] === 'wg-slot') out.slots?.push(el)
+    if (el.props['className'] === 'wg-group-count') out.counts?.push(el)
+    // 按文档序记下行头各段，用来断言「会话数在标题右侧、操作位左侧」
+    const section = el.props['className']
+    if (section === 'wg-group-label' || section === 'wg-group-count' || section === 'wg-row-actions') {
+      out.order?.push(String(section))
+    }
     if (el.type === 'button') out.buttons?.push(el)
     walk(el.props.children as unknown)
   }
@@ -155,16 +169,30 @@ function rowActionShape(out: { menus: unknown[]; buttons?: unknown[]; containers
 }
 
 /** 渲染一个分组行并返回可断言的操作结构 */
-function renderGroupRow(onCreateSession?: () => void) {
+function renderGroupRow(onCreateSession?: () => void, sessionCount = 0) {
   const out = {
     menus: [] as unknown[],
     text: [] as string[],
     buttons: [] as unknown[],
     containers: [] as unknown[],
+    counts: [] as unknown[],
+    order: [] as string[],
   }
   render(
     React.createElement(GroupSection, {
-      section: { id: 'g1', label: '前端', sessions: [] },
+      section: {
+        id: 'g1',
+        label: '前端',
+        sessions: Array.from({ length: sessionCount }, (_, index) => ({
+          id: `s${index}`,
+          title: `会话 ${index}`,
+          blank: false,
+          running: false,
+          runningSubagentCount: 0,
+          completed: false,
+          updatedAt: 0,
+        })),
+      },
       collapsed: false,
       onToggle: () => {},
       onRename: () => {},
@@ -315,6 +343,28 @@ describe('WorkspaceGroupsRegion render', () => {
 
     // stray 会话没有分组可归，但官方三项照常可用
     expect(menuItems(out)).toContainEqual(['rename', 'fork', 'archive'])
+  })
+
+  it('shows the group session count as its own trailing element', () => {
+    const out = renderGroupRow(() => {}, 3)
+
+    // 会话数不再拼进标题文本，而是自己一格贴在行右——与 session 行的 time 同位置
+    expect(out.text).toContain('前端')
+    expect(out.text).not.toContain('前端 (3)')
+    expect((out.counts ?? []).length).toBe(1)
+    const count = (out.counts ?? [])[0] as { props: { children?: unknown } }
+    expect(count.props.children).toBe(3)
+    // 行头文档序：标题 → 会话数 → 操作位，即会话数落在行的右侧
+    expect(out.order).toEqual(['wg-group-label', 'wg-group-count', 'wg-row-actions'])
+  })
+
+  it('omits the group session count for an empty group', () => {
+    // 空分组的 0 是噪声；行尾留给操作按钮
+    const out = renderGroupRow(() => {}, 0)
+
+    expect((out.counts ?? []).length).toBe(0)
+    expect(out.text).not.toContain('0')
+    expect(out.order).toEqual(['wg-group-label', 'wg-row-actions'])
   })
 
   it('keeps the group row actions in the same shape as the workspace row', () => {

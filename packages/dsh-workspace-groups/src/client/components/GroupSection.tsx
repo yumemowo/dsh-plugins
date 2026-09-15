@@ -63,28 +63,34 @@ export function GroupSection({
         <span className="wg-slot">
           <IconTriangleRightFill14 className={`wg-arrow${collapsed ? '' : ' wg-arrow-open'}`} />
         </span>
-        <span className="wg-group-label">
-          {section.label} ({section.sessions.length})
+        <span className="wg-group-label">{section.label}</span>
+        {/* 会话数自己成格贴在行右，与 session 行的 time 同格同形；空分组不显示 */}
+        {section.sessions.length <= 0 ? null : (
+          <span className="wg-group-count">{section.sessions.length}</span>
+        )}
+        {/* 操作位收进 session 行同一套可收放槽位：静止时不占宽，上面的会话数
+            因此贴到行右；悬停/菜单展开/键盘聚焦时槽位展开，会话数隐去 */}
+        <span className="wg-row-action-slot">
+          <RowActions
+            menuOpen={menuOpen}
+            onMenuOpen={setMenuOpen}
+            onMenuSelect={(id) => {
+              setMenuOpen(false)
+              if (id === GROUP_MENU.rename) onRename()
+              else if (id === GROUP_MENU.delete) onDelete()
+            }}
+            menuItems={buildGroupMenuItems({
+              renameLabel: labels.rename,
+              deleteLabel: labels.delete,
+            })}
+            actionsLabel={labels.actions(section.label)}
+            create={
+              onCreateSession === undefined
+                ? undefined
+                : { label: labels.newSession(section.label), onCreate: onCreateSession }
+            }
+          />
         </span>
-        <RowActions
-          menuOpen={menuOpen}
-          onMenuOpen={setMenuOpen}
-          onMenuSelect={(id) => {
-            setMenuOpen(false)
-            if (id === GROUP_MENU.rename) onRename()
-            else if (id === GROUP_MENU.delete) onDelete()
-          }}
-          menuItems={buildGroupMenuItems({
-            renameLabel: labels.rename,
-            deleteLabel: labels.delete,
-          })}
-          actionsLabel={labels.actions(section.label)}
-          create={
-            onCreateSession === undefined
-              ? undefined
-              : { label: labels.newSession(section.label), onCreate: onCreateSession }
-          }
-        />
       </div>
       {collapsed || section.sessions.length <= 0 ? null : <div className="wg-sessions">{children}</div>}
     </div>

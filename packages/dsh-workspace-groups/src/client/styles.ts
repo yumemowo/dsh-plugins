@@ -265,6 +265,19 @@ const CSS = `
 /* 分组是工作区之下的一层，靠更暗的色阶表示「低一级」 */
 .wg-group-label { color: var(--dsw-alias-label-tertiary); }
 
+/* 分组的会话数：与 session 行的 .wg-row-time 同格同形（tertiary、12px/20px），
+   内容为纯数字。它排在可收放的操作槽之前，正对 time 相对操作槽的位置：槽位
+   静止时不占宽，会话数因此贴在行右；悬停时槽位展开、会话数隐去，两者互换 */
+.wg-group-count {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+  /* 分组头是 gap:6px 的 flex 行，而 session 行是 gap:0。会话数要落在与 time
+     同一条右缘线上，就得把自己与操作槽之间那份 gap 还回去 */
+  margin-right: -6px;
+}
+
 /* 工作区行静止时是文件夹，悬停时换成箭头：两个槽都在文档流里，
    各自 16px，因此切换不会让标题横向跳动。悬停箭头的色阶同官方 .chevron */
 .wg-folder-active { color: var(--dsw-alias-state-business-primary); }
@@ -351,6 +364,18 @@ const CSS = `
 .wg-row-menu-open .wg-row-time,
 .wg-row:has(.wg-row-action:focus-visible) .wg-row-time { display: none; }
 
+/* 分组的会话数与 time 一样让位：三条触发条件与上面那组一一对应，行类换成分组行 */
+.wg-group-head:hover .wg-group-count,
+.wg-group-head.wg-row-menu-open .wg-group-count,
+.wg-group-head:has(.wg-row-action:focus-visible) .wg-group-count { display: none; }
+
+/* 分组行的操作位也收进同一套可收放槽位，展开宽度取自然宽：里面是省略号与加号
+   两个按钮（16 + 12 + 16），不是会话行的单个 16px。槽位收着时操作位不占宽，
+   会话数因此与 time 一样贴在行右；展开后由它接替行尾 */
+.wg-group-head:hover .wg-row-action-slot,
+.wg-group-head.wg-row-menu-open .wg-row-action-slot,
+.wg-group-head:has(.wg-row-action:focus-visible) .wg-row-action-slot { width: auto; }
+
 .wg-row:hover .wg-row-action-slot,
 .wg-row-menu-open .wg-row-action-slot,
 .wg-row:has(.wg-row-action:focus-visible) .wg-row-action-slot { width: 16px; }
@@ -378,8 +403,10 @@ const CSS = `
 }
 .wg-row-action:hover { color: var(--dsw-alias-label-primary); }
 
-/* 工作区行尾的操作位容器：官方 .rowActions 的 gap:12px 与 20px 行高。
-   本包的操作按钮始终参与布局、只切换不透明度，因此悬停时标题不会位移 */
+/* 容器行尾的操作位容器：官方 .rowActions 的 gap:12px 与 20px 行高。
+   里面两个按钮始终参与布局、只切换不透明度，因此悬停时容器内的排布不变。
+   它是「贴右」还是「先让位」由外层决定：工作区行直接放进行里（常驻占位），
+   分组行则套一层可收放的 .wg-row-action-slot 给会话数腾出位置 */
 .wg-row-actions {
   flex: none;
   height: 20px;

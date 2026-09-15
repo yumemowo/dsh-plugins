@@ -241,4 +241,64 @@ describe('client stylesheet', () => {
     expect(rail?.body).toMatch(/height:\s*36px/)
     expect(rail?.body).toMatch(/--dsw-alias-label-primary/)
   })
+
+  it('styles the group session count exactly like the session row time', () => {
+    // 会话数要与 time 在行尾同形：同样的 tertiary 12px/20px，且不参与伸缩
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    const count = bodyOf('.wg-group-count')
+    const time = bodyOf('.wg-row-time')
+    expect(count).not.toBe('')
+    for (const declaration of ['flex: none', 'color: var(--dsw-alias-label-tertiary)']) {
+      expect(count).toContain(declaration)
+      expect(time).toContain(declaration)
+    }
+    expect(count).toMatch(/font-size:\s*12px/)
+    expect(count).toMatch(/line-height:\s*20px/)
+
+    // 分组头是 gap:6px，而 session 行是 gap:0；差的那份 gap 要还回去，
+    // 会话数才会落在与 time 同一条右缘线上
+    expect(count).toMatch(/margin-right:\s*-6px/)
+
+    // 隐去会话数的三条触发条件要与 time 那组一一对应，只是行类换成分组行
+    const hides = (selector: string): boolean =>
+      rules.some(
+        (rule) =>
+          rule.selectors.includes(selector) &&
+          rule.body.replace(/\s/g, '').includes('display:none'),
+      )
+    expect(hides('.wg-group-head:hover .wg-group-count')).toBe(true)
+    expect(hides('.wg-group-head.wg-row-menu-open .wg-group-count')).toBe(true)
+    expect(hides('.wg-group-head:has(.wg-row-action:focus-visible) .wg-group-count')).toBe(true)
+    // 会话行的 time 照旧，不能被这轮改动带跑
+    expect(hides('.wg-row:hover .wg-row-time')).toBe(true)
+  })
+
+  it('gives the group row the same collapsible action slot as the session row', () => {
+    // 会话数要贴到行右，操作位就必须像 session 行那样静止时不占宽。
+    // 三条展开触发条件与上面隐去会话数的那组一一对应，这样两者严格互换
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const expands = (selector: string): boolean =>
+      rules.some((rule) => rule.selectors.includes(selector) && /width:\s*auto/.test(rule.body))
+
+    expect(expands('.wg-group-head:hover .wg-row-action-slot')).toBe(true)
+    expect(expands('.wg-group-head.wg-row-menu-open .wg-row-action-slot')).toBe(true)
+    expect(
+      expands('.wg-group-head:has(.wg-row-action:focus-visible) .wg-row-action-slot'),
+    ).toBe(true)
+
+    // 分组行里是两个按钮，自然宽不是会话行的单个 16px
+    const slot = rules.find((rule) => rule.selectors.includes('.wg-row-action-slot'))?.body ?? ''
+    expect(slot).toMatch(/width:\s*0/)
+  })
 })
