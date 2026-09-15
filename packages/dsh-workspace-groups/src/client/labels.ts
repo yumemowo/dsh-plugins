@@ -42,7 +42,15 @@ export interface RegionLabels {
   newSessionIn: (name: string) => string
   /** 工作区「更多操作」按钮的无障碍标签；工作区名由调用方传入 */
   workspaceActions: (name: string) => string
-  /** 「重命名工作区」菜单项与对话框标题 */
+  /**
+   * 工作区行菜单里的「重命名」项
+   *
+   * 官方工作区菜单用的就是通用动词 `rename`（`ui-workspace` 里
+   * `label: t("rename")`），并不是 `rename.workspace.title`——后者只作
+   * 对话框标题。这里照官方保持同一分工
+   */
+  rename: string
+  /** 重命名工作区对话框的标题 */
   renameWorkspace: string
   /** 「删除工作区」菜单项、对话框标题与确认按钮 */
   deleteWorkspace: string
@@ -56,10 +64,10 @@ export interface RegionLabels {
   ungrouped: string
   /** 分组名输入框的占位与无障碍标签 */
   groupNamePrompt: string
-  /** 分组名对话框的标题（重命名时用） */
-  renameGroup: string
   /** 「删除分组」按钮与对话框标题 */
   deleteGroup: string
+  /** 分组名对话框的标题（重命名时用） */
+  renameGroup: string
   /** 分组行「更多操作」按钮的无障碍标签；分组名由调用方传入 */
   groupActions: (name: string) => string
   /** 在分组内新建会话的无障碍标签；分组名由调用方传入 */
@@ -97,6 +105,7 @@ export function regionLabels(
     newGroup: t('newGroup'),
     newSessionIn: (name: string) => tw('actions.newSession.aria', { name }),
     workspaceActions: (name: string) => tw('actions.workspace.aria', { name }),
+    rename: tw('rename'),
     renameWorkspace: tw('rename.workspace.title'),
     deleteWorkspace: tw('delete.workspace'),
     confirmDeleteWorkspace: (name: string) => tw('delete.desc', { name }),
@@ -104,8 +113,8 @@ export function regionLabels(
     workspaceConflict: (name: string) => tw('conflict.named', { name }),
     ungrouped: tw('group.ungrouped'),
     groupNamePrompt: t('groupNamePrompt'),
-    renameGroup: t('renameGroup'),
     deleteGroup: t('deleteGroup'),
+    renameGroup: t('renameGroup'),
     confirmDeleteGroup: (name: string) => t('delete.desc.group', { name }),
     groupActions: (name: string) => t('actions.group.aria', { name }),
     newSessionInGroup: (name: string) => tw('actions.newSession.aria', { name }),

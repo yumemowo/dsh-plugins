@@ -64,6 +64,8 @@ describe('regionLabels', () => {
   })
 
   it('reads the workspace rename and delete copy from the official keys', () => {
+    // 菜单项是通用动词，对话框标题才点明对象——官方 ui-workspace 就是这样分的
+    expect(labels.rename).toBe('重命名')
     expect(labels.renameWorkspace).toBe('重命名工作区')
     expect(labels.deleteWorkspace).toBe('删除工作区')
     expect(labels.confirmDeleteWorkspace('w1')).toBe(
@@ -97,6 +99,15 @@ describe('regionLabels', () => {
     )
     expect(labels.moveToGroup).toBe('分组')
     expect(labels.ungroup).toBe('取消分组')
+  })
+
+  it('splits the group rename menu item from its dialog title', () => {
+    // 两个容器行共用同一个菜单项动词，各自的对话框标题才点明对象
+    expect(labels.rename).toBe('重命名')
+    expect(labels.renameGroup).toBe('重命名分组')
+    expect(labels.renameWorkspace).toBe('重命名工作区')
+    // 三个标题两两不同，说明「点明对象」这件事没有被漏掉
+    expect(new Set([labels.renameGroup, labels.renameWorkspace])).toHaveLength(2)
   })
 
   it('resolves official copy through the official namespace, not our dictionary', () => {

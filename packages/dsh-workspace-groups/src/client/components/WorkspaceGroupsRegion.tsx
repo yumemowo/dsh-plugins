@@ -283,7 +283,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     actions: labels.workspaceActions,
     newSession: labels.newSessionIn,
     newGroup: labels.newGroup,
-    rename: labels.renameWorkspace,
+    // 与官方工作区菜单一致：菜单项用通用动词，对话框标题才点明对象
+    rename: labels.rename,
     delete: labels.deleteWorkspace,
   }
 
@@ -345,7 +346,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
               emptyLabel={labels.empty}
               groupActionLabels={{
                 actions: labels.groupActions,
-                rename: labels.renameGroup,
+                rename: labels.rename,
                 delete: labels.deleteGroup,
                 newSession: labels.newSessionInGroup,
               }}

@@ -146,7 +146,8 @@ function renderGroupRow(onCreateSession?: () => void) {
       ...(onCreateSession === undefined ? {} : { onCreateSession }),
       labels: {
         actions: (name: string) => `分组“${name}”的操作`,
-        rename: '重命名分组',
+        // 菜单项用官方通用动词，对话框标题才点明对象
+        rename: '重命名',
         delete: '删除分组',
         newSession: (name: string) => `在“${name}”中新建会话`,
       },
@@ -247,6 +248,19 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(menuItems(out)).toContainEqual(['rename', 'fork', 'archive', 'separator', 'group'])
   })
 
+  it('uses the generic rename verb in the workspace row menu, like official does', () => {
+    const out = { menus: [] as unknown[], text: [] as string[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
+
+    // 官方工作区菜单项就是 label: t("rename")；rename.workspace.title 只作对话框
+    // 标题。这里断言菜单里显示的是通用动词，而不是「重命名工作区」。
+    const workspaceMenu = out.menus.find(
+      (m) => menuItems({ menus: [m] })[0]?.join() === 'new-group,rename,delete',
+    )
+    expect(workspaceMenu).toBeDefined()
+    expect(menuLabels({ menus: [workspaceMenu] })).toEqual(['新建分组', '重命名', '删除工作区'])
+  })
+
   it('gives the ungrouped row the official actions without a group item', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
@@ -260,7 +274,7 @@ describe('WorkspaceGroupsRegion render', () => {
 
     // 分组行的 `...` 收着删除与重命名，`+` 是行内新建会话——与工作区行同形
     expect(menuItems(out)).toEqual([['rename', 'delete']])
-    expect(menuLabels(out)).toEqual(['重命名分组', '删除分组'])
+    expect(menuLabels(out)).toEqual(['重命名', '删除分组'])
     expect(actionLabels(out)).toEqual(['分组“前端”的操作'])
     expect(rowButtons(out).map((b) => b.label)).toEqual(['在“前端”中新建会话'])
 
