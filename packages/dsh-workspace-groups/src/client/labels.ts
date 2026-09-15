@@ -60,6 +60,10 @@ export interface RegionLabels {
   renameGroup: string
   /** 「删除分组」按钮与对话框标题 */
   deleteGroup: string
+  /** 分组行「更多操作」按钮的无障碍标签；分组名由调用方传入 */
+  groupActions: (name: string) => string
+  /** 在分组内新建会话的无障碍标签；分组名由调用方传入 */
+  newSessionInGroup: (name: string) => string
   /** 删除分组的说明文案；分组名由调用方传入 */
   confirmDeleteGroup: (name: string) => string
   /** 会话行尾操作位的无障碍标签；会话标题由调用方传入 */
@@ -103,6 +107,8 @@ export function regionLabels(
     renameGroup: t('renameGroup'),
     deleteGroup: t('deleteGroup'),
     confirmDeleteGroup: (name: string) => t('delete.desc.group', { name }),
+    groupActions: (name: string) => t('actions.group.aria', { name }),
+    newSessionInGroup: (name: string) => tw('actions.newSession.aria', { name }),
     sessionActions: (name: string) => tw('actions.session.aria', { name }),
     moveToGroup: t('moveToGroup'),
     ungroup: t('ungroup'),

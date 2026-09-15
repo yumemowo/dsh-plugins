@@ -20,8 +20,17 @@ export interface WorkspaceSectionProps {
   /** 分组头与工作区行共用的文案 */
   labels: WorkspaceRowLabels
   emptyLabel: string
-  /** 分组头两个按钮的文案 */
-  groupActionLabels: { rename: string; delete: string }
+  /** 分组行行尾操作位的文案 */
+  groupActionLabels: {
+    /** `...` 按钮的无障碍标签，取分组名 */
+    actions: (name: string) => string
+    /** 「重命名分组」菜单项 */
+    rename: string
+    /** 「删除分组」菜单项 */
+    delete: string
+    /** `+` 按钮的无障碍标签，取分组名 */
+    newSession: (name: string) => string
+  }
   onToggle: () => void
   onCreateSession: () => void
   onNewGroup: () => void
@@ -30,6 +39,8 @@ export interface WorkspaceSectionProps {
   onToggleGroup: (groupId: string) => void
   onRenameGroup: (section: { id: string; label: string }) => void
   onDeleteGroup: (section: { id: string; label: string }) => void
+  /** 在该分组新建会话 */
+  onCreateSessionInGroup: (section: { id: string; label: string }) => void
   /** 把一个会话行渲染成元素；渲染方式由区域组件决定（是否带归组菜单） */
   renderSession: (row: SessionRow) => ReactNode
 }
@@ -51,6 +62,7 @@ export function WorkspaceSection({
   onToggleGroup,
   onRenameGroup,
   onDeleteGroup,
+  onCreateSessionInGroup,
   renderSession,
 }: WorkspaceSectionProps): ReactElement {
   const hasAnyRow = layout.groups.length > 0 || layout.loose.length > 0
@@ -78,6 +90,9 @@ export function WorkspaceSection({
               onToggle={() => onToggleGroup(section.id)}
               onRename={() => onRenameGroup({ id: section.id, label: section.label })}
               onDelete={() => onDeleteGroup({ id: section.id, label: section.label })}
+              onCreateSession={() =>
+                onCreateSessionInGroup({ id: section.id, label: section.label })
+              }
               labels={groupActionLabels}
             >
               {section.sessions.map(renderSession)}

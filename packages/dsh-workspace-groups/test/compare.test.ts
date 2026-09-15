@@ -9,7 +9,7 @@ import type { Context } from '@deepseek-ai/cordis'
 function actions(): RegionActions {
   return {
     openSession: () => {},
-    startSession: () => {},
+    startSession: async () => '',
     onReady: () => () => {},
     loadGroups: async () => ({}),
     createGroup: async () => {},

@@ -48,10 +48,11 @@
   一致（重命名在前、删除在后）。两者都直接调用官方工作区控制器
   （`ctx.workspaces.rename` / `delete`），不另造 RPC。删除只移除工作区注册，
   文件夹与会话记录由宿主保留。
-- **重命名 / 删除分组**：分组行右侧的铅笔与叉号；删除只解散分组，
+- **重命名 / 删除分组**：分组行右侧 `...` 菜单里的两项；删除只解散分组，
   组内会话移出分组，会话本身不受影响。
 - **展开折叠**：工作区行与分组行都可折叠，两者状态互不影响。
-- **新建会话**：工作区行右侧的 `+`。
+- **新建会话**：工作区行与分组行右侧的 `+`。分组行的 `+` 会把新会话建在
+  该分组所属工作区，并自动把它归入这个分组（见下节）。
 - **会话可见性**：与官方组件一致 —— 已归档、子代理来源的会话不显示；
   空白会话只保留当前选中的那一条。
 - **会话状态点**：行首用官方 `StateDot` 原语显示状态，取值与官方
@@ -61,14 +62,19 @@
 - **行尾最近更新时间**：官方风格的紧凑相对时间，格式化完全复用官方原语与
   语言包（见「行尾最近更新时间」）。
 
-### 工作区行的按钮形态
+### 工作区行与分组行的按钮形态
 
-与官方 `ui-workspace` 逐项对齐：行内只放两个操作，`...` 与 `+`。
+两类容器行共用同一套行尾操作：`...` 管理菜单 + `+` 新建会话。工作区行与官方
+`ui-workspace` 逐项对齐，分组行刻意复用同一布局（同一 `.wg-row-actions`
+容器、同一悬停显隐规则），因此两行不会各自漂移。
 
-| 按钮 | 图标 | 行为 |
+| 行 | `...` 菜单 | `+` |
 | --- | --- | --- |
-| `...` | `IconEllipsisOutline16` | 打开菜单：新建分组 / 重命名工作区 / 删除工作区 |
-| `+` | `IconPlusOutline16` | 在该工作区新建会话（与官方 `onCreate` 语义一致） |
+| 工作区 | 新建分组 / 重命名工作区 / 删除工作区 | 在该工作区新建会话（与官方 `onCreate` 语义一致） |
+| 分组 | 重命名分组 / 删除分组 | 在该分组所属工作区新建会话，并归入该分组 |
+
+图标一律取 primitives：`IconEllipsisOutline16` / `IconPlusOutline16` /
+`IconEditOutline16` / `IconTrashOutline16`。
 
 **「新建分组」收进 `...`**：它不像新建会话那样高频，因此不占行内位置。
 官方的 `+` 语义是「新建会话」而非「新建分组」，这里与官方保持一致；
@@ -77,6 +83,14 @@
 菜单里的「新建分组」带 `+` 图标，与官方 `menu.addWorkspace` 用 `IconPlusOutline16`
 的写法一致；官方菜单项的两个图标（`IconEditOutline16` / `IconTrashOutline16`）
 原样复用。
+
+**分组行的 `+` 建完会话后自动归组**：先走既有的 `sessions.create({ workspaceId })`
+建会话，再用本包既有的 `moveSession` 把它移入该分组，不另造「在分组内建会话」
+的宿主接口。与工作区行的 `+` 一样，建之前会展开所在工作区；分组行还会展开
+分组本身，否则新会话会落在折叠区里看不见。
+
+分组行的 `...` 与工作区行一样是**管理操作菜单**，不承担建造型操作：「新建分组」
+属于工作区行，分组行的高频建造操作就是行内 `+`。
 
 **会话行尾的 `...` 打开会话操作菜单**：外观、位置与悬停行为都对齐官方，
 菜单里既有官方三项操作，也有本包的归组项（见下节）。
@@ -238,6 +252,10 @@
 - **会话行**：行首是官方 `StateDot` 状态点（空闲时留空占位），行尾是操作位，
   标题因此落在工作区标题的同一横向线上，与官方几何一致。
 
+**分组行没有文件夹槽**（分组不是工作区），因此图标列只有箭头一个，也不参与
+「悬停换成箭头」那套互换；但它的行尾操作位与工作区行共用同一个 `.wg-row-actions`
+容器与同一份悬停显隐规则，两类行的按钮几何与出现时机因此完全一致。
+
 行内操作按钮默认隐藏（并同时 `pointer-events: none`，否则会留下看不见却能
 点中的热区），只在三种情况下显示：**所在行悬停**、**菜单展开期间**、
 **键盘导航聚焦**（`:focus-visible`）。
@@ -305,10 +323,13 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 也不会出现两套说法。这也是官方的既有做法：`ui-attachment` 就注册自己的
 命名空间，却用 `locale: "conversation"` 读 `ui-conversation` 的文案。
 
-本包字典只剩官方没有对应词的 9 个键：`newGroup` / `renameGroup` /
-`deleteGroup` / `groupNamePrompt` / `delete.desc.group` / `moveToGroup` /
-`ungroup` / `compareTabDescription` / `unimplemented`。
-`locales.test.ts` 会断言字典里没有任何与官方重合的键，避免以后又抄回来。
+本包字典只剩官方没有对应词的 10 个键：`actions.group.aria` / `newGroup` /
+`renameGroup` / `deleteGroup` / `groupNamePrompt` / `delete.desc.group` /
+`moveToGroup` / `ungroup` / `compareTabDescription` / `unimplemented`。
+`actions.group.aria` 是分组自己的无障碍标签（官方只有工作区与会话两个），
+分组 `+` 的标签则直接复用官方的 `actions.newSession.aria`——语义完全相同，
+不另造一个同义键。`labels.test.ts` 会断言字典里没有任何与官方重合的键，
+避免以后又抄回来。
 
 两个命名空间的取用方式不同：
 
@@ -393,7 +414,7 @@ src/client/
 ├── compare.tsx                 对照模式：挂进 better-sidebar 右侧栏 tab
 ├── remote.ts                   Remote 贡献声明与调用封装
 ├── runtime.ts                  primitives 值导入的唯一出口（external）
-├── menus.tsx                   行内「更多操作」菜单的条目构造
+├── menus.tsx                   容器行「更多操作」菜单的条目构造（工作区 / 分组）
 ├── styles.ts                   本包样式表
 ├── data/                       无 React 依赖的纯逻辑
 │   ├── types.ts                SessionRow / GroupSection / WorkspaceLayout / 草稿类型
@@ -405,6 +426,7 @@ src/client/
     ├── WorkspaceSection.tsx        一个工作区区块（标题 + 折叠体 + 空态）
     ├── WorkspaceRow.tsx            工作区标题行（文件夹/箭头、`...`、`+`）
     ├── GroupSection.tsx            一个分组（分组头 + 组内会话）
+    ├── RowActions.tsx              容器行行尾操作位（`...` 菜单 + `+`），两行共用
     ├── SessionRowView.tsx          会话行外壳（状态位列、标题、时间、操作位）
     ├── SessionRowMenu.tsx          带会话操作菜单的会话行
     ├── WorkspaceRail.tsx           窄栏展开入口

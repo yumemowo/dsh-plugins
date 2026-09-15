@@ -98,6 +98,36 @@ export function buildSessionMenuItems(input: SessionMenuInput): readonly MenuIte
   return items
 }
 
+/** 分组菜单条目 id；与 `GroupSection` 的分派一一对应 */
+export const GROUP_MENU = {
+  rename: 'rename',
+  delete: 'delete',
+} as const
+
+/** 分组行「更多操作」菜单的条目文案 */
+export interface GroupRowMenuInput {
+  /** 「重命名分组」项文案 */
+  renameLabel: string
+  /** 「删除分组」项文案 */
+  deleteLabel: string
+}
+
+/**
+ * 构造分组行「更多操作」菜单的条目
+ *
+ * 与工作区菜单同形：重命名在前、删除在后，删除项带 `danger` 标记。分组没有
+ * 建造型菜单项——「新建分组」属于工作区行，分组行的高频建造操作是行内 `+`
+ *（在该分组新建会话）
+ * @param input - 两项文案
+ * @returns Menu items 列表
+ */
+export function buildGroupMenuItems(input: GroupRowMenuInput): readonly MenuItem[] {
+  return [
+    { id: GROUP_MENU.rename, label: input.renameLabel, icon: <IconEditOutline16 /> },
+    { id: GROUP_MENU.delete, label: input.deleteLabel, icon: <IconTrashOutline16 />, danger: true },
+  ]
+}
+
 /** 工作区行「更多操作」菜单的条目文案 */
 export interface WorkspaceMenuInput {
   /** 「新建分组」项文案 */

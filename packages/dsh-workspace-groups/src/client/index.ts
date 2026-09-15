@@ -170,7 +170,7 @@ export function apply(ctx: Context): void {
       // 依赖缺失时给出空实现：组件仍可渲染，只是没有可操作的动作。
       return {
         openSession: () => {},
-        startSession: () => {},
+        startSession: async () => '',
         onReady: () => () => {},
         loadGroups: async () => ({}),
         createGroup: async () => {},
@@ -186,11 +186,11 @@ export function apply(ctx: Context): void {
       openSession: (sessionId: string) => {
         sessions.open(sessionId as never)
       },
-      startSession: (workspaceId: string) => {
-        void sessions.create({ workspaceId: workspaceId as never }).then((created) => {
+      startSession: (workspaceId: string) =>
+        sessions.create({ workspaceId: workspaceId as never }).then((created) => {
           sessions.open(created)
-        })
-      },
+          return String(created)
+        }),
       onReady,
       loadGroups,
       createGroup: (workspaceId, name) =>

@@ -34,8 +34,15 @@ export interface RegionDataHooks {
 export interface RegionActions {
   /** 打开一个会话 */
   openSession: (sessionId: string) => void
-  /** 在指定工作区创建一个新会话 */
-  startSession: (workspaceId: string) => void
+  /**
+   * 在指定工作区创建一个新会话
+   *
+   * 返回新会话 id 而不是空：分组行的 `+` 要在建好之后把会话归入自己的分组，
+   * 归组走既有的 `moveSession`，不另造「在分组内建会话」的宿主接口
+   * @param workspaceId - 新会话所属工作区
+   * @returns 新会话 id
+   */
+  startSession: (workspaceId: string) => Promise<string>
   /** 读取分组快照 */
   loadGroups: () => Promise<Record<string, Group[]>>
   /** 远程数据面就绪后回调一次；返回反注册函数 */

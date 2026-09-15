@@ -227,6 +227,30 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     )
   }
 
+  /**
+   * 在一个工作区里新建会话
+   *
+   * 官方在新建前展开工作区，否则新会话会落在折叠区里看不见；分组行的 `+`
+   * 同理要把分组一起展开。建好之后再把会话归入指定分组（`groupId` 为空串
+   * 表示不归组，即工作区行的 `+`）
+   * @param workspaceId - 目标工作区
+   * @param groupId - 新会话要归入的分组；空串表示留在未归组区
+   */
+  const createSessionIn = (workspaceId: string, groupId: string): void => {
+    setCollapsedWorkspaces((prev) => ({ ...prev, [workspaceId]: false }))
+    // 展开而不是取反：分组本就展开时，切换会把它收起来，新会话反而看不见
+    if (groupId !== '') {
+      setCollapsedGroups((prev) => ({ ...prev, [`${workspaceId}:${groupId}`]: false }))
+    }
+    void startSession(workspaceId)
+      .then((sessionId) =>
+        groupId === '' ? undefined : apply(moveSession(workspaceId, sessionId, groupId)),
+      )
+      .catch(() => {
+        // 建会话失败由会话控制器自己提示；这里不再弹一次，避免同一错误报两遍
+      })
+  }
+
   /** 归组菜单选中项：取消分组，或移入 `group:<id>` 指名的分组 */
   const selectSessionGroup = (workspaceId: string, sessionId: string, id: string): void => {
     if (id === 'ungroup') {
@@ -319,13 +343,14 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
               }
               labels={workspaceRowLabels}
               emptyLabel={labels.empty}
-              groupActionLabels={{ rename: labels.renameGroup, delete: labels.deleteGroup }}
-              onToggle={() => toggleWorkspace(workspaceId)}
-              onCreateSession={() => {
-                // 官方在新建前展开工作区，否则新会话会落在折叠区里看不见。
-                setCollapsedWorkspaces((prev) => ({ ...prev, [workspaceId]: false }))
-                startSession(workspaceId)
+              groupActionLabels={{
+                actions: labels.groupActions,
+                rename: labels.renameGroup,
+                delete: labels.deleteGroup,
+                newSession: labels.newSessionInGroup,
               }}
+              onToggle={() => toggleWorkspace(workspaceId)}
+              onCreateSession={() => createSessionIn(workspaceId, '')}
               onNewGroup={() => setNameDraft({ workspaceId, groupId: '', value: '' })}
               onRenameWorkspace={() => setWorkspaceRename({ workspaceId, value: workspace.title })}
               onDeleteWorkspace={() => setWorkspaceDelete({ workspaceId, label: workspace.title })}
@@ -336,6 +361,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
               onDeleteGroup={(section) =>
                 setGroupDelete({ workspaceId, groupId: section.id, label: section.label })
               }
+              onCreateSessionInGroup={(section) => createSessionIn(workspaceId, section.id)}
               renderSession={renderSession}
             />
           )

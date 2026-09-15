@@ -5,7 +5,7 @@ import {
   groupIdOfSession,
 } from '../src/client/data/layout.ts'
 import { groupSessionsByWorkspace, straySessions } from '../src/client/data/sessions.ts'
-import { buildSessionMenuItems, buildWorkspaceMenuItems } from '../src/client/menus.tsx'
+import { buildGroupMenuItems, buildSessionMenuItems, buildWorkspaceMenuItems } from '../src/client/menus.tsx'
 import type { SessionRow } from '../src/client/data/types.ts'
 import { officialSessionLabels } from '../src/client/official.ts'
 import { workspaceTranslate } from './locale-stub.ts'
@@ -276,6 +276,30 @@ describe('buildWorkspaceMenuItems', () => {
 
     // 「新建分组」不是高频操作，因此不占行内位置（行内只有 `...` 与 `+`）
     expect(items[0]).toMatchObject({ id: 'new-group', label: '新建分组' })
+  })
+})
+
+describe('buildGroupMenuItems', () => {
+  const labels = { renameLabel: '重命名分组', deleteLabel: '删除分组' }
+
+  it('offers rename and delete in that order', () => {
+    const items = buildGroupMenuItems(labels)
+
+    // 与工作区菜单同形：改名在前、删除在后
+    expect(items.map((item) => (item as { id?: string }).id)).toEqual(['rename', 'delete'])
+  })
+
+  it('marks only the delete entry as dangerous', () => {
+    const items = buildGroupMenuItems(labels) as readonly { id: string; danger?: boolean }[]
+
+    expect(items.filter((item) => item.danger === true).map((item) => item.id)).toEqual(['delete'])
+  })
+
+  it('keeps new group out of the group row menu', () => {
+    const items = buildGroupMenuItems(labels)
+
+    // 「新建分组」是工作区行的事；分组行的高频建造操作是行内 `+`
+    expect(items.some((item) => (item as { id?: string }).id === 'new-group')).toBe(false)
   })
 })
 

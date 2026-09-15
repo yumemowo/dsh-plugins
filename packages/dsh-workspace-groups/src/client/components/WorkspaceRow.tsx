@@ -10,16 +10,9 @@
  */
 import { useState } from 'react'
 import type { ReactElement } from 'react'
-import {
-  IconEllipsisOutline16,
-  IconFolderClose16,
-  IconFolderOpen16,
-  IconPlusOutline16,
-  IconTriangleRightFill14,
-  Menu,
-} from '../runtime.ts'
+import { IconFolderClose16, IconFolderOpen16, IconTriangleRightFill14 } from '../runtime.ts'
 import { WORKSPACE_MENU, buildWorkspaceMenuItems } from '../menus.tsx'
-import { IconButton } from './IconButton.tsx'
+import { RowActions } from './RowActions.tsx'
 import { handleRowKeyDown } from './rowKeyboard.ts'
 
 /** 工作区标题行的文案与无障碍标签 */
@@ -79,50 +72,31 @@ export function WorkspaceRow({
         <IconTriangleRightFill14 className={`wg-arrow${collapsed ? '' : ' wg-arrow-open'}`} />
       </span>
       <span className="wg-workspace-title">{title}</span>
-      {manageable || onCreateSession !== undefined ? (
-        <span className="wg-row-actions">
-          {manageable ? (
-            <Menu
-              open={menuOpen}
-              onClose={() => setMenuOpen(false)}
-              onSelect={(id: string) => {
-                setMenuOpen(false)
-                if (id === WORKSPACE_MENU.newGroup) onNewGroup?.()
-                else if (id === WORKSPACE_MENU.rename) onRename?.()
-                else if (id === WORKSPACE_MENU.delete) onDelete?.()
-              }}
-              portal
-              closeOnPointerLeave
-              anchor={
-                <button
-                  type="button"
-                  className="wg-row-action"
-                  title={labels.actions(title)}
-                  aria-label={labels.actions(title)}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    setMenuOpen((open) => !open)
-                  }}
-                >
-                  <IconEllipsisOutline16 />
-                </button>
-              }
-              items={buildWorkspaceMenuItems({
+      <RowActions
+        menuOpen={menuOpen}
+        onMenuOpen={setMenuOpen}
+        onMenuSelect={(id) => {
+          setMenuOpen(false)
+          if (id === WORKSPACE_MENU.newGroup) onNewGroup?.()
+          else if (id === WORKSPACE_MENU.rename) onRename?.()
+          else if (id === WORKSPACE_MENU.delete) onDelete?.()
+        }}
+        menuItems={
+          manageable
+            ? buildWorkspaceMenuItems({
                 newGroupLabel: labels.newGroup,
                 renameLabel: labels.rename,
                 deleteLabel: labels.delete,
-              })}
-            />
-          ) : null}
-          {onCreateSession === undefined ? null : (
-            <IconButton
-              title={labels.newSession(title)}
-              icon={<IconPlusOutline16 />}
-              onClick={onCreateSession}
-            />
-          )}
-        </span>
-      ) : null}
+              })
+            : undefined
+        }
+        actionsLabel={labels.actions(title)}
+        create={
+          onCreateSession === undefined
+            ? undefined
+            : { label: labels.newSession(title), onCreate: onCreateSession }
+        }
+      />
     </div>
   )
 }

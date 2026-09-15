@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as React from 'react'
+import { GroupSection } from '../src/client/components/GroupSection.tsx'
 import { WorkspaceGroupsRegion } from '../src/client/components/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/components/WorkspaceGroupsRegion.tsx'
 import { officialSessionLabels, timeLabel } from '../src/client/official.ts'
@@ -27,7 +28,10 @@ const dispatcher = {
 }
 
 /** 渲染整棵树；Menu 元素被收集起来而不下钻（stub 返回 null） */
-function render(node: unknown, out: { menus: unknown[]; text: string[] }): void {
+function render(
+  node: unknown,
+  out: { menus: unknown[]; text: string[]; buttons?: unknown[]; containers?: unknown[] },
+): void {
   const walk = (n: unknown): void => {
     if (n === null || n === undefined || typeof n === 'boolean') return
     if (typeof n === 'string' || typeof n === 'number') {
@@ -57,9 +61,24 @@ function render(node: unknown, out: { menus: unknown[]; text: string[] }): void 
       walk(rendered)
       return
     }
+    // 行内按钮（如分组行的 `+`）与操作位容器都是宿主元素，收集起来供断言
+    if (el.props['className'] === 'wg-row-actions') out.containers?.push(el)
+    if (el.type === 'button') out.buttons?.push(el)
     walk(el.props.children as unknown)
   }
   walk(node)
+}
+
+/** 把行内操作按钮的无障碍标签与点击回调读出来 */
+function rowButtons(out: { buttons?: unknown[] }): { label: string; click: () => void }[] {
+  return (out.buttons ?? []).map((b) => {
+    const el = b as { props: Record<string, unknown> }
+    return {
+      label: String(el.props['aria-label'] ?? ''),
+      // 按钮的 onClick 会先 stopPropagation，替身事件给出空实现即可
+      click: () => (el.props['onClick'] as (e: unknown) => void)({ stopPropagation: () => {} }),
+    }
+  })
 }
 
 /**
@@ -89,6 +108,53 @@ function menuItems(out: { menus: unknown[] }): string[][] {
   return out.menus.map((m) =>
     ((m as { props: { items: { id: string }[] } }).props.items).map((item) => item.id),
   )
+}
+
+/**
+ * 收集容器行的行尾操作结构
+ *
+ * 「分组行与工作区行同形」是这次改动的核心承诺，因此断言落在结构上：两者
+ * 都必须有 `...` 菜单锚点与 `+` 按钮，且都在 `.wg-row-actions` 容器里
+ */
+function rowActionShape(out: { menus: unknown[]; buttons?: unknown[]; containers?: unknown[] }): {
+  menuAnchors: number
+  plusButtons: number
+  containers: number
+} {
+  return {
+    menuAnchors: out.menus.length,
+    plusButtons: rowButtons(out).filter((b) => b.label.includes('新建会话')).length,
+    containers: (out.containers ?? []).length,
+  }
+}
+
+/** 渲染一个分组行并返回可断言的操作结构 */
+function renderGroupRow(onCreateSession?: () => void) {
+  const out = {
+    menus: [] as unknown[],
+    text: [] as string[],
+    buttons: [] as unknown[],
+    containers: [] as unknown[],
+  }
+  render(
+    React.createElement(GroupSection, {
+      section: { id: 'g1', label: '前端', sessions: [] },
+      collapsed: false,
+      onToggle: () => {},
+      onRename: () => {},
+      onDelete: () => {},
+      ...(onCreateSession === undefined ? {} : { onCreateSession }),
+      labels: {
+        actions: (name: string) => `分组“${name}”的操作`,
+        rename: '重命名分组',
+        delete: '删除分组',
+        newSession: (name: string) => `在“${name}”中新建会话`,
+      },
+      children: null,
+    }),
+    out,
+  )
+  return out
 }
 
 function props(
@@ -125,7 +191,7 @@ function props(
     useSessionPendingInteraction: ((select: (s: unknown) => unknown) =>
       select(options.pending ?? new Map())) as never,
     openSession: () => {},
-    startSession: () => {},
+    startSession: async () => '',
     loadGroups: async () => ({ w1: [{ id: 'g1', name: '前端', sessionIds: [] }] }),
     onReady: () => () => {},
     createGroup: async () => {},
@@ -187,6 +253,40 @@ describe('WorkspaceGroupsRegion render', () => {
 
     // stray 会话没有分组可归，但官方三项照常可用
     expect(menuItems(out)).toContainEqual(['rename', 'fork', 'archive'])
+  })
+
+  it('keeps the group row actions in the same shape as the workspace row', () => {
+    const out = renderGroupRow(() => {})
+
+    // 分组行的 `...` 收着删除与重命名，`+` 是行内新建会话——与工作区行同形
+    expect(menuItems(out)).toEqual([['rename', 'delete']])
+    expect(menuLabels(out)).toEqual(['重命名分组', '删除分组'])
+    expect(actionLabels(out)).toEqual(['分组“前端”的操作'])
+    expect(rowButtons(out).map((b) => b.label)).toEqual(['在“前端”中新建会话'])
+
+    // 两者都走同一个操作位容器，布局因此不可能各自漂移
+    const group = rowActionShape(out)
+    expect(group.containers).toBe(1)
+    expect(group.menuAnchors).toBe(1)
+    expect(group.plusButtons).toBe(1)
+  })
+
+  it('drops the plus button but keeps the menu when no create handler is given', () => {
+    const out = renderGroupRow()
+
+    expect(rowActionShape(out).containers).toBe(1)
+    expect(rowActionShape(out).plusButtons).toBe(0)
+    expect(menuItems(out)).toEqual([['rename', 'delete']])
+  })
+
+  it('builds the group session through the plus button', () => {
+    const created: string[] = []
+    const out = renderGroupRow(() => created.push('g1'))
+
+    const plus = rowButtons(out).find((b) => b.label.includes('新建会话'))
+    expect(plus).toBeDefined()
+    plus?.click()
+    expect(created).toEqual(['g1'])
   })
 
   it('renders no session menu at all when official services are absent', () => {

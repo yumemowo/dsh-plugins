@@ -29,6 +29,7 @@ describe('locales', () => {
   it('lists every package-owned key explicitly', () => {
     // 自有键不多，逐个列出；新增文案时这里会提醒重新确认它是否真的官方没有。
     expect(Object.keys(zh).sort()).toEqual([
+      'actions.group.aria',
       'compareTabDescription',
       'delete.desc.group',
       'deleteGroup',

@@ -10,8 +10,13 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 /** 本包的命名空间：按官方惯例取短名，不带包前缀 */
 export const NS = 'workspaceGroups'
 
-/** 简体中文字典，同时是键集的事实来源 */
+/**
+ * 简体中文字典，同时是键集的事实来源
+ *
+ * 只有官方 `workspace` 命名空间没有对应词的自有文案才在这里另起键名
+ */
 export const zh = {
+  'actions.group.aria': '分组“{name}”的操作',
   'newGroup': '新建分组',
   'renameGroup': '重命名分组',
   'deleteGroup': '删除分组',
@@ -25,6 +30,7 @@ export const zh = {
 
 /** 英文字典，键集与 {@link zh} 完全一致 */
 export const en = {
+  'actions.group.aria': 'Group actions for {name}',
   'newGroup': 'New group',
   'renameGroup': 'Rename group',
   'deleteGroup': 'Delete group',
