@@ -106,7 +106,6 @@ export function SessionRowMenu({
               <button
                 type="button"
                 className="wg-row-action"
-                title={actionsLabel(row.title)}
                 aria-label={actionsLabel(row.title)}
                 onClick={(event) => {
                   event.stopPropagation()

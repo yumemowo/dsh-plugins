@@ -7,7 +7,7 @@ import type { ReactElement } from 'react'
 import { IconPanelLeftOutline16 } from '../runtime.ts'
 
 export interface WorkspaceRailProps {
-  /** 图标按钮的无障碍标签与 tooltip */
+  /** 图标按钮的无障碍标签 */
   label: string
   onExpand: () => void
 }
@@ -18,7 +18,6 @@ export function WorkspaceRail({ label, onExpand }: WorkspaceRailProps): ReactEle
       <button
         type="button"
         className="wg-rail-button"
-        title={label}
         aria-label={label}
         onClick={onExpand}
       >

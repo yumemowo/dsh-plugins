@@ -30,7 +30,7 @@ const dispatcher = {
 /** 渲染整棵树；Menu 元素被收集起来而不下钻（stub 返回 null） */
 function render(
   node: unknown,
-  out: { menus: unknown[]; text: string[]; buttons?: unknown[]; containers?: unknown[] },
+  out: { menus: unknown[]; text: string[]; buttons?: unknown[]; containers?: unknown[]; slots?: unknown[] },
 ): void {
   const walk = (n: unknown): void => {
     if (n === null || n === undefined || typeof n === 'boolean') return
@@ -61,20 +61,25 @@ function render(
       walk(rendered)
       return
     }
-    // 行内按钮（如分组行的 `+`）与操作位容器都是宿主元素，收集起来供断言
+    // 行内按钮（如分组行的 `+`）、操作位容器与状态点槽位都是宿主元素，收集起来供断言
     if (el.props['className'] === 'wg-row-actions') out.containers?.push(el)
+    if (el.props['className'] === 'wg-slot') out.slots?.push(el)
     if (el.type === 'button') out.buttons?.push(el)
     walk(el.props.children as unknown)
   }
   walk(node)
 }
 
-/** 把行内操作按钮的无障碍标签与点击回调读出来 */
-function rowButtons(out: { buttons?: unknown[] }): { label: string; click: () => void }[] {
+/** 把行内操作按钮的无障碍标签、原生提示与点击回调读出来 */
+function rowButtons(
+  out: { buttons?: unknown[] },
+): { label: string; title: string | undefined; click: () => void }[] {
   return (out.buttons ?? []).map((b) => {
     const el = b as { props: Record<string, unknown> }
+    const title = el.props['title']
     return {
       label: String(el.props['aria-label'] ?? ''),
+      title: typeof title === 'string' ? title : undefined,
       // 按钮的 onClick 会先 stopPropagation，替身事件给出空实现即可
       click: () => (el.props['onClick'] as (e: unknown) => void)({ stopPropagation: () => {} }),
     }
@@ -95,12 +100,33 @@ function menuLabels(out: { menus: unknown[] }): string[] {
   )
 }
 
-/** 把所有行内操作按钮的无障碍标签读出来（工作区行与会话行的锚点） */
-function actionLabels(out: { menus: unknown[] }): string[] {
+/** 把所有行内操作按钮的锚点元素读出来（工作区行、分组行与会话行的 `...`） */
+function actionAnchors(out: { menus: unknown[] }): { props?: Record<string, unknown> }[] {
   return out.menus
     .map((m) => (m as { props: { anchor?: { props?: Record<string, unknown> } } }).props.anchor)
-    .map((anchor) => anchor?.props?.['aria-label'])
+    .filter((anchor): anchor is { props?: Record<string, unknown> } => anchor !== undefined)
+}
+
+/** 把所有行内操作按钮的无障碍标签读出来（工作区行与会话行的锚点） */
+function actionLabels(out: { menus: unknown[] }): string[] {
+  return actionAnchors(out)
+    .map((anchor) => anchor.props?.['aria-label'])
     .filter((label): label is string => typeof label === 'string')
+}
+
+/** 锚点按钮上的原生 `title` 提示；本包所有行操作只留无障碍标签，不该有 */
+function actionTitles(out: { menus: unknown[]; buttons?: unknown[] }): (string | undefined)[] {
+  return [
+    ...actionAnchors(out).map((anchor) => anchor.props?.['title'] as string | undefined),
+    ...rowButtons(out).map((button) => button.title),
+  ]
+}
+
+/** 状态点槽位上挂的原生 `title` 提示；状态语义由无障碍标签承担，槽位不该有 */
+function slotTitles(out: { slots?: unknown[] }): (string | undefined)[] {
+  return (out.slots ?? []).map(
+    (slot) => (slot as { props: Record<string, unknown> }).props['title'] as string | undefined,
+  )
 }
 
 /** 把所有已渲染 Menu 的条目 id 读出来 */
@@ -283,6 +309,32 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(group.containers).toBe(1)
     expect(group.menuAnchors).toBe(1)
     expect(group.plusButtons).toBe(1)
+  })
+
+  it('leaves row actions with an accessible label but no native tooltip', () => {
+    const region = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), region)
+    const group = renderGroupRow(() => {})
+
+    // 行操作（`...` 锚点与 `+`）只留 aria-label，不再挂原生 title 提示；
+    // 文案仍要照常投影出来，不能连无障碍标签一起丢
+    expect(actionLabels(region).length).toBeGreaterThan(0)
+    expect(actionTitles(region).filter((t) => t !== undefined)).toEqual([])
+    expect(actionTitles(group).filter((t) => t !== undefined)).toEqual([])
+  })
+
+  it('leaves the status slot with an accessible label but no native tooltip', () => {
+    const out = { menus: [] as unknown[], text: [] as string[], slots: [] as unknown[] }
+    const pending = new Map([['orphan', { kind: 'approval' }]])
+    render(React.createElement(WorkspaceGroupsRegion, props(true, { pending })), out)
+
+    // 状态点是纯视觉元素，语义靠槽位的 aria-label 承担；原生 title 会多出
+    // 一个同级提示，因此不再挂
+    const status = (out.slots as { props: Record<string, unknown> }[]).filter(
+      (slot) => slot.props['role'] === 'img',
+    )
+    expect(status.map((slot) => slot.props['aria-label'])).toContain('等待审批')
+    expect(slotTitles(out).filter((t) => t !== undefined)).toEqual([])
   })
 
   it('drops the plus button but keeps the menu when no create handler is given', () => {

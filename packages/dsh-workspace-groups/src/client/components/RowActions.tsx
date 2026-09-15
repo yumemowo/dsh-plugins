@@ -53,7 +53,6 @@ export function RowActions({
             <button
               type="button"
               className="wg-row-action"
-              title={actionsLabel}
               aria-label={actionsLabel}
               onClick={(event) => {
                 event.stopPropagation()
@@ -67,7 +66,11 @@ export function RowActions({
         />
       )}
       {create === undefined ? null : (
-        <IconButton title={create.label} icon={<IconPlusOutline16 />} onClick={create.onCreate} />
+        <IconButton
+          ariaLabel={create.label}
+          icon={<IconPlusOutline16 />}
+          onClick={create.onCreate}
+        />
       )}
     </span>
   )

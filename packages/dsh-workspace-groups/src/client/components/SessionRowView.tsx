@@ -54,7 +54,7 @@ export function SessionRowView({
       {status === undefined ? (
         <span className="wg-slot" />
       ) : (
-        <span className="wg-slot" role="img" title={status.label} aria-label={status.label}>
+        <span className="wg-slot" role="img" aria-label={status.label}>
           <StateDot state={status.state} />
         </span>
       )}

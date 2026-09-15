@@ -1,5 +1,5 @@
 /**
- * `aria-label` 与 tooltip 共用一个文案的 16px 行内按钮
+ * 带无障碍标签的 16px 行内按钮
  *
  * 官方行内按钮几何来自 ui-workspace 的 CSS Module，primitives 没有等价的
  * 16px 行内按钮，因此保留本地 16px 几何，图标仍取 primitives 导出。
@@ -8,19 +8,18 @@
 import type { ReactElement } from 'react'
 
 export interface IconButtonProps {
-  /** 无障碍标签与 tooltip 共用的文案 */
-  title: string
+  /** 无障碍标签 */
+  ariaLabel: string
   icon: ReactElement
   onClick: () => void
 }
 
-export function IconButton({ title, icon, onClick }: IconButtonProps): ReactElement {
+export function IconButton({ ariaLabel, icon, onClick }: IconButtonProps): ReactElement {
   return (
     <button
       type="button"
       className="wg-row-action"
-      title={title}
-      aria-label={title}
+      aria-label={ariaLabel}
       onClick={(event) => {
         event.stopPropagation()
         onClick()
