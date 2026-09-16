@@ -66,10 +66,13 @@ function indexRunningSubagents(
 /** 把一个会话摘要投影成渲染行 */
 function toRow(summary: SessionSummary, runningSubagents: Map<string, number>): SessionRow {
   const id = String(summary.id)
+  const blank = summary.blank === true
   return {
     id,
-    title: summary.displayTitle,
-    blank: summary.blank === true,
+    // 空白会话不进搜索、也不显示标题：与官方 `sessionTitle` 一样取空串，
+    // 由渲染期套语言包的「新会话」固定名
+    title: blank ? '' : summary.displayTitle,
+    blank,
     running: summary.running === true,
     runningSubagentCount: runningSubagents.get(id) ?? 0,
     completed: summary.completed === true,

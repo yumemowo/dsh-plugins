@@ -58,6 +58,12 @@ describe('regionLabels', () => {
     expect(labels.empty).toBe('暂无会话')
   })
 
+  it('reads the new-session row name from the official session.new key', () => {
+    // 空白（新建中）会话行的固定名是官方词，本包字典里不存副本；会话正式
+    // 启用后的名字由标题服务投影，不走这一格
+    expect(labels.newSession).toBe('新会话')
+  })
+
   it('reads the workspace name prompt and its conflict hint from the official keys', () => {
     expect(labels.workspaceNamePrompt).toBe('工作区名称')
     expect(labels.workspaceConflict('w1')).toBe('已存在名为“w1”的工作区。')

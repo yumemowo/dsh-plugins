@@ -27,6 +27,87 @@ const dispatcher = {
   useMemo: (fn: () => unknown) => fn(),
 }
 
+/**
+ * 会真正跑 effect 与保留状态的 dispatcher
+ *
+ * 基础的 {@link dispatcher} 把 `useState` 的 setter 与 `useEffect` 都做成空
+ * 操作，够用于「渲染一次看结构」的断言；需要界面先经过一次异步加载（例如
+ * 分组元数据要先 `loadGroups` 落地才会出现分组行）时就用这一份。
+ *
+ * 状态按**组件类型**分桶、游标在每次调用组件前归零，与 React 的「hook 按
+ * 调用顺序、游标按组件实例归零」一致：否则父组件与子组件会共用同一批槽位，
+ * 状态在第二次渲染时串位。同一类型的多个实例因此共用一份状态——本测试里的
+ * 行组件都停在初始态（菜单未开、无改名草稿），这个简化不影响断言
+ */
+function renderingDispatcher(): {
+  active: unknown
+  flush: () => Promise<void>
+  render: (node: unknown, out: Parameters<typeof render>[1]) => void
+} {
+  const buckets = new Map<unknown, unknown[]>()
+  const effects: (() => void)[] = []
+  let cursor = 0
+  let bucket: unknown[] = []
+
+  const active = {
+    useState: (initial: unknown) => {
+      const index = cursor
+      const owner = bucket
+      cursor += 1
+      if (!(index in owner)) {
+        owner[index] = typeof initial === 'function' ? (initial as () => unknown)() : initial
+      }
+      return [
+        owner[index],
+        // setter 绑定调用时的状态桶：effect 在渲染结束后才跑，那时游标已经在
+        // 别的组件上，按当前位置写会写错组件的槽位
+        (value: unknown) => {
+          owner[index] = value
+        },
+      ]
+    },
+    useCallback: (fn: unknown) => fn,
+    useEffect: (effect: () => void) => {
+      effects.push(effect)
+    },
+    useRef: (initial: unknown) => ({ current: initial }),
+    useMemo: (fn: () => unknown) => fn(),
+  }
+
+  /** 切到一个组件的状态桶；返回恢复父组件桶的函数 */
+  const enter = (type: unknown): (() => void) => {
+    const outer = bucket
+    const outerCursor = cursor
+    let next = buckets.get(type)
+    if (next === undefined) {
+      next = []
+      buckets.set(type, next)
+    }
+    bucket = next
+    cursor = 0
+    return () => {
+      bucket = outer
+      cursor = outerCursor
+    }
+  }
+
+  return {
+    active,
+    /** 跑掉本轮挂上的全部 effect，并等它们的异步续作落地 */
+    flush: async () => {
+      const pending = effects.splice(0)
+      for (const effect of pending) effect()
+      // loadGroups 的 then 连跑两轮微任务才写完状态表
+      await Promise.resolve()
+      await Promise.resolve()
+    },
+    render: (node, out) => {
+      bucket = []
+      render(node, out, active, enter)
+    },
+  }
+}
+
 /** 渲染整棵树；Menu 元素被收集起来而不下钻（stub 返回 null） */
 function render(
   node: unknown,
@@ -39,6 +120,8 @@ function render(
     counts?: unknown[]
     order?: string[]
   },
+  active: unknown = dispatcher,
+  enter?: (type: unknown) => () => void,
 ): void {
   const walk = (n: unknown): void => {
     if (n === null || n === undefined || typeof n === 'boolean') return
@@ -59,11 +142,13 @@ function render(
         return
       }
       const prev = internals.ReactCurrentDispatcher.current
-      internals.ReactCurrentDispatcher.current = dispatcher
+      internals.ReactCurrentDispatcher.current = active
+      const leave = enter?.(el.type)
       let rendered: unknown
       try {
         rendered = (el.type as (p: unknown) => unknown)(el.props)
       } finally {
+        leave?.()
         internals.ReactCurrentDispatcher.current = prev
       }
       walk(rendered)
@@ -221,6 +306,12 @@ function props(
     add?: boolean
     /** directoryFlow 洞是否被占用；缺省为已占用 */
     flowOccupied?: boolean
+    /** 造一条当前选中的空白（新建中）会话；缺省不加 */
+    blankCurrent?: boolean
+    /** startSession 的返回值；undefined 模拟导航被取代 */
+    startReturns?: string | undefined
+    /** 记录 moveSession 的三元调用 */
+    moves?: [string, string, string][]
   } = {},
 ): WorkspaceGroupsProps {
   const byId: Record<string, unknown> = {
@@ -233,12 +324,23 @@ function props(
       updatedAt: Date.now() - 300_000,
     },
   }
+  // 空白会话的宿主后备标题是目录名；渲染行必须用语言包的固定名顶掉它
+  if (options.blankCurrent === true) {
+    byId['blank'] = {
+      id: 'blank',
+      displayTitle: 'w1',
+      running: false,
+      blank: true,
+      updatedAt: Date.now() - 300_000,
+    }
+  }
+  const sessionIds = options.blankCurrent === true ? ['a', 'blank'] : ['a']
   const workspaces = [
     {
       workspaceId: 'w1',
       path: '/tmp/w1',
       title: 'W1',
-      sessionIds: ['a'],
+      sessionIds,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     },
@@ -249,19 +351,28 @@ function props(
     useWorkspaces: ((select: (s: unknown) => unknown) =>
       select({ items: workspaces, archivedSessionIds: [] })) as never,
     useSessions: ((select: (s: unknown) => unknown) =>
-      select({ ids: ['a', 'orphan'], byId, current: undefined, phase: 'ready' })) as never,
+      select({
+        ids: [...sessionIds, 'orphan'],
+        byId,
+        current: options.blankCurrent === true ? 'blank' : undefined,
+        phase: 'ready',
+      })) as never,
     useSessionPendingInteraction: ((select: (s: unknown) => unknown) =>
       select(options.pending ?? new Map())) as never,
     useDirectoryFlow: ((select: (occupied: boolean) => unknown) =>
       select(options.flowOccupied ?? true)) as never,
     openSession: () => {},
-    startSession: async () => '',
+    // startReturns 显式给了就用它（undefined 表示导航被取代），否则给一个 id
+    startSession: async () =>
+      'startReturns' in options ? options.startReturns : 'fresh',
     loadGroups: async () => ({ w1: [{ id: 'g1', name: '前端', sessionIds: [] }] }),
     onReady: () => () => {},
     createGroup: async () => {},
     renameGroup: async () => {},
     deleteGroup: async () => {},
-    moveSession: async () => {},
+    moveSession: async (workspaceId: string, sessionId: string, groupId: string) => {
+      options.moves?.push([workspaceId, sessionId, groupId])
+    },
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     t: regionTranslate(),
@@ -345,6 +456,40 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(menuItems(out)).toContainEqual(['rename', 'fork', 'archive'])
   })
 
+  it('names the provisional blank session with the official fixed label', () => {
+    const out = { menus: [] as unknown[], text: [] as string[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true, { blankCurrent: true })), out)
+
+    // 空白行显示官方 session.new 的固定名，而不是宿主给的后备标题（目录名 w1）
+    expect(out.text).toContain('新会话')
+    expect(out.text).not.toContain('w1')
+  })
+
+  it('gives the blank session no row menu until it is really started', () => {
+    const withBlank = { menus: [] as unknown[], text: [] as string[] }
+    render(
+      React.createElement(WorkspaceGroupsRegion, props(true, { blankCurrent: true })),
+      withBlank,
+    )
+    const without = { menus: [] as unknown[], text: [] as string[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), without)
+
+    // 空白行没有会话可重命名或归档。官方连省略号都不渲染，本包同样收掉：
+    // 多出这条占位行后菜单数不变（工作区行、既有会话行、未分组桶各一）
+    expect(menuItems(withBlank)).toEqual(menuItems(without))
+    expect(menuItems(withBlank)).toContainEqual(['new-group', 'rename', 'delete'])
+    expect(menuItems(withBlank)).toContainEqual(['rename', 'fork', 'archive', 'separator', 'group'])
+  })
+
+  it('shows the summary title once the session leaves the blank state', () => {
+    const out = { menus: [] as unknown[], text: [] as string[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
+
+    // 非空会话直接用宿主投影的显示标题
+    expect(out.text).toContain('A')
+    expect(out.text).not.toContain('新会话')
+  })
+
   it('shows the group session count as its own trailing element', () => {
     const out = renderGroupRow(() => {}, 3)
 
@@ -425,6 +570,72 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(plus).toBeDefined()
     plus?.click()
     expect(created).toEqual(['g1'])
+  })
+
+  it('moves a session created from the workspace row out of any group', async () => {
+    const moves: [string, string, string][] = []
+    const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[] }
+    render(
+      React.createElement(
+        WorkspaceGroupsRegion,
+        props(true, { startReturns: 'fresh', moves }),
+      ),
+      out,
+    )
+
+    // 工作区行的 `+` 指的是「未归组的新会话」。官方会复用该工作区已有的空白
+    // 会话——若那条会话先前是在分组里建的，这里必须显式把它移出分组，否则
+    // 它的位置会停在上一次创建的地方
+    rowButtons(out)
+      .find((b) => b.label.includes('W1'))
+      ?.click()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(moves).toEqual([['w1', 'fresh', '']])
+  })
+
+  it('moves a session created from a group row into that group', async () => {
+    const moves: [string, string, string][] = []
+    const harness = renderingDispatcher()
+    const args = props(true, { startReturns: 'fresh', moves })
+
+    // 分组行要先等 loadGroups 落地才存在，因此这里跑一遍 effect 再渲染
+    const first = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[] }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), first)
+    await harness.flush()
+    const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[] }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), out)
+
+    rowButtons(out)
+      .find((b) => b.label.includes('前端'))
+      ?.click()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // 分组行的 `+` 把会话归入该分组
+    expect(moves).toEqual([['w1', 'fresh', 'g1']])
+  })
+
+  it('skips the placement when a newer navigation superseded this creation', async () => {
+    const moves: [string, string, string][] = []
+    const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[] }
+    render(
+      React.createElement(
+        WorkspaceGroupsRegion,
+        props(true, { startReturns: undefined, moves }),
+      ),
+      out,
+    )
+
+    // 被取代的那次新建不打开会话，也就不该再摆它的位置
+    rowButtons(out)
+      .find((b) => b.label.includes('W1'))
+      ?.click()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(moves).toEqual([])
   })
 
   it('renders no session menu at all when official services are absent', () => {

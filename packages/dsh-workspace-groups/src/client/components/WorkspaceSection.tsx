@@ -45,8 +45,18 @@ export interface WorkspaceSectionProps {
   renderSession: (row: SessionRow) => ReactNode;
 }
 
-const sortByUpdateTime = (a: SessionRow, b: SessionRow) =>
-  (a.updatedAt - b.updatedAt) * -1
+/**
+ * 会话行的显示顺序：新建中的空白会话排最前，其余按最近更新倒序
+ *
+ * 空白会话是刚点出来的那条占位行，还没有自己的内容与时间，排在所属区段
+ *（分组内或未归组区）的最前才符合「刚新建的就是这条」的预期；它一旦启用
+ * 就回到与其他会话同一套排序里
+ * @returns 供 `Array.prototype.sort` 使用的比较值
+ */
+function compareSessionRows(a: SessionRow, b: SessionRow): number {
+  if (a.blank !== b.blank) return a.blank ? -1 : 1
+  return b.updatedAt - a.updatedAt
+}
 
 export function WorkspaceSection({
   title,
@@ -102,13 +112,13 @@ export function WorkspaceSection({
               }
               labels={groupActionLabels}
             >
-              {section.sessions.sort(sortByUpdateTime).map(renderSession)}
+              {[...section.sessions].sort(compareSessionRows).map(renderSession)}
             </GroupSection>
           ))}
           {/* 未归组的会话平铺在工作区下，不套任何分组头 */}
           {layout.loose.length === 0 ? null : (
             <div className="wg-sessions">
-              {layout.loose.sort(sortByUpdateTime).map(renderSession)}
+              {[...layout.loose].sort(compareSessionRows).map(renderSession)}
             </div>
           )}
           {hasAnyRow ? null : <div className="wg-empty">{emptyLabel}</div>}

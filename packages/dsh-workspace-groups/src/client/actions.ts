@@ -91,14 +91,19 @@ export interface RegionActions {
   /** 打开一个会话 */
   openSession: (sessionId: string) => void
   /**
-   * 在指定工作区创建一个新会话
+   * 在指定工作区开一个新会话
    *
-   * 返回新会话 id 而不是空：分组行的 `+` 要在建好之后把会话归入自己的分组，
-   * 归组走既有的 `moveSession`，不另造「在分组内建会话」的宿主接口
+   * 走官方导航服务的 `openWorkspace`：它复用该工作区已有的空白会话，没有才
+   * 新建，并把它选中打开；后发的新建请求会取代先发的
+   *
+   * 返回会话 id 而不是空：调用方要在建好之后把它摆到本次创建指定的位置
+   *（分组内或未分组），归组走既有的 `moveSession`，不另造「在分组内建会话」
+   * 的宿主接口。返回 undefined 表示这次导航已被更晚的一次取代，会话虽已建好
+   * 但不打开，调用方因此也不摆位置
    * @param workspaceId - 新会话所属工作区
-   * @returns 新会话 id
+   * @returns 新建或复用的会话 id；被取代时为 undefined
    */
-  startSession: (workspaceId: string) => Promise<string>
+  startSession: (workspaceId: string) => Promise<string | undefined>
   /** 读取分组快照 */
   loadGroups: () => Promise<Record<string, Group[]>>
   /** 远程数据面就绪后回调一次；返回反注册函数 */

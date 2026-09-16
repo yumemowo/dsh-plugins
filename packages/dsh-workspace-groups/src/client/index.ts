@@ -13,13 +13,18 @@
  *
  * 文案走两条官方路径：本包自己的 `workspaceGroups` 命名空间由
  * `locale.register` 注册，组件从插槽注入的 `t` 座位取用（渲染期绑定，
- * 语言切换后自动重新渲染）；会话行那三项官方操作的文案与相对时间直接绑
- * 官方 `workspace` 命名空间，官方改文案时本包逐键跟随
+ * 语言切换后自动重新渲染）；会话行的固定名（空白行显示官方「新会话」）、
+ * 那三项官方操作的文案、以及相对时间都直接绑官方 `workspace` 命名空间，
+ * 官方改文案时本包逐键跟随
+ *
+ * 新建会话不自行拼流程，而是走官方导航服务 `ctx.uiWorkspace`：它复用目标
+ * 工作区已有的空白会话，与官方 WorkspaceBrowser 的「新建」是同一条路径
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { IWorkspaces } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { ISessions, SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import type { UiWorkspace } from '@deepseek-ai/dsh-client-ui-workspace/client'
 // 仅用于引入 ui-renderer 的客户端类型增强（ctx.slots 等）
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // 仅用于引入 sidebar 的插槽声明增强（sidebar.workspaces 的 SlotMap 条目）
@@ -139,12 +144,7 @@ export function apply(ctx: Context): void {
    * @returns 官方动作；官方服务或控制器缺失时为 undefined
    */
   const officialActions = (): OfficialSessionActions | undefined => {
-    const uiWorkspace = ctx.get('uiWorkspace') as
-      | {
-          forkSession: (sessionId: string) => Promise<void>
-          archiveSession: (sessionId: string) => Promise<void>
-        }
-      | undefined
+    const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace | undefined
     if (uiWorkspace === undefined || sessions === undefined) return undefined
 
     return {
@@ -158,9 +158,9 @@ export function apply(ctx: Context): void {
       },
       // 官方菜单把 fork 的失败咽掉（分叉失败不该弹错），这里保持同一行为。
       forkSession: (sessionId) => {
-        void uiWorkspace.forkSession(sessionId).catch(() => {})
+        void uiWorkspace.forkSession(sessionId as never).catch(() => {})
       },
-      archiveSession: (sessionId) => uiWorkspace.archiveSession(sessionId),
+      archiveSession: (sessionId) => uiWorkspace.archiveSession(sessionId as never),
       labels: officialSessionLabels(tWorkspace),
       relativeTime: (updatedAt, now) => timeLabel(updatedAt, now, tWorkspace),
     }
@@ -183,9 +183,7 @@ export function apply(ctx: Context): void {
   const addWorkspaceActions = (): AddWorkspaceActions | undefined => {
     if (workspaces === undefined) return undefined
     if (directoryFlowOccupant(ctx.slots) === undefined) return undefined
-    const uiWorkspace = ctx.get('uiWorkspace') as
-      | { startSession: (workspaceId: string) => void }
-      | undefined
+    const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace | undefined
     return {
       createWorkspace: (path) => workspaces.create({ path }),
       // 官方在采纳成功后立刻在新工作区开会话；uiWorkspace 缺失时退化为只添加，
@@ -215,7 +213,9 @@ export function apply(ctx: Context): void {
       // 依赖缺失时给出空实现：组件仍可渲染，只是没有可操作的动作。
       return {
         openSession: () => {},
-        startSession: async () => '',
+        startSession: async () => {
+          throw new Error('workspace-groups requires the workspace and session controllers')
+        },
         onReady: () => () => {},
         loadGroups: async () => ({}),
         createGroup: async () => {},
@@ -232,11 +232,24 @@ export function apply(ctx: Context): void {
       openSession: (sessionId: string) => {
         sessions.open(sessionId as never)
       },
-      startSession: (workspaceId: string) =>
-        sessions.create({ workspaceId: workspaceId as never }).then((created) => {
-          sessions.open(created)
-          return String(created)
-        }),
+      startSession: async (workspaceId: string) => {
+        // 新建会话整段走官方导航服务：`openWorkspace` 复用该工作区已有的空白
+        // 会话，没有才新建（官方 WorkspaceBrowser 的「新建」也是这条路径），
+        // 因此连点两次不会攒出两条空会话；它内部还用 `ctx.layout` 起了导航
+        // 守卫，点完立刻切走时这次新建会被取代，与官方行为一致
+        //
+        // 它返回 void，会话 id 因此从 `beforeOpen` 回调里取：官方只在这轮
+        // 导航仍有效时才回调，被取代时回调不触发，id 停在 undefined
+        const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace | undefined
+        if (uiWorkspace === undefined) {
+          throw new Error('workspace-groups requires the uiWorkspace service')
+        }
+        let target: string | undefined
+        await uiWorkspace.openWorkspace(workspaceId as never, (sessionId) => {
+          target = String(sessionId)
+        })
+        return target
+      },
       onReady,
       loadGroups,
       createGroup: (workspaceId, name) =>

@@ -32,6 +32,7 @@ import { sessionStatus } from '../data/status.ts'
 import type { SessionStatus } from '../data/status.ts'
 import type { GroupNameDraft, SessionRow, WorkspaceNameDraft } from '../data/types.ts'
 import { SessionRowMenu } from './SessionRowMenu.tsx'
+import type { SessionGroupingContext } from './SessionRowMenu.tsx'
 import { SessionRowView } from './SessionRowView.tsx'
 import { RegionHeader, RegionRailHeader } from './RegionHeader.tsx'
 import { WorkspaceRail } from './WorkspaceRail.tsx'
@@ -238,10 +239,14 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    * 在一个工作区里新建会话
    *
    * 官方在新建前展开工作区，否则新会话会落在折叠区里看不见；分组行的 `+`
-   * 同理要把分组一起展开。建好之后再把会话归入指定分组（`groupId` 为空串
-   * 表示不归组，即工作区行的 `+`）
+   * 同理要把分组一起展开
+   *
+   * 建好之后无条件把会话摆到本次创建指定的位置：`groupId` 为空串表示工作区行
+   * 的 `+`，会话归入未归组区。这一步不能只在指定了分组时做——官方会复用该
+   * 工作区已有的空白会话，若那条会话先前是在某个分组里建的，工作区行的 `+`
+   * 复用到它时必须把它从分组里摘出来，否则它的位置会停在上一次创建的地方
    * @param workspaceId - 目标工作区
-   * @param groupId - 新会话要归入的分组；空串表示留在未归组区
+   * @param groupId - 新会话要归入的分组；空串表示归入未归组区
    */
   const createSessionIn = (workspaceId: string, groupId: string): void => {
     setCollapsedWorkspaces((prev) => ({ ...prev, [workspaceId]: false }))
@@ -250,9 +255,11 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
       setCollapsedGroups((prev) => ({ ...prev, [`${workspaceId}:${groupId}`]: false }))
     }
     void startSession(workspaceId)
-      .then((sessionId) =>
-        groupId === '' ? undefined : apply(moveSession(workspaceId, sessionId, groupId)),
-      )
+      .then((sessionId) => {
+        // 被更晚的导航取代时没有会话要摆位置
+        if (sessionId === undefined) return undefined
+        return apply(moveSession(workspaceId, sessionId, groupId))
+      })
       .catch(() => {
         // 建会话失败由会话控制器自己提示；这里不再弹一次，避免同一错误报两遍
       })
@@ -325,27 +332,37 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
           const layout = buildLayout(rowsByWorkspace.get(workspaceId) ?? [], groups[workspaceId] ?? [])
           const collapsed = collapsedWorkspaces[workspaceId] === true
 
-          /** 工作区内带会话操作菜单的会话行 */
-          const renderSession = (row: SessionRow): ReactElement => (
-            <SessionRowMenu
-              key={row.id}
-              row={row}
-              selected={row.id === currentSessionId}
-              status={statusOf(row)}
-              time={timeOf(row)}
-              grouping={{
-                sections: layout.groups,
-                currentGroupId: groupIdOfSession(layout.groups, row.id),
-                groupLabel: labels.moveToGroup,
-                ungroupLabel: labels.ungroup,
-                onSelect: (id) => selectSessionGroup(workspaceId, row.id, id),
-              }}
-              official={official}
-              onOpen={() => openSession(row.id)}
-              actionsLabel={labels.sessionActions}
-              t={t}
-            />
-          )
+          /**
+           * 渲染一个会话行
+           *
+           * 空白行的名字取语言包的固定名（官方 `session.new`），并且像官方一样
+           * 不挂行尾菜单——它只是「准备开始一个新会话」的占位，没有会话可重命名
+           * 或归档。`grouping` 缺省表示该行没有分组可归（「未分组」桶）
+           */
+          const renderSession = (
+            row: SessionRow,
+            grouping?: SessionGroupingContext,
+          ): ReactElement => {
+            const shared = {
+              title: row.blank ? labels.newSession : row.title,
+              selected: row.id === currentSessionId,
+              status: statusOf(row),
+              time: timeOf(row),
+              onOpen: () => openSession(row.id),
+            }
+            if (row.blank) return <SessionRowView key={row.id} {...shared} />
+            return (
+              <SessionRowMenu
+                key={row.id}
+                {...shared}
+                row={row}
+                grouping={grouping}
+                official={official}
+                actionsLabel={labels.sessionActions}
+                t={t}
+              />
+            )
+          }
 
           return (
             <WorkspaceSection
@@ -382,7 +399,15 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
                 setGroupDelete({ workspaceId, groupId: section.id, label: section.label })
               }
               onCreateSessionInGroup={(section) => createSessionIn(workspaceId, section.id)}
-              renderSession={renderSession}
+              renderSession={(row) =>
+                renderSession(row, {
+                  sections: layout.groups,
+                  currentGroupId: groupIdOfSession(layout.groups, row.id),
+                  groupLabel: labels.moveToGroup,
+                  ungroupLabel: labels.ungroup,
+                  onSelect: (id) => selectSessionGroup(workspaceId, row.id, id),
+                })
+              }
             />
           )
         })}
@@ -403,10 +428,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
                     空的，那时直接渲染无菜单的行，不留点不动的省略号 */}
                 <div className="wg-sessions">
                   {stray.map((row) =>
-                    official === undefined ? (
+                    official === undefined || row.blank ? (
                       <SessionRowView
                         key={row.id}
-                        row={row}
+                        title={row.blank ? labels.newSession : row.title}
                         selected={row.id === currentSessionId}
                         status={statusOf(row)}
                         time={timeOf(row)}
@@ -416,6 +441,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
                       <SessionRowMenu
                         key={row.id}
                         row={row}
+                        title={row.title}
                         selected={row.id === currentSessionId}
                         status={statusOf(row)}
                         time={timeOf(row)}

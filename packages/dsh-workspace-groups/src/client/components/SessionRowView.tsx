@@ -5,15 +5,22 @@
  * 因此标题与工作区标题的横向关系始终与官方一致。行尾在操作位之前放官方风格
  * 的相对时间，悬停时让位给操作位（与官方同为 CSS 切换）。`action` 缺省时不
  * 渲染行尾操作位——未分组桶里的会话不属于任何工作区，没有可用的归组操作
+ *
+ * 纯展示组件：行的选择态、状态位、标题与时间都由调用方算好传进来
  */
 import type { ReactElement, ReactNode } from 'react'
 import { StateDot } from '../runtime.ts'
 import { handleRowKeyDown } from './rowKeyboard.ts'
 import type { SessionStatus } from '../data/status.ts'
-import type { SessionRow } from '../data/types.ts'
 
 export interface SessionRowViewProps {
-  row: SessionRow
+  /**
+   * 行上显示的标题
+   *
+   * 新建中（空白）会话的存储标题是空串，调用方在这里套语言包的固定名
+   *（官方 `session.new`）
+   */
+  title: string
   selected: boolean
   /** 该行要显示的状态位；空闲时为 undefined，槽位仍占位 */
   status?: SessionStatus | undefined
@@ -32,7 +39,7 @@ export interface SessionRowViewProps {
 }
 
 export function SessionRowView({
-  row,
+  title,
   selected,
   status,
   time,
@@ -47,7 +54,7 @@ export function SessionRowView({
       }
       role="button"
       tabIndex={0}
-      title={row.title}
+      title={title}
       onClick={onOpen}
       onKeyDown={(event) => handleRowKeyDown(event, onOpen)}
     >
@@ -58,7 +65,7 @@ export function SessionRowView({
           <StateDot state={status.state} />
         </span>
       )}
-      <span className="wg-row-title">{row.title}</span>
+      <span className="wg-row-title">{title}</span>
       {time === undefined ? null : <span className="wg-row-time">{time}</span>}
       {action === undefined ? null : (
         <span className="wg-row-action-slot" onClick={(event) => event.stopPropagation()}>

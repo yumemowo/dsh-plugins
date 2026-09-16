@@ -13,6 +13,7 @@ import type { WorkspaceTranslate } from '../src/client/official.ts'
 /** 官方 `workspace` 命名空间的键与中文文案（测试替身） */
 export const OFFICIAL_WORKSPACE_ZH: Record<string, string> = {
   'section.workspaces': '工作区',
+  'session.new': '新会话',
   'group.ungrouped': '未分组',
   'empty.none': '暂无会话',
   'workspace.add': '添加工作区',

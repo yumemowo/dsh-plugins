@@ -7,6 +7,13 @@
 /** 一个会话在列表中的渲染行 */
 export interface SessionRow {
   id: string
+  /**
+   * 存储的显示标题
+   *
+   * 空白（新建中）会话为空串：与官方一样，那条占位行的名字由渲染期套官方
+   * 语言包的固定名，而不是拿宿主给的后备标题顶上。首个回合落地后宿主提供
+   * 摘要标题，这一格随之有值
+   */
   title: string
   blank: boolean
   running: boolean

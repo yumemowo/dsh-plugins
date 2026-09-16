@@ -6,6 +6,9 @@
  * 会话不属于任何工作区，没有分组可落，因此那些行只保留官方三项。宿主未提供
  * 官方服务时官方三项整体隐藏，同样不留点不动的入口
  *
+ * 新建中（空白）会话行没有会话可操作，与官方一样整条行都不挂菜单：那条行
+ * 只是「准备开始一个新会话」的占位，对它重命名或归档都无从谈起
+ *
  * 菜单开合状态收敛在本组件内：行组件在 map 回调里生成，把 useState 留在
  * 行内会让每行无条件多挂一组 hook 状态，独立组件则按需挂载。重命名对话框
  * 也留在这里——只有真正打开过的行才付出这份状态
@@ -37,6 +40,8 @@ export interface SessionGroupingContext {
 
 export interface SessionRowMenuProps {
   row: SessionRow
+  /** 行上显示的标题；空白会话取语言包的固定名 */
+  title: string
   selected: boolean
   /** 该行要显示的状态位；空闲时为 undefined */
   status?: SessionStatus | undefined
@@ -55,6 +60,7 @@ export interface SessionRowMenuProps {
 
 export function SessionRowMenu({
   row,
+  title,
   selected,
   status,
   time,
@@ -70,7 +76,7 @@ export function SessionRowMenu({
   return (
     <>
       <SessionRowView
-        row={row}
+        title={title}
         selected={selected}
         status={status}
         time={time}

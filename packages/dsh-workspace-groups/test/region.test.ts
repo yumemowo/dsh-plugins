@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildLayout,
+  compareSessionRows,
   containsSession,
   groupIdOfSession,
 } from '../src/client/data/layout.ts'
@@ -29,6 +30,37 @@ function row(id: string, title = id): SessionRow {
 function group(id: string, name: string, sessionIds: string[]) {
   return { id, name, sessionIds }
 }
+
+describe('compareSessionRows', () => {
+  /** 造一行带更新时刻的会话 */
+  function at(id: string, updatedAt: number, blank = false): SessionRow {
+    return { ...row(id), blank, updatedAt }
+  }
+
+  it('sorts live sessions newest first', () => {
+    const sorted = [at('old', 100), at('new', 300), at('mid', 200)].sort(compareSessionRows)
+
+    expect(sorted.map((s) => s.id)).toEqual(['new', 'mid', 'old'])
+  })
+
+  it('puts the blank session first regardless of its timestamp', () => {
+    // 空白会话是刚点出来的占位行，它没有自己的内容时间，排最前才符合预期
+    const sorted = [at('new', 900), at('blank', 1, true)].sort(compareSessionRows)
+
+    expect(sorted.map((s) => s.id)).toEqual(['blank', 'new'])
+  })
+
+  it('keeps a single blank session at the head of a long list', () => {
+    const sorted = [
+      at('a', 500),
+      at('blank', 100, true),
+      at('b', 400),
+      at('c', 300),
+    ].sort(compareSessionRows)
+
+    expect(sorted.map((s) => s.id)).toEqual(['blank', 'a', 'b', 'c'])
+  })
+})
 
 describe('buildLayout', () => {
   it('keeps sessions inside their group in metadata order', () => {
@@ -397,6 +429,7 @@ describe('groupSessionsByWorkspace', () => {
       blank?: boolean
       parentId?: string
       running?: boolean
+      displayTitle?: string
     }[],
     current?: string,
   ): SessionListState {
@@ -404,7 +437,7 @@ describe('groupSessionsByWorkspace', () => {
     for (const item of rows) {
       byId[item.id] = {
         id: item.id,
-        displayTitle: item.id,
+        displayTitle: item.displayTitle ?? item.id,
         running: item.running === true,
         blank: item.blank === true,
         updatedAt: 0,
@@ -483,6 +516,27 @@ describe('groupSessionsByWorkspace', () => {
     )
 
     expect(grouped.get('w1')?.map((s) => s.id)).toEqual(['a', 'blank'])
+  })
+
+  it('leaves the blank session title empty for the renderer to name', () => {
+    // 空白会话的存储标题取空串（官方 sessionTitle 同样如此），显示名由渲染期
+    // 套语言包的固定名「新会话」；宿主给的后备标题（目录名）不能当成它的名字
+    const grouped = groupSessionsByWorkspace(
+      listState([{ id: 'blank', blank: true, displayTitle: 'w1' }], 'blank'),
+      [workspace('w1', ['blank'])],
+    )
+
+    expect(grouped.get('w1')?.[0]?.title).toBe('')
+  })
+
+  it('shows the host summary title once the session is really started', () => {
+    // 会话正式启用后宿主投影摘要标题，渲染行随之带上正式名字
+    const grouped = groupSessionsByWorkspace(
+      listState([{ id: 'a', displayTitle: '修复登录超时' }]),
+      [workspace('w1', ['a'])],
+    )
+
+    expect(grouped.get('w1')?.[0]?.title).toBe('修复登录超时')
   })
 
   it('omits a workspace member absent from the session list', () => {

@@ -41,6 +41,8 @@ export interface RegionLabels {
   newGroup: string
   /** 新建会话按钮的无障碍标签；工作区名由调用方传入 */
   newSessionIn: (name: string) => string
+  /** 新建中（空白）会话行的固定名，取官方 `session.new` */
+  newSession: string
   /** 工作区「更多操作」按钮的无障碍标签；工作区名由调用方传入 */
   workspaceActions: (name: string) => string
   /**
@@ -107,6 +109,7 @@ export function regionLabels(
     title: tw('section.workspaces'),
     newGroup: t('newGroup'),
     newSessionIn: (name: string) => tw('actions.newSession.aria', { name }),
+    newSession: tw('session.new'),
     workspaceActions: (name: string) => tw('actions.workspace.aria', { name }),
     rename: tw('rename'),
     renameWorkspace: tw('rename.workspace.title'),
