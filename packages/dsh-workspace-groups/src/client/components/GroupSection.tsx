@@ -12,6 +12,7 @@ import { useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { IconTriangleRightFill14 } from '../runtime.ts'
 import { GROUP_MENU, buildGroupMenuItems } from '../menus.tsx'
+import { CollapsibleBody, useStaggerReveal } from './CollapsibleBody.tsx'
 import { RowActions } from './RowActions.tsx'
 import { handleRowKeyDown } from './rowKeyboard.ts'
 import type { GroupSection as GroupSectionData } from '../data/types.ts'
@@ -50,11 +51,14 @@ export function GroupSection({
   labels,
 }: GroupSectionProps): ReactElement {
   const [menuOpen, setMenuOpen] = useState(false)
+  const reveal = useStaggerReveal()
 
   return (
     <div className="wg-group">
       <div
-        className={'wg-group-head' + (menuOpen ? ' wg-row-menu-open' : '')}
+        className={'wg-group-head' + (menuOpen ? ' wg-row-menu-open' : '') + reveal}
+        // 参与所在折叠体的逐个淡入；序号由折叠体按文档序下发
+        data-wg-stagger=""
         role="button"
         tabIndex={0}
         onClick={onToggle}
@@ -92,7 +96,12 @@ export function GroupSection({
           />
         </span>
       </div>
-      {collapsed || section.sessions.length <= 0 ? null : <div className="wg-sessions">{children}</div>}
+      {/* 空分组没有可折叠的内容，整块折叠体都不渲染 */}
+      {section.sessions.length <= 0 ? null : (
+        <CollapsibleBody open={!collapsed}>
+          <div className="wg-sessions">{children}</div>
+        </CollapsibleBody>
+      )}
     </div>
   )
 }

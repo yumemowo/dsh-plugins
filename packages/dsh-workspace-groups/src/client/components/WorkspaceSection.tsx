@@ -5,6 +5,7 @@
  * 不同分组之间的开合互不影响
  */
 import type { ReactElement, ReactNode } from "react";
+import { CollapsibleBody, useStaggerReveal } from "./CollapsibleBody.tsx";
 import { GroupSection } from "./GroupSection.tsx";
 import { WorkspaceRow } from "./WorkspaceRow.tsx";
 import type { WorkspaceRowLabels } from "./WorkspaceRow.tsx";
@@ -79,6 +80,8 @@ export function WorkspaceSection({
   renderSession,
 }: WorkspaceSectionProps): ReactElement {
   const hasAnyRow = layout.groups.length > 0 || layout.loose.length > 0;
+  // 显隐类必须由渲染产出：命令式挂上去的会被 React 重写 className 时抹掉
+  const reveal = useStaggerReveal();
   return (
     <section className="wg-workspace">
       <WorkspaceRow
@@ -92,7 +95,7 @@ export function WorkspaceSection({
         onDelete={onDeleteWorkspace}
         labels={labels}
       />
-      {collapsed ? null : (
+      <CollapsibleBody open={!collapsed}>
         <div className="wg-workspace-body">
           {/* 只有用户建过分组时才渲染分组结构 */}
           {layout.groups.map((section) => (
@@ -121,9 +124,14 @@ export function WorkspaceSection({
               {[...layout.loose].sort(compareSessionRows).map(renderSession)}
             </div>
           )}
-          {hasAnyRow ? null : <div className="wg-empty">{emptyLabel}</div>}
+          {hasAnyRow ? null : (
+            // 空态也是折叠体里要露面的子元素，与行一样参与逐个淡入
+            <div className={'wg-empty' + reveal} data-wg-stagger="">
+              {emptyLabel}
+            </div>
+          )}
         </div>
-      )}
+      </CollapsibleBody>
     </section>
   );
 }

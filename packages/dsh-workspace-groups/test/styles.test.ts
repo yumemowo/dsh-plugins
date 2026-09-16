@@ -1,20 +1,14 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { CSS } from '../src/client/styles.ts'
 
 /**
- * 从 styles.ts 里取出内联的 CSS 文本
+ * 取样式表文本
  *
- * 这里刻意不去正则匹配外层的模板字符串：本文件要断言的正是「CSS 块内部
- * 不得出现反引号」，用反引号做定界符解析会与被测对象互相污染
+ * 直接读**求值后**的导出：节奏参数以插值进入 CSS，按源文本切割只会拿到 ${...}
+ * 字面量。同理不再按反引号定界解析——那会与被测对象互相污染
  */
 function readCss(): string {
-  const src = readFileSync(new URL('../src/client/styles.ts', import.meta.url), 'utf8')
-  const start = src.indexOf('const CSS = `')
-  expect(start).toBeGreaterThanOrEqual(0)
-  const body = src.slice(start + 'const CSS = `'.length)
-  const end = body.indexOf('`\n')
-  expect(end).toBeGreaterThanOrEqual(0)
-  return body.slice(0, end)
+  return CSS
 }
 
 describe('client stylesheet', () => {
@@ -87,11 +81,17 @@ describe('client stylesheet', () => {
         .find((value) => value !== undefined)
 
     // 工作区行保持官方几何；分组层与组内会话各再让出一层，层级因此可读。
-    // padding 简写按「上 右 下 左」读，左边即该层的缩进量。
+    // padding 简写按「上 右 下 左」读，左边即该层的缩进量。分组的会话行多了
+    // 折叠体两层包装，选择器要跟着写穿
     expect(declared('.wg-workspace-head', 'padding')).toBe('0 8px')
     expect(declared('.wg-group-head', 'padding')).toBe('0 8px 0 24px')
     expect(declared('.wg-workspace-body > .wg-sessions > .wg-row', 'padding-left')).toBe('24px')
-    expect(declared('.wg-group > .wg-sessions > .wg-row', 'padding-left')).toBe('40px')
+    expect(
+      declared(
+        '.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions > .wg-row',
+        'padding-left',
+      ),
+    ).toBe('40px')
   })
 
   it('draws one guide line per nested level at the parent icon column', () => {
@@ -104,9 +104,11 @@ describe('client stylesheet', () => {
     const hasRule = (selector: string, pattern: RegExp): boolean =>
       rules.some((rule) => rule.selectors.includes(selector) && pattern.test(rule.body))
 
+    const groupSessions = '.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions'
+
     // 引导线落在父级图标列的中心：工作区是 8 + 16/2，分组是 24 + 16/2。
     expect(hasRule('.wg-workspace-body::before', /left:\s*16px/)).toBe(true)
-    expect(hasRule('.wg-group > .wg-sessions::before', /left:\s*32px/)).toBe(true)
+    expect(hasRule(`${groupSessions}::before`, /left:\s*32px/)).toBe(true)
     // 线要跟着主题走，不能写死颜色。
     expect(hasRule('.wg-workspace-body::before', /background:\s*var\(--dsw-alias-border-l1\)/)).toBe(
       true,
@@ -300,5 +302,88 @@ describe('client stylesheet', () => {
     // 分组行里是两个按钮，自然宽不是会话行的单个 16px
     const slot = rules.find((rule) => rule.selectors.includes('.wg-row-action-slot'))?.body ?? ''
     expect(slot).toMatch(/width:\s*0/)
+  })
+
+  it('animates the collapse body by track height instead of a hard-coded size', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 收起态与展开态只差轨道高度（0fr ↔ 1fr）：轨道高度由内容自身决定，
+    // 因此子元素有多少个、各自多高都不需要预先知道
+    expect(bodyOf('.wg-collapse')).toMatch(/grid-template-rows:\s*0fr/)
+    expect(bodyOf('.wg-collapse-open')).toMatch(/grid-template-rows:\s*1fr/)
+
+    // 轨道高度可动画的前提是内层裁剪 + 自动最小尺寸归零：缺了任一条，
+    // 内容都会把 0fr 的轨道顶开，收不到底
+    const clip = bodyOf('.wg-collapse-clip')
+    expect(clip).toMatch(/overflow:\s*hidden/)
+    expect(clip).toMatch(/min-height:\s*0/)
+    // 收起后内容仍在文档里，必须自己让出焦点顺序
+    expect(clip).toMatch(/visibility:\s*hidden/)
+
+    // 这套做法不依赖任何写死的尺寸或序号
+    expect(css).not.toMatch(/max-height/)
+    expect(css).not.toMatch(/nth-child/)
+  })
+
+  it('fades rows in from a per-row order variable without listing them', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 基准态透明；显隐由折叠体逐个挂/摘 .wg-reveal，不能写成「展开祖先的后代」，
+    // 否则嵌套折叠体里收着的行会被外层展开态一起点亮，等自己展开时已是不透明的
+    expect(bodyOf('.wg-collapse-clip [data-wg-stagger]')).toMatch(/opacity:\s*0/)
+    for (const selector of rules.map((rule) => rule.selectors.join(', '))) {
+      // 展开态的选择器必须带 .wg-reveal，且不能只靠祖先类名点灯
+      if (!selector.includes('wg-collapse-open')) continue
+      expect(selector).not.toContain('[data-wg-stagger]')
+    }
+
+    const revealed = bodyOf('.wg-collapse-clip [data-wg-stagger].wg-reveal')
+    expect(revealed).toMatch(/opacity:\s*1/)
+    // 延迟逐元素不同（取该元素完全露出时的容器进度），由折叠体量几何后逐个下发；
+    // 样式只消费一个变量，因此没有任何逐元素写死的值或序号
+    expect(revealed).toMatch(/transition-delay:\s*var\(--wg-collapse-delay/)
+  })
+
+  it('fades every row out together when the body closes', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const base = rules.find((rule) =>
+      rule.selectors.includes('.wg-collapse-clip [data-wg-stagger]'),
+    )?.body
+
+    // 收起时 .wg-reveal 被摘掉就落回基准规则：延迟不在基准规则里，因此归零，
+    // 所有行同时淡出（步进的延迟只挂在展开态那条规则上）
+    expect(base).toBeDefined()
+    expect(base).not.toMatch(/transition-delay/)
+    expect(base).toMatch(/transition:\s*opacity/)
+  })
+
+  it('drops the collapse animation under prefers-reduced-motion', () => {
+    const css = readCss()
+    const reduced =
+      /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+
+    // 关掉动画还不够：visibility 的延时不跟着去掉，收起后内容仍会多挡
+    // 一个动画时长才交出焦点
+    expect(reduced).toMatch(/\.wg-collapse\s*\{\s*transition:\s*none/)
+    expect(reduced).toMatch(/\.wg-collapse-clip\s*\{\s*transition:\s*visibility 0s linear/)
+    // 逐个淡入也要一并落位。延迟挂在 .wg-reveal 上且更具体，因此那条也要清掉，
+    // 否则 reduced-motion 下行仍是逐个出现
+    expect(reduced).toMatch(/\[data-wg-stagger\]\.wg-reveal[\s\S]*?transition:\s*none/)
   })
 })

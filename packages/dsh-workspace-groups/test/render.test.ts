@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import * as React from 'react'
 import { GroupSection } from '../src/client/components/GroupSection.tsx'
+import { WorkspaceSection } from '../src/client/components/WorkspaceSection.tsx'
+import type { WorkspaceSectionProps } from '../src/client/components/WorkspaceSection.tsx'
 import { WorkspaceGroupsRegion } from '../src/client/components/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/components/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
@@ -23,8 +25,11 @@ const dispatcher = {
   useState: (initial: unknown) => [typeof initial === 'function' ? (initial as () => unknown)() : initial, () => {}],
   useCallback: (fn: unknown) => fn,
   useEffect: () => {},
+  useLayoutEffect: () => {},
   useRef: (initial: unknown) => ({ current: initial }),
   useMemo: (fn: () => unknown) => fn(),
+  // 上下文在渲染期读取，返回值按提供者追不下去也用不到：断言只关心结构
+  useContext: (context: { _currentValue?: unknown }) => context._currentValue,
 }
 
 /**
@@ -70,8 +75,12 @@ function renderingDispatcher(): {
     useEffect: (effect: () => void) => {
       effects.push(effect)
     },
+    useLayoutEffect: (effect: () => void) => {
+      effects.push(effect)
+    },
     useRef: (initial: unknown) => ({ current: initial }),
     useMemo: (fn: () => unknown) => fn(),
+    useContext: (context: { _currentValue?: unknown }) => context._currentValue,
   }
 
   /** 切到一个组件的状态桶；返回恢复父组件桶的函数 */
@@ -119,6 +128,8 @@ function render(
     slots?: unknown[]
     counts?: unknown[]
     order?: string[]
+    /** 折叠体元素，按文档序 */
+    collapses?: unknown[]
   },
   active: unknown = dispatcher,
   enter?: (type: unknown) => () => void,
@@ -158,6 +169,12 @@ function render(
     if (el.props['className'] === 'wg-row-actions') out.containers?.push(el)
     if (el.props['className'] === 'wg-slot') out.slots?.push(el)
     if (el.props['className'] === 'wg-group-count') out.counts?.push(el)
+    if (
+      el.props['className'] === 'wg-collapse' ||
+      el.props['className'] === 'wg-collapse wg-collapse-open'
+    ) {
+      out.collapses?.push(el)
+    }
     // 按文档序记下行头各段，用来断言「会话数在标题右侧、操作位左侧」
     const section = el.props['className']
     if (section === 'wg-group-label' || section === 'wg-group-count' || section === 'wg-row-actions') {
@@ -254,7 +271,7 @@ function rowActionShape(out: { menus: unknown[]; buttons?: unknown[]; containers
 }
 
 /** 渲染一个分组行并返回可断言的操作结构 */
-function renderGroupRow(onCreateSession?: () => void, sessionCount = 0) {
+function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, collapsed = false) {
   const out = {
     menus: [] as unknown[],
     text: [] as string[],
@@ -262,6 +279,7 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0) {
     containers: [] as unknown[],
     counts: [] as unknown[],
     order: [] as string[],
+    collapses: [] as unknown[],
   }
   render(
     React.createElement(GroupSection, {
@@ -278,7 +296,7 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0) {
           updatedAt: 0,
         })),
       },
-      collapsed: false,
+      collapsed,
       onToggle: () => {},
       onRename: () => {},
       onDelete: () => {},
@@ -295,6 +313,68 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0) {
     out,
   )
   return out
+}
+
+/** 渲染一个工作区区块并返回可断言的折叠结构 */
+function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
+  const loose = Array.from({ length: looseCount }, (_, index) => ({
+    id: `s${index}`,
+    title: `会话 ${index}`,
+    blank: false,
+    running: false,
+    runningSubagentCount: 0,
+    completed: false,
+    updatedAt: 0,
+  }))
+  const props: WorkspaceSectionProps = {
+    title: 'W1',
+    collapsed,
+    folderActive: false,
+    layout: { groups: [], loose },
+    isGroupCollapsed: () => false,
+    labels: {
+      actions: (name: string) => `工作区“${name}”的操作`,
+      newSession: (name: string) => `在“${name}”中新建会话`,
+      newGroup: '新建分组',
+      rename: '重命名',
+      delete: '删除工作区',
+    },
+    emptyLabel: '还没有会话',
+    groupActionLabels: {
+      actions: (name: string) => `分组“${name}”的操作`,
+      rename: '重命名',
+      delete: '删除分组',
+      newSession: (name: string) => `在“${name}”中新建会话`,
+    },
+    onToggle: () => {},
+    onCreateSession: () => {},
+    onNewGroup: () => {},
+    onRenameWorkspace: () => {},
+    onDeleteWorkspace: () => {},
+    onToggleGroup: () => {},
+    onRenameGroup: () => {},
+    onDeleteGroup: () => {},
+    onCreateSessionInGroup: () => {},
+    renderSession: (row) => React.createElement('span', { key: row.id, className: 'wg-row' }, row.title),
+  }
+  const out = {
+    menus: [] as unknown[],
+    text: [] as string[],
+    buttons: [] as unknown[],
+    containers: [] as unknown[],
+    slots: [] as unknown[],
+    counts: [] as unknown[],
+    order: [] as string[],
+    collapses: [] as unknown[],
+  }
+  render(React.createElement(WorkspaceSection, props), out)
+  return out
+}
+
+/** 折叠体的展开态：类名里带 wg-collapse-open 即为展开 */
+function isOpen(collapse: unknown): boolean {
+  const className = (collapse as { props: Record<string, unknown> }).props['className']
+  return typeof className === 'string' && className.includes('wg-collapse-open')
 }
 
 function props(
@@ -510,6 +590,36 @@ describe('WorkspaceGroupsRegion render', () => {
     expect((out.counts ?? []).length).toBe(0)
     expect(out.text).not.toContain('0')
     expect(out.order).toEqual(['wg-group-label', 'wg-row-actions'])
+  })
+
+  it('keeps the collapsed group sessions mounted so the body can shrink', () => {
+    // 收起靠的是折叠体把轨道收成 0 高，而不是把组内会话卸载掉——卸载了就没有
+    // 可收回的内容，收缩动作也就无从播起
+    const collapsed = renderGroupRow(() => {}, 2, true)
+    const expanded = renderGroupRow(() => {}, 2, false)
+
+    expect((collapsed.collapses ?? []).length).toBe(1)
+    expect(isOpen((collapsed.collapses ?? [])[0])).toBe(false)
+    expect(isOpen((expanded.collapses ?? [])[0])).toBe(true)
+  })
+
+  it('renders no collapse body at all for an empty group', () => {
+    // 没有内容就没有可撑开的轨道，连折叠体都不渲染
+    const out = renderGroupRow(() => {}, 0, true)
+
+    expect((out.collapses ?? []).length).toBe(0)
+  })
+
+  it('keeps the collapsed workspace sessions mounted so the body can shrink', () => {
+    const collapsed = renderWorkspaceSection(true)
+    const expanded = renderWorkspaceSection(false)
+
+    expect((collapsed.collapses ?? []).length).toBe(1)
+    expect(isOpen((collapsed.collapses ?? [])[0])).toBe(false)
+    expect(isOpen((expanded.collapses ?? [])[0])).toBe(true)
+    // 会话行仍在文档里，收起时只是被轨道裁掉
+    expect(collapsed.text).toContain('会话 0')
+    expect(expanded.text).toContain('会话 0')
   })
 
   it('keeps the group row actions in the same shape as the workspace row', () => {

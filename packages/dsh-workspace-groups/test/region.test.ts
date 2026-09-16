@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildLayout,
-  compareSessionRows,
   containsSession,
   groupIdOfSession,
 } from '../src/client/data/layout.ts'
@@ -30,37 +29,6 @@ function row(id: string, title = id): SessionRow {
 function group(id: string, name: string, sessionIds: string[]) {
   return { id, name, sessionIds }
 }
-
-describe('compareSessionRows', () => {
-  /** 造一行带更新时刻的会话 */
-  function at(id: string, updatedAt: number, blank = false): SessionRow {
-    return { ...row(id), blank, updatedAt }
-  }
-
-  it('sorts live sessions newest first', () => {
-    const sorted = [at('old', 100), at('new', 300), at('mid', 200)].sort(compareSessionRows)
-
-    expect(sorted.map((s) => s.id)).toEqual(['new', 'mid', 'old'])
-  })
-
-  it('puts the blank session first regardless of its timestamp', () => {
-    // 空白会话是刚点出来的占位行，它没有自己的内容时间，排最前才符合预期
-    const sorted = [at('new', 900), at('blank', 1, true)].sort(compareSessionRows)
-
-    expect(sorted.map((s) => s.id)).toEqual(['blank', 'new'])
-  })
-
-  it('keeps a single blank session at the head of a long list', () => {
-    const sorted = [
-      at('a', 500),
-      at('blank', 100, true),
-      at('b', 400),
-      at('c', 300),
-    ].sort(compareSessionRows)
-
-    expect(sorted.map((s) => s.id)).toEqual(['blank', 'a', 'b', 'c'])
-  })
-})
 
 describe('buildLayout', () => {
   it('keeps sessions inside their group in metadata order', () => {

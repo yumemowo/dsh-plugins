@@ -33,6 +33,7 @@ import type { SessionStatus } from '../data/status.ts'
 import type { GroupNameDraft, SessionRow, WorkspaceNameDraft } from '../data/types.ts'
 import { SessionRowMenu } from './SessionRowMenu.tsx'
 import type { SessionGroupingContext } from './SessionRowMenu.tsx'
+import { CollapsibleBody } from './CollapsibleBody.tsx'
 import { SessionRowView } from './SessionRowView.tsx'
 import { RegionHeader, RegionRailHeader } from './RegionHeader.tsx'
 import { WorkspaceRail } from './WorkspaceRail.tsx'
@@ -421,7 +422,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
               onToggle={() => toggleWorkspace(UNGROUPED_KEY)}
               labels={workspaceRowLabels}
             />
-            {ungroupedCollapsed ? null : (
+            <CollapsibleBody open={!ungroupedCollapsed}>
               <div className="wg-workspace-body">
                 {/* 这些会话不属于任何工作区，没有分组可归，因此菜单里只有
                     官方三项（归组项无处落）。宿主未提供官方服务时菜单会是
@@ -454,7 +455,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
                   )}
                 </div>
               </div>
-            )}
+            </CollapsibleBody>
           </section>
         )}
         <div className="wg-note">{labels.unimplemented}</div>

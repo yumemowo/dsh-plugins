@@ -19,11 +19,18 @@
  * 通过带 `data-plugin` / `data-plugin-css` 标记的 `<style>` 标签注入：
  * 客户端模块系统按这两个属性认领样式标签并做 HMR 记账
  */
+import { COLLAPSE_VARS, DEFAULT_COLLAPSE_MOTION as MOTION } from './utils/collapseMotion.ts'
 
 /** 样式表内容的唯一标识；重复挂载时用它去重 */
 const STYLE_TAG_ID = '@your-scope/dsh-workspace-groups/src/client/region.css'
 
-const CSS = `
+/**
+ * 样式表内容
+ *
+ * 导出供测试直接读取**求值后**的文本：节奏参数以插值进入 CSS，再按源文本切割只会
+ * 拿到 ${...} 字面量
+ */
+export const CSS = `
 /* 区域根：官方 WorkspaceBrowser 的根节点自己带整块右留白，本区域必须有同一份，
    否则 header 的入口按钮与列表行都会贴到侧栏右缘
  *
@@ -190,6 +197,62 @@ const CSS = `
 .wg-workspace { position: relative; display: flex; flex-direction: column; }
 .wg-workspace + .wg-workspace { margin-top: 4px; }
 
+/* 折叠体：轨道高度走 0fr ↔ 1fr，高度因此完全由内容决定，与子元素数量和
+   各自高度都无关，样式里不需要任何写死的尺寸
+ *
+ * 时长与缓动走自定义属性，由 CollapsibleBody 按 props 下发。回退值直接取共享常量，
+ * 因此两边不可能漂移（常量见 utils/collapseMotion.ts）
+ *
+ * clip 那一层负责裁剪：展开过程中轨道比内容矮，内容被自上而下「撑」出来。
+   min-height 必须归零，否则轨道会被内容的自动最小尺寸顶开，0fr 收不到底 */
+.wg-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  /* 它同时是 .wg-workspace / .wg-group 的 flex 子项，自动最小尺寸同样会让
+     轨道收不到底，因此这里也要归零 */
+  min-height: 0;
+  transition: grid-template-rows var(${COLLAPSE_VARS.duration}, ${MOTION.duration}ms)
+    var(${COLLAPSE_VARS.easing}, ${MOTION.easing});
+}
+.wg-collapse-open { grid-template-rows: 1fr; }
+.wg-collapse-clip {
+  overflow: hidden;
+  min-height: 0;
+  /* 收起后内容仍在文档里（收缩动画要靠它），因此显式移出焦点顺序与命中
+     测试；等收起动作跑完再隐藏，展开时立即可见。
+     延时取容器同一份时长：两者不可能失配 */
+  visibility: hidden;
+  transition: visibility 0s linear var(${COLLAPSE_VARS.duration}, ${MOTION.duration}ms);
+}
+.wg-collapse-open > .wg-collapse-clip { visibility: visible; transition-delay: 0s; }
+
+/* 折叠体里的元素逐个淡入
+ *
+ * .wg-reveal 由元素自己在渲染时产出（见 useStaggerReveal），不能写成「展开祖先的
+ * 后代」——那样嵌套折叠体里仍收着的元素会被外层的展开态一起点亮，等它自己那层展
+ * 开时就已经是不透明的，淡入不会发生
+ *
+ * 淡入发生在容器撑开之后（见 CollapsibleBody），因此撑开期间元素保持全透明、不跑
+ * 任何过渡：两段各自只承担一件事，两种代价不挤在同一时间段
+ *
+ * 延迟按视觉序逐个下发到 ${COLLAPSE_VARS.delay}，样式只消费。收起时类名摘掉即落回
+ * 基础规则，基准里没有 transition-delay，延迟随之归零，所有元素因此一起淡出 */
+.wg-collapse-clip [data-wg-stagger] {
+  opacity: 0;
+  transition: opacity var(${COLLAPSE_VARS.fade}, ${MOTION.fade}ms)
+    var(${COLLAPSE_VARS.easing}, ${MOTION.easing});
+}
+.wg-collapse-clip [data-wg-stagger].wg-reveal {
+  opacity: 1;
+  transition-delay: var(${COLLAPSE_VARS.delay}, 0ms);
+}
+
+/* 折叠体自己承担「上一行与它之间」的那 2px：这段间距要连同内容一起收掉，
+   否则收起后行下会留一条 2px 空档。间距改成内层容器的上内边距——它落在
+   clip 的裁剪区内，轨道合拢时随之被裁掉 */
+.wg-collapse-clip > .wg-workspace-body,
+.wg-collapse-clip > .wg-sessions { padding-top: 2px; }
+
 /* 图标列：工作区的文件夹/箭头、分组的箭头、会话的状态位共用同一列宽 */
 .wg-slot {
   width: 16px;
@@ -227,16 +290,16 @@ const CSS = `
 .wg-workspace-head { padding: 0 8px; }
 .wg-group-head { padding: 0 8px 0 24px; }
 .wg-workspace-body > .wg-sessions > .wg-row { padding-left: 24px; }
-.wg-group > .wg-sessions > .wg-row { padding-left: 40px; }
+.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions > .wg-row { padding-left: 40px; }
 
 /* 竖向引导线：落在父级图标列的中心（工作区 8 + 16/2 = 16，分组 24 + 16/2 = 32），
    把「这组行属于上一行」画出来。行本身是 position: relative 的定位元素，按树序
    排在容器伪元素之后绘制，因此悬停/选中的行底色会盖住它，不会出现线穿过高亮
    底色的割裂感 */
 .wg-workspace-body,
-.wg-group > .wg-sessions { position: relative; }
+.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions { position: relative; }
 .wg-workspace-body::before,
-.wg-group > .wg-sessions::before {
+.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions::before {
   content: '';
   position: absolute;
   top: 4px;
@@ -246,7 +309,7 @@ const CSS = `
   pointer-events: none;
 }
 .wg-workspace-body::before { left: 16px; }
-.wg-group > .wg-sessions::before { left: 32px; }
+.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions::before { left: 32px; }
 
 /* 字号与行高成对写在叶子上（官方 .title 即如此），根节点不设 line-height */
 .wg-workspace-title,
@@ -301,6 +364,11 @@ const CSS = `
 .wg-workspace-body > * + *,
 .wg-group > * + *,
 .wg-sessions > * + * { margin-top: 2px; }
+
+/* 折叠体要抵消上一条规则给它写上的 margin-top：那段间距改由 clip 内部的上内边距
+   承担（见折叠体规则处），这样它会落在裁剪区内，能随内容一起收掉 */
+.wg-workspace > .wg-collapse,
+.wg-group > .wg-collapse { margin-top: 0; }
 
 .wg-row {
   box-sizing: border-box;
@@ -464,6 +532,17 @@ body[data-wg-menu-flip] [role='menu'] [role='menu']::before {
 
 @media (prefers-reduced-motion: reduce) {
   .wg-arrow { transition: none; }
+  /* 折叠体直接落位，不做撑开/收回动作；visibility 的延时也要一并去掉，
+     否则收起后仍会多挡一个容器时长才交出焦点 */
+  .wg-collapse { transition: none; }
+  .wg-collapse-clip { transition: visibility 0s linear; }
+  /* 子元素随容器一起落位。逐个淡入的延迟挂在 .wg-reveal 上，那条规则比这里
+     更具体，因此要连它一起清掉，否则行仍是逐个出现 */
+  .wg-collapse-clip [data-wg-stagger],
+  .wg-collapse-clip [data-wg-stagger].wg-reveal {
+    transition: none;
+    transition-delay: 0s;
+  }
 }
 `
 

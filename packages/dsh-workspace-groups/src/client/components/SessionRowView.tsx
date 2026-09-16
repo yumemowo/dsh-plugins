@@ -10,6 +10,7 @@
  */
 import type { ReactElement, ReactNode } from 'react'
 import { StateDot } from '../runtime.ts'
+import { useStaggerReveal } from './CollapsibleBody.tsx'
 import { handleRowKeyDown } from './rowKeyboard.ts'
 import type { SessionStatus } from '../data/status.ts'
 
@@ -47,11 +48,19 @@ export function SessionRowView({
   action,
   onOpen,
 }: SessionRowViewProps): ReactElement {
+  // 显隐类必须由渲染产出：命令式挂上去的会被 React 重写 className 时抹掉
+  const reveal = useStaggerReveal()
+
   return (
     <div
       className={
-        'wg-row' + (selected ? ' wg-row-selected' : '') + (menuOpen ? ' wg-row-menu-open' : '')
+        'wg-row' +
+        (selected ? ' wg-row-selected' : '') +
+        (menuOpen ? ' wg-row-menu-open' : '') +
+        reveal
       }
+      // 参与所在折叠体的逐个淡入；序号由折叠体按文档序下发
+      data-wg-stagger=""
       role="button"
       tabIndex={0}
       title={title}

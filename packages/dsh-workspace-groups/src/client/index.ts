@@ -57,7 +57,7 @@ export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'remote']
  * 不是要交付给用户的能力，配置化反而要多一套 schema 与文档
  */
 const COMPARE_MODE = false
-//const COMPARE_MODE = true
+// const COMPARE_MODE = true
 
 /**
  * 插件入口
