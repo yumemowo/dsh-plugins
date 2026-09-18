@@ -64,3 +64,20 @@ export function sessionStatus(
   if (row.completed) return { state: 'done', label: labels.completed }
   return undefined
 }
+
+/**
+ * 比较两个状态位是否表示同一件事
+ *
+ * 供行级 memo 的比较器使用：决定显示结果的只有状态与文案这两格
+ * @param a - 上一次的状态位
+ * @param b - 这一次的状态位
+ * @returns 显示结果相同为 true
+ */
+export function sameSessionStatus(
+  a: SessionStatus | undefined,
+  b: SessionStatus | undefined,
+): boolean {
+  if (a === b) return true
+  if (a === undefined || b === undefined) return false
+  return a.state === b.state && a.label === b.label
+}

@@ -340,18 +340,15 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    // 基准态透明；显隐由折叠体逐个挂/摘 .wg-reveal，不能写成「展开祖先的后代」，
-    // 否则嵌套折叠体里收着的行会被外层展开态一起点亮，等自己展开时已是不透明的
-    expect(bodyOf('.wg-collapse-clip [data-wg-stagger]')).toMatch(/opacity:\s*0/)
-    for (const selector of rules.map((rule) => rule.selectors.join(', '))) {
-      // 展开态的选择器必须带 .wg-reveal，且不能只靠祖先类名点灯
-      if (!selector.includes('wg-collapse-open')) continue
-      expect(selector).not.toContain('[data-wg-stagger]')
-    }
+    // 不透明是元素的自然状态：展开态不得有任何规则写 opacity，否则过渡没跑或主线程
+    // 被占住时元素会留在透明上。透明只挂在「所在折叠体还没展开」这条结构条件上
+    expect(bodyOf('.wg-collapse-clip [data-wg-stagger]')).not.toMatch(/opacity\s*:/)
+    expect(
+      bodyOf('.wg-collapse:not(.wg-collapse-open) > .wg-collapse-clip [data-wg-stagger]'),
+    ).toMatch(/opacity:\s*0/)
 
-    const revealed = bodyOf('.wg-collapse-clip [data-wg-stagger].wg-reveal')
-    expect(revealed).toMatch(/opacity:\s*1/)
-    // 延迟逐元素不同（取该元素完全露出时的容器进度），由折叠体量几何后逐个下发；
+    const revealed = bodyOf('.wg-collapse-clip [data-wg-stagger]')
+    // 延迟逐元素不同（撑开那段等待 + 该元素的先后），由折叠体量几何后逐个下发；
     // 样式只消费一个变量，因此没有任何逐元素写死的值或序号
     expect(revealed).toMatch(/transition-delay:\s*var\(--wg-collapse-delay/)
   })
@@ -362,15 +359,13 @@ describe('client stylesheet', () => {
       selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
       body: m[2] ?? '',
     }))
-    const base = rules.find((rule) =>
-      rule.selectors.includes('.wg-collapse-clip [data-wg-stagger]'),
+    const closed = rules.find((rule) =>
+      rule.selectors.includes('.wg-collapse:not(.wg-collapse-open) > .wg-collapse-clip [data-wg-stagger]'),
     )?.body
 
-    // 收起时 .wg-reveal 被摘掉就落回基准规则：延迟不在基准规则里，因此归零，
-    // 所有行同时淡出（步进的延迟只挂在展开态那条规则上）
-    expect(base).toBeDefined()
-    expect(base).not.toMatch(/transition-delay/)
-    expect(base).toMatch(/transition:\s*opacity/)
+    // 收起时这条更具体，且把延迟归零：所有行同时淡出（步进的延迟只挂在展开态那条）
+    expect(closed).toBeDefined()
+    expect(closed).toMatch(/transition-delay:\s*0ms/)
   })
 
   it('drops the collapse animation under prefers-reduced-motion', () => {
@@ -382,8 +377,8 @@ describe('client stylesheet', () => {
     // 一个动画时长才交出焦点
     expect(reduced).toMatch(/\.wg-collapse\s*\{\s*transition:\s*none/)
     expect(reduced).toMatch(/\.wg-collapse-clip\s*\{\s*transition:\s*visibility 0s linear/)
-    // 逐个淡入也要一并落位。延迟挂在 .wg-reveal 上且更具体，因此那条也要清掉，
+    // 逐个淡入也要一并落位。延迟由组件逐个下发，因此那条展开态规则要一起清掉，
     // 否则 reduced-motion 下行仍是逐个出现
-    expect(reduced).toMatch(/\[data-wg-stagger\]\.wg-reveal[\s\S]*?transition:\s*none/)
+    expect(reduced).toMatch(/\[data-wg-stagger\][\s\S]*?transition:\s*none/)
   })
 })

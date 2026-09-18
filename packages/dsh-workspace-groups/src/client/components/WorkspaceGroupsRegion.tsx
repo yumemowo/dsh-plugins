@@ -16,7 +16,7 @@
  * 的「未分组」区段——那是工作区一级的容器，与本包在工作区内刻意不造
  * 「未分组分组」的取舍无关
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
@@ -81,7 +81,11 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     t,
   } = props
 
-  const labels = regionLabels(t, tWorkspace)
+  // 文案表按两个翻译座位缓存：它每次渲染都是新对象，里面的函数（如
+  // sessionActions）会直接传给行组件，每渲染新建一份会让整片列表的 memo 失效。
+  // 缓存的是投影结果而不是译文——两个 t 都在**调用时**才读当前语言，因此语言
+  // 切换后重新调用拿到的仍是新译文
+  const labels = useMemo(() => regionLabels(t, tWorkspace), [t, tWorkspace])
 
   const workspaces = useWorkspaces((state) => state.items) as readonly WorkspaceView[]
   // 归档集是注册表全局的：归档会话仍留在工作区的 sessionIds 里，
@@ -129,7 +133,9 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   /**
    * 一个会话行要显示的状态位
    *
-   * 待交互种类从快照里按会话 id 取；空闲返回 undefined，槽位仍占位
+   * 待交互种类从快照里按会话 id 取；空闲返回 undefined，槽位仍占位。在这里算是为了
+   * 让状态位与时间文案作为内容稳定的 prop 参与行级 memo 的比对：被 memo 挡下的行不会
+   * 重算，按渲染当刻取时间会停住
    * @param row - 会话渲染行
    * @returns 状态位或 undefined
    */
@@ -167,10 +173,25 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   // 就绪信号到达时重拉一次，否则已落盘的分组要等下一次改动才会出现
   useEffect(() => onReady(() => reload()), [onReady, reload])
 
-  /** 执行一次改动并刷新本地快照 */
+  /**
+   * 执行一次改动，并用宿主回传的快照替换本地状态
+   *
+   * 宿主每个变更方法都回整份快照（见宿主 `service.ts`），直接采用它就不必再拉
+   * 一次，也避免「改动已生效、本地状态还是旧的」这段空档
+   *
+   * 失败要留下痕迹：分组元数据的写入不可见，一次静默失败只会表现为「什么都
+   * 没发生」，而界面与元数据的偏差会一直留着（新会话停在旧分组就是这样来的）。
+   * 失败时退回重拉一次，让本地状态与宿主对齐
+   */
   const apply = useCallback(
-    (action: Promise<void>) => {
-      void action.then(() => reload())
+    (action: Promise<Record<string, Group[]>>) => {
+      void action.then(
+        (next) => setGroups(next),
+        (reason: unknown) => {
+          console.error('workspace-groups: group change failed', reason)
+          reload()
+        },
+      )
     },
     [reload],
   )
@@ -214,7 +235,11 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     const name = workspaceRename.value.trim()
     if (name === '' || name === renamedFrom(workspaceRename)) return
     setWorkspaceRename(null)
-    apply(renameWorkspace(workspaceRename.workspaceId, name))
+    // 不经过 `apply`：改名不动分组元数据，官方控制器返回的是工作区视图而不是
+    // 分组快照，`apply` 因此只收「回整份快照」的改动。失败仍要留下痕迹
+    void renameWorkspace(workspaceRename.workspaceId, name).catch((reason: unknown) => {
+      console.error('workspace-groups: workspace rename failed', reason)
+    })
   }
 
   /**
@@ -223,6 +248,9 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    * 先删注册再清分组元数据：工作区没了，它名下的分组再也不会被渲染，
    * 留着就是读不到的记录；反过来的话，删组成功而删工作区失败会把分组
    * 提前丢掉。清理由既有的 `deleteGroup` 承担，不新增宿主接口
+   *
+   * 每一步都回整份快照，取最后一步的那份即可：删工作区本身不动分组元数据，
+   * 因此最终状态就是最后一次删组的结果（没有分组可清时退回删工作区前的本地值）
    */
   const commitWorkspaceDelete = (): void => {
     if (workspaceDelete === null) return
@@ -231,7 +259,9 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     const orphanGroups = groups[workspaceId] ?? []
     apply(
       deleteWorkspace(workspaceId).then(async () => {
-        for (const group of orphanGroups) await deleteGroup(workspaceId, group.id)
+        let snapshot: Record<string, Group[]> = groups
+        for (const group of orphanGroups) snapshot = await deleteGroup(workspaceId, group.id)
+        return snapshot
       }),
     )
   }
@@ -266,16 +296,24 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
       })
   }
 
-  /** 归组菜单选中项：取消分组，或移入 `group:<id>` 指名的分组 */
-  const selectSessionGroup = (workspaceId: string, sessionId: string, id: string): void => {
-    if (id === 'ungroup') {
-      apply(moveSession(workspaceId, sessionId, ''))
-      return
-    }
-    if (id.startsWith('group:')) {
-      apply(moveSession(workspaceId, sessionId, id.slice('group:'.length)))
-    }
-  }
+  /**
+   * 归组菜单选中项：取消分组，或移入 `group:<id>` 指名的分组
+   *
+   * 是 `useCallback` 而不是每次渲染新建：它会随归组上下文传到每一行，行级 memo
+   * 按引用比对，每渲染新建一个会让整片列表的 memo 失效
+   */
+  const selectSessionGroup = useCallback(
+    (workspaceId: string, sessionId: string, id: string): void => {
+      if (id === 'ungroup') {
+        apply(moveSession(workspaceId, sessionId, ''))
+        return
+      }
+      if (id.startsWith('group:')) {
+        apply(moveSession(workspaceId, sessionId, id.slice('group:'.length)))
+      }
+    },
+    [apply, moveSession],
+  )
 
   // 待改的工作区名是否与另一个工作区撞名
   const renameConflict =
@@ -339,27 +377,39 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
            * 空白行的名字取语言包的固定名（官方 `session.new`），并且像官方一样
            * 不挂行尾菜单——它只是「准备开始一个新会话」的占位，没有会话可重命名
            * 或归档。`grouping` 缺省表示该行没有分组可归（「未分组」桶）
+           *
+           * 传下去的字段都是原语或稳定引用，动作传的是未绑定的函数本身：行级
+           * memo 要按字段比对，任何一处每渲染新建都会让它整片失效
            */
           const renderSession = (
             row: SessionRow,
             grouping?: SessionGroupingContext,
           ): ReactElement => {
-            const shared = {
-              title: row.blank ? labels.newSession : row.title,
-              selected: row.id === currentSessionId,
-              status: statusOf(row),
-              time: timeOf(row),
-              onOpen: () => openSession(row.id),
+            if (row.blank) {
+              return (
+                <SessionRowView
+                  key={row.id}
+                  sessionId={row.id}
+                  title={labels.newSession}
+                  selected={row.id === currentSessionId}
+                  status={statusOf(row)}
+                  time={timeOf(row)}
+                  onOpenSession={openSession}
+                />
+              )
             }
-            if (row.blank) return <SessionRowView key={row.id} {...shared} />
             return (
               <SessionRowMenu
                 key={row.id}
-                {...shared}
                 row={row}
+                title={row.title}
+                selected={row.id === currentSessionId}
+                status={statusOf(row)}
+                time={timeOf(row)}
                 grouping={grouping}
                 official={official}
                 actionsLabel={labels.sessionActions}
+                onOpenSession={openSession}
                 t={t}
               />
             )
@@ -402,11 +452,12 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
               onCreateSessionInGroup={(section) => createSessionIn(workspaceId, section.id)}
               renderSession={(row) =>
                 renderSession(row, {
+                  workspaceId,
                   sections: layout.groups,
                   currentGroupId: groupIdOfSession(layout.groups, row.id),
                   groupLabel: labels.moveToGroup,
                   ungroupLabel: labels.ungroup,
-                  onSelect: (id) => selectSessionGroup(workspaceId, row.id, id),
+                  onSelectGroup: selectSessionGroup,
                 })
               }
             />
@@ -432,11 +483,12 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
                     official === undefined || row.blank ? (
                       <SessionRowView
                         key={row.id}
+                        sessionId={row.id}
                         title={row.blank ? labels.newSession : row.title}
                         selected={row.id === currentSessionId}
                         status={statusOf(row)}
                         time={timeOf(row)}
-                        onOpen={() => openSession(row.id)}
+                        onOpenSession={openSession}
                       />
                     ) : (
                       <SessionRowMenu
@@ -447,7 +499,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
                         status={statusOf(row)}
                         time={timeOf(row)}
                         official={official}
-                        onOpen={() => openSession(row.id)}
+                        onOpenSession={openSession}
                         actionsLabel={labels.sessionActions}
                         t={t}
                       />

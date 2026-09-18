@@ -13,10 +13,12 @@
  * 行内会让每行无条件多挂一组 hook 状态，独立组件则按需挂载。重命名对话框
  * 也留在这里——只有真正打开过的行才付出这份状态
  */
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import type { ReactElement } from 'react'
 import { IconEllipsisOutline16, Menu } from '../runtime.ts'
 import { buildSessionMenuItems } from '../menus.tsx'
+import { sameGroupSections } from '../data/layout.ts'
+import { sameSessionStatus } from '../data/status.ts'
 import { SessionRowView } from './SessionRowView.tsx'
 import { NameDialog } from './dialogs/NameDialog.tsx'
 import type { OfficialSessionActions } from '../actions.ts'
@@ -24,8 +26,15 @@ import type { RegionTranslate } from '../locales.ts'
 import type { SessionStatus } from '../data/status.ts'
 import type { GroupSection, SessionRow } from '../data/types.ts'
 
-/** 一个会话行的归组上下文；缺省表示该行没有分组可归 */
+/**
+ * 一个会话行的归组上下文；缺省表示该行没有分组可归
+ *
+ * 只装数据与稳定引用的动作：行级 memo 按字段比对这个对象，把每次渲染新建的闭包放进来
+ * 会让比对落空
+ */
 export interface SessionGroupingContext {
+  /** 该会话所在的工作区；归组动作要用它定位 */
+  workspaceId: string
   /** 该会话所在工作区的全部分组 */
   sections: readonly GroupSection[]
   /** 目标会话当前所属分组 id；空串表示未归组 */
@@ -34,8 +43,13 @@ export interface SessionGroupingContext {
   groupLabel: string
   /** 「取消分组」文案 */
   ungroupLabel: string
-  /** 菜单选中项：`ungroup` 或 `group:<id>` */
-  onSelect: (id: string) => void
+  /**
+   * 归组选中项：`ungroup` 或 `group:<id>`
+   *
+   * 接收工作区与会话 id 而不是提前绑定：这个动作由区域组件缓存，因此对所有行是
+   * 同一个引用，行自己在组件内把 id 绑上去
+   */
+  onSelectGroup: (workspaceId: string, sessionId: string, id: string) => void
 }
 
 export interface SessionRowMenuProps {
@@ -51,14 +65,64 @@ export interface SessionRowMenuProps {
   grouping?: SessionGroupingContext | undefined
   /** 官方三项会话操作；缺省时菜单里没有官方三项 */
   official?: OfficialSessionActions | undefined
-  onOpen: () => void
+  /**
+   * 打开会话
+   *
+   * 传动作本身而不是绑好 id 的闭包：绑好的闭包每次渲染都是新引用，行级 memo
+   * 因此永远判定为变过
+   */
+  onOpenSession: (sessionId: string) => void
   /** 行尾操作按钮的无障碍标签，取会话标题 */
   actionsLabel: (name: string) => string
   /** 本包命名空间的翻译座位，供重命名对话框解析通用词 */
   t: RegionTranslate
 }
 
-export function SessionRowMenu({
+/**
+ * 比较两次归组上下文是否表示同一件事
+ *
+ * 分组段每次渲染都是新数组，按引用比会让每一行都判定为变过；菜单只消费分组的
+ * id 与名字，因此判定这些字段就够
+ */
+function sameGrouping(
+  a: SessionGroupingContext | undefined,
+  b: SessionGroupingContext | undefined,
+): boolean {
+  if (a === b) return true
+  if (a === undefined || b === undefined) return false
+  if (
+    a.workspaceId !== b.workspaceId ||
+    a.currentGroupId !== b.currentGroupId ||
+    a.groupLabel !== b.groupLabel ||
+    a.ungroupLabel !== b.ungroupLabel ||
+    a.onSelectGroup !== b.onSelectGroup
+  ) {
+    return false
+  }
+  return sameGroupSections(a.sections, b.sections)
+}
+
+/**
+ * 行级 memo 的比较器
+ *
+ * 传进来的都是原语或稳定引用，因此逐格比即可；状态位与归组上下文按内容比
+ */
+function sameRowMenuProps(prev: SessionRowMenuProps, next: SessionRowMenuProps): boolean {
+  return (
+    prev.row === next.row &&
+    prev.title === next.title &&
+    prev.selected === next.selected &&
+    prev.time === next.time &&
+    sameSessionStatus(prev.status, next.status) &&
+    prev.official === next.official &&
+    prev.onOpenSession === next.onOpenSession &&
+    prev.actionsLabel === next.actionsLabel &&
+    prev.t === next.t &&
+    sameGrouping(prev.grouping, next.grouping)
+  )
+}
+
+function SessionRowMenuView({
   row,
   title,
   selected,
@@ -66,7 +130,7 @@ export function SessionRowMenu({
   time,
   grouping,
   official,
-  onOpen,
+  onOpenSession,
   actionsLabel,
   t,
 }: SessionRowMenuProps): ReactElement {
@@ -76,12 +140,13 @@ export function SessionRowMenu({
   return (
     <>
       <SessionRowView
+        sessionId={row.id}
         title={title}
         selected={selected}
         status={status}
         time={time}
         menuOpen={menuOpen}
-        onOpen={onOpen}
+        onOpenSession={onOpenSession}
         action={
           <Menu
             open={menuOpen}
@@ -101,7 +166,7 @@ export function SessionRowMenu({
                 void official?.archiveSession(row.id)
                 return
               }
-              grouping?.onSelect(id)
+              if (grouping !== undefined) grouping.onSelectGroup(grouping.workspaceId, row.id, id)
             }}
             // portal 进 document.body：本区域的列表容器 overflow 裁剪会把
             // 就近渲染的菜单裁掉。二级面板的方向由宿主挂的 body 标记控制
@@ -146,3 +211,11 @@ export function SessionRowMenu({
     </>
   )
 }
+
+/**
+ * 裹上 memo 的会话行
+ *
+ * 流式期间每次活动都会重渲染整片区域，未变的行若跟着重算，长列表就会在每次活动
+ * 时付出与行数成正比的代价——实测 800 行时单次更新逾百毫秒，主线程因此被整段占住
+ */
+export const SessionRowMenu = memo(SessionRowMenuView, sameRowMenuProps)

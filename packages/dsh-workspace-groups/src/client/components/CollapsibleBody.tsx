@@ -10,16 +10,21 @@
  * 展开分两段：先把容器撑开，撑开跑完再让元素自上而下逐个淡入
  *
  * 分两段是为了不让两种代价叠在同一时间段：撑开每帧都要重排整棵子树，而一批元素
- * 同时做 opacity 过渡又要逐帧重新合成。撑开期间元素保持透明、不跑任何过渡，两段
- * 各自只承担一件事
+ * 同时做 opacity 过渡又要逐帧重新合成
+ *
+ * 衔接两段的是一段延迟：撑开那段等待（容器时长 × 起点比例）与逐个淡入的先后相加后
+ * 一起写进元素的延迟。等待走挂钟时间，主线程被长任务占住时只是晚一点淡入
+ *
+ * 透明只挂在「所在折叠体还没展开」这一条结构条件上（见 styles.ts），不透明是元素的
+ * 自然状态。这里只写延迟、不写显隐，因此没有会过期的状态
  *
  * 淡入放在撑开之后还顺带解决了首帧问题：首次展开要付样式与布局的初始化代价，而
  * 过渡按挂钟时间推进，等第一帧真的画出来，淡入往往已经过去大半
  *
- * 嵌套时内层要让外层先走完（见 {@link CollapsibleBody} 里的 settled）：内层若抢在
- * 外层撑开期间点亮，它的元素还在逐渐揭开的裁剪区里，整段淡入都会落在暗处
+ * 嵌套时内层要让外层先走完：内层若抢在外层撑开期间点亮，它的元素还在逐渐揭开的
+ * 裁剪区里，整段淡入都会落在暗处
  */
-import { createContext, useContext, useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import {
   COLLAPSE_VARS,
@@ -44,9 +49,6 @@ export interface StaggerTiming {
 /** 带此标记的元素参与逐个淡入；标记由元素组件打在自己根节点上 */
 const STAGGER_UNIT = '[data-wg-stagger]'
 
-/** 逐个淡入的显隐类；由 useStaggerReveal 按 context 决定是否拼进 className */
-const REVEAL_CLASS = 'wg-reveal'
-
 /** 折叠体根节点的类名 */
 const BODY_CLASS = 'wg-collapse'
 
@@ -55,36 +57,6 @@ const BODY_SELECTOR = `.${BODY_CLASS}`
 
 /** 仍收着的折叠体；落在它里面的元素本次展开不会露面 */
 const CLOSED_BODY = `${BODY_SELECTOR}:not(.wg-collapse-open)`
-
-/** 撑开动作对应的过渡属性；用它把容器的轨道过渡与别的过渡分开 */
-const EXPAND_PROPERTY = 'grid-template-rows'
-
-/** 兜底计时的宽限；过渡结束时事件通常先到 */
-const FALLBACK_SLACK_MS = 60
-
-/**
- * 本子树此刻是否可以点亮
- *
- * 逐个淡入的元素**自己从 context 取**显隐类，而不是由折叠体命令式地往它们身上挂：
- * className 归 React 所有，行内状态一变（例如菜单开合）React 会整体重写它，命令式
- * 挂上去的类会被抹掉，而且父组件不会因此重渲染、补不回来——表现为该行卡在透明，
- * 反复补挂则是闪烁
- *
- * 折叠体只负责算出「现在能不能亮」，写类交给渲染。默认 true，没被折叠体包着的
- * 元素因此不受影响
- */
-const RevealContext = createContext(true)
-
-/**
- * 取本元素要附加的显隐类
- *
- * 参与逐个淡入的元素（会话行、分组头、空态）在渲染时调用它，把返回的值接到
- * className 末尾。返回空串表示还没到点亮的时候
- * @returns 形如 ` wg-reveal` 的后缀，或空串
- */
-export function useStaggerReveal(): string {
-  return useContext(RevealContext) ? ` ${REVEAL_CLASS}` : ''
-}
 
 /**
  * 祖先链上的节点
@@ -100,7 +72,6 @@ export interface StaggerAncestor {
  * 收窄成结构类型只为可测，真实节点天然满足
  */
 export interface StaggerNode extends StaggerAncestor {
-  classList: { add(token: string): void; remove(token: string): void }
   style: { setProperty(name: string, value: string): void }
 }
 
@@ -112,11 +83,8 @@ export interface StaggerRoot extends StaggerAncestor {
 /**
  * 判断元素此刻是否可见
  *
- * 沿祖先链一路向上找仍收着的折叠体：收着的祖先里的元素根本看不见，点亮它等于把
- * 淡入提前用掉，等祖先真的展开时已经是不透明，淡入不再发生
- *
- * 「祖先正在撑开」不在这里判断——那是会随时间变化的时序状态，适合用 context 传，
- * DOM 里看不出来
+ * 沿祖先链一路向上找仍收着的折叠体：收着的祖先里的元素根本看不见，给它排期等于把
+ * 淡入提前用掉，等祖先真的展开时延迟已经过完，淡入不再发生
  * @param unit - 待判断的元素
  * @returns 可见为 true
  */
@@ -171,113 +139,16 @@ export function staggerDelayMs(order: number, timing: StaggerTiming): number {
 /**
  * 给会露面的元素逐个下发淡入延迟
  *
- * 只写延迟、不点亮——点亮要等撑开动作跑完，否则元素会在容器还没撑开时就淡入
+ * 写进去的是绝对延迟：撑开那段等待（`waitMs`）加上该元素自己的先后，因此样式只需
+ * 消费一个值。只写延迟、不写显隐
  * @param root - 折叠体的内容根节点
  * @param timing - 换算依据
+ * @param waitMs - 撑开那段等待占用的毫秒数
  */
-export function planStaggerUnits(root: StaggerRoot, timing: StaggerTiming): void {
+export function planStaggerUnits(root: StaggerRoot, timing: StaggerTiming, waitMs: number): void {
   visibleUnits(root).forEach((unit, order) => {
-    unit.style.setProperty(COLLAPSE_VARS.delay, `${staggerDelayMs(order, timing)}ms`)
+    unit.style.setProperty(COLLAPSE_VARS.delay, `${waitMs + staggerDelayMs(order, timing)}ms`)
   })
-}
-
-/** 过渡结束事件里我们关心的那两栏 */
-export interface TransitionLikeEvent {
-  target?: unknown
-  propertyName?: string
-}
-
-/** 展开动作结束的通知口；只用到添加/移除监听这点能力 */
-export interface ExpandWatcher {
-  addEventListener(type: string, listener: (event: TransitionLikeEvent) => void): void
-  removeEventListener(type: string, listener: (event: TransitionLikeEvent) => void): void
-}
-
-/** 兜底计时所需的定时器能力；只为可测而收窄 */
-export interface RevealTimer {
-  setTimeout(handler: () => void, ms: number): number
-  clearTimeout(id: number): void
-}
-
-/** 真实环境里的定时器 */
-const REAL_TIMER: RevealTimer = {
-  setTimeout: (handler, ms) => window.setTimeout(handler, ms),
-  clearTimeout: (id) => window.clearTimeout(id),
-}
-
-export interface ScheduleAfterExpandOptions {
-  /** 撑开动作的时长 */
-  duration: number
-  /**
-   * 等撑开走到这个比例时动手，取 0..1
-   *
-   * `1` 表示等完全撑开，`0` 表示立刻动手。比例 < 1 时只能靠定时器——`transitionend`
-   * 只在结束那一刻才来，回不到过去；比例 = 1 则认事件，过渡真正结束才算数，标签页被
-   * 降频或主线程被占住时也停在正确的时刻
-   */
-  lead?: number | undefined
-  /** 动手时调用 */
-  onExpandDone: () => void
-  /** 定时器能力，缺省用真实环境 */
-  timer?: RevealTimer | undefined
-}
-
-/**
- * 等撑开动作跑到预定比例再执行后续动作
- *
- * 比例 = 1（默认）时认容器的 `transitionend`：过渡真正结束的时刻才算数，标签页被
- * 降频或主线程被占住时也停在正确的时刻。定时器只作兜底——`prefers-reduced-motion`
- * 下过渡被关掉、事件不会来，没有兜底元素会永远停在透明
- *
- * 比例 < 1 时反过来以定时器为准，`transitionend` 退居兜底
- * @param shell - 承载撑开过渡的容器
- * @param options - 时长、比例、后续动作与定时器
- * @returns 取消这次等待；取消后定时器会被清掉，后续动作不再执行
- */
-export function scheduleAfterExpand(
-  shell: ExpandWatcher,
-  options: ScheduleAfterExpandOptions,
-): () => void {
-  const { duration, onExpandDone } = options
-  // 比例越界时夹回区间：调用点给错值不该把等待算成负数或超出整段
-  const lead = Math.min(Math.max(options.lead ?? 1, 0), 1)
-  const timer = options.timer ?? REAL_TIMER
-  let settled = false
-  let fallback: number | undefined
-
-  const finish = (): void => {
-    if (settled) return
-    settled = true
-    shell.removeEventListener('transitionend', onEnd)
-    if (fallback !== undefined) timer.clearTimeout(fallback)
-    onExpandDone()
-  }
-
-  function onEnd(event: TransitionLikeEvent): void {
-    // 只认容器自己的轨道过渡：内层 clip 的 visibility 过渡也会冒泡到这里
-    if (event.target !== shell || event.propertyName !== EXPAND_PROPERTY) return
-    finish()
-  }
-
-  shell.addEventListener('transitionend', onEnd)
-  fallback = timer.setTimeout(
-    finish,
-    lead < 1 ? duration * lead : duration + FALLBACK_SLACK_MS,
-  )
-
-  return () => {
-    if (settled) return
-    settled = true
-    shell.removeEventListener('transitionend', onEnd)
-    if (fallback !== undefined) timer.clearTimeout(fallback)
-  }
-}
-
-/** 是否要求减少动态效果 */
-function prefersReducedMotion(): boolean {
-  if (typeof window === 'undefined') return false
-  if (typeof window.matchMedia !== 'function') return false
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
 export interface CollapsibleBodyProps {
@@ -294,85 +165,42 @@ export interface CollapsibleBodyProps {
 }
 
 export function CollapsibleBody({ open, children, motion }: CollapsibleBodyProps): ReactElement {
-  const shell = useRef<HTMLDivElement | null>(null)
   const clip = useRef<HTMLDivElement | null>(null)
   const wasOpen = useRef(open)
-  /** 本层是否已走完撑开、可以淡入 */
-  const [settled, setSettled] = useState(true)
-  /** 取消「撑开后淡入」这次等待 */
-  const cancelReveal = useRef<(() => void) | null>(null)
 
-  // 节奏参数只用于换算，不必进依赖：中途改它不该取消已经在跑的等待
+  // 节奏参数只用于换算与下发，不进依赖：中途改它不该让已经在跑的淡入换一套延迟
   const resolved = { ...DEFAULT_COLLAPSE_MOTION, ...motion }
   const motionRef = useRef(resolved)
   motionRef.current = resolved
 
-  // 祖先此刻是否已点亮；本层要不要亮还要看自己的展开与撑开进度
-  const ancestorsRevealed = useContext(RevealContext)
-  const justOpened = open && !wasOpen.current
+  // 时长、缓动、淡入时长对所有元素相同，下发一次由自定义属性继承下去。依赖按字段
+  // 列出，父组件每次重渲染传进来的新对象因此不会让内联样式每帧换一份
+  const { duration, easing, fade, step, cap, lead } = resolved
+  const vars = useMemo(
+    () => collapseMotionVars({ duration, easing, fade, step, cap, lead }),
+    [duration, easing, fade, step, cap, lead],
+  )
 
-  /**
-   * 在渲染期就把「还没点亮」传下去
-   *
-   * layout effect 是子组件先跑，等到 effect 里再改状态就已经晚了：内层早已先跑过
-   * 一轮，会抢在撑开期间把自己点亮，整段淡入都落在裁剪区里。React 允许在渲染期按
-   * props 调整状态，它会立刻重渲染，子树因此读到新值
-   *
-   * 减少动态效果时容器不做撑开动作、没有可等的过渡，因此不进入这个状态
-   */
-  if (justOpened && settled && !prefersReducedMotion()) setSettled(false)
+  const justOpened = open && !wasOpen.current
 
   useLayoutEffect(() => {
     const root = clip.current
-    const outer = shell.current
-    if (root === null || outer === null) return
+    if (root === null) return
     wasOpen.current = open
+    if (!justOpened) return
 
-    if (!open) {
-      // 收起：撤掉等待。显隐类由渲染的 context 决定，这里不必也不该去动它
-      cancelReveal.current?.()
-      cancelReveal.current = null
-      return
-    }
-
-    // 自己这次展开：先记下这一批的先后，等撑开跑完再按它点亮
-    if (justOpened) {
-      planStaggerUnits(root, { step: motionRef.current.step, cap: motionRef.current.cap })
-    }
-
-    // 撑开中：等它跑完才轮到点亮。已经在等就不重复排期
-    if (!settled && cancelReveal.current === null) {
-      cancelReveal.current = scheduleAfterExpand(outer, {
-        duration: motionRef.current.duration,
-        // 只有一个元素时强制等完全撑开，见 resolveLead
-        lead: resolveLead(root, motionRef.current.lead),
-        onExpandDone: () => setSettled(true),
-      })
-    }
+    // 只有这一个元素要露面时等完全撑开，因此先量出这一批里有多少元素，再算等待时长。
+    // 在布局阶段写，和展开态本身的样式变更落在同一次样式计算里，元素不会先亮一帧
+    const current = motionRef.current
+    const waitMs = current.duration * resolveLead(root, current.lead)
+    planStaggerUnits(root, { step: current.step, cap: current.cap }, waitMs)
   })
 
-  // 卸载时取消等待，免得定时器醒来去碰已摘除的节点
-  useLayoutEffect(() => {
-    return () => {
-      cancelReveal.current?.()
-      cancelReveal.current = null
-    }
-  }, [])
-
-  // 三层都满足才点亮：自己展开着、自己的撑开已跑完、祖先也已点亮
-  const revealed = open && settled && ancestorsRevealed
-
   return (
-    <RevealContext.Provider value={revealed}>
-      <div
-        className={'wg-collapse' + (open ? ' wg-collapse-open' : '')}
-        style={collapseMotionVars(resolved)}
-        ref={shell}
-      >
-        <div className="wg-collapse-clip" ref={clip}>
-          {children}
-        </div>
+    <div className={'wg-collapse' + (open ? ' wg-collapse-open' : '')} style={vars}>
+      <div className="wg-collapse-clip" ref={clip}>
+        {children}
       </div>
-    </RevealContext.Provider>
+    </div>
   )
 }

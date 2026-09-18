@@ -63,21 +63,38 @@ function indexRunningSubagents(
   return running
 }
 
-/** 把一个会话摘要投影成渲染行 */
+/**
+ * 上一次投影的结果，按摘要对象本身缓存
+ *
+ * 流式期间每次活动只替换发生变化的那条摘要（其余对象保持同一引用），按摘要缓存即可
+ * 让未变的行保持同一身份，供行级 memo 比对
+ *
+ * 用 WeakMap：摘要被替换后旧条目自动回收，不会随会话数增长而堆积
+ */
+const rowCache = new WeakMap<SessionSummary, SessionRow>()
+
+/** 把一个会话摘要投影成渲染行；输入未变时复用上一次的对象 */
 function toRow(summary: SessionSummary, runningSubagents: Map<string, number>): SessionRow {
   const id = String(summary.id)
+  const runningSubagentCount = runningSubagents.get(id) ?? 0
+  const cached = rowCache.get(summary)
+  // 子代理运行数由别的会话决定，可能与摘要本身不同步地变化，因此一并比对
+  if (cached !== undefined && cached.runningSubagentCount === runningSubagentCount) return cached
+
   const blank = summary.blank === true
-  return {
+  const row: SessionRow = {
     id,
     // 空白会话不进搜索、也不显示标题：与官方 `sessionTitle` 一样取空串，
     // 由渲染期套语言包的「新会话」固定名
     title: blank ? '' : summary.displayTitle,
     blank,
     running: summary.running === true,
-    runningSubagentCount: runningSubagents.get(id) ?? 0,
+    runningSubagentCount,
     completed: summary.completed === true,
     updatedAt: summary.updatedAt,
   }
+  rowCache.set(summary, row)
+  return row
 }
 
 /** 可见性过滤的共同输入 */

@@ -88,7 +88,9 @@ export interface RegionDataHooks {
 
 /** 区域组件需要的动作 */
 export interface RegionActions {
-  /** 打开一个会话 */
+  /**
+   * 打开一个会话
+   */
   openSession: (sessionId: string) => void
   /**
    * 在指定工作区开一个新会话
@@ -108,14 +110,24 @@ export interface RegionActions {
   loadGroups: () => Promise<Record<string, Group[]>>
   /** 远程数据面就绪后回调一次；返回反注册函数 */
   onReady: (listener: () => void) => () => void
-  /** 新建分组 */
-  createGroup: (workspaceId: string, name: string) => Promise<void>
-  /** 重命名分组 */
-  renameGroup: (workspaceId: string, groupId: string, name: string) => Promise<void>
-  /** 删除分组；组内会话回到未归组 */
-  deleteGroup: (workspaceId: string, groupId: string) => Promise<void>
-  /** 把会话移入分组；空串表示移出分组 */
-  moveSession: (workspaceId: string, sessionId: string, groupId: GroupChoice) => Promise<void>
+  /** 新建分组；返回替换用的完整快照 */
+  createGroup: (workspaceId: string, name: string) => Promise<Record<string, Group[]>>
+  /** 重命名分组；返回替换用的完整快照 */
+  renameGroup: (workspaceId: string, groupId: string, name: string) => Promise<Record<string, Group[]>>
+  /** 删除分组，组内会话回到未归组；返回替换用的完整快照 */
+  deleteGroup: (workspaceId: string, groupId: string) => Promise<Record<string, Group[]>>
+  /**
+   * 把会话移入分组；空串表示移出分组
+   *
+   * 返回替换用的完整快照，而不是让调用方再拉一次：宿主每个变更方法本来就回整份
+   * 快照（见宿主 `service.ts`），直接采用它既少一次往返，也让「摆位置」与「本地
+   * 状态反映新位置」之间没有空档
+   */
+  moveSession: (
+    workspaceId: string,
+    sessionId: string,
+    groupId: GroupChoice,
+  ) => Promise<Record<string, Group[]>>
   /** 重命名工作区 */
   renameWorkspace: (workspaceId: string, title: string) => Promise<void>
   /** 删除工作区注册；文件夹与会话记录保留 */

@@ -15,5 +15,10 @@
     "clean": "pnpm -r --if-present run clean && node -e \"require('node:fs').rmSync('.tmp',{recursive:true,force:true})\"",
     "verify:mount": "node scripts/verify-profile-mount.mjs",
     "check": "pnpm run build && pnpm run typecheck && pnpm run test && pnpm run verify:mount"
+  },
+  "devDependencies": {
+    "@types/react-dom": "^18.3.7",
+    "jsdom": "^30.0.1",
+    "react-dom": "^18.3.1"
   }
 }

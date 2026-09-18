@@ -52,6 +52,27 @@ export function groupIdOfSession(sections: readonly GroupSection[], sessionId: s
 }
 
 /**
+ * 比较两组分组段是否表示同一件事
+ *
+ * 供行级 memo 的比较器使用：归组菜单只消费分组的 id 与名字
+ * @param a - 上一次的分组段
+ * @param b - 这一次的分组段
+ * @returns 归组菜单的显示结果相同为 true
+ */
+export function sameGroupSections(
+  a: readonly GroupSection[] | undefined,
+  b: readonly GroupSection[] | undefined,
+): boolean {
+  if (a === b) return true
+  if (a === undefined || b === undefined) return false
+  if (a.length !== b.length) return false
+  return a.every((section, index) => {
+    const other = b[index]
+    return other !== undefined && section.id === other.id && section.label === other.label
+  })
+}
+
+/**
  * 判定一组会话行里是否有当前选中的那条
  *
  * 官方用它决定展开状态下的工作区文件夹是否染成强调色

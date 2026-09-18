@@ -4,20 +4,15 @@ import {
   planStaggerUnits,
   resolveLead,
   staggerDelayMs,
-  scheduleAfterExpand,
 } from '../src/client/components/CollapsibleBody.tsx'
-import type {
-  RevealTimer,
-  StaggerTiming,
-  TransitionLikeEvent,
-} from '../src/client/components/CollapsibleBody.tsx'
+import type { StaggerTiming } from '../src/client/components/CollapsibleBody.tsx'
 
 /**
- * 逐个淡入的排期与显隐
+ * 逐个淡入的排期与延迟
  *
- * 这几个函数只依赖「查元素 + 读写元素」这点能力，接口因此收窄成结构类型，
+ * 这几个函数只依赖「查元素 + 写元素」这点能力，接口因此收窄成结构类型，
  * node 环境用替身即可验证——真正要看的是延迟排期、哪些元素被排除，以及
- * 「撑开跑完才淡入」的时序，不需要一个完整的 DOM
+ * 「撑开那段等待也在延迟里」的换算，不需要一个完整的 DOM
  */
 
 /**
@@ -65,11 +60,9 @@ function openBody(parent: FakeNode | null): FakeNode {
 }
 
 interface FakeUnit extends FakeNode {
-  classList: { add(token: string): void; remove(token: string): void }
   style: { setProperty(name: string, value: string): void }
   /** 当前延迟值；没排过期时为 undefined */
   delay: string | undefined
-  revealed: boolean
 }
 
 /** 造一个元素替身；`parent` 是它的父节点，用来表达嵌套层级 */
@@ -77,15 +70,6 @@ function unit(parent: FakeNode | null = null): FakeUnit {
   const node: FakeUnit = {
     ...fakeNode([], parent),
     delay: undefined,
-    revealed: false,
-    classList: {
-      add: (token) => {
-        if (token === 'wg-reveal') node.revealed = true
-      },
-      remove: (token) => {
-        if (token === 'wg-reveal') node.revealed = false
-      },
-    },
     style: {
       setProperty: (name, value) => {
         if (name === '--wg-collapse-delay') node.delay = value
@@ -123,49 +107,6 @@ function scene(
   return { root: container, units }
 }
 
-/** 可手动推进的定时器替身；记下被请求的延时，便于断言提前量 */
-function fakeTimer(): RevealTimer & { fire(): void; pending(): boolean; delay(): number | undefined } {
-  let handler: (() => void) | undefined
-  let wait: number | undefined
-  return {
-    setTimeout: (fn, ms) => {
-      handler = fn
-      wait = ms
-      return 1
-    },
-    clearTimeout: () => {
-      handler = undefined
-      wait = undefined
-    },
-    fire: () => handler?.(),
-    pending: () => handler !== undefined,
-    delay: () => wait,
-  }
-}
-
-/** 可手动触发过渡结束的容器替身 */
-function fakeShell(): {
-  addEventListener(type: string, fn: (e: TransitionLikeEvent) => void): void
-  removeEventListener(type: string, fn: (e: TransitionLikeEvent) => void): void
-  end(propertyName: string, target?: unknown): void
-  listenerCount(): number
-} {
-  const listeners = new Set<(e: TransitionLikeEvent) => void>()
-  const shell = {
-    addEventListener: (_type: string, fn: (e: TransitionLikeEvent) => void) => {
-      listeners.add(fn)
-    },
-    removeEventListener: (_type: string, fn: (e: TransitionLikeEvent) => void) => {
-      listeners.delete(fn)
-    },
-    end: (propertyName: string, target?: unknown) => {
-      for (const fn of [...listeners]) fn({ propertyName, target: target ?? shell })
-    },
-    listenerCount: () => listeners.size,
-  }
-  return shell
-}
-
 const TIMING: StaggerTiming = { step: 16, cap: 160 }
 
 describe('staggerDelayMs', () => {
@@ -186,20 +127,38 @@ describe('planStaggerUnits', () => {
   it('numbers the delays in document order', () => {
     const { root: container, units } = scene(3)
 
-    planStaggerUnits(container, TIMING)
+    planStaggerUnits(container, TIMING, 0)
 
     expect(units.map((u) => u.delay)).toEqual(['0ms', '16ms', '32ms'])
+  })
+
+  it('adds the expand wait to every delay', () => {
+    const { root: container, units } = scene(2)
+
+    // 撑开那段等待是绝对量：元素在它之后才开始淡入，因此逐元素加上去。样式因此只
+    // 消费一个值，不必再把两段时长拼一次，也就不存在两处各写一份时长而失配
+    planStaggerUnits(container, TIMING, 90)
+
+    expect(units.map((u) => u.delay)).toEqual(['90ms', '106ms'])
+  })
+
+  it('keeps the cap independent of the expand wait', () => {
+    const { root: container, units } = scene(20)
+
+    // 上限只压元素之间的先后，不该把撑开那段等待也一起压掉
+    planStaggerUnits(container, TIMING, 90)
+
+    expect(units[19]?.delay).toBe(`${90 + TIMING.cap}ms`)
   })
 
   it('skips elements inside a still-closed nested body', () => {
     const { root: container, units } = scene(3, [1])
 
-    planStaggerUnits(container, TIMING)
+    planStaggerUnits(container, TIMING, 0)
 
     // 藏起来的元素不占号，否则它后面的元素会被推得更晚
     expect(units.map((u) => u.delay)).toEqual(['0ms', undefined, '16ms'])
   })
-
 })
 
 describe('resolveLead', () => {
@@ -245,7 +204,7 @@ describe('nested visibility', () => {
     // 外层展开会连内部展开着的嵌套体一起排期，它们同属一批
     units[0]!.parentElement = openBody(container)
 
-    planStaggerUnits(container, TIMING)
+    planStaggerUnits(container, TIMING, 0)
 
     expect(units.map((u) => u.delay)).toEqual(['0ms', '16ms'])
   })
@@ -255,7 +214,7 @@ describe('nested visibility', () => {
     const { root: container, units } = scene(2)
     units[0]!.parentElement = closedBody(container)
 
-    planStaggerUnits(container, TIMING)
+    planStaggerUnits(container, TIMING, 0)
 
     expect([units[0]?.delay, units[1]?.delay]).toEqual([undefined, '0ms'])
   })
@@ -273,171 +232,39 @@ describe('nested visibility', () => {
   })
 })
 
-describe('reveal class ownership', () => {
-  it('hands the reveal class to the elements through context, not by writing DOM', () => {
-    // className 归 React 所有：行内状态一变（菜单开合）React 会整体重写它。命令式
-    // 挂上去的类会被抹掉，而父组件不会因此重渲染、补不回来——表现为该行卡在透明，
-    // 反复补挂则是闪烁。因此显隐类只能由元素自己在渲染时产出
-    const source = readFileSync(
+describe('fail-open reveal', () => {
+  /**
+   * 读组件源码；显隐是否 fail-open 是**结构性**的，只能从源码断言
+   * @returns 去掉了注释的源码
+   */
+  function componentSource(): string {
+    return readFileSync(
       new URL('../src/client/components/CollapsibleBody.tsx', import.meta.url),
       'utf8',
-    )
+    ).replace(/\/\*[\s\S]*?\*\//g, '')
+  }
 
-    expect(source).toContain('export function useStaggerReveal')
-    // 折叠体不得从外部改元素的 classList
+  it('never leaves an element hidden behind a callback that may not wake up', () => {
+    // 透明一旦写进基准规则，就得靠某个回调在正确时刻把类补回去。那次唤醒在主线程被
+    // 长任务占住时会被挤掉且补不回来——元素会一直白着，这正是卡死的现象。因此这里
+    // 不得有任何会过期的显隐状态，也不得靠定时器或过渡事件驱动显隐
+    const source = componentSource()
+
+    expect(source).not.toMatch(/useState/)
+    expect(source).not.toMatch(/transitionend/)
+    expect(source).not.toMatch(/setTimeout/)
     expect(source).not.toMatch(/classList\.(add|remove)/)
   })
 
-  it('exposes the reveal suffix only when context allows it', () => {
-    // hook 的返回值直接拼进 className，因此必须是「带前导空格的后缀或空串」
-    const source = readFileSync(
-      new URL('../src/client/components/CollapsibleBody.tsx', import.meta.url),
-      'utf8',
-    )
-
-    expect(source).toContain('` ${REVEAL_CLASS}`')
-  })
-})
-
-describe('scheduleAfterExpand', () => {
-  it('waits for the expand transition to end before acting', () => {
-    const shell = fakeShell()
-    const timer = fakeTimer()
-    let done = 0
-
-    scheduleAfterExpand(shell, { duration: 180, onExpandDone: () => (done += 1), timer })
-    expect(done).toBe(0)
-
-    shell.end('grid-template-rows')
-
-    expect(done).toBe(1)
+  it('schedules delays in a layout effect so the first frame is already correct', () => {
+    // 延迟必须和展开态的样式变更落在同一次样式计算里；放到普通 effect 里元素会先以
+    // 没有延迟的状态亮一帧，逐个淡入的开头因此丢掉
+    expect(componentSource()).toMatch(/useLayoutEffect/)
   })
 
-  it('ignores transitions bubbled up from the inner clip', () => {
-    const shell = fakeShell()
-    const timer = fakeTimer()
-    let done = 0
-
-    scheduleAfterExpand(shell, { duration: 180, onExpandDone: () => (done += 1), timer })
-    // 内层 clip 的 visibility 过渡会冒泡到容器，认错就会提前淡入
-    shell.end('visibility', {})
-    expect(done).toBe(0)
-
-    shell.end('grid-template-rows')
-    expect(done).toBe(1)
-  })
-
-  it('falls back to a timer when no transition event ever arrives', () => {
-    const shell = fakeShell()
-    const timer = fakeTimer()
-    let done = 0
-
-    // 关掉动画时过渡事件不会来，没有兜底元素会永远停在透明
-    scheduleAfterExpand(shell, { duration: 180, onExpandDone: () => (done += 1), timer })
-    timer.fire()
-
-    expect(done).toBe(1)
-  })
-
-  it('acts exactly once even when both the event and the timer arrive', () => {
-    const shell = fakeShell()
-    const timer = fakeTimer()
-    let done = 0
-
-    scheduleAfterExpand(shell, { duration: 180, onExpandDone: () => (done += 1), timer })
-    shell.end('grid-template-rows')
-    timer.fire()
-
-    expect(done).toBe(1)
-  })
-
-  it('waits until the expand is over before acting by default', () => {
-    const shell = fakeShell()
-    const timer = fakeTimer()
-
-    scheduleAfterExpand(shell, { duration: 180, onExpandDone: () => {}, timer })
-
-    // 默认 lead = 1，等过渡结束；定时器只是兜底，因此要多留一点宽限
-    expect(timer.delay()).toBe(180 + 60)
-  })
-
-  it('acts at the given fraction of the expand', () => {
-    const shell = fakeShell()
-    const timer = fakeTimer()
-    let done = 0
-
-    scheduleAfterExpand(shell, {
-      duration: 200,
-      lead: 0.25,
-      onExpandDone: () => (done += 1),
-      timer,
-    })
-
-    // 比例 < 1 时定时器说了算，`transitionend` 退居兜底
-    expect(timer.delay()).toBe(50)
-    timer.fire()
-    expect(done).toBe(1)
-  })
-
-  it('acts immediately at a lead of zero', () => {
-    const shell = fakeShell()
-    const timer = fakeTimer()
-
-    scheduleAfterExpand(shell, { duration: 180, lead: 0, onExpandDone: () => {}, timer })
-
-    expect(timer.delay()).toBe(0)
-  })
-
-  it('clamps a negative lead to zero', () => {
-    const shell = fakeShell()
-    const timer = fakeTimer()
-
-    scheduleAfterExpand(shell, { duration: 180, lead: -0.5, onExpandDone: () => {}, timer })
-
-    expect(timer.delay()).toBe(0)
-  })
-
-  it('clamps a lead above one to waiting for the whole expand', () => {
-    const shell = fakeShell()
-    const timer = fakeTimer()
-
-    // 比例超过区间时按「等完全撑开」处理，等待不该超出整段
-    scheduleAfterExpand(shell, { duration: 180, lead: 3, onExpandDone: () => {}, timer })
-
-    expect(timer.delay()).toBe(180 + 60)
-  })
-
-  it('drops the listener once the expand has been handled', () => {
-    const shell = fakeShell()
-    const timer = fakeTimer()
-
-    scheduleAfterExpand(shell, { duration: 180, onExpandDone: () => {}, timer })
-    expect(shell.listenerCount()).toBe(1)
-
-    shell.end('grid-template-rows')
-
-    // 留着监听会在后续每次重渲染里被反复触发
-    expect(shell.listenerCount()).toBe(0)
-    expect(timer.pending()).toBe(false)
-  })
-
-  it('cancels the pending action and cleans up', () => {
-    const shell = fakeShell()
-    const timer = fakeTimer()
-    let done = 0
-
-    const cancel = scheduleAfterExpand(shell, {
-      duration: 180,
-      onExpandDone: () => (done += 1),
-      timer,
-    })
-    cancel()
-
-    // 收起动作会取消等待；取消后既不该回调，也不该留下监听或定时器
-    shell.end('grid-template-rows')
-    timer.fire()
-    expect(done).toBe(0)
-    expect(shell.listenerCount()).toBe(0)
-    expect(timer.pending()).toBe(false)
+  it('derives the expand wait from the shared duration instead of a second copy', () => {
+    // 撑开那段等待若另写一个数字，改时长就会失配：容器先撑完而元素还没开始淡入，
+    // 或元素在容器还收着时就把淡入用掉
+    expect(componentSource()).toMatch(/duration \* resolveLead\(/)
   })
 })

@@ -130,6 +130,8 @@ function render(
     order?: string[]
     /** 折叠体元素，按文档序 */
     collapses?: unknown[]
+    /** 会话行元素，按文档序 */
+    rows?: unknown[]
   },
   active: unknown = dispatcher,
   enter?: (type: unknown) => () => void,
@@ -146,7 +148,17 @@ function render(
     }
     if (!React.isValidElement(n)) return
     const el = n as React.ReactElement & { type: unknown; props: Record<string, unknown> }
-    if (typeof el.type === 'function') {
+    // memo 包出来的组件其 type 是对象而不是函数，函数体挂在 type.type 上。
+    // 替身没有 React 的比对逻辑，这里取内层函数直接调用即可——本测试关心结构，
+    // 不关心某次渲染是否被 memo 挡下
+    const memoized = el.type as { type?: unknown } | undefined
+    const type =
+      typeof el.type === 'function'
+        ? el.type
+        : memoized !== null && typeof memoized === 'object' && typeof memoized.type === 'function'
+          ? memoized.type
+          : el.type
+    if (typeof type === 'function') {
       // 测试替身把 Menu 渲染成 null，因此按 props 形状识别，而不是函数名
       if (Array.isArray(el.props.items) && el.props.anchor !== undefined) {
         out.menus.push(el)
@@ -154,10 +166,12 @@ function render(
       }
       const prev = internals.ReactCurrentDispatcher.current
       internals.ReactCurrentDispatcher.current = active
-      const leave = enter?.(el.type)
+      // enter 按**内层**函数分桶：memo 对象的身份在内层组件每次渲染时都是同一个，
+      // 用 type 或内层函数都不影响本测试的状态分桶，但保持一致更直白
+      const leave = enter?.(type)
       let rendered: unknown
       try {
-        rendered = (el.type as (p: unknown) => unknown)(el.props)
+        rendered = (type as (p: unknown) => unknown)(el.props)
       } finally {
         leave?.()
         internals.ReactCurrentDispatcher.current = prev
@@ -169,6 +183,14 @@ function render(
     if (el.props['className'] === 'wg-row-actions') out.containers?.push(el)
     if (el.props['className'] === 'wg-slot') out.slots?.push(el)
     if (el.props['className'] === 'wg-group-count') out.counts?.push(el)
+    // 会话行与分组头都带淡入标记；这里只收会话行（带 data-wg-stagger 的 wg-row）
+    if (
+      typeof el.props['className'] === 'string' &&
+      (el.props['className'] as string).startsWith('wg-row') &&
+      el.props['data-wg-stagger'] === ''
+    ) {
+      out.rows?.push(el)
+    }
     if (
       el.props['className'] === 'wg-collapse' ||
       el.props['className'] === 'wg-collapse wg-collapse-open'
@@ -447,11 +469,12 @@ function props(
       'startReturns' in options ? options.startReturns : 'fresh',
     loadGroups: async () => ({ w1: [{ id: 'g1', name: '前端', sessionIds: [] }] }),
     onReady: () => () => {},
-    createGroup: async () => {},
-    renameGroup: async () => {},
-    deleteGroup: async () => {},
+    createGroup: async () => ({}),
+    renameGroup: async () => ({}),
+    deleteGroup: async () => ({}),
     moveSession: async (workspaceId: string, sessionId: string, groupId: string) => {
       options.moves?.push([workspaceId, sessionId, groupId])
+      return {}
     },
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
@@ -829,6 +852,24 @@ describe('WorkspaceGroupsRegion render', () => {
 
     // 待交互压过其他状态：orphan 静置但仍在等用户审批
     expect(out.text).toContain('StateDot:warning')
+  })
+
+  it('never gates row visibility on a class the renderer could lose', () => {
+    // 透明只由「所在折叠体还没展开」这一条结构条件决定，行上不得再出现别的显隐状态：
+    // 靠回调补类的那种显隐会在主线程被长任务占住时丢失，且补不回来
+    const out = { menus: [] as unknown[], text: [] as string[], rows: [] as unknown[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
+
+    for (const node of out.rows) {
+      const className = String((node as { props: Record<string, unknown> }).props['className'])
+      expect(className).not.toContain('wg-reveal')
+      expect(className).not.toMatch(/hidden|invisible|opacity/)
+    }
+    // 行必须仍带着参与逐个淡入的标记，否则整段淡入不会发生
+    expect(out.rows.length).toBeGreaterThan(0)
+    for (const node of out.rows) {
+      expect((node as { props: Record<string, unknown> }).props['data-wg-stagger']).toBe('')
+    }
   })
 
   it('renders the section header with the region title and the add entry', () => {

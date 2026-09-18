@@ -228,23 +228,23 @@ export const CSS = `
 
 /* 折叠体里的元素逐个淡入
  *
- * .wg-reveal 由元素自己在渲染时产出（见 useStaggerReveal），不能写成「展开祖先的
- * 后代」——那样嵌套折叠体里仍收着的元素会被外层的展开态一起点亮，等它自己那层展
- * 开时就已经是不透明的，淡入不会发生
+ * 不透明是元素的自然状态：展开态没有任何规则写 opacity。透明只挂在「所在折叠体还没
+ * 展开」这一条结构条件上，因此过渡没跑、被降频或主线程被长任务占住时，元素只会「晚
+ * 一点淡入」，不会留在透明上
  *
- * 淡入发生在容器撑开之后（见 CollapsibleBody），因此撑开期间元素保持全透明、不跑
- * 任何过渡：两段各自只承担一件事，两种代价不挤在同一时间段
+ * 嵌套由选择器自己兜住：外层收着时，收着的折叠体这条选择器作为祖先命中它裁剪区里的
+ * 所有元素，含内层折叠体的，因此不需要往元素上挂显隐类
  *
- * 延迟按视觉序逐个下发到 ${COLLAPSE_VARS.delay}，样式只消费。收起时类名摘掉即落回
- * 基础规则，基准里没有 transition-delay，延迟随之归零，所有元素因此一起淡出 */
+ * 延迟是绝对值（撑开那段等待 + 该元素的先后），由组件量出来逐个下发；样式只消费。
+ * 收起那条更具体且把延迟归零，所有元素因此一起淡出 */
 .wg-collapse-clip [data-wg-stagger] {
-  opacity: 0;
   transition: opacity var(${COLLAPSE_VARS.fade}, ${MOTION.fade}ms)
     var(${COLLAPSE_VARS.easing}, ${MOTION.easing});
-}
-.wg-collapse-clip [data-wg-stagger].wg-reveal {
-  opacity: 1;
   transition-delay: var(${COLLAPSE_VARS.delay}, 0ms);
+}
+.wg-collapse:not(.wg-collapse-open) > .wg-collapse-clip [data-wg-stagger] {
+  opacity: 0;
+  transition-delay: 0ms;
 }
 
 /* 折叠体自己承担「上一行与它之间」的那 2px：这段间距要连同内容一起收掉，
@@ -536,10 +536,9 @@ body[data-wg-menu-flip] [role='menu'] [role='menu']::before {
      否则收起后仍会多挡一个容器时长才交出焦点 */
   .wg-collapse { transition: none; }
   .wg-collapse-clip { transition: visibility 0s linear; }
-  /* 子元素随容器一起落位。逐个淡入的延迟挂在 .wg-reveal 上，那条规则比这里
-     更具体，因此要连它一起清掉，否则行仍是逐个出现 */
-  .wg-collapse-clip [data-wg-stagger],
-  .wg-collapse-clip [data-wg-stagger].wg-reveal {
+  /* 子元素随容器一起落位。逐个淡入的延迟由组件逐个下发，这里把过渡整条撤掉，
+     否则 reduced-motion 下行仍是逐个出现。撤掉后元素落回自然的不透明 */
+  .wg-collapse-clip [data-wg-stagger] {
     transition: none;
     transition-delay: 0s;
   }

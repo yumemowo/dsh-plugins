@@ -56,8 +56,8 @@ export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'remote']
  * 之所以是编译期常量而不是配置项：这是开发期的对照开关，
  * 不是要交付给用户的能力，配置化反而要多一套 schema 与文档
  */
-const COMPARE_MODE = false
-// const COMPARE_MODE = true
+// const COMPARE_MODE = false
+export const COMPARE_MODE = true
 
 /**
  * 插件入口
@@ -99,16 +99,36 @@ export function apply(ctx: Context): void {
   ctx.effect(
     () => {
       let disposed = false
-      void ctx.remote.$mount(REMOTE_CONTRIBUTION as never).then(() => {
-        if (disposed) return
-        // 服务键按 descriptor 的 namespace 注册（remote.<namespace>），
-        // 不是包名——typert 网关以 namespace 归组安装方法表
-        groupsApi = ctx.get(`remote.${SERVICE}`) as typeof groupsApi
-        for (const listener of [...readyListeners]) listener()
-        readyListeners.clear()
-      })
+      /** `$mount` 的卸载函数；挂载完成前一直是 undefined */
+      let unmount: (() => Promise<void>) | undefined
+      void ctx.remote
+        .$mount(REMOTE_CONTRIBUTION as never)
+        .then((dispose) => {
+          // 卸载早于挂载落地时必须当场退回这次挂载：`$mount` 的 effect 挂在
+          // 网关自己那一侧的 context 上（不是本包 fiber），丢掉卸载函数等于
+          // 让它永久留着，热重载后的第二次挂载会撞上「已挂载」而整体失效
+          if (disposed) {
+            void dispose()
+            return
+          }
+          unmount = dispose
+          // 服务键按 descriptor 的 namespace 注册（remote.<namespace>），
+          // 不是包名——typert 网关以 namespace 归组安装方法表
+          groupsApi = ctx.get(`remote.${SERVICE}`) as typeof groupsApi
+          for (const listener of [...readyListeners]) listener()
+          readyListeners.clear()
+        })
+        .catch((reason: unknown) => {
+          // 挂载失败此前是一条无人接管的 rejection：界面只会表现为分组整体
+          // 不可用，日志里却什么都没有
+          ctx.logger.warn('workspace-groups: remote mount failed')
+          ctx.logger.warn(reason)
+        })
       return () => {
         disposed = true
+        groupsApi = undefined
+        // 卸载是异步的；调用方不必等它，但必须发起
+        void unmount?.()
       }
     },
     'workspace-groups: remote mount',
@@ -123,6 +143,13 @@ export function apply(ctx: Context): void {
     if (groupsApi === undefined) throw new Error('workspace-groups remote is not ready')
     return groupsApi
   }
+
+  /**
+   * 上一次解析出的官方动作对象及其依据的服务
+   *
+   * 官方 `ui-workspace` 是单例，同一个服务期间复用同一个对象即可
+   */
+  let cachedOfficial: { service: UiWorkspace; value: OfficialSessionActions } | undefined
 
   const loadGroups = async (): Promise<Record<string, Group[]>> => {
     const snapshot = await callRemote<WorkspaceGroupsSnapshot>(requireApi(), 'list')
@@ -147,7 +174,13 @@ export function apply(ctx: Context): void {
     const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace | undefined
     if (uiWorkspace === undefined || sessions === undefined) return undefined
 
-    return {
+    // 服务没换人时复用同一个对象：这一格会传进行级 memo 的比对，每次渲染新建一个会
+    // 让每一行都判定为变过
+    if (cachedOfficial !== undefined && cachedOfficial.service === uiWorkspace) {
+      return cachedOfficial.value
+    }
+
+    const value: OfficialSessionActions = {
       // 重命名没有走 uiWorkspace：官方把这条留在会话对象上，菜单里也是
       // 同一个入口。走 binding 而不是另造 RPC，接受规范化与错误语义。
       renameSession: async (sessionId, title) => {
@@ -161,9 +194,15 @@ export function apply(ctx: Context): void {
         void uiWorkspace.forkSession(sessionId as never).catch(() => {})
       },
       archiveSession: (sessionId) => uiWorkspace.archiveSession(sessionId as never),
-      labels: officialSessionLabels(tWorkspace),
+      // 文案在**取用时**才投影，不是在造这个对象时：绑定结果在调用时才读当前
+      // 语言，写成取值器就能既复用对象、又让切换语言后的下一次读取拿到新译文
+      get labels() {
+        return officialSessionLabels(tWorkspace)
+      },
       relativeTime: (updatedAt, now) => timeLabel(updatedAt, now, tWorkspace),
     }
+    cachedOfficial = { service: uiWorkspace, value }
+    return value
   }
 
   /**
@@ -218,10 +257,10 @@ export function apply(ctx: Context): void {
         },
         onReady: () => () => {},
         loadGroups: async () => ({}),
-        createGroup: async () => {},
-        renameGroup: async () => {},
-        deleteGroup: async () => {},
-        moveSession: async () => {},
+        createGroup: async () => ({}),
+        renameGroup: async () => ({}),
+        deleteGroup: async () => ({}),
+        moveSession: async () => ({}),
         renameWorkspace: async () => {},
         deleteWorkspace: async () => {},
         tWorkspace,
@@ -253,18 +292,27 @@ export function apply(ctx: Context): void {
       onReady,
       loadGroups,
       createGroup: (workspaceId, name) =>
-        callRemote(requireApi(), 'createGroup', [workspaceId, name]).then(() => undefined),
+        callRemote<WorkspaceGroupsSnapshot>(requireApi(), 'createGroup', [workspaceId, name]).then(
+          (snapshot) => snapshot.byWorkspace,
+        ),
       renameGroup: (workspaceId, groupId, name) =>
-        callRemote(requireApi(), 'renameGroup', [workspaceId, groupId, name]).then(() => undefined),
+        callRemote<WorkspaceGroupsSnapshot>(requireApi(), 'renameGroup', [
+          workspaceId,
+          groupId,
+          name,
+        ]).then((snapshot) => snapshot.byWorkspace),
       deleteGroup: (workspaceId, groupId) =>
-        callRemote(requireApi(), 'deleteGroup', [workspaceId, groupId]).then(() => undefined),
+        callRemote<WorkspaceGroupsSnapshot>(requireApi(), 'deleteGroup', [
+          workspaceId,
+          groupId,
+        ]).then((snapshot) => snapshot.byWorkspace),
       // 选择器用空串表示「不属于任何分组」，宿主接口用 null 表达同一含义。
       moveSession: (workspaceId, sessionId, groupId) =>
-        callRemote(requireApi(), 'moveSession', [
+        callRemote<WorkspaceGroupsSnapshot>(requireApi(), 'moveSession', [
           workspaceId,
           sessionId,
           groupId === '' ? null : groupId,
-        ]).then(() => undefined),
+        ]).then((snapshot) => snapshot.byWorkspace),
       // 工作区自身的改名与删除直接走官方工作区控制器，不另造 RPC：
       // 删除只移除注册，文件夹与会话记录都由宿主保留。
       renameWorkspace: (workspaceId, title) =>

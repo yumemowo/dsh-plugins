@@ -70,9 +70,9 @@ describe('collapse motion parameters', () => {
     const reduced =
       /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
 
-    // 逐个淡入的延迟挂在 .wg-reveal 上，那条规则比单独的 [data-wg-stagger] 更
-    // 具体；这里不连它一起清掉，reduced-motion 下行仍是逐个出现
-    expect(reduced).toMatch(/\[data-wg-stagger\]\.wg-reveal/)
+    // 逐个淡入的延迟由组件下发到元素上，reduced-motion 下要把那条展开态规则的过渡
+    // 一起清掉，否则行仍是逐个出现
+    expect(reduced).toMatch(/\[data-wg-stagger\]/)
     expect(reduced).toMatch(/transition-delay:\s*0s/)
   })
 })

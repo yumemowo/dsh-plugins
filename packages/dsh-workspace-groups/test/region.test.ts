@@ -3,7 +3,9 @@ import {
   buildLayout,
   containsSession,
   groupIdOfSession,
+  sameGroupSections,
 } from '../src/client/data/layout.ts'
+import { sameSessionStatus } from '../src/client/data/status.ts'
 import { groupSessionsByWorkspace, straySessions } from '../src/client/data/sessions.ts'
 import { buildGroupMenuItems, buildSessionMenuItems, buildWorkspaceMenuItems } from '../src/client/menus.tsx'
 import type { SessionRow } from '../src/client/data/types.ts'
@@ -549,5 +551,150 @@ describe('groupSessionsByWorkspace', () => {
     const grouped = groupSessionsByWorkspace(listState([{ id: 'a' }]), [workspace('w1', ['a'])])
 
     expect(grouped.get('w1')?.[0]?.runningSubagentCount).toBe(0)
+  })
+})
+
+/**
+ * 投影结果的身份稳定性
+ *
+ * 流式期间每次活动只替换发生变化的那条摘要，其余对象保持同一引用。投影若每次都
+ * 造新行对象，行级 memo 的逐格比对必然全部落空，长列表会在每次活动时逐行重算——
+ * 实测 800 行时单次更新逾百毫秒，主线程因此被整段占住
+ */
+describe('session row identity', () => {
+  function listStateOf(
+    rows: { id: string; displayTitle?: string; updatedAt?: number }[],
+    current?: string,
+  ): SessionListState {
+    const byId: Record<string, unknown> = {}
+    for (const item of rows) {
+      byId[item.id] = {
+        id: item.id,
+        displayTitle: item.displayTitle ?? item.id,
+        running: false,
+        blank: false,
+        updatedAt: item.updatedAt ?? 0,
+      }
+    }
+    return { ids: rows.map((r) => r.id), byId, current, phase: 'ready' } as unknown as SessionListState
+  }
+
+  function workspaceOf(id: string, sessionIds: string[]): WorkspaceView {
+    return {
+      workspaceId: id,
+      path: `/tmp/${id}`,
+      title: id,
+      sessionIds,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    } as unknown as WorkspaceView
+  }
+
+  it('reuses the row object when its summary is unchanged', () => {
+    const sessions = listStateOf([{ id: 'a' }, { id: 'b' }])
+    const first = groupSessionsByWorkspace(sessions, [workspaceOf('w1', ['a', 'b'])]).get('w1')
+    const second = groupSessionsByWorkspace(sessions, [workspaceOf('w1', ['a', 'b'])]).get('w1')
+
+    // 同一份摘要对象再次投影，必须得到同一个行对象，否则按引用比对的行级 memo 失效
+    expect(second?.[0]).toBe(first?.[0])
+    expect(second?.[1]).toBe(first?.[1])
+  })
+
+  it('gives a changed summary a new row object and leaves the rest alone', () => {
+    const sessions = listStateOf([{ id: 'a' }, { id: 'b' }])
+    const before = groupSessionsByWorkspace(sessions, [workspaceOf('w1', ['a', 'b'])]).get('w1')
+    // 模拟一次流式活动：只替换 'a' 的摘要，'b' 保持同一引用
+    const next = {
+      ...sessions,
+      byId: {
+        ...(sessions.byId as Record<string, unknown>),
+        a: { ...(sessions.byId as Record<string, unknown>)['a'] as object, updatedAt: 1 },
+      },
+    }
+    const after = groupSessionsByWorkspace(next, [workspaceOf('w1', ['a', 'b'])]).get('w1')
+
+    expect(after?.[0]).not.toBe(before?.[0])
+    expect(after?.[0]?.updatedAt).toBe(1)
+    // 未变的那条必须保持同一身份——它正是 memo 要挡下的行
+    expect(after?.[1]).toBe(before?.[1])
+  })
+
+  it('rebuilds a row when the subagent count changes under it', () => {
+    // 子代理运行数由别的会话决定，与自身摘要不同步，因此也要参与缓存的有效性判断
+    const base = listStateOf([{ id: 'a' }])
+    const before = groupSessionsByWorkspace(base, [workspaceOf('w1', ['a'])]).get('w1')
+    const withChild = listStateOf([{ id: 'a' }])
+    ;(withChild.byId as Record<string, unknown>)['child'] = {
+      id: 'child',
+      displayTitle: 'child',
+      running: true,
+      blank: false,
+      updatedAt: 0,
+      origin: 'subagent',
+      parentId: 'a',
+    }
+    withChild.ids.push('child' as never)
+    const after = groupSessionsByWorkspace(withChild, [workspaceOf('w1', ['a'])]).get('w1')
+
+    expect(before?.[0]?.runningSubagentCount).toBe(0)
+    expect(after?.[0]?.runningSubagentCount).toBe(1)
+  })
+})
+
+/**
+ * 归组菜单上下文的比对
+ *
+ * 分组段每次渲染都是新的数组与对象，若按引用比对，整片列表的行级 memo 都会失效
+ */
+describe('sameGroupSections', () => {
+  it('treats rebuilt sections with the same ids and names as equal', () => {
+    const a = [{ id: 'g1', label: '前端', sessions: [] }]
+    const b = [{ id: 'g1', label: '前端', sessions: [] }]
+
+    expect(sameGroupSections(a, b)).toBe(true)
+  })
+
+  it('reports a renamed group as changed', () => {
+    expect(
+      sameGroupSections(
+        [{ id: 'g1', label: '前端', sessions: [] }],
+        [{ id: 'g1', label: '后端', sessions: [] }],
+      ),
+    ).toBe(false)
+  })
+
+  it('reports an added group as changed', () => {
+    expect(
+      sameGroupSections([{ id: 'g1', label: '前端', sessions: [] }], [
+        { id: 'g1', label: '前端', sessions: [] },
+        { id: 'g2', label: '后端', sessions: [] },
+      ]),
+    ).toBe(false)
+  })
+
+  it('treats a missing grouping as different from any list', () => {
+    expect(sameGroupSections(undefined, [])).toBe(false)
+    expect(sameGroupSections(undefined, undefined)).toBe(true)
+  })
+})
+
+/**
+ * 状态位的比对
+ *
+ * 状态位每次渲染都是新对象，按引用比会让每一行都判定为变过
+ */
+describe('sameSessionStatus', () => {
+  it('treats equal states and labels as the same dot', () => {
+    expect(sameSessionStatus({ state: 'ongoing', label: '进行中' }, { state: 'ongoing', label: '进行中' })).toBe(true)
+  })
+
+  it('reports a different label as changed', () => {
+    expect(sameSessionStatus({ state: 'ongoing', label: '进行中' }, { state: 'ongoing', label: '已完成' })).toBe(false)
+  })
+
+  it('reports appearing and disappearing dots as changed', () => {
+    expect(sameSessionStatus(undefined, { state: 'done', label: '已完成' })).toBe(false)
+    expect(sameSessionStatus({ state: 'done', label: '已完成' }, undefined)).toBe(false)
+    expect(sameSessionStatus(undefined, undefined)).toBe(true)
   })
 })
