@@ -27,72 +27,72 @@ const labels: SessionStatusLabels = {
 }
 
 describe('sessionStatus', () => {
-  it('Session_Idle_Should_Report_No_Status', () => {
+  it('reports no status for an idle session', () => {
     // 空闲不画点，槽位留空因此标题不位移。
     expect(sessionStatus(row(), undefined, labels)).toBeUndefined()
   })
 
-  it('Session_Running_Should_Report_Ongoing', () => {
+  it('reports ongoing for a running session', () => {
     expect(sessionStatus(row({ running: true }), undefined, labels)).toEqual({
       state: 'ongoing',
       label: '进行中',
     })
   })
 
-  it('Session_Completed_Should_Report_Done', () => {
+  it('reports done for a completed session', () => {
     expect(sessionStatus(row({ completed: true }), undefined, labels)).toEqual({
       state: 'done',
       label: '已完成',
     })
   })
 
-  it('Session_Pending_Approval_Should_Report_Warning', () => {
+  it('reports a warning for a session awaiting approval', () => {
     expect(sessionStatus(row(), 'approval', labels)).toEqual({
       state: 'warning',
       label: '等待审批',
     })
   })
 
-  it('Session_Pending_Plan_Review_Should_Report_Warning', () => {
+  it('reports a warning for a session awaiting plan review', () => {
     expect(sessionStatus(row(), 'plan-review', labels)).toEqual({
       state: 'warning',
       label: '计划待审',
     })
   })
 
-  it('Session_Pending_Question_Should_Report_Warning', () => {
+  it('reports a warning for a session awaiting an answer', () => {
     expect(sessionStatus(row(), 'question', labels)).toEqual({
       state: 'warning',
       label: '等待回答',
     })
   })
 
-  it('Session_Pending_While_Running_Should_Report_Warning_Only', () => {
+  it('reports only the warning while the session also runs', () => {
     // 待交互压过运行：用户要看的是「在等我」而不是「在跑」。
     expect(sessionStatus(row({ running: true }), 'approval', labels)?.state).toBe('warning')
   })
 
-  it('Session_Running_And_Completed_Should_Report_Ongoing', () => {
+  it('reports ongoing when the session is running and completed', () => {
     // 运行压过完成提醒，避免刚跑完的行亮着绿色。
     expect(sessionStatus(row({ running: true, completed: true }), undefined, labels)?.state).toBe(
       'ongoing',
     )
   })
 
-  it('Session_With_Running_Subagent_Should_Report_Ongoing_With_Count', () => {
+  it('reports ongoing with the count for a running subagent', () => {
     expect(sessionStatus(row({ runningSubagentCount: 2 }), undefined, labels)).toEqual({
       state: 'ongoing',
       label: '2 个子代理运行中',
     })
   })
 
-  it('Session_With_Completed_And_Running_Subagent_Should_Report_Ongoing', () => {
+  it('reports ongoing for a completed session with a running subagent', () => {
     expect(
       sessionStatus(row({ completed: true, runningSubagentCount: 1 }), undefined, labels)?.state,
     ).toBe('ongoing')
   })
 
-  it('Session_With_Unknown_Pending_Kind_Should_Fall_Back_To_Run_State', () => {
+  it('falls back to the run state for an unknown pending kind', () => {
     // 其他插件发布的交互种类不在侧边栏表意，忽略它而不是画一个没有文案的点。
     expect(sessionStatus(row({ running: true }), 'some-other-kind', labels)).toEqual({
       state: 'ongoing',
@@ -100,11 +100,11 @@ describe('sessionStatus', () => {
     })
   })
 
-  it('Session_With_Unknown_Pending_Kind_And_Completed_Should_Report_Done', () => {
+  it('reports done for a completed session with an unknown pending kind', () => {
     expect(sessionStatus(row({ completed: true }), 'some-other-kind', labels)?.state).toBe('done')
   })
 
-  it('Session_With_Unknown_Pending_Kind_And_Idle_Should_Report_No_Status', () => {
+  it('reports no status for an idle session with an unknown pending kind', () => {
     expect(sessionStatus(row(), 'some-other-kind', labels)).toBeUndefined()
   })
 })

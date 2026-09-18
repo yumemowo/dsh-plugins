@@ -277,7 +277,7 @@ function menuItems(out: { menus: unknown[] }): string[][] {
 /**
  * 收集容器行的行尾操作结构
  *
- * 「分组行与工作区行同形」是这次改动的核心承诺，因此断言落在结构上：两者
+ * 「分组行与工作区行同形」是本包的核心承诺，因此断言落在结构上：两者
  * 都必须有 `...` 菜单锚点与 `+` 按钮，且都在 `.wg-row-actions` 容器里
  */
 function rowActionShape(out: { menus: unknown[]; buttons?: unknown[]; containers?: unknown[] }): {
@@ -596,7 +596,7 @@ describe('WorkspaceGroupsRegion render', () => {
   it('shows the group session count as its own trailing element', () => {
     const out = renderGroupRow(() => {}, 3)
 
-    // 会话数不再拼进标题文本，而是自己一格贴在行右——与 session 行的 time 同位置
+    // 会话数不拼进标题文本，而是自己一格贴在行右——与 session 行的 time 同位置
     expect(out.text).toContain('前端')
     expect(out.text).not.toContain('前端 (3)')
     expect((out.counts ?? []).length).toBe(1)
@@ -666,7 +666,7 @@ describe('WorkspaceGroupsRegion render', () => {
     render(React.createElement(WorkspaceGroupsRegion, props(true)), region)
     const group = renderGroupRow(() => {})
 
-    // 行操作（`...` 锚点与 `+`）只留 aria-label，不再挂原生 title 提示；
+    // 行操作（`...` 锚点与 `+`）只留 aria-label，不挂原生 title 提示；
     // 文案仍要照常投影出来，不能连无障碍标签一起丢
     expect(actionLabels(region).length).toBeGreaterThan(0)
     expect(actionTitles(region).filter((t) => t !== undefined)).toEqual([])
@@ -679,7 +679,7 @@ describe('WorkspaceGroupsRegion render', () => {
     render(React.createElement(WorkspaceGroupsRegion, props(true, { pending })), out)
 
     // 状态点是纯视觉元素，语义靠槽位的 aria-label 承担；原生 title 会多出
-    // 一个同级提示，因此不再挂
+    // 一个同级提示，因此不挂
     const status = (out.slots as { props: Record<string, unknown> }[]).filter(
       (slot) => slot.props['role'] === 'img',
     )
@@ -717,8 +717,8 @@ describe('WorkspaceGroupsRegion render', () => {
     )
 
     // 工作区行的 `+` 指的是「未归组的新会话」。官方会复用该工作区已有的空白
-    // 会话——若那条会话先前是在分组里建的，这里必须显式把它移出分组，否则
-    // 它的位置会停在上一次创建的地方
+    // 会话——那条会话可能是在某个分组里建的，这里必须显式把它移出分组，否则
+    // 它仍会留在那个分组里
     rowButtons(out)
       .find((b) => b.label.includes('W1'))
       ?.click()

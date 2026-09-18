@@ -5,7 +5,7 @@ import { CSS } from '../src/client/styles.ts'
  * 取样式表文本
  *
  * 直接读**求值后**的导出：节奏参数以插值进入 CSS，按源文本切割只会拿到 ${...}
- * 字面量。同理不再按反引号定界解析——那会与被测对象互相污染
+ * 字面量。同理不按反引号定界解析：那会与被测对象互相污染
  */
 function readCss(): string {
   return CSS
@@ -126,7 +126,7 @@ describe('client stylesheet', () => {
       rules.some((rule) => rule.selectors.includes(selector) && pattern.test(rule.body))
 
     // 静止时操作位必须收成 0 宽，否则会把行尾时间顶到左侧，两者右缘错开
-    // 一个图标列宽——这正是本次修掉的观感问题。
+    // 一个图标列宽
     expect(hasRule('.wg-row-action-slot', /width:\s*0/)).toBe(true)
     expect(hasRule('.wg-row-action-slot', /overflow:\s*hidden/)).toBe(true)
 
@@ -177,7 +177,7 @@ describe('client stylesheet', () => {
         .map((m) => new RegExp(`${property}:\\s*([^;]+)`).exec(m[2] ?? '')?.[1]?.trim())
         .find((value) => value !== undefined)
 
-    // 官方 header 的 -4px 是相对「自带右留白」的根节点写的；本包根节点现在有
+    // 官方 header 的 -4px 是相对「自带右留白」的根节点写的；本包根节点有
     // 同一份留白，因此这一条照抄即可，相抵后按钮右缘离栏缘 8px，不贴边
     expect(declared('.wg-header', 'margin-right')).toBe('-4px')
     expect(declared('.wg-header', 'height')).toBe('36px')
@@ -201,13 +201,13 @@ describe('client stylesheet', () => {
     )
     expect(list?.body).toMatch(/padding-right:\s*calc\(/)
     expect(list?.body).toMatch(/--dsh-session-list-scrollbar-width/)
-    // 两边各 12px 会让内容整体缩进 24px——这正是本次修掉的观感问题
+    // 两边各 12px 会让内容整体缩进 24px，因此列表必须自己抵掉根节点那份留白
     expect(list?.body).not.toMatch(/margin-right:\s*0/)
   })
 
   it('gives the header entry the official icon-button geometry', () => {
     // 官方 header 图标按钮是 28px 正圆（.iconButton），与行内 16px 按钮
-    // 不是一套；本轮改动是按官方外观来的，尺寸不能被行内那套带跑
+    // 不是一套；这些几何按官方外观取，不能被行内那套带跑
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
       selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
@@ -278,7 +278,7 @@ describe('client stylesheet', () => {
     expect(hides('.wg-group-head:hover .wg-group-count')).toBe(true)
     expect(hides('.wg-group-head.wg-row-menu-open .wg-group-count')).toBe(true)
     expect(hides('.wg-group-head:has(.wg-row-action:focus-visible) .wg-group-count')).toBe(true)
-    // 会话行的 time 照旧，不能被这轮改动带跑
+    // 会话行的时间也走同一组触发条件，两者互换关系一致
     expect(hides('.wg-row:hover .wg-row-time')).toBe(true)
   })
 

@@ -22,7 +22,7 @@ describe('collapse motion parameters', () => {
 
   it('writes the default constant into the CSS fallbacks', () => {
     // 回退值直接由常量插值而来，两者不可能漂移；这里确认插值确实落到了 CSS 里，
-    // 而不是留下 `${...}` 字面量或某个手写的旧值
+    // 而不是留下 `${...}` 字面量或手写数字
     const css = CSS
     expect(css).toContain(`var(${COLLAPSE_VARS.duration}, ${DEFAULT_COLLAPSE_MOTION.duration}ms)`)
     expect(css).toContain(`var(${COLLAPSE_VARS.easing}, ${DEFAULT_COLLAPSE_MOTION.easing})`)

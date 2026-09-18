@@ -56,7 +56,7 @@ export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'remote']
  * 之所以是编译期常量而不是配置项：这是开发期的对照开关，
  * 不是要交付给用户的能力，配置化反而要多一套 schema 与文档
  */
-// const COMPARE_MODE = false
+// export const COMPARE_MODE = false
 export const COMPARE_MODE = true
 
 /**
@@ -119,8 +119,8 @@ export function apply(ctx: Context): void {
           readyListeners.clear()
         })
         .catch((reason: unknown) => {
-          // 挂载失败此前是一条无人接管的 rejection：界面只会表现为分组整体
-          // 不可用，日志里却什么都没有
+          // 挂载失败必须留下可查的痕迹：它让分组整体不可用，不接住这次
+          // rejection 的话日志里什么都没有
           ctx.logger.warn('workspace-groups: remote mount failed')
           ctx.logger.warn(reason)
         })
@@ -216,7 +216,7 @@ export function apply(ctx: Context): void {
    *
    * 与 `officialActions` 同为延迟到渲染期的解析器。解析结果为空表示本包没读到
    * 占用者（宿主没装目录选择器插件）：此时入口按钮整体不渲染，不留点不动的
-   * 死按钮，回归本包阶段一的行为
+   * 死按钮
    * @returns 添加工作区的动作；控制器或洞占用者缺失时为 undefined
    */
   const addWorkspaceActions = (): AddWorkspaceActions | undefined => {

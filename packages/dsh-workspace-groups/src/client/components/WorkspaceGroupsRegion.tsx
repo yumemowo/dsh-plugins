@@ -180,8 +180,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    * 一次，也避免「改动已生效、本地状态还是旧的」这段空档
    *
    * 失败要留下痕迹：分组元数据的写入不可见，一次静默失败只会表现为「什么都
-   * 没发生」，而界面与元数据的偏差会一直留着（新会话停在旧分组就是这样来的）。
-   * 失败时退回重拉一次，让本地状态与宿主对齐
+   * 没发生」，界面与元数据的偏差却一直留着。失败时退回重拉一次，让本地状态
+   * 与宿主对齐
    */
   const apply = useCallback(
     (action: Promise<Record<string, Group[]>>) => {
@@ -274,8 +274,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    *
    * 建好之后无条件把会话摆到本次创建指定的位置：`groupId` 为空串表示工作区行
    * 的 `+`，会话归入未归组区。这一步不能只在指定了分组时做——官方会复用该
-   * 工作区已有的空白会话，若那条会话先前是在某个分组里建的，工作区行的 `+`
-   * 复用到它时必须把它从分组里摘出来，否则它的位置会停在上一次创建的地方
+   * 工作区已有的空白会话，那条会话可能正留在某个分组里，复用时不把它摘出来
+   * 就会停在原分组
    * @param workspaceId - 目标工作区
    * @param groupId - 新会话要归入的分组；空串表示归入未归组区
    */

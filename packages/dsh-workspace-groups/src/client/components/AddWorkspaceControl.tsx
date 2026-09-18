@@ -54,7 +54,7 @@ export function AddWorkspaceControl({
       .finally(() => setAdopting(false))
   }
 
-  // 占用者在渲染期解析：注册项可能在本次渲染与上次之间换过占用者
+  // 占用者在渲染期解析：注册项可能在两次渲染之间换过占用者
   // 解析不到时不渲染交互，但入口按钮与错误框仍在——区域那边订阅了占用
   // 情况，下一次渲染就会把入口一起收掉
   const resolved = occupant()

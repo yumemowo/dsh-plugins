@@ -4,7 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 
 /**
  * 对照模式下 `apply` 把左侧 `sidebar.workspaces` 交还官方 ui-workspace，改去注册
- * 右侧栏 tab，因此不再往插槽里注册区域组件。下面依赖那次注册的用例据此跳过，
+ * 右侧栏 tab，因此不往插槽里注册区域组件。下面依赖插槽注册的用例据此跳过，
  * 而不是在两种模式下都硬跑——它们在对照模式下没有可断言的对象
  */
 const REGION_REGISTRATIONS = COMPARE_MODE ? 0 : 1
@@ -167,8 +167,8 @@ describe('client half remote mount', () => {
     apply(harness.ctx)
     await settle()
 
-    // 挂载失败此前是一条无人接管的 rejection：界面只表现为分组不可用，
-    // 日志里什么都没有。至少要留下可查的痕迹
+    // 挂载失败要留下可查的痕迹：界面只表现为分组不可用，不接住这次 rejection
+    // 的话日志里什么都没有
     expect(harness.warnings.flat()).toContain(failure)
   })
 })

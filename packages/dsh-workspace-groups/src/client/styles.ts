@@ -70,7 +70,7 @@ export const CSS = `
    （36px 高、圆角 12px、左内边距 4px、控件间距 4px、下间距 4px）
 
    margin-right 同样照官方取 -4px：官方那条负值是相对「自带整块右留白」的
-   根节点写的，本包 .wg-root 现在有同一份留白（见上），因此两者相抵后
+   根节点写的，本包 .wg-root 有同一份留白（见上），因此两者相抵后
    header 的右缘与官方一样落在离栏缘 8px 处 */
 .wg-header {
   box-sizing: border-box;
@@ -248,7 +248,7 @@ export const CSS = `
 }
 
 /* 折叠体自己承担「上一行与它之间」的那 2px：这段间距要连同内容一起收掉，
-   否则收起后行下会留一条 2px 空档。间距改成内层容器的上内边距——它落在
+   否则收起后行下会留一条 2px 空档。间距取内层容器的上内边距——它落在
    clip 的裁剪区内，轨道合拢时随之被裁掉 */
 .wg-collapse-clip > .wg-workspace-body,
 .wg-collapse-clip > .wg-sessions { padding-top: 2px; }
@@ -365,7 +365,7 @@ export const CSS = `
 .wg-group > * + *,
 .wg-sessions > * + * { margin-top: 2px; }
 
-/* 折叠体要抵消上一条规则给它写上的 margin-top：那段间距改由 clip 内部的上内边距
+/* 折叠体要抵消上一条规则给它写上的 margin-top：那段间距由 clip 内部的上内边距
    承担（见折叠体规则处），这样它会落在裁剪区内，能随内容一起收掉 */
 .wg-workspace > .wg-collapse,
 .wg-group > .wg-collapse { margin-top: 0; }

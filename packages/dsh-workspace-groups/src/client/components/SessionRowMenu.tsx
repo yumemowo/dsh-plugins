@@ -216,6 +216,6 @@ function SessionRowMenuView({
  * 裹上 memo 的会话行
  *
  * 流式期间每次活动都会重渲染整片区域，未变的行若跟着重算，长列表就会在每次活动
- * 时付出与行数成正比的代价——实测 800 行时单次更新逾百毫秒，主线程因此被整段占住
+ * 时付出与行数成正比的代价，主线程因此被整段占住
  */
 export const SessionRowMenu = memo(SessionRowMenuView, sameRowMenuProps)

@@ -558,8 +558,7 @@ describe('groupSessionsByWorkspace', () => {
  * 投影结果的身份稳定性
  *
  * 流式期间每次活动只替换发生变化的那条摘要，其余对象保持同一引用。投影若每次都
- * 造新行对象，行级 memo 的逐格比对必然全部落空，长列表会在每次活动时逐行重算——
- * 实测 800 行时单次更新逾百毫秒，主线程因此被整段占住
+ * 造新行对象，行级 memo 的逐格比对必然全部落空，长列表会在每次活动时逐行重算
  */
 describe('session row identity', () => {
   function listStateOf(

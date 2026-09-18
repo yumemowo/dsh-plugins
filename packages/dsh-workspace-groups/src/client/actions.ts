@@ -158,7 +158,7 @@ export interface RegionActions {
    *
    * 与 `official` 同为延迟解析器。解析结果为空表示本包没读到官方
    * directoryFlow 洞的占用者（宿主没装目录选择器，或官方注册不在场）：
-   * 此时入口按钮不渲染，回归本包阶段一的行为
+   * 此时入口按钮不渲染，不留点不动的死按钮
    */
   addWorkspace?: (() => AddWorkspaceActions | undefined) | undefined
 }
