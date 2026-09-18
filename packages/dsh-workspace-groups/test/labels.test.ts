@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { regionLabels } from '../src/client/labels.ts'
 import { NS, en, zh } from '../src/client/locales.ts'
-import { OFFICIAL_WORKSPACE_ZH, regionTranslate, translateFor, workspaceTranslate } from './locale-stub.ts'
+import {
+  OFFICIAL_SIDEBAR_ZH,
+  OFFICIAL_WORKSPACE_ZH,
+  regionTranslate,
+  sidebarTranslate,
+  translateFor,
+  workspaceTranslate,
+} from './locale-stub.ts'
 
 /**
  * 文案分两个来源，这里同时固化这条边界：
@@ -21,7 +28,9 @@ describe('locales', () => {
 
   it('holds only the copy the official namespace does not already have', () => {
     // 键名与官方字典重合即意味着又复制了一份官方译文。
-    const duplicated = Object.keys(zh).filter((key) => key in OFFICIAL_WORKSPACE_ZH)
+    const duplicated = Object.keys(zh).filter(
+      (key) => key in OFFICIAL_WORKSPACE_ZH || key in OFFICIAL_SIDEBAR_ZH,
+    )
 
     expect(duplicated).toEqual([])
   })
@@ -44,7 +53,7 @@ describe('locales', () => {
 })
 
 describe('regionLabels', () => {
-  const labels = regionLabels(regionTranslate(), workspaceTranslate())
+  const labels = regionLabels(regionTranslate(), workspaceTranslate(), sidebarTranslate())
 
   it('reads the region title from the official section key', () => {
     expect(labels.title).toBe('工作区')
@@ -83,6 +92,16 @@ describe('regionLabels', () => {
     expect(labels.workspaceActions('w1')).toBe('工作区“w1”的操作')
     expect(labels.newSessionIn('w1')).toBe('在“w1”中新建会话')
     expect(labels.sessionActions('S1')).toBe('会话“S1”的操作')
+  })
+
+  it('reads the row menu new-session item from the official sidebar key', () => {
+    // 菜单项是一次性动作，读作动词短语；它取官方 sidebar 新建按钮的文案，
+    // 与行内 `+` 的无障碍标签（带对象名的 actions.newSession.aria）分工不同
+    expect(labels.newSessionItem).toBe('新建会话')
+    expect(labels.newSessionItem).not.toBe(labels.newSessionIn('w1'))
+    // 本包字典里没有这个键，只能来自官方 sidebar 命名空间
+    const ours = regionTranslate() as unknown as (key: string) => string
+    expect(ours('session.new.label')).toBe('session.new.label')
   })
 
   it('reads every session status label from the official status keys', () => {
@@ -143,6 +162,7 @@ describe('translateFor', () => {
 
     expect(raw(NS)('newGroup')).toBe('新建分组')
     expect(raw('workspace')('section.workspaces')).toBe('工作区')
+    expect(raw('sidebar')('session.new.label')).toBe('新建会话')
   })
 
   it('falls back to the shared common vocabulary from both namespaces', () => {

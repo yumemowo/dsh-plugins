@@ -13,6 +13,15 @@ import { relativeTime } from './runtime.ts'
 /** 官方 `workspace` 命名空间的翻译函数 */
 export type WorkspaceTranslate = TranslateNS<'workspace'>
 
+/**
+ * 官方 `sidebar` 命名空间的翻译函数
+ *
+ * 外壳的全局控件文案在这里（如新建会话按钮）。本包的行右键菜单要复用官方
+ * 那个按钮的动词短语，因此需要多绑一个命名空间——两个命名空间的键都只被
+ * 投影一次，语言切换后仍跟着走
+ */
+export type SidebarTranslate = TranslateNS<'sidebar'>
+
 /** 官方那三项会话操作与相关对话框的文案 */
 export interface OfficialSessionLabels {
   /** 菜单里的「重命名」项，也是重命名对话框的确认按钮 */

@@ -8,6 +8,7 @@ import {
   IconArchiveOutline20,
   IconBranchOutline16,
   IconEditOutline16,
+  IconNewChatOutline16,
   IconPlusOutline16,
   IconTrashOutline16,
 } from './runtime.ts'
@@ -146,6 +147,30 @@ export const WORKSPACE_MENU = {
 } as const
 
 /**
+ * 行右键菜单比行内 `...` 菜单多出的条目 id
+ *
+ * 右键是行内操作位的捷径，两者共用同一批条目与同一段分派；唯一多出来的是
+ * 「新建会话」——它在行内对应的是 `+` 按钮，不是一个菜单项。`+` 仍只以按钮
+ * 形态存在，右键菜单把它一并列出，使右键能触达该行全部动作
+ */
+export const ROW_MENU = {
+  newSession: 'new-session',
+} as const
+
+/**
+ * 构造行右键菜单里的「新建会话」项
+ *
+ * 图标取官方 sidebar 新建按钮的 `IconNewChatOutline16`：同一个动作在行内是
+ * 官方的 `+`，而本菜单里还有一个「新建分组」也带 `+`，两项都用 `+` 就只能
+ * 靠文字区分
+ * @param label - 「新建会话」项文案
+ * @returns Menu item
+ */
+function newSessionItem(label: string): MenuActionItem {
+  return { id: ROW_MENU.newSession, label, icon: <IconNewChatOutline16 /> }
+}
+
+/**
  * 构造工作区「更多操作」菜单的条目
  *
  * 两项官方操作的相对顺序与官方一致（重命名在前、删除在后）；本包自有的
@@ -160,4 +185,25 @@ export function buildWorkspaceMenuItems(input: WorkspaceMenuInput): readonly Men
     { id: WORKSPACE_MENU.rename, label: input.renameLabel, icon: <IconEditOutline16 /> },
     { id: WORKSPACE_MENU.delete, label: input.deleteLabel, icon: <IconTrashOutline16 />, danger: true },
   ]
+}
+
+/**
+ * 把行内菜单条目补成右键菜单条目
+ *
+ * 右键是行内操作位的捷径，因此条目集合与分派都必须一致；差别只有一条：
+ * 「新建会话」在行内是 `+` 按钮，菜单里没有对应项，右键时补在最前——
+ * 它是该行最高频的建造动作，正因如此才占着行内位置
+ *
+ * 只在真的有新建入口时补：未分组桶的工作区行没有可建会话的工作区归属，
+ * 那时补一项就是点不动的死按钮
+ * @param items - 行内 `...` 菜单的条目
+ * @param newSessionLabel - 「新建会话」项文案；缺省表示该行不提供新建
+ * @returns 右键菜单的条目列表
+ */
+export function buildRowContextMenuItems(
+  items: readonly MenuItem[],
+  newSessionLabel?: string | undefined,
+): readonly MenuItem[] {
+  if (newSessionLabel === undefined) return items
+  return [newSessionItem(newSessionLabel), ...items]
 }

@@ -11,9 +11,10 @@
 import { useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { IconTriangleRightFill14 } from '../runtime.ts'
-import { GROUP_MENU, buildGroupMenuItems } from '../menus.tsx'
+import { GROUP_MENU, ROW_MENU, buildGroupMenuItems, buildRowContextMenuItems } from '../menus.tsx'
 import { CollapsibleBody } from './CollapsibleBody.tsx'
 import { RowActions } from './RowActions.tsx'
+import { useRowContextMenu } from './RowContextMenu.tsx'
 import { handleRowKeyDown } from './rowKeyboard.ts'
 import type { GroupSection as GroupSectionData } from '../data/types.ts'
 
@@ -31,6 +32,8 @@ export interface GroupSectionProps {
   labels: {
     /** `...` 按钮的无障碍标签，取分组名 */
     actions: (name: string) => string
+    /** 「新建会话」菜单项 */
+    newSessionItem: string
     /** 「重命名分组」菜单项 */
     rename: string
     /** 「删除分组」菜单项 */
@@ -52,6 +55,32 @@ export function GroupSection({
 }: GroupSectionProps): ReactElement {
   const [menuOpen, setMenuOpen] = useState(false)
 
+  /**
+   * 菜单选中项的分派
+   *
+   * 行内 `...` 菜单与右键菜单共用它：右键多一项「新建会话」，但 id 相同者
+   * 必须落到同一件事上
+   */
+  const select = (id: string): void => {
+    setMenuOpen(false)
+    if (id === ROW_MENU.newSession) onCreateSession?.()
+    else if (id === GROUP_MENU.rename) onRename()
+    else if (id === GROUP_MENU.delete) onDelete()
+  }
+
+  const menuItems = buildGroupMenuItems({
+    renameLabel: labels.rename,
+    deleteLabel: labels.delete,
+  })
+
+  const contextMenu = useRowContextMenu({
+    items: buildRowContextMenuItems(
+      menuItems,
+      onCreateSession === undefined ? undefined : labels.newSessionItem,
+    ),
+    onSelect: select,
+  })
+
   return (
     <div className="wg-group">
       <div
@@ -62,7 +91,9 @@ export function GroupSection({
         tabIndex={0}
         onClick={onToggle}
         onKeyDown={(event) => handleRowKeyDown(event, onToggle)}
+        onContextMenu={contextMenu.onContextMenu}
       >
+        {contextMenu.menu}
         <span className="wg-slot">
           <IconTriangleRightFill14 className={`wg-arrow${collapsed ? '' : ' wg-arrow-open'}`} />
         </span>
@@ -77,15 +108,8 @@ export function GroupSection({
           <RowActions
             menuOpen={menuOpen}
             onMenuOpen={setMenuOpen}
-            onMenuSelect={(id) => {
-              setMenuOpen(false)
-              if (id === GROUP_MENU.rename) onRename()
-              else if (id === GROUP_MENU.delete) onDelete()
-            }}
-            menuItems={buildGroupMenuItems({
-              renameLabel: labels.rename,
-              deleteLabel: labels.delete,
-            })}
+            onMenuSelect={select}
+            menuItems={menuItems}
             actionsLabel={labels.actions(section.label)}
             create={
               onCreateSession === undefined

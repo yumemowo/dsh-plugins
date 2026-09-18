@@ -78,14 +78,15 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     official: resolveOfficial,
     addWorkspace: resolveAddWorkspace,
     tWorkspace,
+    tSidebar,
     t,
   } = props
 
-  // 文案表按两个翻译座位缓存：它每次渲染都是新对象，里面的函数（如
+  // 文案表按三个翻译座位缓存：它每次渲染都是新对象，里面的函数（如
   // sessionActions）会直接传给行组件，每渲染新建一份会让整片列表的 memo 失效。
-  // 缓存的是投影结果而不是译文——两个 t 都在**调用时**才读当前语言，因此语言
+  // 缓存的是投影结果而不是译文——三个 t 都在**调用时**才读当前语言，因此语言
   // 切换后重新调用拿到的仍是新译文
-  const labels = useMemo(() => regionLabels(t, tWorkspace), [t, tWorkspace])
+  const labels = useMemo(() => regionLabels(t, tWorkspace, tSidebar), [t, tWorkspace, tSidebar])
 
   const workspaces = useWorkspaces((state) => state.items) as readonly WorkspaceView[]
   // 归档集是注册表全局的：归档会话仍留在工作区的 sessionIds 里，
@@ -335,6 +336,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const workspaceRowLabels: WorkspaceRowLabels = {
     actions: labels.workspaceActions,
     newSession: labels.newSessionIn,
+    newSessionItem: labels.newSessionItem,
     newGroup: labels.newGroup,
     // 与官方工作区菜单一致：菜单项用通用动词，对话框标题才点明对象
     rename: labels.rename,
@@ -433,6 +435,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
               emptyLabel={labels.empty}
               groupActionLabels={{
                 actions: labels.groupActions,
+                newSessionItem: labels.newSessionItem,
                 rename: labels.rename,
                 delete: labels.deleteGroup,
                 newSession: labels.newSessionInGroup,

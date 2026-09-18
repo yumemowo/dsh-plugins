@@ -20,6 +20,7 @@ import { buildSessionMenuItems } from '../menus.tsx'
 import { sameGroupSections } from '../data/layout.ts'
 import { sameSessionStatus } from '../data/status.ts'
 import { SessionRowView } from './SessionRowView.tsx'
+import { useRowContextMenu } from './RowContextMenu.tsx'
 import { NameDialog } from './dialogs/NameDialog.tsx'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { RegionTranslate } from '../locales.ts'
@@ -137,6 +138,34 @@ function SessionRowMenuView({
   const [menuOpen, setMenuOpen] = useState(false)
   const [renameDraft, setRenameDraft] = useState<string | null>(null)
 
+  const items = buildSessionMenuItems({ grouping, official: official?.labels })
+
+  /**
+   * 菜单选中项的分派
+   *
+   * 行内 `...` 菜单与右键菜单共用它：右键是行尾操作位的捷径，同一个 id
+   * 必须落到同一件事上。会话行没有行内新建入口，因此两份条目的集合相同
+   */
+  const select = (id: string): void => {
+    setMenuOpen(false)
+    if (id === 'rename') {
+      setRenameDraft(row.title)
+      return
+    }
+    if (id === 'fork') {
+      official?.forkSession(row.id)
+      return
+    }
+    if (id === 'archive') {
+      // 归档会改写会话列表快照，本区域订阅着它，因此不需要手动刷新
+      void official?.archiveSession(row.id)
+      return
+    }
+    if (grouping !== undefined) grouping.onSelectGroup(grouping.workspaceId, row.id, id)
+  }
+
+  const contextMenu = useRowContextMenu({ items, onSelect: select })
+
   return (
     <>
       <SessionRowView
@@ -147,27 +176,12 @@ function SessionRowMenuView({
         time={time}
         menuOpen={menuOpen}
         onOpenSession={onOpenSession}
+        onContextMenu={contextMenu.onContextMenu}
         action={
           <Menu
             open={menuOpen}
             onClose={() => setMenuOpen(false)}
-            onSelect={(id: string) => {
-              setMenuOpen(false)
-              if (id === 'rename') {
-                setRenameDraft(row.title)
-                return
-              }
-              if (id === 'fork') {
-                official?.forkSession(row.id)
-                return
-              }
-              if (id === 'archive') {
-                // 归档会改写会话列表快照，本区域订阅着它，因此不需要手动刷新
-                void official?.archiveSession(row.id)
-                return
-              }
-              if (grouping !== undefined) grouping.onSelectGroup(grouping.workspaceId, row.id, id)
-            }}
+            onSelect={select}
             // portal 进 document.body：本区域的列表容器 overflow 裁剪会把
             // 就近渲染的菜单裁掉。二级面板的方向由宿主挂的 body 标记控制
             //（见 index.ts），这里不感知宿主差异
@@ -186,10 +200,11 @@ function SessionRowMenuView({
                 <IconEllipsisOutline16 />
               </button>
             }
-            items={buildSessionMenuItems({ grouping, official: official?.labels })}
+            items={items}
           />
         }
       />
+      {contextMenu.menu}
       {renameDraft === null || official === undefined ? null : (
         <NameDialog
           title={official.labels.renameTitle}

@@ -7,7 +7,12 @@ import {
 } from '../src/client/data/layout.ts'
 import { sameSessionStatus } from '../src/client/data/status.ts'
 import { groupSessionsByWorkspace, straySessions } from '../src/client/data/sessions.ts'
-import { buildGroupMenuItems, buildSessionMenuItems, buildWorkspaceMenuItems } from '../src/client/menus.tsx'
+import {
+  buildGroupMenuItems,
+  buildRowContextMenuItems,
+  buildSessionMenuItems,
+  buildWorkspaceMenuItems,
+} from '../src/client/menus.tsx'
 import type { SessionRow } from '../src/client/data/types.ts'
 import { officialSessionLabels } from '../src/client/official.ts'
 import { workspaceTranslate } from './locale-stub.ts'
@@ -250,6 +255,48 @@ describe('buildSessionMenuItems', () => {
 
     const groupItem = items[0] as { disabled?: boolean }
     expect(groupItem.disabled).toBe(true)
+  })
+})
+
+describe('buildRowContextMenuItems', () => {
+  const rowItems = buildWorkspaceMenuItems({
+    newGroupLabel: '新建分组',
+    renameLabel: '重命名',
+    deleteLabel: '删除工作区',
+  })
+
+  it('puts the new-session item in front of the row menu', () => {
+    const items = buildRowContextMenuItems(rowItems, '新建会话')
+
+    // 右键菜单 = 行内 `...` 菜单 + 行内 `+` 那一项（它没有菜单形态，因此补在最前）
+    expect(items.map((item) => (item as { id?: string }).id)).toEqual([
+      'new-session',
+      'new-group',
+      'rename',
+      'delete',
+    ])
+  })
+
+  it('keeps every row menu item so both entries share one dispatch', () => {
+    const items = buildRowContextMenuItems(rowItems, '新建会话')
+
+    // 右键是 `...` 的捷径：除新增项外，条目对象必须是同一批，否则同一个动作
+    // 会在两个入口下各走一套
+    expect(items.slice(1)).toEqual(rowItems)
+  })
+
+  it('adds nothing when the row has no create entry', () => {
+    // 未分组桶的工作区行没有可建会话的工作区归属，补一项就是点不动的死按钮
+    expect(buildRowContextMenuItems(rowItems, undefined)).toEqual(rowItems)
+    expect(buildRowContextMenuItems([], undefined)).toEqual([])
+  })
+
+  it('gives the new-session item the official sidebar icon', () => {
+    // 同一个菜单里「新建分组」也带 `+`，两项都用 `+` 就只能靠文字区分
+    const items = buildRowContextMenuItems(rowItems, '新建会话')
+    const icon = (items[0] as { icon?: { type: () => unknown } }).icon
+
+    expect(icon?.type()).toBe('IconNewChatOutline16')
   })
 })
 

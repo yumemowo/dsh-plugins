@@ -1,21 +1,22 @@
 /**
  * 界面文案的契约与投影
  *
- * 字典本体在 `locales.ts`（只含本包自有文案），本模块把两个命名空间的翻译
+ * 字典本体在 `locales.ts`（只含本包自有文案），本模块把三个命名空间的翻译
  * 函数投影成组件消费的语义化文案表，让组件只认字段名，不认键名：
  *
  * - 官方 `workspace` 已有的文案（区域标题、工作区改名/删除、会话行标签、
  *   状态点、空态）直接用官方键，不复制官方译文——官方改措辞时本包自动跟随，
  *   两处同屏也不会出现两套说法；
+ * - 官方 `sidebar` 已有的文案（行右键菜单的「新建会话」）同样直接取官方键；
  * - 官方没有对应词的自有文案（建组、分组管理、实验特性说明）取本包命名空间。
  *
- * 通用词（`ok` / `cancel` / `close`）两个命名空间都能解析：查找链在命名空间
+ * 通用词（`ok` / `cancel` / `close`）三个命名空间都能解析：查找链在命名空间
  * 未命中后回退到官方 `common`
  */
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
 import { officialAddLabels } from './official.ts'
-import type { OfficialAddLabels, WorkspaceTranslate } from './official.ts'
+import type { OfficialAddLabels, SidebarTranslate, WorkspaceTranslate } from './official.ts'
 
 /** 会话状态位的无障碍文案 */
 export interface SessionStatusLabels {
@@ -41,6 +42,14 @@ export interface RegionLabels {
   newGroup: string
   /** 新建会话按钮的无障碍标签；工作区名由调用方传入 */
   newSessionIn: (name: string) => string
+  /**
+   * 容器行右键菜单里的「新建会话」项
+   *
+   * 取官方 sidebar 新建按钮的动词短语 `session.new.label`，与行内 `+` 的
+   * 无障碍标签（`actions.newSession.aria`，带对象名）分工不同：菜单项是
+   * 一次性动作，读作动词短语，和「新建分组 / 重命名 / 删除工作区」一致
+   */
+  newSessionItem: string
   /** 新建中（空白）会话行的固定名，取官方 `session.new` */
   newSession: string
   /** 工作区「更多操作」按钮的无障碍标签；工作区名由调用方传入 */
@@ -96,19 +105,22 @@ export interface RegionLabels {
 }
 
 /**
- * 把两个命名空间的翻译函数投影成组件需要的文案表
+ * 把三个命名空间的翻译函数投影成组件需要的文案表
  * @param t - 本包命名空间的翻译函数（自有文案，并回退 `common` 通用词）
  * @param tw - 官方 `workspace` 命名空间的翻译函数（官方已有文案）
+ * @param ts - 官方 `sidebar` 命名空间的翻译函数（外壳控件的官方文案）
  * @returns 语义化字段的文案表
  */
 export function regionLabels(
   t: TranslateNS<typeof NS>,
   tw: WorkspaceTranslate,
+  ts: SidebarTranslate,
 ): RegionLabels {
   return {
     title: tw('section.workspaces'),
     newGroup: t('newGroup'),
     newSessionIn: (name: string) => tw('actions.newSession.aria', { name }),
+    newSessionItem: ts('session.new.label'),
     newSession: tw('session.new'),
     workspaceActions: (name: string) => tw('actions.workspace.aria', { name }),
     rename: tw('rename'),

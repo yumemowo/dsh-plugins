@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { COMPARE_TAB_ID, registerCompareTab } from '../src/client/compare.tsx'
 import type { RegionActions } from '../src/client/actions.ts'
-import { translateFor, workspaceTranslate } from './locale-stub.ts'
+import { sidebarTranslate, translateFor, workspaceTranslate } from './locale-stub.ts'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { Context } from '@deepseek-ai/cordis'
 
@@ -19,6 +19,7 @@ function actions(): RegionActions {
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     tWorkspace: workspaceTranslate(),
+    tSidebar: sidebarTranslate(),
   }
 }
 

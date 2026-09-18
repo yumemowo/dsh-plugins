@@ -148,6 +148,21 @@ describe('client stylesheet', () => {
     }
   })
 
+  it('takes the context menu root out of the row flex flow', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const root = rules.find((rule) => rule.selectors.includes('.wg-context-menu.wg-context-menu'))
+
+    // 原语根节点是 position: relative 的行内盒，没有 DOM 子节点（面板 portal 到
+    // body）。留在流里会成为一个空 flex 项，行的 gap 照样算，标题与会话数会被推开
+    expect(root?.body).toMatch(/display:\s*contents/)
+    // 类名写两遍抬一次优先级：原语自己的单类规则谁后注入谁赢，先后不由本包决定
+    expect(root).toBeDefined()
+  })
+
   it('gives the region root the official right-side block inset', () => {
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const declared = (selector: string, property: string): string | undefined =>

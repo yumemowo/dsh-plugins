@@ -1,6 +1,6 @@
 import { NS, zh } from '../src/client/locales.ts'
 import type { RegionTranslate } from '../src/client/locales.ts'
-import type { WorkspaceTranslate } from '../src/client/official.ts'
+import type { SidebarTranslate, WorkspaceTranslate } from '../src/client/official.ts'
 
 /**
  * 测试用的语言包替身
@@ -58,6 +58,16 @@ const COMMON_ZH: Record<string, string> = {
   close: '关闭',
 }
 
+/**
+ * 官方 `sidebar` 命名空间的键与中文文案（测试替身）
+ *
+ * 本包只取其中的「新建会话」——外壳新建按钮的动词短语，行右键菜单复用它
+ */
+export const OFFICIAL_SIDEBAR_ZH: Record<string, string> = {
+  'session.new': '新会话',
+  'session.new.label': '新建会话',
+}
+
 /** 用一个键表造翻译函数；未命中的键原样返回，便于断言暴露缺键 */
 export function translateWith(dict: Record<string, string>): (key: string, params?: Record<string, unknown>) => string {
   return (key, params) => {
@@ -79,12 +89,18 @@ export function workspaceTranslate(): WorkspaceTranslate {
   return translateWith({ ...COMMON_ZH, ...OFFICIAL_WORKSPACE_ZH }) as WorkspaceTranslate
 }
 
+/** 官方 `sidebar` 命名空间的翻译函数替身 */
+export function sidebarTranslate(): SidebarTranslate {
+  return translateWith({ ...COMMON_ZH, ...OFFICIAL_SIDEBAR_ZH }) as SidebarTranslate
+}
+
 /**
  * 按命名空间取翻译函数替身，与 `LocaleRuntime.bind` 同形
  *
- * 本包命名空间用真实字典，官方 `workspace` 用官方键名的替身——两边都只提供
+ * 本包命名空间用真实字典，两个官方命名空间各用官方键名的替身——三边都只提供
  * 各自拥有的键，因此「本包多余地复制官方文案」这类问题会在这里暴露
  */
 export function translateFor(ns: string): RegionTranslate {
-  return (ns === NS ? regionTranslate() : workspaceTranslate()) as RegionTranslate
+  if (ns === NS) return regionTranslate()
+  return (ns === 'workspace' ? workspaceTranslate() : sidebarTranslate()) as RegionTranslate
 }

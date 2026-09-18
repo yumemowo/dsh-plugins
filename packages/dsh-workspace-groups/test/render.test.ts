@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import * as React from 'react'
 import { GroupSection } from '../src/client/components/GroupSection.tsx'
+import { SessionRowMenu } from '../src/client/components/SessionRowMenu.tsx'
 import { WorkspaceSection } from '../src/client/components/WorkspaceSection.tsx'
 import type { WorkspaceSectionProps } from '../src/client/components/WorkspaceSection.tsx'
 import { WorkspaceGroupsRegion } from '../src/client/components/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/components/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
-import { regionTranslate, translateWith, workspaceTranslate } from './locale-stub.ts'
+import { regionTranslate, sidebarTranslate, translateWith, workspaceTranslate } from './locale-stub.ts'
 
 /**
  * 区域组件的渲染冒烟
@@ -132,6 +133,10 @@ function render(
     collapses?: unknown[]
     /** 会话行元素，按文档序 */
     rows?: unknown[]
+    /** 行右键菜单元素，按文档序；与 `menus` 分开收，见下方识别条件 */
+    contextMenus?: unknown[]
+    /** 挂了右键处理的行元素，按文档序（工作区行头、分组行头、会话行） */
+    hosts?: unknown[]
   },
   active: unknown = dispatcher,
   enter?: (type: unknown) => () => void,
@@ -159,9 +164,12 @@ function render(
           ? memoized.type
           : el.type
     if (typeof type === 'function') {
-      // 测试替身把 Menu 渲染成 null，因此按 props 形状识别，而不是函数名
+      // 测试替身把 Menu 渲染成 null，因此按 props 形状识别，而不是函数名。
+      // 右键菜单与按钮菜单都是 Menu，靠锚点区分：右键那一份锚点在指针处，按
+      // 契约传 anchor={null} 并由 getAnchorRect 定位，两者因此不会混进同一个桶
       if (Array.isArray(el.props.items) && el.props.anchor !== undefined) {
-        out.menus.push(el)
+        if (el.props.anchor === null) out.contextMenus?.push(el)
+        else out.menus.push(el)
         return
       }
       const prev = internals.ReactCurrentDispatcher.current
@@ -181,6 +189,8 @@ function render(
     }
     // 行内按钮（如分组行的 `+`）、操作位容器与状态点槽位都是宿主元素，收集起来供断言
     if (el.props['className'] === 'wg-row-actions') out.containers?.push(el)
+    // 行了挂右键处理的行：据此断言右键入口确实接在了行本身上
+    if (el.props['onContextMenu'] !== undefined) out.hosts?.push(el)
     if (el.props['className'] === 'wg-slot') out.slots?.push(el)
     if (el.props['className'] === 'wg-group-count') out.counts?.push(el)
     // 会话行与分组头都带淡入标记；这里只收会话行（带 data-wg-stagger 的 wg-row）
@@ -275,6 +285,123 @@ function menuItems(out: { menus: unknown[] }): string[][] {
 }
 
 /**
+ * 在一条行上触发一次右键
+ *
+ * 行是宿主元素，处理函数直接挂在它的 props 上；事件按真实 `contextmenu` 的
+ * 形状造：带指针坐标，并记录 preventDefault / stopPropagation 是否被调用。
+ * 缺省坐标 (0,0) 模拟键盘（菜单键）触发的右键
+ * @param row - 行元素（工作区行头、分组行头或会话行）
+ * @param at - 指针坐标
+ * @returns 这次右键是否拦掉了浏览器默认菜单与冒泡
+ */
+function fireContextMenu(
+  row: unknown,
+  at: { clientX: number; clientY: number } = { clientX: 0, clientY: 0 },
+): { prevented: boolean; stopped: boolean } {
+  const handler = (row as { props: Record<string, unknown> }).props['onContextMenu'] as
+    | ((event: unknown) => void)
+    | undefined
+  if (handler === undefined) return { prevented: false, stopped: false }
+  let prevented = false
+  let stopped = false
+  handler({
+    ...at,
+    currentTarget: { getBoundingClientRect: () => ({ left: 4, top: 8, right: 40, bottom: 30 }) },
+    preventDefault: () => {
+      prevented = true
+    },
+    stopPropagation: () => {
+      stopped = true
+    },
+  })
+  return { prevented, stopped }
+}
+
+/** 从一张菜单元素上读条目 id；菜单不存在时给空表 */
+function menuIdsOf(menu: unknown): string[] {
+  if (menu === null || menu === undefined) return []
+  return ((menu as { props: { items: { id: string }[] } }).props.items).map((item) => item.id)
+}
+
+/** 从菜单元素上读定位矩形；菜单未打开时原语拿到 null，据此保持隐藏 */
+function contextMenuAnchorRect(out: { contextMenus?: unknown[] }): unknown {
+  const menu = (out.contextMenus ?? [])[0] as
+    | { props: { getAnchorRect?: () => unknown } }
+    | undefined
+  return menu?.props.getAnchorRect?.() ?? null
+}
+
+/**
+ * 一个会话行的元素；供右键测试直接渲染一行
+ *
+ * 直接渲染单行而不是整片区域：测试替身按组件类型给状态分桶，同一类型的多个
+ * 实例共用一份状态，整片列表里所有会话行会一起"被右键"
+ * @param options.official - 是否给官方三项操作；false 时该行完全没有菜单
+ * @param options.grouping - 归组上下文；缺省表示该行没有分组可归
+ */
+function sessionRowNode(options: { official?: boolean; grouping?: boolean } = {}): unknown {
+  return React.createElement(SessionRowMenu, {
+    row: {
+      id: 's1',
+      title: '会话一',
+      blank: false,
+      running: false,
+      runningSubagentCount: 0,
+      completed: false,
+      updatedAt: 0,
+    },
+    title: '会话一',
+    selected: false,
+    actionsLabel: (name: string) => `会话“${name}”的操作`,
+    onOpenSession: () => {},
+    t: regionTranslate(),
+    ...(options.official === false
+      ? {}
+      : {
+          official: {
+            renameSession: async () => {},
+            forkSession: () => {},
+            archiveSession: async () => {},
+            labels: officialSessionLabels(workspaceTranslate()),
+            relativeTime: () => '',
+          },
+        }),
+    ...(options.grouping === true
+      ? {
+          grouping: {
+            workspaceId: 'w1',
+            sections: [],
+            currentGroupId: '',
+            groupLabel: '分组',
+            ungroupLabel: '取消分组',
+            onSelectGroup: () => {},
+          },
+        }
+      : {}),
+  })
+}
+
+/** 一个分组行的元素；供右键测试直接渲染一行 */
+function groupRowNode(onCreateSession?: () => void): unknown {
+  return React.createElement(GroupSection, {
+    section: { id: 'g1', label: '前端', sessions: [] },
+    collapsed: false,
+    onToggle: () => {},
+    onRename: () => {},
+    onDelete: () => {},
+    ...(onCreateSession === undefined ? {} : { onCreateSession }),
+    labels: {
+      actions: (name: string) => `分组“${name}”的操作`,
+      rename: '重命名',
+      delete: '删除分组',
+      newSessionItem: '新建会话',
+      newSession: (name: string) => `在“${name}”中新建会话`,
+    },
+    children: null,
+  })
+}
+
+/**
  * 收集容器行的行尾操作结构
  *
  * 「分组行与工作区行同形」是本包的核心承诺，因此断言落在结构上：两者
@@ -302,6 +429,7 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, collapse
     counts: [] as unknown[],
     order: [] as string[],
     collapses: [] as unknown[],
+    contextMenus: [] as unknown[],
   }
   render(
     React.createElement(GroupSection, {
@@ -328,6 +456,7 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, collapse
         // 菜单项用官方通用动词，对话框标题才点明对象
         rename: '重命名',
         delete: '删除分组',
+        newSessionItem: '新建会话',
         newSession: (name: string) => `在“${name}”中新建会话`,
       },
       children: null,
@@ -357,6 +486,7 @@ function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
     labels: {
       actions: (name: string) => `工作区“${name}”的操作`,
       newSession: (name: string) => `在“${name}”中新建会话`,
+      newSessionItem: '新建会话',
       newGroup: '新建分组',
       rename: '重命名',
       delete: '删除工作区',
@@ -366,6 +496,7 @@ function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
       actions: (name: string) => `分组“${name}”的操作`,
       rename: '重命名',
       delete: '删除分组',
+      newSessionItem: '新建会话',
       newSession: (name: string) => `在“${name}”中新建会话`,
     },
     onToggle: () => {},
@@ -480,6 +611,7 @@ function props(
     deleteWorkspace: async () => {},
     t: regionTranslate(),
     tWorkspace: workspaceTranslate(),
+    tSidebar: sidebarTranslate(),
     // 官方三项操作与相对时间：缺省不给，用于验证降级路径
     ...(options.official === false
       ? {}
@@ -925,5 +1057,176 @@ describe('WorkspaceGroupsRegion render', () => {
 
     // 官方窄栏也放这个入口（36px、label-primary），这里保持一致
     expect(rowButtons(out).map((b) => b.label)).toContain('添加工作区')
+  })
+})
+
+/**
+ * 行右键菜单
+ *
+ * 右键是行内操作位的捷径：条目与分派都必须与 `...` 菜单一致，差别只在入口
+ * 与落点。工作区行与分组行还多一项「新建会话」——它在行内对应 `+` 按钮
+ */
+describe('row context menu', () => {
+  /** 一次渲染的收集结果；`hosts` 与 `contextMenus` 由 walk 单独分桶 */
+  interface Collected {
+    menus: unknown[]
+    text: string[]
+    buttons: unknown[]
+    contextMenus: unknown[]
+    hosts: unknown[]
+    rows: unknown[]
+  }
+
+  function emptyOut(): Collected {
+    return {
+      menus: [],
+      text: [],
+      buttons: [],
+      contextMenus: [],
+      hosts: [],
+      rows: [],
+    }
+  }
+
+  /** 一类行元素；`className` 按前缀匹配（菜单展开的那条会多挂一个标记类） */
+  function rowsOf(out: Collected, className: string): unknown[] {
+    return out.hosts.filter((row) =>
+      String((row as { props: Record<string, unknown> }).props['className']).startsWith(className),
+    )
+  }
+
+  /** 一行的某个 prop；用于按标题之类的内容挑出具体某一行 */
+  function propOf(row: unknown, name: string): unknown {
+    return (row as { props: Record<string, unknown> }).props[name]
+  }
+
+  /** 当下开着的那张右键菜单；未打开或没有菜单时为 undefined */
+  function openMenu(out: Collected): unknown {
+    return out.contextMenus.find(
+      (menu) => (menu as { props: { open: boolean } }).props.open === true,
+    )
+  }
+
+  /**
+   * 渲染 → 在指定行上右键 → 再渲染一次
+   *
+   * 菜单开合是行的状态，两次渲染之间才会体现出来；`renderingDispatcher` 把
+   * 状态按组件类型留桶，因此同一条行在第二次渲染里读回自己刚写下的落点
+   * @param node - 待渲染的元素
+   * @param className - 要在哪一类行上右键（按类名前缀找第一条）
+   * @param at - 指针坐标；缺省模拟键盘触发的右键（浏览器给 (0,0)）
+   */
+  function rightClick(
+    node: unknown,
+    className: string,
+    at?: { clientX: number; clientY: number },
+    pick?: (row: unknown) => boolean,
+  ): { before: Collected; after: Collected; flags: { prevented: boolean; stopped: boolean } } {
+    const harness = renderingDispatcher()
+    const before = emptyOut()
+    harness.render(node, before)
+    const candidates = rowsOf(before, className)
+    const target = pick === undefined ? candidates[0] : candidates.find(pick)
+    const flags = fireContextMenu(target, at)
+    const after = emptyOut()
+    harness.render(node, after)
+    return { before, after, flags }
+  }
+
+  /** 在区域里右键工作区行 */
+  function region() {
+    return React.createElement(WorkspaceGroupsRegion, props(true))
+  }
+
+  it('attaches a right-click handler to every kind of row', () => {
+    // 工作区行与会话行（未分组桶里那条）都有右键入口
+    const { before } = rightClick(region(), 'wg-workspace-head')
+    expect(rowsOf(before, 'wg-workspace-head').length).toBeGreaterThan(0)
+    expect(rowsOf(before, 'wg-row').length).toBeGreaterThan(0)
+
+    // 分组行只在 loadGroups 落地后才出现，因此直接渲染一条
+    const group = rightClick(groupRowNode(() => {}), 'wg-group-head')
+    expect(rowsOf(group.before, 'wg-group-head')).toHaveLength(1)
+  })
+
+  it('opens the menu at the pointer and keeps the browser menu suppressed', () => {
+    const { after, flags } = rightClick(region(), 'wg-workspace-head', {
+      clientX: 120,
+      clientY: 240,
+    })
+
+    // 不 preventDefault 就没有自绘面板可言（浏览器会弹出自己的菜单）；
+    // 不 stopPropagation 则外层若也认右键会同时开两个
+    expect(flags.prevented).toBe(true)
+    expect(flags.stopped).toBe(true)
+
+    // 落点即指针处，面板因此贴着鼠标而不是行的某个锚点
+    expect(contextMenuAnchorRect({ contextMenus: [openMenu(after)] })).toEqual({
+      left: 120,
+      top: 240,
+      right: 120,
+      bottom: 240,
+    })
+  })
+
+  it('falls back to the row rect when the right click comes from the keyboard', () => {
+    // 菜单键触发的 contextmenu 没有指针坐标（浏览器给 (0,0)）：那时菜单该落在
+    // 行旁，而不是被丢到窗口左上角
+    const { after } = rightClick(region(), 'wg-workspace-head')
+
+    expect(contextMenuAnchorRect({ contextMenus: [openMenu(after)] })).toEqual({
+      left: 4,
+      top: 8,
+      right: 40,
+      bottom: 30,
+    })
+  })
+
+  it('keeps the row menu items and adds only the new-session entry', () => {
+    const { after } = rightClick(region(), 'wg-workspace-head')
+
+    // 右键菜单 = 行内 `...` 菜单 + 行内 `+` 那一项
+    expect(menuIdsOf(openMenu(after))).toEqual(['new-session', 'new-group', 'rename', 'delete'])
+  })
+
+  it('gives the session row the same items as its own menu', () => {
+    // 没有归组上下文的会话行（「未分组」桶里的那种）只留官方三项，且没有行内
+    // 新建入口可补：右键菜单与它的 `...` 菜单条目集合因此完全相同
+    const { after } = rightClick(sessionRowNode(), 'wg-row')
+
+    expect(menuIdsOf(openMenu(after))).toEqual(['rename', 'fork', 'archive'])
+  })
+
+  it('leaves a row without a create entry with the plain row menu', () => {
+    // 没有新建入口的行（这里用不传 onCreateSession 的分组行）补一项「新建会话」
+    // 就是点不动的死按钮，因此右键菜单退化成 `...` 菜单本身
+    const { after } = rightClick(groupRowNode(), 'wg-group-head')
+
+    expect(menuIdsOf(openMenu(after))).toEqual(['rename', 'delete'])
+  })
+
+  it('routes the new-session entry to the row own create handler', () => {
+    const created: string[] = []
+    const { after } = rightClick(groupRowNode(() => created.push('g1')), 'wg-group-head')
+
+    // 选中「新建会话」必须落到该行自己的新建入口上，与行内 `+` 是同一件事
+    const menu = openMenu(after) as { props: { onSelect: (id: string) => void } }
+    menu.props.onSelect('new-session')
+
+    expect(created).toEqual(['g1'])
+  })
+
+  it('hangs no right-click handler on a row that has no menu at all', () => {
+    // 「未分组」桶里的会话既没有工作区归属（没有归组项）又拿不到官方服务
+    //（没有官方三项），菜单条目因此是空的。那时右键保持浏览器默认行为，
+    // 而不是弹出空面板
+    const out = emptyOut()
+    render(React.createElement(WorkspaceGroupsRegion, props(true, { official: false })), out)
+
+    const stray = (out.rows ?? []).find((row) => propOf(row, 'title') === 'Orphan')
+    expect(stray).toBeDefined()
+    expect(propOf(stray, 'onContextMenu')).toBeUndefined()
+    // 它确实是一条会话行，只是没有入口——不是因为整片列表都没渲染
+    expect(rowsOf(out, 'wg-row').length).toBeGreaterThan(0)
   })
 })

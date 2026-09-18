@@ -11,8 +11,9 @@
 import { useState } from 'react'
 import type { ReactElement } from 'react'
 import { IconFolderClose16, IconFolderOpen16, IconTriangleRightFill14 } from '../runtime.ts'
-import { WORKSPACE_MENU, buildWorkspaceMenuItems } from '../menus.tsx'
+import { ROW_MENU, WORKSPACE_MENU, buildRowContextMenuItems, buildWorkspaceMenuItems } from '../menus.tsx'
 import { RowActions } from './RowActions.tsx'
+import { useRowContextMenu } from './RowContextMenu.tsx'
 import { handleRowKeyDown } from './rowKeyboard.ts'
 
 /** 工作区标题行的文案与无障碍标签 */
@@ -21,6 +22,8 @@ export interface WorkspaceRowLabels {
   actions: (name: string) => string
   /** 新建会话按钮的无障碍标签，取工作区名 */
   newSession: (name: string) => string
+  /** 菜单里的「新建会话」项 */
+  newSessionItem: string
   /** 菜单里的「新建分组」项 */
   newGroup: string
   /** 菜单里的「重命名工作区」项 */
@@ -57,6 +60,41 @@ export function WorkspaceRow({
   const [menuOpen, setMenuOpen] = useState(false)
   const manageable = onNewGroup !== undefined || onRename !== undefined || onDelete !== undefined
 
+  /**
+   * 菜单选中项的分派
+   *
+   * 行内 `...` 菜单与右键菜单共用它：两个入口的条目集合不同（右键多一项
+   * 「新建会话」），但 id 相同者必须落到同一件事上，否则同一个动作在两个
+   * 入口下会各走一套
+   */
+  const select = (id: string): void => {
+    setMenuOpen(false)
+    if (id === ROW_MENU.newSession) onCreateSession?.()
+    else if (id === WORKSPACE_MENU.newGroup) onNewGroup?.()
+    else if (id === WORKSPACE_MENU.rename) onRename?.()
+    else if (id === WORKSPACE_MENU.delete) onDelete?.()
+  }
+
+  const menuItems = manageable
+    ? buildWorkspaceMenuItems({
+        newGroupLabel: labels.newGroup,
+        renameLabel: labels.rename,
+        deleteLabel: labels.delete,
+      })
+    : undefined
+
+  // 没有新建入口时「新建会话」项不出现，右键菜单因此就是 `...` 菜单本身
+  const contextMenu = useRowContextMenu({
+    items:
+      menuItems === undefined
+        ? undefined
+        : buildRowContextMenuItems(
+            menuItems,
+            onCreateSession === undefined ? undefined : labels.newSessionItem,
+          ),
+    onSelect: select,
+  })
+
   return (
     <div
       className={'wg-workspace-head' + (menuOpen ? ' wg-row-menu-open' : '')}
@@ -64,7 +102,9 @@ export function WorkspaceRow({
       tabIndex={0}
       onClick={onToggle}
       onKeyDown={(event) => handleRowKeyDown(event, onToggle)}
+      onContextMenu={contextMenu.onContextMenu}
     >
+      {contextMenu.menu}
       <span className={`wg-slot wg-folder${folderActive ? ' wg-folder-active' : ''}`}>
         {collapsed ? <IconFolderClose16 /> : <IconFolderOpen16 />}
       </span>
@@ -75,21 +115,8 @@ export function WorkspaceRow({
       <RowActions
         menuOpen={menuOpen}
         onMenuOpen={setMenuOpen}
-        onMenuSelect={(id) => {
-          setMenuOpen(false)
-          if (id === WORKSPACE_MENU.newGroup) onNewGroup?.()
-          else if (id === WORKSPACE_MENU.rename) onRename?.()
-          else if (id === WORKSPACE_MENU.delete) onDelete?.()
-        }}
-        menuItems={
-          manageable
-            ? buildWorkspaceMenuItems({
-                newGroupLabel: labels.newGroup,
-                renameLabel: labels.rename,
-                deleteLabel: labels.delete,
-              })
-            : undefined
-        }
+        onMenuSelect={select}
+        menuItems={menuItems}
         actionsLabel={labels.actions(title)}
         create={
           onCreateSession === undefined

@@ -74,6 +74,8 @@
   `ui-workspace` 的 `sessionStatuses` 逐条一致（见下节）。
 - **会话重命名 / 分叉 / 归档**：会话行 `...` 菜单里直接复用官方接口与官方
   文案（见「会话操作菜单」）。
+- **行右键菜单**：三类行都可右键唤出行操作菜单，条目与行内 `...` 菜单一致，
+  面板落在指针处（见「行右键菜单」）。
 - **行尾最近更新时间**：官方风格的紧凑相对时间，格式化完全复用官方原语与
   语言包（见「行尾最近更新时间」）。
 
@@ -136,6 +138,7 @@
 ### 会话操作菜单
 
 行尾 `...` 打开菜单，内容分两段：官方三项 + 一条分隔线 + 本包的归组项。
+行右键唤出的是同一份条目与同一段分派（见「行右键菜单」）。
 
 | 段 | 项 | 行为 |
 | --- | --- | --- |
@@ -164,6 +167,61 @@
 「未分组」桶里的会话没有工作区归属、没有分组可落，因此那里只留官方三项。
 宿主未加载官方 `ui-workspace` 时（本包的区域本来就依赖它供的 `useWorkspaces`
 等全局 hook），官方三项与行尾时间**整体不渲染**，不留点不动的死按钮。
+
+### 行右键菜单
+
+工作区行、分组行与会话行都可以右键唤出操作菜单。它是行内 `...` 按钮的
+**捷径**，不是第二套操作：条目与分派函数都直接取自该行的 `...` 菜单，两个
+入口下同一个 id 落到同一段代码上，因此不会各自漂移。`...` 按钮保留，键盘与
+触控仍靠它。
+
+| 行 | 右键菜单条目 |
+| --- | --- |
+| 工作区 | 新建会话 / 新建分组 / 重命名 / 删除工作区 |
+| 分组 | 新建会话 / 重命名分组 / 删除分组 |
+| 会话 | 重命名 / 分叉 / 归档（+ 归组 / 取消分组） |
+
+容器行比 `...` 菜单**多一项「新建会话」**：在行内它对应 `+` 按钮，没有菜单
+形态，右键时补在最前，使右键能触达该行全部动作。`+` 本身不变，仍只以按钮
+形态存在。没有新建入口的行（如「未分组」桶的工作区行）不补这一项，否则就是
+个点不动的死按钮。
+
+面板落在**指针处**：官方 `Menu` 原语的 `getAnchorRect` 允许直接给定位矩形，
+官方 `WorkspacePickFlow` 用的就是这个入口，本包因此不必自造浮层。原语在该
+模式下要求 `anchor` 为空。另外两处与原语默认不同：
+
+- **不随指针离开关闭**。锚在按钮旁的 `...` 菜单用 `closeOnPointerLeave`，
+  因为指针一旦移开按钮，菜单就该收起；右键菜单的指针正停在落点，之后移向
+  条目正是正常操作，跟随离开会让它一移就关。
+- **根节点整盒去掉**（`.wg-context-menu`）。原语根节点是 `position: relative`
+  的行内盒，而面板本身 portal 到 body、根节点没有 DOM 子节点。留在流里会多出
+  一个空 flex 项，行的 `gap` 照样算，标题与会话数会被推开。规则用
+  `display: contents`，并把类名写两遍（`.wg-context-menu.wg-context-menu`）
+  抬一次优先级：原语自己的根类是单类规则，谁后注入谁赢，而插件样式标签与基线
+  样式表的先后不由本包决定。
+
+右键处理拦掉浏览器的默认菜单（`preventDefault`）并停止冒泡（`stopPropagation`，
+否则外层若也认右键会同时开两个）。**键盘触发的右键**（菜单键）没有指针坐标，
+浏览器给的是 `(0,0)`：那时退回量行自身的矩形，菜单落在行旁，而不是被丢到窗口
+左上角。整行都没有菜单时不挂右键处理，右键保持浏览器默认行为。
+
+菜单项文案与图标：
+
+| 项 | 文案来源 | 图标 |
+| --- | --- | --- |
+| 新建会话 | 官方 `sidebar` 的 `session.new.label`（「新建会话」） | 官方 `IconNewChatOutline16` |
+| 新建分组 | 本包 `newGroup` | `IconPlusOutline16`（同官方 `menu.addWorkspace`） |
+| 重命名 | 官方 `workspace` 的 `rename` | `IconEditOutline16` |
+| 删除工作区 / 分组 | 官方 `delete.workspace` / 本包 `deleteGroup` | `IconTrashOutline16` |
+| 分叉 / 归档 | 官方 `workspace` 的 `menu.fork` / `menu.archiveSession` | `IconBranchOutline16` / `IconArchiveOutline20` |
+
+「新建会话」的文案取官方 `sidebar` 新建按钮的**动词短语** `session.new.label`，
+与行内 `+` 的无障碍标签（官方 `actions.newSession.aria`，带对象名）分工不同：
+菜单项是一次性动作，读作动词短语，与「新建分组 / 重命名 / 删除工作区」一致。
+图标取官方 `IconNewChatOutline16`（官方 sidebar 新建按钮的字形）而不是 `+`：
+同一个菜单里「新建分组」也带 `+`，两项都用 `+` 就只能靠文字区分。因此
+`regionLabels` 多绑一个官方 `sidebar` 命名空间（`tSidebar`），与本包
+`t`、官方 `workspace` 三个座位并列。
 
 ### 会话命名
 
@@ -501,12 +559,14 @@ picking 交互本身不重写：它整段来自官方 `sidebar.workspaces.direct
 | 添加工作区失败 | `Modal` + `Button`（同上，文案取官方 `folderError.*`） |
 | 文件夹、三角、省略号 | `IconFolderClose16` / `IconFolderOpen16` / `IconTriangleRightFill14` / `IconEllipsisOutline16` |
 | 新建会话、新建分组、改名、删除 | `IconPlusOutline16` / `IconEditOutline16` / `IconTrashOutline16` |
+| 行右键菜单的「新建会话」项 | `IconNewChatOutline16`（与官方 sidebar 新建按钮同字形） |
 | header 的添加工作区 / 搜索 / 视图选项 | `IconProjectAddOutline16` / `IconSearchOutline16` / `IconPersonalizationOutline16`（与官方 header 同字形） |
 | 会话菜单的分叉 / 归档项 | `IconBranchOutline16` / `IconArchiveOutline20`（与官方会话菜单同字形） |
 | 窄栏展开入口 | `IconPanelLeftOutline16`（与官方侧栏折叠按钮同一字形） |
 | 会话状态点 | `StateDot`（运行态画追光方阵，其余画圆点；颜色由原语的主题规则给出） |
 | 行尾相对时间 | `relativeTime`（官方 `timeLabel` 用的同一个分桶函数，文案走官方语言包） |
 | 「添加工作区」入口提示 | `Tooltip`（与官方 header 同一 `delayMs` 与展开方向） |
+| 行内 `...` 菜单与行右键菜单 | `Menu`（右键那份走它的 `getAnchorRect`，官方 `WorkspacePickFlow` 用的同一入口） |
 
 原语的样式属于 ui-theme / ui-primitives：本包不为它们写颜色、阈值或高亮，
 只在 `styles.ts` 里保留自己的布局约定。
@@ -533,7 +593,7 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 | 模块 | 内容 |
 | --- | --- |
 | `locales.ts` | 命名空间名 `NS`、`zh` / `en` 字典、键域类型，以及 `LocaleNamespaceMap` 声明 |
-| `labels.ts` | 只有投影：`regionLabels(t)` 把翻译函数绑成 `RegionLabels` 契约 |
+| `labels.ts` | 只有投影：`regionLabels(t, tWorkspace, tSidebar)` 把翻译函数绑成 `RegionLabels` 契约 |
 
 命名空间取短名 `workspaceGroups`（官方插件的命名空间都是短名：`workspace` /
 `sidebar` / `goal` / `reference` …），不是包名。
@@ -589,7 +649,7 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 标准词，其中并没有 `rename`。所以这一项必须走 `tw('rename')`；写成
 `t('rename')` 会被 tsc 直接拒绝（本包自己的键域里没有它，`common` 也没兜住）。
 
-两个命名空间的取用方式不同：
+三个命名空间的取用方式：
 
 - 本包自己的 `workspaceGroups` 由插件入口 `ctx.locale.register(NS, { zh, en })`
   注册，字典键域由 `LocaleNamespaceMap` 声明，因此 tsc 会拒绝漏键或错键；
@@ -597,6 +657,9 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 - 官方 `workspace` 由官方包自己注册，本包只**读**：`locale.bind('workspace')`
   取翻译函数后随 inject 结果传下去。`bind` 返回稳定引用且**调用时才读当前
   语言**，因此既不必占用插槽座位，也不会冻结在注册那一刻。
+- 官方 `sidebar` 同样只读：行右键菜单的「新建会话」项取它新建按钮的动词
+  短语 `session.new.label`（见「行右键菜单」）。这个键在 `sidebar` 而不在
+  `workspace` 里——后者只有名词形态的 `session.new`（「新会话」）。
 
 通用词（`ok` / `cancel` / `close`）不在本包字典里：它们走官方 `common`
 命名空间，由拿到 `t` 座位的对话框组件直接解析，查找链在命名空间未命中后
@@ -605,8 +668,8 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 必须分清「缓存的是函数还是文案表」：渲染器会缓存 inject 结果整个注册周期，
 因此**投影后的文案表**不能放进 inject（会冻结在首次渲染那一刻），而
 `locale.bind` 返回的**翻译函数**可以——它调用时才读当前语言。因此
-`regionLabels(t, tWorkspace)` 在组件渲染期现算，`t` 走插槽座位、`tWorkspace`
-随 inject 传入。
+`regionLabels(t, tWorkspace, tSidebar)` 在组件渲染期现算：`t` 走插槽座位，
+`tWorkspace` 与 `tSidebar` 随 inject 传入。
 
 
 ### 为什么不能只做增量扩展
@@ -707,7 +770,7 @@ src/client/
 ├── compare.tsx                 对照模式：挂进 better-sidebar 右侧栏 tab
 ├── remote.ts                   Remote 贡献声明与调用封装
 ├── runtime.ts                  primitives 值导入的唯一出口（external）
-├── menus.tsx                   容器行「更多操作」菜单的条目构造（工作区 / 分组）
+├── menus.tsx                   菜单条目构造（工作区 / 分组行内菜单、右键菜单补全）
 ├── styles.ts                   本包样式表
 ├── data/                       无 React 依赖的纯逻辑
 │   ├── types.ts                SessionRow / GroupSection / WorkspaceLayout / 草稿类型
@@ -727,6 +790,7 @@ src/client/
     ├── RowActions.tsx              容器行行尾操作位（`...` 菜单 + `+`），两行共用
     ├── SessionRowView.tsx          会话行外壳（状态位列、标题、时间、操作位）
     ├── SessionRowMenu.tsx          带会话操作菜单的会话行
+    ├── RowContextMenu.tsx          行右键菜单（指针定位、与 `...` 菜单共用条目与分派）
     ├── WorkspaceRail.tsx           窄栏展开入口
     ├── IconButton.tsx              16px 行内图标按钮
     ├── rowKeyboard.ts              Enter/Space 行激活（忽略行内按钮冒泡）
@@ -736,7 +800,8 @@ src/client/
 ```
 
 状态的归属只有一处：折叠态与四个对话框草稿留在 `WorkspaceGroupsRegion`，
-菜单开合留在持有锚点的行组件内，行的外观组件保持无状态。
+菜单开合留在持有行组件内（行内 `...` 菜单与右键菜单各一份，都由
+`useRowContextMenu` 与行自己的 `useState` 持有），行的外观组件保持无状态。
 
 两条容易踩错的设计（折叠体为什么必须 fail-open、行级 memo 要怎样才能命中，
 含实测数据）单独记在 [`docs/reveal-and-caching.md`](docs/reveal-and-caching.md)。

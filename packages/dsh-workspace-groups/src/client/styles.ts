@@ -492,6 +492,15 @@ export const CSS = `
 .wg-row-menu-open .wg-row-action,
 .wg-row-action:focus-visible { opacity: 1; pointer-events: auto; }
 
+/* 右键菜单随行渲染时，原语根节点（position: relative 的行内盒）必须整盒去掉。
+   它没有 DOM 子节点——面板是 portal 到 body 的——留在流里却会成为一个空 flex
+   项：行的 gap 照样算，多个 6px 就会把标题推开；分组行的会话数也同理偏移。
+   display: contents 让它不生成盒子，面板不受影响（它不在这个盒子里）
+
+   类名写两遍是为了抬一次优先级：原语自己的根类是一条单类规则，谁后注入谁赢，
+   而插件的样式标签与基线样式表的先后不由本包决定 */
+.wg-context-menu.wg-context-menu { display: contents; }
+
 /* 对话框内的错误提示（如工作区重名）：只上错误色，几何走官方 Modal */
 .wg-dialog-error {
   color: var(--dsw-alias-state-error-primary);

@@ -46,6 +46,20 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     /** end：列表右缘对齐锚点右缘（贴近窗口右缘时向左展开） */
     align?: 'start' | 'end'
     closeOnPointerLeave?: boolean
+    /**
+     * 面板的定位矩形，只在 `portal` 下生效
+     *
+     * 给了就按它定位，而不是去量锚点元素：右键菜单因此能落在指针处。原语只读
+     * 四条边，返回 null 表示本次没有可用的矩形，面板保持隐藏
+     */
+    getAnchorRect?: (() => {
+      left: number
+      top: number
+      right: number
+      bottom: number
+    } | null) | undefined
+    /** 挂在原语根节点上的类名；根节点默认是行内盒，行内使用时靠它调整 */
+    className?: string
   }) => ReactNode
 
   /** 通用按钮；variant 决定填充、悬停与边框 */
@@ -135,6 +149,8 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const IconTriangleRightFill14: IconComponent
   export const IconEllipsisOutline16: IconComponent
   export const IconPlusOutline16: IconComponent
+  /** 官方 sidebar「新建会话」按钮的图标 */
+  export const IconNewChatOutline16: IconComponent
   export const IconEditOutline16: IconComponent
   export const IconTrashOutline16: IconComponent
   export const IconPanelLeftOutline16: IconComponent

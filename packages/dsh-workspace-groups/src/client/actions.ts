@@ -11,7 +11,7 @@ import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/cl
 import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { Group } from './remote.ts'
 import type { GroupChoice } from './data/types.ts'
-import type { OfficialAddLabels, OfficialSessionLabels, WorkspaceTranslate } from './official.ts'
+import type { OfficialAddLabels, OfficialSessionLabels, SidebarTranslate, WorkspaceTranslate } from './official.ts'
 
 /** 工作区状态快照里区域用到的部分 */
 export interface WorkspaceState {
@@ -141,6 +141,14 @@ export interface RegionActions {
    * 的 `t` 走插槽座位（见 `WorkspaceGroupsProps`），官方这份不占座位。
    */
   tWorkspace: WorkspaceTranslate
+  /**
+   * 官方 `sidebar` 命名空间的翻译函数
+   *
+   * 容器行的右键菜单要复用官方新建会话按钮的动词短语
+   *（`session.new.label`），那个键在 `sidebar` 命名空间里。与 `tWorkspace`
+   * 同为稳定引用、调用时才读当前语言
+   */
+  tSidebar: SidebarTranslate
   /**
    * 官方三项会话操作与相对时间的解析器
    *

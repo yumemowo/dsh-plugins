@@ -14,6 +14,7 @@ export {
   IconEllipsisOutline16,
   IconFolderClose16,
   IconFolderOpen16,
+  IconNewChatOutline16,
   IconPanelLeftOutline16,
   IconPersonalizationOutline16,
   IconPlusOutline16,

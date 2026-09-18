@@ -15,6 +15,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { StateDot } from '../runtime.ts'
 import { handleRowKeyDown } from './rowKeyboard.ts'
 import { sameSessionStatus } from '../data/status.ts'
+import type { RowContextMenuEvent } from './RowContextMenu.tsx'
 import type { SessionStatus } from '../data/status.ts'
 
 export interface SessionRowViewProps {
@@ -33,6 +34,13 @@ export interface SessionRowViewProps {
   /** 行尾操作位；缺省表示该行没有任何可用操作（如未分组桶里的会话） */
   action?: ReactNode
   /**
+   * 行右键处理；缺省表示该行没有右键菜单，右键保持浏览器默认行为
+   *
+   * 通过 props 下发而不是在行内自建：菜单条目与分派都属于「这一行有哪些
+   * 操作」，由持有菜单的组件决定；本组件只管把事件接上
+   */
+  onContextMenu?: ((event: RowContextMenuEvent) => void) | undefined
+  /**
    * 打开会话
    *
    * 传动作本身而不是绑好 id 的闭包：绑好的闭包每次渲染都是新引用，行级 memo
@@ -49,6 +57,7 @@ function SessionRowViewImpl({
   time,
   menuOpen = false,
   action,
+  onContextMenu,
   onOpenSession,
 }: SessionRowViewProps): ReactElement {
   const open = () => onOpenSession(sessionId)
@@ -64,6 +73,7 @@ function SessionRowViewImpl({
       title={title}
       onClick={open}
       onKeyDown={(event) => handleRowKeyDown(event, open)}
+      onContextMenu={onContextMenu}
     >
       {status === undefined ? (
         <span className="wg-slot" />
@@ -97,6 +107,7 @@ function sameRowViewProps(prev: SessionRowViewProps, next: SessionRowViewProps):
     prev.time === next.time &&
     prev.menuOpen === next.menuOpen &&
     prev.action === next.action &&
+    prev.onContextMenu === next.onContextMenu &&
     prev.onOpenSession === next.onOpenSession &&
     sameSessionStatus(prev.status, next.status)
   )

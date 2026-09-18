@@ -25,6 +25,8 @@ export interface WorkspaceSectionProps {
   groupActionLabels: {
     /** `...` 按钮的无障碍标签，取分组名 */
     actions: (name: string) => string;
+    /** 「新建会话」菜单项 */
+    newSessionItem: string;
     /** 「重命名分组」菜单项 */
     rename: string;
     /** 「删除分组」菜单项 */

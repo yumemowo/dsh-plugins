@@ -23,6 +23,7 @@ export const IconFolderOpen16 = icon('IconFolderOpen16')
 export const IconTriangleRightFill14 = icon('IconTriangleRightFill14')
 export const IconEllipsisOutline16 = icon('IconEllipsisOutline16')
 export const IconPlusOutline16 = icon('IconPlusOutline16')
+export const IconNewChatOutline16 = icon('IconNewChatOutline16')
 export const IconEditOutline16 = icon('IconEditOutline16')
 export const IconTrashOutline16 = icon('IconTrashOutline16')
 export const IconPanelLeftOutline16 = icon('IconPanelLeftOutline16')
@@ -62,6 +63,7 @@ export default {
   IconTriangleRightFill14,
   IconEllipsisOutline16,
   IconPlusOutline16,
+  IconNewChatOutline16,
   IconEditOutline16,
   IconTrashOutline16,
   IconPanelLeftOutline16,

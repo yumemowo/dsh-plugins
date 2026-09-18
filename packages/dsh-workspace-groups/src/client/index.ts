@@ -138,6 +138,9 @@ export function apply(ctx: Context): void {
   // 才读当前语言**，因此可以放心地随 inject 结果或渲染期解析一起缓存——
   // 被缓存的是函数，不是投影后的文案表，语言切换后调用它自然读到新语言。
   const tWorkspace = locale.bind('workspace')
+  // 容器行右键菜单里的「新建会话」取官方 sidebar 新建按钮的动词短语，那个键
+  // 在 `sidebar` 命名空间；绑定语义同上
+  const tSidebar = locale.bind('sidebar')
 
   const requireApi = (): Record<string, (...args: never[]) => Promise<never>> => {
     if (groupsApi === undefined) throw new Error('workspace-groups remote is not ready')
@@ -264,6 +267,7 @@ export function apply(ctx: Context): void {
         renameWorkspace: async () => {},
         deleteWorkspace: async () => {},
         tWorkspace,
+        tSidebar,
         hooks,
       }
     }
@@ -319,6 +323,7 @@ export function apply(ctx: Context): void {
         workspaces.rename(workspaceId as never, title).then(() => undefined),
       deleteWorkspace: (workspaceId) => workspaces.delete(workspaceId as never),
       tWorkspace,
+      tSidebar,
       // 传解析器而不是值：渲染时才去读 ctx.uiWorkspace（见 RegionActions）。
       official: officialActions,
       // 同为解析器：它还要去读官方 directoryFlow 洞的占用者
