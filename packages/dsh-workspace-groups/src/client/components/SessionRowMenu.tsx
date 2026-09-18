@@ -77,6 +77,8 @@ export interface SessionRowMenuProps {
   actionsLabel: (name: string) => string
   /** 本包命名空间的翻译座位，供重命名对话框解析通用词 */
   t: RegionTranslate
+  /** 请求把这一行滚进可视区；只在从搜索结果打开时下发 */
+  onReveal?: (() => void) | undefined
 }
 
 /**
@@ -119,6 +121,7 @@ function sameRowMenuProps(prev: SessionRowMenuProps, next: SessionRowMenuProps):
     prev.onOpenSession === next.onOpenSession &&
     prev.actionsLabel === next.actionsLabel &&
     prev.t === next.t &&
+    prev.onReveal === next.onReveal &&
     sameGrouping(prev.grouping, next.grouping)
   )
 }
@@ -134,6 +137,7 @@ function SessionRowMenuView({
   onOpenSession,
   actionsLabel,
   t,
+  onReveal,
 }: SessionRowMenuProps): ReactElement {
   const [menuOpen, setMenuOpen] = useState(false)
   const [renameDraft, setRenameDraft] = useState<string | null>(null)
@@ -176,6 +180,7 @@ function SessionRowMenuView({
         time={time}
         menuOpen={menuOpen}
         onOpenSession={onOpenSession}
+        onReveal={onReveal}
         onContextMenu={contextMenu.onContextMenu}
         action={
           <Menu

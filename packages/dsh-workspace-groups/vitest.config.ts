@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
     environment: 'node',
+    // DOM 冒烟测试（文件头的 `@vitest-environment jsdom`）用 `act` 驱动 React，
+    // 而那个全局标记必须早于 React 被 import；见 test/setup.ts
+    setupFiles: ['test/setup.ts'],
   },
   // @deepseek-ai/dsh-client-ui-primitives 只存在于客户端基线模块表，
   // node 测试环境用最小替身满足 require

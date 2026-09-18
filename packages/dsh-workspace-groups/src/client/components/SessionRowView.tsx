@@ -9,8 +9,12 @@
  * 状态位与相对时间由调用方算好传进来，两者都必须是内容稳定的值（时间文案的精度是
  * 分钟级），因此既能参与行级 memo 的比对，又能在任何一次区域重渲染时刷新。不要在行内
  * 按渲染当刻取时间：被 memo 挡下的行不会重算，文案会停住
+ *
+ * `reveal` 为真的那一行在挂载后把自己滚进可视区并回报一次（官方
+ * `SessionNodeItem` 的 `onReveal` 就是这条路径）：从搜索结果打开一条会话时，
+ * 列表要自动滚到它所在的那一行
  */
-import { memo } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { StateDot } from '../runtime.ts'
 import { handleRowKeyDown } from './rowKeyboard.ts'
@@ -47,6 +51,12 @@ export interface SessionRowViewProps {
    * 因此永远判定为变过
    */
   onOpenSession: (sessionId: string) => void
+  /**
+   * 请求把这一行滚进可视区
+   *
+   * 只在从搜索结果打开会话时下发；缺省表示这一行没有待揭示的请求
+   */
+  onReveal?: (() => void) | undefined
 }
 
 function SessionRowViewImpl({
@@ -59,10 +69,22 @@ function SessionRowViewImpl({
   action,
   onContextMenu,
   onOpenSession,
+  onReveal,
 }: SessionRowViewProps): ReactElement {
   const open = () => onOpenSession(sessionId)
+  const rowRef = useRef<HTMLDivElement | null>(null)
+
+  // 挂载后把自己滚进可视区，并立刻回报一次：请求方要在收到回报后清掉标记，
+  // 否则该行会在后续每次重新挂载时再滚一次
+  useEffect(() => {
+    if (onReveal === undefined) return
+    rowRef.current?.scrollIntoView({ block: 'nearest' })
+    onReveal()
+  }, [onReveal])
+
   return (
     <div
+      ref={rowRef}
       className={
         'wg-row' + (selected ? ' wg-row-selected' : '') + (menuOpen ? ' wg-row-menu-open' : '')
       }
@@ -109,6 +131,7 @@ function sameRowViewProps(prev: SessionRowViewProps, next: SessionRowViewProps):
     prev.action === next.action &&
     prev.onContextMenu === next.onContextMenu &&
     prev.onOpenSession === next.onOpenSession &&
+    prev.onReveal === next.onReveal &&
     sameSessionStatus(prev.status, next.status)
   )
 }

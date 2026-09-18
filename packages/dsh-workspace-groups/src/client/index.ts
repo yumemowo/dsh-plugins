@@ -266,6 +266,8 @@ export function apply(ctx: Context): void {
         moveSession: async () => ({}),
         renameWorkspace: async () => {},
         deleteWorkspace: async () => {},
+        // 会话控制器缺失时退回线上契约里那个固定值（见 RegionActions）
+        searchResultLimit: 20,
         tWorkspace,
         tSidebar,
         hooks,
@@ -322,6 +324,9 @@ export function apply(ctx: Context): void {
       renameWorkspace: (workspaceId, title) =>
         workspaces.rename(workspaceId as never, title).then(() => undefined),
       deleteWorkspace: (workspaceId) => workspaces.delete(workspaceId as never),
+      // 结果条数上限直接读官方控制器上的那一格，不自己定一个数：它就是线上
+      // 响应契约里的上限，官方改它时本包自动跟随
+      searchResultLimit: sessions.searchResultLimit,
       tWorkspace,
       tSidebar,
       // 传解析器而不是值：渲染时才去读 ctx.uiWorkspace（见 RegionActions）。

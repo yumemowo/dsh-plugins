@@ -158,6 +158,8 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const IconProjectAddOutline16: IconComponent
   /** 官方 header「搜索」入口的图标 */
   export const IconSearchOutline16: IconComponent
+  /** 官方搜索框清除按钮的图标 */
+  export const IconCloseFill14: IconComponent
   /** 官方 header「视图选项」入口的图标 */
   export const IconPersonalizationOutline16: IconComponent
   /** 官方会话菜单「分叉」项用的图标 */

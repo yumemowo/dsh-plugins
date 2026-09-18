@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
+import {
+  officialAddLabels,
+  officialSearchLabels,
+  officialSessionLabels,
+  timeLabel,
+} from '../src/client/official.ts'
 import { workspaceTranslate } from './locale-stub.ts'
 
 /**
@@ -28,7 +33,6 @@ describe('officialAddLabels', () => {
       add: '添加工作区',
       folderErrorTitle: '无法打开文件夹',
       folderErrorRetry: '重新选择',
-      search: '搜索会话',
       viewOptions: '视图选项',
     })
   })
@@ -37,6 +41,27 @@ describe('officialAddLabels', () => {
     // 两个键官方都提供，但语义不同：菜单项带省略号，表示还要再选一次
     expect(workspaceTranslate()('workspace.add')).toBe('添加工作区')
     expect(workspaceTranslate()('menu.addWorkspace')).toBe('添加工作区…')
+  })
+})
+
+describe('officialSearchLabels', () => {
+  it('reads the search entry, input and result copy from the official dictionary', () => {
+    const labels = officialSearchLabels(workspaceTranslate())
+
+    expect(labels.entry).toBe('搜索会话')
+    expect(labels.placeholder).toBe('搜索会话…')
+    expect(labels.clear).toBe('清除搜索')
+    expect(labels.results).toBe('搜索结果')
+    expect(labels.noMatches).toBe('无匹配会话')
+    // 上限由调用方传入，官方那句模板里带 {n}
+    expect(labels.truncated(20)).toBe('仅显示前 20 条结果，请缩小搜索范围。')
+  })
+
+  it('takes the entry tooltip from the shared common word, not the object-named key', () => {
+    // 官方入口按钮的 tooltip 用通用词「搜索」（common 命名空间，由查找链兜住），
+    // 无障碍标签才点明对象；两者不是同一个键
+    expect(workspaceTranslate()('search')).toBe('搜索')
+    expect(workspaceTranslate()('search.sessions.aria')).toBe('搜索会话')
   })
 })
 

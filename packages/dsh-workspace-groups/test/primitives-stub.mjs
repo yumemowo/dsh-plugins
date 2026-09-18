@@ -49,6 +49,7 @@ export const Tooltip = ({ children }) => children
 export const IconProjectAddOutline16 = icon('IconProjectAddOutline16')
 export const IconSearchOutline16 = icon('IconSearchOutline16')
 export const IconPersonalizationOutline16 = icon('IconPersonalizationOutline16')
+export const IconCloseFill14 = icon('IconCloseFill14')
 
 export default {
   Menu,
@@ -72,4 +73,5 @@ export default {
   IconProjectAddOutline16,
   IconSearchOutline16,
   IconPersonalizationOutline16,
+  IconCloseFill14,
 }

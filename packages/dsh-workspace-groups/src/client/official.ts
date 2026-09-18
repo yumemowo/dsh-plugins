@@ -44,10 +44,26 @@ export interface OfficialAddLabels {
   folderErrorTitle: string
   /** 错误框里的「重新选择」按钮 */
   folderErrorRetry: string
-  /** 搜索入口的文案，同时是占位按钮的无障碍标签 */
-  search: string
   /** 视图选项入口的文案，同时是占位按钮的无障碍标签 */
   viewOptions: string
+}
+
+/** 官方搜索入口、输入框与结果列表的文案 */
+export interface OfficialSearchLabels {
+  /** 入口的 tooltip 文案，取官方通用的「搜索」 */
+  hint: string
+  /** 入口按钮的无障碍标签，官方在这里点明对象 */
+  entry: string
+  /** 输入框的占位文案 */
+  placeholder: string
+  /** 清除按钮的无障碍标签 */
+  clear: string
+  /** 结果列表的无障碍标签 */
+  results: string
+  /** 没有任何匹配时的空态 */
+  noMatches: string
+  /** 结果被条数上限截断时的提示；上限由调用方传入 */
+  truncated: (n: number) => string
 }
 
 /**
@@ -64,8 +80,28 @@ export function officialAddLabels(t: WorkspaceTranslate): OfficialAddLabels {
     add: t('workspace.add'),
     folderErrorTitle: t('folderError.title'),
     folderErrorRetry: t('folderError.retry'),
-    search: t('search.sessions.aria'),
     viewOptions: t('viewOptions.label'),
+  }
+}
+
+/**
+ * 把官方语言包绑成搜索入口、输入框与结果列表的文案表
+ *
+ * 入口的 tooltip 与无障碍标签官方分两个键：tooltip 用通用的「搜索」
+ *（`search`，落在 `common` 命名空间、由查找链兜住），无障碍标签才点明对象
+ *（`search.sessions.aria`）。本包照官方的分工逐键取用
+ * @param t - 官方 `workspace` 命名空间的翻译函数
+ * @returns 语义化字段的文案表
+ */
+export function officialSearchLabels(t: WorkspaceTranslate): OfficialSearchLabels {
+  return {
+    hint: t('search'),
+    entry: t('search.sessions.aria'),
+    placeholder: t('search.placeholder'),
+    clear: t('search.clear'),
+    results: t('search.results.aria'),
+    noMatches: t('search.noMatches'),
+    truncated: (n: number) => t('search.hasMore', { n }),
   }
 }
 

@@ -28,6 +28,8 @@ import { regionLabels } from '../labels.ts'
 import type { RegionTranslate } from '../locales.ts'
 import { buildLayout, containsSession, groupIdOfSession } from '../data/layout.ts'
 import { groupSessionsByWorkspace, straySessions } from '../data/sessions.ts'
+import { searchSessions } from '../data/search.ts'
+import type { SearchMatch } from '../data/search.ts'
 import { sessionStatus } from '../data/status.ts'
 import type { SessionStatus } from '../data/status.ts'
 import type { GroupNameDraft, SessionRow, WorkspaceNameDraft } from '../data/types.ts'
@@ -36,6 +38,7 @@ import type { SessionGroupingContext } from './SessionRowMenu.tsx'
 import { CollapsibleBody } from './CollapsibleBody.tsx'
 import { SessionRowView } from './SessionRowView.tsx'
 import { RegionHeader, RegionRailHeader } from './RegionHeader.tsx'
+import { SearchResults, useSearch } from './SearchControl.tsx'
 import { WorkspaceRail } from './WorkspaceRail.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
 import type { WorkspaceRowLabels } from './WorkspaceRow.tsx'
@@ -75,6 +78,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     moveSession,
     renameWorkspace,
     deleteWorkspace,
+    searchResultLimit,
     official: resolveOfficial,
     addWorkspace: resolveAddWorkspace,
     tWorkspace,
@@ -115,8 +119,14 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     workspaceId: string
     label: string
   } | null>(null)
+  /** 从搜索结果打开、等待滚进可视区的那一行；滚动完成后由行自己回报清除 */
+  const [revealSessionId, setRevealSessionId] = useState<string | undefined>(undefined)
 
   const currentSessionId = sessions.current === undefined ? undefined : String(sessions.current)
+
+  // 搜索状态留在这里而不是 header 内部：窄栏入口要触发宽栏输入框的聚焦，
+  // 这一跨形态的联动需要一个共同宿主
+  const search = useSearch(wide, expandSidebar)
 
   // 行尾相对时间的基准时刻。官方在渲染时直接取 Date.now()（没有任何 ticker），
   // 这里取同一做法：时间文案的精度是分钟级，跟着别的重渲染刷新足够
@@ -152,6 +162,59 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    */
   const timeOf = (row: SessionRow): string | undefined =>
     row.blank || official === undefined ? undefined : official.relativeTime(row.updatedAt, now)
+
+  /** 被打开的那一行滚进可视区后清掉标记，避免它在后续重新挂载时再滚一次 */
+  const acknowledgeReveal = useCallback((sessionId: string) => {
+    setRevealSessionId((current) => (current === sessionId ? undefined : current))
+  }, [])
+
+  // 本次搜索的结果页。计算是纯的且输入都来自快照，因此跟着这些输入走 memo：
+  // 流式期间每次活动都会重渲染整片区域，不缓存就要在每次活动重扫一遍全部会话
+  const searchResult = useMemo(
+    () =>
+      searchSessions(
+        sessions,
+        workspaces,
+        groups,
+        archivedSessionIds,
+        search.normalized,
+        searchResultLimit,
+      ),
+    [sessions, workspaces, groups, archivedSessionIds, search.normalized, searchResultLimit],
+  )
+
+  /**
+   * 从搜索结果打开一条会话
+   *
+   * 打开之前先把这条会话所在的两层折叠打开并清掉搜索：结果行点下去的意图是
+   * 「去看这条会话」，而它可能正躺在收起的工作区或分组里，不展开就落在一个
+   * 看不见的行上。这正是官方 `revealSessionId` 承担的那段编排——官方在那里
+   * 由组件订阅会话树自行展开，本包把展开状态放在本组件里，因此在打开前直接
+   * 写这两份状态
+   *
+   * 清掉查询还有一层意义：结果列表随即被常规列表取代，标记的那一行才真的存在
+   * @param match - 被点开的那条结果
+   */
+  const openSearchResult = (match: SearchMatch): void => {
+    const workspaceId = match.workspace?.id
+    if (workspaceId === undefined) {
+      // 无所属工作区的会话落在末尾的隐式「未分组」区段里，同样要先展开
+      setCollapsedWorkspaces((prev) =>
+        prev[UNGROUPED_KEY] === true ? { ...prev, [UNGROUPED_KEY]: false } : prev,
+      )
+    } else {
+      setCollapsedWorkspaces((prev) =>
+        prev[workspaceId] === true ? { ...prev, [workspaceId]: false } : prev,
+      )
+      if (match.group !== undefined) {
+        const key = `${workspaceId}:${match.group.id}`
+        setCollapsedGroups((prev) => (prev[key] === true ? { ...prev, [key]: false } : prev))
+      }
+    }
+    setRevealSessionId(match.row.id)
+    search.clear()
+    openSession(match.row.id)
+  }
 
   const reload = useCallback(() => {
     let cancelled = false
@@ -343,11 +406,15 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     delete: labels.deleteWorkspace,
   }
 
-  // 窄栏：官方在这里也只留「添加工作区」一个入口（外加 shell 的展开入口）
+  // 窄栏：官方在这里也只留搜索与「添加工作区」两个入口（外加 shell 的展开入口）
   if (!wide) {
     return (
       <>
-        <RegionRailHeader addWorkspace={addWorkspace} t={t} />
+        <RegionRailHeader
+          addWorkspace={addWorkspace}
+          search={{ state: search, labels: labels.search }}
+          t={t}
+        />
         <WorkspaceRail label={labels.title} onExpand={expandSidebar} />
       </>
     )
@@ -357,164 +424,190 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   // 不属于任何工作区的会话；只有存在时才渲染末尾的「未分组」区段
   const stray = straySessions(sessions, workspaces, archivedSessionIds)
   const ungroupedCollapsed = collapsedWorkspaces[UNGROUPED_KEY] === true
+  const searching = search.normalized !== ''
 
   return (
     <div className="wg-root">
       <RegionHeader
         title={labels.title}
         addWorkspace={addWorkspace}
-        searchLabel={labels.add.search}
+        search={{ state: search, labels: labels.search }}
         viewOptionsLabel={labels.add.viewOptions}
         t={t}
       />
-      <div className="wg-list">
-        {workspaces.map((workspace) => {
-          const workspaceId = String(workspace.workspaceId)
-          const layout = buildLayout(rowsByWorkspace.get(workspaceId) ?? [], groups[workspaceId] ?? [])
-          const collapsed = collapsedWorkspaces[workspaceId] === true
+      {searching ? (
+        <SearchResults
+          result={searchResult}
+          limit={searchResultLimit}
+          currentSessionId={currentSessionId}
+          statusOf={(match) => statusOf(match.row)}
+          ungrouped={labels.ungrouped}
+          labels={labels.search}
+          onOpen={openSearchResult}
+        />
+      ) : (
+        <div className="wg-list wg-panel">
+          {workspaces.map((workspace) => {
+            const workspaceId = String(workspace.workspaceId)
+            const layout = buildLayout(rowsByWorkspace.get(workspaceId) ?? [], groups[workspaceId] ?? [])
+            const collapsed = collapsedWorkspaces[workspaceId] === true
 
-          /**
-           * 渲染一个会话行
-           *
-           * 空白行的名字取语言包的固定名（官方 `session.new`），并且像官方一样
-           * 不挂行尾菜单——它只是「准备开始一个新会话」的占位，没有会话可重命名
-           * 或归档。`grouping` 缺省表示该行没有分组可归（「未分组」桶）
-           *
-           * 传下去的字段都是原语或稳定引用，动作传的是未绑定的函数本身：行级
-           * memo 要按字段比对，任何一处每渲染新建都会让它整片失效
-           */
-          const renderSession = (
-            row: SessionRow,
-            grouping?: SessionGroupingContext,
-          ): ReactElement => {
-            if (row.blank) {
+            /**
+             * 渲染一个会话行
+             *
+             * 空白行的名字取语言包的固定名（官方 `session.new`），并且像官方一样
+             * 不挂行尾菜单——它只是「准备开始一个新会话」的占位，没有会话可重命名
+             * 或归档。`grouping` 缺省表示该行没有分组可归（「未分组」桶）
+             *
+             * 传下去的字段都是原语或稳定引用，动作传的是未绑定的函数本身：行级
+             * memo 要按字段比对，任何一处每渲染新建都会让它整片失效
+             */
+            const renderSession = (
+              row: SessionRow,
+              grouping?: SessionGroupingContext,
+            ): ReactElement => {
+              // 只有被打开的那一行带揭示请求；它的闭包每渲染新建一份，因此每次
+              // 重渲染会让这一行重渲染一次——行滚进可视区并回报后标记即被清掉，
+              // 这个代价只落在该行上
+              const reveal =
+                row.id === revealSessionId ? () => acknowledgeReveal(row.id) : undefined
+              if (row.blank) {
+                return (
+                  <SessionRowView
+                    key={row.id}
+                    sessionId={row.id}
+                    title={labels.newSession}
+                    selected={row.id === currentSessionId}
+                    status={statusOf(row)}
+                    time={timeOf(row)}
+                    onOpenSession={openSession}
+                    onReveal={reveal}
+                  />
+                )
+              }
               return (
-                <SessionRowView
+                <SessionRowMenu
                   key={row.id}
-                  sessionId={row.id}
-                  title={labels.newSession}
+                  row={row}
+                  title={row.title}
                   selected={row.id === currentSessionId}
                   status={statusOf(row)}
                   time={timeOf(row)}
+                  grouping={grouping}
+                  official={official}
+                  actionsLabel={labels.sessionActions}
                   onOpenSession={openSession}
+                  t={t}
+                  onReveal={reveal}
                 />
               )
             }
+
             return (
-              <SessionRowMenu
-                key={row.id}
-                row={row}
-                title={row.title}
-                selected={row.id === currentSessionId}
-                status={statusOf(row)}
-                time={timeOf(row)}
-                grouping={grouping}
-                official={official}
-                actionsLabel={labels.sessionActions}
-                onOpenSession={openSession}
-                t={t}
+              <WorkspaceSection
+                key={workspaceId}
+                title={workspace.title}
+                collapsed={collapsed}
+                // 官方只在「展开且含当前会话」时把文件夹染成强调色
+                folderActive={
+                  !collapsed &&
+                  containsSession(rowsByWorkspace.get(workspaceId) ?? [], currentSessionId)
+                }
+                layout={layout}
+                isGroupCollapsed={(groupId) =>
+                  collapsedGroups[`${workspaceId}:${groupId}`] === true
+                }
+                labels={workspaceRowLabels}
+                emptyLabel={labels.empty}
+                groupActionLabels={{
+                  actions: labels.groupActions,
+                  newSessionItem: labels.newSessionItem,
+                  rename: labels.rename,
+                  delete: labels.deleteGroup,
+                  newSession: labels.newSessionInGroup,
+                }}
+                onToggle={() => toggleWorkspace(workspaceId)}
+                onCreateSession={() => createSessionIn(workspaceId, '')}
+                onNewGroup={() => setNameDraft({ workspaceId, groupId: '', value: '' })}
+                onRenameWorkspace={() => setWorkspaceRename({ workspaceId, value: workspace.title })}
+                onDeleteWorkspace={() => setWorkspaceDelete({ workspaceId, label: workspace.title })}
+                onToggleGroup={(groupId) => toggleGroup(`${workspaceId}:${groupId}`)}
+                onRenameGroup={(section) =>
+                  setNameDraft({ workspaceId, groupId: section.id, value: section.label })
+                }
+                onDeleteGroup={(section) =>
+                  setGroupDelete({ workspaceId, groupId: section.id, label: section.label })
+                }
+                onCreateSessionInGroup={(section) => createSessionIn(workspaceId, section.id)}
+                renderSession={(row) =>
+                  renderSession(row, {
+                    workspaceId,
+                    sections: layout.groups,
+                    currentGroupId: groupIdOfSession(layout.groups, row.id),
+                    groupLabel: labels.moveToGroup,
+                    ungroupLabel: labels.ungroup,
+                    onSelectGroup: selectSessionGroup,
+                  })
+                }
               />
             )
-          }
-
-          return (
-            <WorkspaceSection
-              key={workspaceId}
-              title={workspace.title}
-              collapsed={collapsed}
-              // 官方只在「展开且含当前会话」时把文件夹染成强调色
-              folderActive={
-                !collapsed &&
-                containsSession(rowsByWorkspace.get(workspaceId) ?? [], currentSessionId)
-              }
-              layout={layout}
-              isGroupCollapsed={(groupId) =>
-                collapsedGroups[`${workspaceId}:${groupId}`] === true
-              }
-              labels={workspaceRowLabels}
-              emptyLabel={labels.empty}
-              groupActionLabels={{
-                actions: labels.groupActions,
-                newSessionItem: labels.newSessionItem,
-                rename: labels.rename,
-                delete: labels.deleteGroup,
-                newSession: labels.newSessionInGroup,
-              }}
-              onToggle={() => toggleWorkspace(workspaceId)}
-              onCreateSession={() => createSessionIn(workspaceId, '')}
-              onNewGroup={() => setNameDraft({ workspaceId, groupId: '', value: '' })}
-              onRenameWorkspace={() => setWorkspaceRename({ workspaceId, value: workspace.title })}
-              onDeleteWorkspace={() => setWorkspaceDelete({ workspaceId, label: workspace.title })}
-              onToggleGroup={(groupId) => toggleGroup(`${workspaceId}:${groupId}`)}
-              onRenameGroup={(section) =>
-                setNameDraft({ workspaceId, groupId: section.id, value: section.label })
-              }
-              onDeleteGroup={(section) =>
-                setGroupDelete({ workspaceId, groupId: section.id, label: section.label })
-              }
-              onCreateSessionInGroup={(section) => createSessionIn(workspaceId, section.id)}
-              renderSession={(row) =>
-                renderSession(row, {
-                  workspaceId,
-                  sections: layout.groups,
-                  currentGroupId: groupIdOfSession(layout.groups, row.id),
-                  groupLabel: labels.moveToGroup,
-                  ungroupLabel: labels.ungroup,
-                  onSelectGroup: selectSessionGroup,
-                })
-              }
-            />
-          )
-        })}
-        {/* 未分组桶排在全部工作区之后，与官方一致；空则整段不渲染 */}
-        {stray.length === 0 ? null : (
-          <section className="wg-workspace">
-            <WorkspaceRow
-              title={labels.ungrouped}
-              collapsed={ungroupedCollapsed}
-              folderActive={!ungroupedCollapsed && containsSession(stray, currentSessionId)}
-              onToggle={() => toggleWorkspace(UNGROUPED_KEY)}
-              labels={workspaceRowLabels}
-            />
-            <CollapsibleBody open={!ungroupedCollapsed}>
-              <div className="wg-workspace-body">
-                {/* 这些会话不属于任何工作区，没有分组可归，因此菜单里只有
-                    官方三项（归组项无处落）。宿主未提供官方服务时菜单会是
-                    空的，那时直接渲染无菜单的行，不留点不动的省略号 */}
-                <div className="wg-sessions">
-                  {stray.map((row) =>
-                    official === undefined || row.blank ? (
-                      <SessionRowView
-                        key={row.id}
-                        sessionId={row.id}
-                        title={row.blank ? labels.newSession : row.title}
-                        selected={row.id === currentSessionId}
-                        status={statusOf(row)}
-                        time={timeOf(row)}
-                        onOpenSession={openSession}
-                      />
-                    ) : (
-                      <SessionRowMenu
-                        key={row.id}
-                        row={row}
-                        title={row.title}
-                        selected={row.id === currentSessionId}
-                        status={statusOf(row)}
-                        time={timeOf(row)}
-                        official={official}
-                        onOpenSession={openSession}
-                        actionsLabel={labels.sessionActions}
-                        t={t}
-                      />
-                    ),
-                  )}
+          })}
+          {/* 未分组桶排在全部工作区之后，与官方一致；空则整段不渲染 */}
+          {stray.length === 0 ? null : (
+            <section className="wg-workspace">
+              <WorkspaceRow
+                title={labels.ungrouped}
+                collapsed={ungroupedCollapsed}
+                folderActive={!ungroupedCollapsed && containsSession(stray, currentSessionId)}
+                onToggle={() => toggleWorkspace(UNGROUPED_KEY)}
+                labels={workspaceRowLabels}
+              />
+              <CollapsibleBody open={!ungroupedCollapsed}>
+                <div className="wg-workspace-body">
+                  {/* 这些会话不属于任何工作区，没有分组可归，因此菜单里只有
+                      官方三项（归组项无处落）。宿主未提供官方服务时菜单会是
+                      空的，那时直接渲染无菜单的行，不留点不动的省略号 */}
+                  <div className="wg-sessions">
+                    {stray.map((row) =>
+                      official === undefined || row.blank ? (
+                        <SessionRowView
+                          key={row.id}
+                          sessionId={row.id}
+                          title={row.blank ? labels.newSession : row.title}
+                          selected={row.id === currentSessionId}
+                          status={statusOf(row)}
+                          time={timeOf(row)}
+                          onOpenSession={openSession}
+                          onReveal={
+                            row.id === revealSessionId ? () => acknowledgeReveal(row.id) : undefined
+                          }
+                        />
+                      ) : (
+                        <SessionRowMenu
+                          key={row.id}
+                          row={row}
+                          title={row.title}
+                          selected={row.id === currentSessionId}
+                          status={statusOf(row)}
+                          time={timeOf(row)}
+                          official={official}
+                          onOpenSession={openSession}
+                          actionsLabel={labels.sessionActions}
+                          t={t}
+                          onReveal={
+                            row.id === revealSessionId ? () => acknowledgeReveal(row.id) : undefined
+                          }
+                        />
+                      ),
+                    )}
+                  </div>
                 </div>
-              </div>
-            </CollapsibleBody>
-          </section>
-        )}
-        <div className="wg-note">{labels.unimplemented}</div>
-      </div>
+              </CollapsibleBody>
+            </section>
+          )}
+          <div className="wg-note">{labels.unimplemented}</div>
+        </div>
+      )}
       {/* 对话框挂在列表之外：它们都是 portal 到 body 的浮层，放进 overflow
           容器只会多一层无用的裁剪上下文 */}
       {nameDraft === null ? null : (

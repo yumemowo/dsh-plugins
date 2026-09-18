@@ -18,6 +18,7 @@ function actions(): RegionActions {
     moveSession: async () => ({}),
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
+    searchResultLimit: 20,
     tWorkspace: workspaceTranslate(),
     tSidebar: sidebarTranslate(),
   }

@@ -21,6 +21,11 @@ export const OFFICIAL_WORKSPACE_ZH: Record<string, string> = {
   'folderError.title': '无法打开文件夹',
   'folderError.retry': '重新选择',
   'search.sessions.aria': '搜索会话',
+  'search.placeholder': '搜索会话…',
+  'search.clear': '清除搜索',
+  'search.results.aria': '搜索结果',
+  'search.noMatches': '无匹配会话',
+  'search.hasMore': '仅显示前 {n} 条结果，请缩小搜索范围。',
   'viewOptions.label': '视图选项',
   'actions.workspace.aria': '工作区“{name}”的操作',
   'actions.session.aria': '会话“{name}”的操作',
@@ -56,6 +61,7 @@ const COMMON_ZH: Record<string, string> = {
   ok: '确定',
   cancel: '取消',
   close: '关闭',
+  search: '搜索',
 }
 
 /**

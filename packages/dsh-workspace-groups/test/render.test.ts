@@ -125,6 +125,8 @@ function render(
     menus: unknown[]
     text: string[]
     buttons?: unknown[]
+    /** 文本框元素，按文档序；搜索的受控输入在这里 */
+    inputs?: unknown[]
     containers?: unknown[]
     slots?: unknown[]
     counts?: unknown[]
@@ -137,6 +139,8 @@ function render(
     contextMenus?: unknown[]
     /** 挂了右键处理的行元素，按文档序（工作区行头、分组行头、会话行） */
     hosts?: unknown[]
+    /** 搜索结果第二行（路径）的元信息元素，按文档序 */
+    metas?: unknown[]
   },
   active: unknown = dispatcher,
   enter?: (type: unknown) => () => void,
@@ -193,6 +197,7 @@ function render(
     if (el.props['onContextMenu'] !== undefined) out.hosts?.push(el)
     if (el.props['className'] === 'wg-slot') out.slots?.push(el)
     if (el.props['className'] === 'wg-group-count') out.counts?.push(el)
+    if (el.props['className'] === 'wg-search-result-meta') out.metas?.push(el)
     // 会话行与分组头都带淡入标记；这里只收会话行（带 data-wg-stagger 的 wg-row）
     if (
       typeof el.props['className'] === 'string' &&
@@ -213,6 +218,7 @@ function render(
       out.order?.push(String(section))
     }
     if (el.type === 'button') out.buttons?.push(el)
+    if (el.type === 'input') out.inputs?.push(el)
     walk(el.props.children as unknown)
   }
   walk(node)
@@ -545,6 +551,10 @@ function props(
     startReturns?: string | undefined
     /** 记录 moveSession 的三元调用 */
     moves?: [string, string, string][]
+    /** 搜索结果的条数上限；缺省取官方契约值 20 */
+    searchResultLimit?: number
+    /** 分组元数据；缺省给一个空组 */
+    groups?: Record<string, { id: string; name: string; sessionIds: string[] }[]>
   } = {},
 ): WorkspaceGroupsProps {
   const byId: Record<string, unknown> = {
@@ -598,7 +608,9 @@ function props(
     // startReturns 显式给了就用它（undefined 表示导航被取代），否则给一个 id
     startSession: async () =>
       'startReturns' in options ? options.startReturns : 'fresh',
-    loadGroups: async () => ({ w1: [{ id: 'g1', name: '前端', sessionIds: [] }] }),
+    // 分组元数据：缺省给一个空组；需要断言归组路径的用例用 groups 覆盖
+    loadGroups: async () =>
+      options.groups ?? { w1: [{ id: 'g1', name: '前端', sessionIds: [] }] },
     onReady: () => () => {},
     createGroup: async () => ({}),
     renameGroup: async () => ({}),
@@ -609,6 +621,8 @@ function props(
     },
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
+    // 结果条数上限来自官方会话控制器的线上契约值
+    searchResultLimit: options.searchResultLimit ?? 20,
     t: regionTranslate(),
     tWorkspace: workspaceTranslate(),
     tSidebar: sidebarTranslate(),
@@ -1013,19 +1027,19 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(rowButtons(out).map((b) => b.label)).toContain('添加工作区')
   })
 
-  it('keeps the unimplemented header entries as disabled placeholders', () => {
+  it('counts down the header entries to the one still unimplemented', () => {
     const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
-    // 搜索与视图选项尚未实现：位置与字形对齐官方，但明说不可用，
-    // 而不是渲染成点下去没反应的死按钮
+    // 搜索已实现，是可用的入口；只剩视图选项仍是 disabled 占位——位置与字形
+    // 对齐官方，但明说不可用，而不是渲染成点下去没反应的死按钮
     const search = (out.buttons ?? []).find(
       (b) => (b as { props: Record<string, unknown> }).props['aria-label'] === '搜索会话',
     )
     const viewOptions = (out.buttons ?? []).find(
       (b) => (b as { props: Record<string, unknown> }).props['aria-label'] === '视图选项',
     )
-    expect((search as { props: Record<string, unknown> }).props['disabled']).toBe(true)
+    expect((search as { props: Record<string, unknown> }).props['disabled']).toBeUndefined()
     expect((viewOptions as { props: Record<string, unknown> }).props['disabled']).toBe(true)
   })
 
@@ -1057,6 +1071,275 @@ describe('WorkspaceGroupsRegion render', () => {
 
     // 官方窄栏也放这个入口（36px、label-primary），这里保持一致
     expect(rowButtons(out).map((b) => b.label)).toContain('添加工作区')
+  })
+})
+
+/**
+ * 搜索
+ *
+ * 本包只做官方「本地标题匹配」那一段：入口、输入框与结果列表的几何和动效对齐
+ * 官方，但不接 Host 内容检索，因此没有摘录，也没有加载与失败两态
+ */
+describe('search', () => {
+  /** 取渲染出来的搜索输入框 */
+  function searchInput(out: { inputs?: unknown[] }): {
+    value: unknown
+    placeholder: unknown
+    tabIndex: unknown
+    change: (value: string) => void
+    keyDown: (key: string) => void
+  } {
+    const el = (out.inputs ?? [])[0] as { props: Record<string, unknown> }
+    return {
+      value: el.props['value'],
+      placeholder: el.props['placeholder'],
+      tabIndex: el.props['tabIndex'],
+      change: (value: string) => (el.props['onChange'] as (e: unknown) => void)({ target: { value } }),
+      keyDown: (key: string) =>
+        (el.props['onKeyDown'] as (e: unknown) => void)({ key, preventDefault: () => {} }),
+    }
+  }
+
+  /** 取结果行元素 */
+  function resultRows(out: { buttons?: unknown[] }): unknown[] {
+    return (out.buttons ?? []).filter((b) =>
+      String((b as { props: Record<string, unknown> }).props['className']).startsWith(
+        'wg-search-result',
+      ),
+    )
+  }
+
+  /** 结果行第二行的路径文案，按文档序；由元信息元素内的各段拼回 */
+  function resultPaths(out: { metas?: unknown[] }): string[] {
+    return (out.metas ?? []).map((meta) => textOf(meta))
+  }
+
+  /** 递归取一个元素子树里的文本；路径被拆成多段着色，只能这样拼回一行 */
+  function textOf(node: unknown): string {
+    if (node === null || node === undefined || typeof node === 'boolean') return ''
+    if (typeof node === 'string' || typeof node === 'number') return String(node)
+    if (Array.isArray(node)) return node.map(textOf).join('')
+    if (!React.isValidElement(node)) return ''
+    return textOf((node as { props: Record<string, unknown> }).props['children'])
+  }
+
+  it('offers a usable search entry rather than a disabled placeholder', () => {
+    const out = {
+      menus: [] as unknown[],
+      text: [] as string[],
+      buttons: [] as unknown[],
+      inputs: [] as unknown[],
+    }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
+
+    const entry = rowButtons(out).find((b) => b.label === '搜索会话')
+    expect(entry).toBeDefined()
+    expect(out.inputs).toHaveLength(1)
+  })
+
+  it('starts with an empty collapsed input that is out of the tab order', () => {
+    const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
+
+    const input = searchInput(out)
+    expect(input.value).toBe('')
+    expect(input.placeholder).toBe('搜索会话…')
+    // 收起态的输入框不可见也不该被 Tab 到，tabIndex 因此是 -1
+    expect(input.tabIndex).toBe(-1)
+  })
+
+  it('filters the list down to title matches once a query is typed', async () => {
+    const harness = renderingDispatcher()
+    const args = props(true)
+    const first = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), first)
+    await harness.flush()
+
+    // 输入一个只命中会话 A 的词：结果区取代常规列表，且只剩那一条
+    searchInput(first).change('A')
+    const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), out)
+
+    expect(resultRows(out).length).toBeGreaterThan(0)
+    // 常规列表整段让位：工作区行不再渲染，未分组区段同理
+    expect(menuItems(out)).toEqual([])
+  })
+
+  it('clears the query and leaves search when Escape is pressed', async () => {
+    const harness = renderingDispatcher()
+    const args = props(true)
+    const first = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), first)
+    await harness.flush()
+    searchInput(first).change('A')
+
+    const typing = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), typing)
+    searchInput(typing).keyDown('Escape')
+
+    const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), out)
+
+    expect(searchInput(out).value).toBe('')
+    // 回到常规列表：工作区行菜单重新出现
+    expect(menuItems(out)).toContainEqual(['new-group', 'rename', 'delete'])
+  })
+
+  it('shows the no-match empty state instead of an empty result tree', async () => {
+    const harness = renderingDispatcher()
+    const args = props(true)
+    const first = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), first)
+    await harness.flush()
+    searchInput(first).change('不存在的词')
+
+    const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), out)
+
+    expect(resultRows(out)).toEqual([])
+    expect(out.text).toContain('无匹配会话')
+  })
+
+  it('names the path as workspace slash group and stops at the workspace when ungrouped', async () => {
+    const harness = renderingDispatcher()
+    // 会话 a 落在分组 g1 里，Orphan 无所属工作区：两条路径要按各自归属渲染
+    const args = props(true, {
+      groups: { w1: [{ id: 'g1', name: '前端', sessionIds: ['a'] }] },
+    })
+    const first = {
+      menus: [] as unknown[],
+      text: [] as string[],
+      buttons: [] as unknown[],
+      inputs: [] as unknown[],
+    }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), first)
+    await harness.flush()
+
+    searchInput(first).change('A')
+    const grouped = {
+      menus: [] as unknown[],
+      text: [] as string[],
+      buttons: [] as unknown[],
+      inputs: [] as unknown[],
+      metas: [] as unknown[],
+    }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), grouped)
+
+    // 归组的会话在结果里带上分组：工作区/分组
+    expect(resultPaths(grouped)).toContain('W1/前端')
+
+    searchInput(grouped).change('Orphan')
+    const stray = {
+      menus: [] as unknown[],
+      text: [] as string[],
+      buttons: [] as unknown[],
+      inputs: [] as unknown[],
+      metas: [] as unknown[],
+    }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), stray)
+
+    // 无所属工作区的会话退回官方的「未分组」，而不是拼出一条空路径
+    expect(resultPaths(stray)).toEqual(['未分组'])
+  })
+
+  it('splits the path into a workspace part and a group part for two-tone contrast', async () => {
+    const harness = renderingDispatcher()
+    const args = props(true, {
+      groups: { w1: [{ id: 'g1', name: '前端', sessionIds: ['a'] }] },
+    })
+    const first = {
+      menus: [] as unknown[],
+      text: [] as string[],
+      buttons: [] as unknown[],
+      inputs: [] as unknown[],
+    }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), first)
+    await harness.flush()
+    searchInput(first).change('A')
+
+    const out = {
+      menus: [] as unknown[],
+      text: [] as string[],
+      buttons: [] as unknown[],
+      inputs: [] as unknown[],
+      metas: [] as unknown[],
+    }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), out)
+
+    // 两段是各自独立着色的元素，而不是一条已经拼好的字符串——否则分不开色阶
+    const meta = out.metas?.[0] as { props: { children: unknown } }
+    const classes: string[] = []
+    const walk = (node: unknown): void => {
+      if (node === null || node === undefined || typeof node === 'boolean') return
+      if (Array.isArray(node)) {
+        node.forEach(walk)
+        return
+      }
+      if (!React.isValidElement(node)) return
+      const el = node as { props: Record<string, unknown> }
+      if (typeof el.props['className'] === 'string') classes.push(el.props['className'])
+      walk(el.props['children'])
+    }
+    walk(meta.props.children)
+
+    expect(classes).toContain('wg-search-result-workspace')
+    expect(classes).toContain('wg-search-result-group')
+    // 分隔符不单独成类：它落在分组那一段里继承同一色阶，避免多出第三个层级
+    expect(classes).not.toContain('wg-search-result-separator')
+  })
+
+  it('truncates the page at the injected limit and says so', async () => {
+    const harness = renderingDispatcher()
+    const args = props(true, { searchResultLimit: 1 })
+    const first = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), first)
+    await harness.flush()
+    searchInput(first).change('A')
+
+    const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
+    harness.render(React.createElement(WorkspaceGroupsRegion, args), out)
+
+    // 命中两条（A 与 Orphan 都按标题命中）而上限是 1
+    expect(resultRows(out)).toHaveLength(1)
+    expect(out.text).toContain('仅显示前 1 条结果，请缩小搜索范围。')
+  })
+
+  it('opens the matched session and leaves search when a result is clicked', async () => {
+    const opened: string[] = []
+    const harness = renderingDispatcher()
+    const args = props(true)
+    const withOpen = { ...args, openSession: (id: string) => opened.push(id) }
+    const first = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
+    harness.render(React.createElement(WorkspaceGroupsRegion, withOpen), first)
+    await harness.flush()
+    searchInput(first).change('Orphan')
+
+    const typing = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
+    harness.render(React.createElement(WorkspaceGroupsRegion, withOpen), typing)
+    const row = resultRows(typing)[0] as { props: { onClick: () => void } }
+    row.props.onClick()
+
+    const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
+    harness.render(React.createElement(WorkspaceGroupsRegion, withOpen), out)
+
+    // 点结果即打开那条会话，并清掉查询回到常规列表
+    expect(opened).toEqual(['orphan'])
+    expect(searchInput(out).value).toBe('')
+  })
+
+  it('offers the search entry in the narrow rail as well', () => {
+    const out = {
+      menus: [] as unknown[],
+      text: [] as string[],
+      buttons: [] as unknown[],
+      inputs: [] as unknown[],
+    }
+    render(React.createElement(WorkspaceGroupsRegion, props(false)), out)
+
+    // 官方 rail 下同样放这个入口；它在窄栏里只是请求展开侧栏
+    expect(rowButtons(out).map((b) => b.label)).toContain('搜索会话')
+    // 窄栏不渲染输入框：那个框在宽栏的 header 里
+    expect(out.inputs).toEqual([])
   })
 })
 

@@ -133,6 +133,14 @@ export interface RegionActions {
   /** 删除工作区注册；文件夹与会话记录保留 */
   deleteWorkspace: (workspaceId: string) => Promise<void>
   /**
+   * 搜索结果的条数上限
+   *
+   * 取官方会话控制器上的 `searchResultLimit`：它是 `session.search` 线上响应
+   * 契约固定下来的同一个数，本包的结果虽然全部来自本地，也照它截断，界面因此
+   * 与官方一致
+   */
+  searchResultLimit: number
+  /**
    * 官方 `workspace` 命名空间的翻译函数
    *
    * 由插件入口 `locale.bind('workspace')` 得到。绑定结果是稳定引用，且**在

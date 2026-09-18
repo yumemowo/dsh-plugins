@@ -396,4 +396,130 @@ describe('client stylesheet', () => {
     // 否则 reduced-motion 下行仍是逐个出现
     expect(reduced).toMatch(/\[data-wg-stagger\][\s\S]*?transition:\s*none/)
   })
+
+  it('fades the whole panel in like the official tree body', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 官方给三种内容体共用的 .treeBody 挂了 .2s 的 wide-in 动画，本包的面板
+    // 类取同一条节奏
+    const panel = bodyOf('.wg-panel')
+    expect(panel).toMatch(/animation:\s*wg-panel-in\s*\.2s/)
+    expect(panel).toMatch(/var\(--ds-ease-in-out/)
+    // 只从 0% 的不透明起，终态留给元素自然状态——这样动画没跑或被打断时
+    // 面板仍是可见的，不会停在透明上。关键帧内部的 `0%` 会连同外层选择器一起
+    // 落进 [^{}]+，因此按整块文本查
+    expect(css).toMatch(/@keyframes wg-panel-in\s*\{\s*0%\s*\{\s*opacity:\s*0/)
+  })
+
+  it('drops the panel fade under prefers-reduced-motion', () => {
+    const css = readCss()
+    const reduced =
+      /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+
+    // 面板动画的初态是 opacity: 0，这里必须整条 animation 撤掉而不是只撤
+    // transition——否则 reduced-motion 下面板会一直停在不可见
+    expect(reduced).toMatch(/\.wg-panel\s*\{\s*animation:\s*none/)
+  })
+
+  it('drops the search expand motion under prefers-reduced-motion', () => {
+    const css = readCss()
+    const reduced =
+      /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+
+    // 展开、输入框淡入、标题与入口组的让位都要一起落位；漏掉哪一条，那一项
+    // 就会在 reduced-motion 下继续动
+    for (const selector of [
+      '.wg-search',
+      '.wg-search-slot',
+      '.wg-search-input',
+      '.wg-header-label',
+      '.wg-header-actions',
+    ]) {
+      expect(reduced, `${selector} keeps animating`).toContain(selector)
+    }
+  })
+
+  it('animates the search exactly like the official section header', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 收起态是 28px 正圆（与 header 图标按钮同形），展开后拉满并把圆角收成 10px
+    expect(bodyOf('.wg-search-slot')).toMatch(/max-width:\s*28px/)
+    expect(bodyOf('.wg-search-slot-expanded')).toMatch(/max-width:\s*100%/)
+    expect(bodyOf('.wg-search')).toMatch(/height:\s*28px/)
+    expect(bodyOf('.wg-search')).toMatch(/border-radius:\s*50%/)
+    expect(bodyOf('.wg-search-expanded')).toMatch(/height:\s*30px/)
+    expect(bodyOf('.wg-search-expanded')).toMatch(/border-radius:\s*10px/)
+
+    // 时长与缓动取官方那套（.18s 展开 / .12s 淡入，--ds-ease-in-out）
+    expect(bodyOf('.wg-search')).toMatch(/\.18s var\(--ds-ease-in-out/)
+    expect(bodyOf('.wg-search-input')).toMatch(/\.12s var\(--ds-ease-in-out/)
+
+    // 标题与入口组的让位是对称的两条：一个向左收、一个向右收
+    expect(bodyOf('.wg-header-label-hidden')).toMatch(/max-width:\s*0/)
+    expect(bodyOf('.wg-header-label-hidden')).toMatch(/transform:\s*translate\(-4px\)/)
+    expect(bodyOf('.wg-header-actions-hidden')).toMatch(/max-width:\s*0/)
+    expect(bodyOf('.wg-header-actions-hidden')).toMatch(/transform:\s*translate\(4px\)/)
+  })
+
+  it('styles the result row like the official flat search result', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 官方 .searchResultRow：48px 起、两行内容、8px 圆角
+    const row = bodyOf('.wg-search-result')
+    expect(row).toMatch(/min-height:\s*48px/)
+    expect(row).toMatch(/border-radius:\s*8px/)
+    expect(row).toMatch(/flex-direction:\s*column/)
+
+    // 第二行整体缩进一个状态位槽（16 + 4），与标题左缘对齐
+    expect(bodyOf('.wg-search-result-meta')).toMatch(/margin-left:\s*20px/)
+
+    // 那一行的 6px gap 是官方给「工作区名 / 摘录」两格用的；本包没有摘录，
+    // 路径必须整体成项，否则 gap 会落进「工作区 / 分组」之间，把一条连续
+    // 路径读成两截
+    expect(bodyOf('.wg-search-result-meta')).toMatch(/gap:\s*6px/)
+    const path = bodyOf('.wg-search-result-path')
+    expect(path).toMatch(/gap:\s*0/)
+    expect(path).toMatch(/flex:/)
+    // 宽度上限挂在路径这一层：挂到段上会按路径自身宽度算百分比，越窄越缩，
+    // 长工作区名一开始就被截断
+    expect(path).toMatch(/max-width:\s*60%/)
+    expect(bodyOf('.wg-search-result-workspace')).not.toMatch(/max-width/)
+
+    // 路径两段同格（12px/17px）但不同色阶：工作区更强、分组更弱，
+    // 靠对比区分「容器」与「组」
+    const workspace = bodyOf('.wg-search-result-workspace')
+    expect(workspace).toMatch(/color:\s*var\(--dsw-alias-label-secondary\)/)
+    expect(workspace).toMatch(/font-size:\s*12px/)
+    expect(workspace).toMatch(/line-height:\s*17px/)
+
+    const group = bodyOf('.wg-search-result-group')
+    // 分组比工作区弱一整档（caption 而非 tertiary），对比才看得出来
+    expect(group).toMatch(/color:\s*var\(--dsw-alias-label-caption/)
+    expect(group).toMatch(/font-size:\s*12px/)
+    expect(group).toMatch(/line-height:\s*17px/)
+
+    // 两段必须真的是两档色阶——写成同一个变量就退化成一条长名字
+    expect(workspace).not.toBe(group)
+    // 分隔符不单独着色：它作为分组那一段的文本继承同一色阶，样式里不该有
+    // 一个只给分隔符用的颜色规则
+    expect(bodyOf('.wg-search-result-separator')).toBe('')
+  })
 })

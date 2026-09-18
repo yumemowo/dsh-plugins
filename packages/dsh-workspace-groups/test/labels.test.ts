@@ -119,9 +119,20 @@ describe('regionLabels', () => {
     expect(labels.add.add).toBe('添加工作区')
     expect(labels.add.folderErrorTitle).toBe('无法打开文件夹')
     expect(labels.add.folderErrorRetry).toBe('重新选择')
-    // 两个未实现的入口也要有可读的无障碍标签，占位按钮才不会是无名按钮
-    expect(labels.add.search).toBe('搜索会话')
+    // 视图选项仍是未实现的入口，也要有可读的无障碍标签，占位按钮才不会是无名按钮
     expect(labels.add.viewOptions).toBe('视图选项')
+  })
+
+  it('reads the search copy from the official keys', () => {
+    // 搜索自身已实现，文案与官方同一套键：入口 tooltip 用通用词「搜索」，
+    // 无障碍标签与结果区各自点明对象
+    expect(labels.search.hint).toBe('搜索')
+    expect(labels.search.entry).toBe('搜索会话')
+    expect(labels.search.placeholder).toBe('搜索会话…')
+    expect(labels.search.clear).toBe('清除搜索')
+    expect(labels.search.results).toBe('搜索结果')
+    expect(labels.search.noMatches).toBe('无匹配会话')
+    expect(labels.search.truncated(20)).toBe('仅显示前 20 条结果，请缩小搜索范围。')
   })
 
   it('keeps the package-owned group copy under its own keys', () => {

@@ -25,7 +25,7 @@ export const zh = {
   'moveToGroup': '分组',
   'ungroup': '取消分组',
   'compareTabDescription': '分组区域的对照视图（左侧为官方工作区列表）',
-  'unimplemented': '分组为实验特性：搜索、归档、拖拽暂未提供。',
+  'unimplemented': '分组为实验特性：归档、拖拽暂未提供。',
 }
 
 /** 英文字典，键集与 {@link zh} 完全一致 */
@@ -40,7 +40,7 @@ export const en = {
   'moveToGroup': 'Group',
   'ungroup': 'Ungroup',
   'compareTabDescription': 'Grouping region for side-by-side comparison with the official list',
-  'unimplemented': 'Groups are experimental: search, archive and drag are not available yet.',
+  'unimplemented': 'Groups are experimental: archive and drag are not available yet.',
 } as const
 
 /** 本命名空间的键域，同时是 {@link zh} 的键集 */

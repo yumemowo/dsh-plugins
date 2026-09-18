@@ -49,6 +49,8 @@
 
 - **添加工作区**：区域 header 右侧的图标入口，借用官方目录选择交互选中一个
   目录后登记为工作区，并在其中开一个新会话（见「添加工作区」）。
+- **搜索**：header 里的搜索入口，按标题（会话标题或工作区标题）过滤会话，
+  动效与交互对齐官方；结果行的路径带上分组（见「搜索」）。
 - **新建分组**：工作区行右侧 `...` 菜单里的第一项，输入名称即可。
 - **重命名 / 删除工作区**：同一个 `...` 菜单里的后两项，与官方工作区菜单
   一致（重命名在前、删除在后）。两者都直接调用官方工作区控制器
@@ -404,21 +406,70 @@
 ## 区域头部与添加工作区
 
 区域顶部有官方同形的 section header（36px）：左侧标题（官方 `section.workspaces`），
-右侧一组 28px 圆形图标按钮。
+右侧一组 28px 圆形图标按钮。三个入口同属右侧那一组、紧挨着排在栏的右缘，
+把这一组推向右的是搜索槽位自己的 `margin-left: auto`（官方同此）——入口组不能再
+写一个 `auto`，两个 `auto` 会平分剩余空间，把搜索框挤到行中间。
 
 | 入口 | 状态 |
 | --- | --- |
+| **搜索** | 已实现，见「搜索」 |
 | **添加工作区** | 已实现，见下节 |
-| 搜索 | 尚未实现，渲染成 **disabled 占位** |
 | 视图选项 | 尚未实现，渲染成 **disabled 占位** |
 
-两个未实现的入口保留官方的位置与字形，但带 `disabled` 语义、悬停无高亮：
-它们在界面上明说自己不可用，而不是渲染成一个点下去没反应的死按钮（后者正是
-本包在别处明确拒绝的形态）。无障碍标签取官方 `search.sessions.aria` /
-`viewOptions.label`，因此占位按钮不是无名按钮。
+视图选项保留官方的位置与字形，但带 `disabled` 语义、悬停无高亮：它在界面上
+明说自己不可用，而不是渲染成一个点下去没反应的死按钮（后者正是本包在别处明确
+拒绝的形态）。无障碍标签取官方 `viewOptions.label`，因此占位按钮不是无名按钮。
 
-窄栏（rail）下与官方一致：标题与搜索都不渲染，只留一个 36px 的「添加工作区」
-入口（`label-primary`）。
+窄栏（rail）下与官方一致：标题与视图选项都不渲染，留「添加工作区」（在 header
+行里）与它下方独立的 36px 搜索入口，两者都是 `label-primary`。
+
+### 搜索
+
+官方 `ui-workspace` 的搜索是**两段合并**：本地按标题匹配 + Host 内容检索
+（`session.search`）。本包只做前一段——**只匹配标题，不接内容检索**，因此结果行
+没有摘录，也没有「正在搜索 / 内容搜索暂不可用」两态。
+
+匹配对象与官方本地那一段同一口径：**会话标题或所属工作区标题**包含查询词即命中
+（工作区名可搜，因此输入「前端仓库」会列出该工作区下的会话）。候选与渲染列表
+同源：归档、子代理来源、以及空闲的空白会话都不进结果。排序照官方：最近更新倒序、
+id 作稳定次序；条数上限直接读官方会话控制器的 `searchResultLimit`（线上响应契约
+的同一个数），被截断时给出官方那句「仅显示前 N 条结果」。
+
+**结果行的路径带上分组，并用两档色阶区分**：官方那行元信息只显示工作区名，
+本包在其后补上分组，形如 `工作区/分组`。两段各自着色——工作区用
+`label-secondary`，分组用更深（浅色主题下更浅）的 `label-caption`，一眼能看出
+哪段是容器、哪段是组；两段同色的话，分隔符两侧只是一条长名字。分隔符本身不单独
+成类，它落在分组那一段里继承同一色阶，因此两段之间不会多出第三个层级。
+
+**两段之间不能有间距**：第二行那个容器带 6px gap，那是官方留给「工作区名 /
+内容摘录」两格的；本包没有摘录，若让两段直接做它的子项，这个 gap 会插进
+「工作区」与「分组」之间，把一条连续的路径读成两截。因此路径整体是那一行里唯一
+的 flex 项，自己内部是 gap 为 0 的 flex 行。宽度上限（60%）也挂在这一层而不是
+段上——挂到段上会按路径自身宽度算百分比，越窄越缩，长工作区名一开始就被截断。
+未归组的会话只显示 `工作区`，无所属工作区的会话退回官方的 `未分组`——与
+「工作区内不凭空造未分组分组」的取舍一致。
+
+**动效与交互照官方**：收起时是一个 28px 正圆的图标按钮；展开后该槽位拉满整行、
+按钮与图标一起缩小，标题向左收拢淡出、右侧入口组向右收拢淡出，整行只剩那个
+30px 的圆角搜索框。`Escape` 清空并收起，清除按钮只在展开时出现，点击别处只收回
+焦点（查询非空时保持展开）。时长与缓动取官方那套 `.18s` / `.12s` +
+`--ds-ease-in-out`，并在 `prefers-reduced-motion` 下整段落位。
+
+**进出搜索时整块面板淡入**：官方给三种内容体（会话树 / 单列表 / 搜索结果）共用的
+`.treeBody` 挂了 `.2s` 的 `wide-in` 动画，三者在它的三元分支里是不同的元素，切换
+内容体即重新挂载、动画重放。本包的常规列表与搜索结果各有自己的根节点（同一条三元
+分支），两者都带 `.wg-panel`，因此每次进出搜索各有一段面板级淡入。它与折叠体的
+逐行淡入是两回事：后者管的是展开折叠体时行逐个露面。关键帧只写 `0% { opacity: 0 }`，
+终态留给元素自然状态，动画没跑或被打断时面板仍可见；`prefers-reduced-motion` 下
+整条 `animation` 撤掉（只撤 `transition` 会让面板一直停在不可见）。
+
+窄栏点搜索会先请求展开侧栏，**等列滑动跑完**（官方 `EXPAND_SLIDE_MS` = 300ms）
+再把焦点交给宽栏的输入框——`focus()` 会强制一次同步布局，抢在滑动中间会把动画
+卡住。
+
+**点结果会展开折叠层并滚到那一行**：会话可能正躺在收起的工作区或分组里，因此
+打开前先把这两层展开并把查询清掉，落到常规列表后再由该行把自己滚进可视区
+（与官方 `revealSessionId` 那条路同一取舍）。
 
 ### 添加工作区
 
@@ -441,7 +492,7 @@ picking 交互本身不重写：它整段来自官方 `sidebar.workspaces.direct
 
 以下原属于官方组件的功能**暂未实现**：
 
-- 搜索（含 Host 内容检索，只留 disabled 占位入口）
+- 搜索里的 **Host 内容检索**（本地标题匹配已提供，见「搜索」）
 - 视图选项（分组 / 排序，只留 disabled 占位入口）
 - 拖拽排序（工作区与会话两级）
 - 每工作区 5 条折叠与 Show more
@@ -466,6 +517,10 @@ picking 交互本身不重写：它整段来自官方 `sidebar.workspaces.direct
 | 区域 section header 高 / 圆角 / 控件间距 | `36px` / `12px` / `4px`（同官方 `.sectionHeader`） |
 | header 图标按钮 | `28px` 正圆、`--dsw-alias-label-secondary`、悬停 `-hover`（同官方 `.iconButton`） |
 | 窄栏 header 图标按钮 | `36px` 正圆、`--dsw-alias-label-primary`（同官方 `.rail .iconButton`） |
+| 搜索框（收起 / 展开） | `28px` 正圆 → `30px` 高、圆角 `10px`、`.5px` 边框 `--dsw-alias-border-l4`（同官方 `.search` / `.searchExpanded`） |
+| 搜索槽位宽度 | 收起 `28px`、展开 `100%`（同官方 `.searchSlot` / `.searchSlotExpanded`） |
+| 搜索结果行 | `min-height: 48px`、圆角 `8px`、两行（标题 14px/20px + 路径 12px/17px，同官方 `.searchResultRow`） |
+| 结果路径的两段色阶 | 工作区 `--dsw-alias-label-secondary`、分组 `--dsw-alias-label-caption`（官方那格只有 tertiary 一档，本包拆成两档做对比） |
 | 工作区与分组行高 | `34px` |
 | 会话行高 | `32px` |
 | 行内水平内边距 / 圆角 | `8px` / `8px` |
@@ -477,6 +532,7 @@ picking 交互本身不重写：它整段来自官方 `sidebar.workspaces.direct
 | 文本色阶 | `--dsw-alias-label-primary` / `-secondary` / `-tertiary` |
 | 滚动条留白 | `--dsh-session-list-scrollbar-width` / `-offset` |
 | 过渡 | `--ds-ease-in-out`，并遵守 `prefers-reduced-motion` |
+| 面板级淡入 | `.2s`、同 `--ds-ease-in-out`（同官方 `.treeBody` 的 `wide-in`）；常规列表与搜索结果各挂一份 |
 
 右侧那 12px 值得单说，它是最容易抄错的一处：**官方的右留白不由 shell 提供，
 而由 `WorkspaceBrowser` 的根节点自己拥有**——shell 的 `regionArea` 先把
@@ -560,7 +616,7 @@ picking 交互本身不重写：它整段来自官方 `sidebar.workspaces.direct
 | 文件夹、三角、省略号 | `IconFolderClose16` / `IconFolderOpen16` / `IconTriangleRightFill14` / `IconEllipsisOutline16` |
 | 新建会话、新建分组、改名、删除 | `IconPlusOutline16` / `IconEditOutline16` / `IconTrashOutline16` |
 | 行右键菜单的「新建会话」项 | `IconNewChatOutline16`（与官方 sidebar 新建按钮同字形） |
-| header 的添加工作区 / 搜索 / 视图选项 | `IconProjectAddOutline16` / `IconSearchOutline16` / `IconPersonalizationOutline16`（与官方 header 同字形） |
+| header 的添加工作区 / 搜索 / 视图选项 | `IconProjectAddOutline16` / `IconSearchOutline16` / `IconPersonalizationOutline16`（与官方 header 同字形）；搜索框的清除按钮用 `IconCloseFill14` |
 | 会话菜单的分叉 / 归档项 | `IconBranchOutline16` / `IconArchiveOutline20`（与官方会话菜单同字形） |
 | 窄栏展开入口 | `IconPanelLeftOutline16`（与官方侧栏折叠按钮同一字形） |
 | 会话状态点 | `StateDot`（运行态画追光方阵，其余画圆点；颜色由原语的主题规则给出） |
@@ -609,9 +665,11 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 本包字典只剩官方没有对应词的 10 个键：`actions.group.aria` / `newGroup` /
 `renameGroup` / `deleteGroup` / `groupNamePrompt` / `delete.desc.group` /
 `moveToGroup` / `ungroup` / `compareTabDescription` / `unimplemented`。
-「添加工作区」的文案因此一个键都不用加：入口取官方 `workspace.add`、错误框
-取 `folderError.title` 与 `folderError.retry`、两个占位入口取
-`search.sessions.aria` 与 `viewOptions.label`。注意入口是 `workspace.add`
+「添加工作区」与「搜索」的文案因此一个键都不用加：添加入口取官方
+`workspace.add`、错误框取 `folderError.title` 与 `folderError.retry`；搜索的
+入口 tooltip、输入框与结果区取官方 `search` / `search.sessions.aria` /
+`search.placeholder` / `search.clear` / `search.results.aria` /
+`search.noMatches` / `search.hasMore`。注意添加入口是 `workspace.add`
 （「添加工作区」），不是 `menu.addWorkspace`（「添加工作区…」）——后者是工作区
 列表菜单里那一项，带省略号表示还要再选一次。
 `actions.group.aria` 是分组自己的无障碍标签（官方只有工作区与会话两个），
@@ -776,12 +834,14 @@ src/client/
 │   ├── types.ts                SessionRow / GroupSection / WorkspaceLayout / 草稿类型
 │   ├── layout.ts               分组元数据 → 渲染布局
 │   ├── status.ts               会话状态位推导（待交互 / 运行 / 完成）
+│   ├── search.ts               按标题搜索（查询净化、匹配、排序与截断）
 │   └── sessions.ts             会话快照 → 渲染行（含可见性过滤、空白行命名、未分组收集）
 ├── utils/                      组件与样式表共用的零散常量
 │   └── collapseMotion.ts       折叠动画节奏常量（只 import React 类型，运行时无依赖）
 └── components/
     ├── WorkspaceGroupsRegion.tsx   区域容器：状态与编排
-    ├── RegionHeader.tsx            区域 section header（标题 + 三个入口）
+    ├── RegionHeader.tsx            区域 section header（标题 + 搜索 + 入口组）
+    ├── SearchControl.tsx           搜索状态、入口、输入框与结果列表
     ├── AddWorkspaceControl.tsx     「添加工作区」入口与 picking 流程
     ├── WorkspaceSection.tsx        一个工作区区块（标题 + 折叠体 + 空态）
     ├── WorkspaceRow.tsx            工作区标题行（文件夹/箭头、`...`、`+`）
@@ -799,9 +859,11 @@ src/client/
         └── DeleteDialog.tsx        破坏性操作确认框
 ```
 
-状态的归属只有一处：折叠态与四个对话框草稿留在 `WorkspaceGroupsRegion`，
-菜单开合留在持有行组件内（行内 `...` 菜单与右键菜单各一份，都由
-`useRowContextMenu` 与行自己的 `useState` 持有），行的外观组件保持无状态。
+状态的归属只有一处：折叠态、搜索状态（查询 / 展开 / 聚焦时机 / 揭示标记）与
+四个对话框草稿留在 `WorkspaceGroupsRegion`，菜单开合留在持有行组件内
+（行内 `...` 菜单与右键菜单各一份，都由 `useRowContextMenu` 与行自己的
+`useState` 持有），行的外观组件保持无状态。搜索状态之所以不留在 header 内部：
+窄栏入口要触发宽栏输入框的聚焦，这一跨形态的联动需要一个共同宿主。
 
 两条容易踩错的设计（折叠体为什么必须 fail-open、行级 memo 要怎样才能命中，
 含实测数据）单独记在 [`docs/reveal-and-caching.md`](docs/reveal-and-caching.md)。
@@ -822,7 +884,7 @@ src/client/
 
 ```bash
 pnpm run typecheck   # src 与 test 两个工程
-pnpm run test        # 分组切分逻辑 + 宿主服务
+pnpm run test        # 分组切分逻辑 + 宿主服务 + 搜索（含真实 DOM 冒烟）
 pnpm run build
 ```
 

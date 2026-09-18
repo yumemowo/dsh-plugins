@@ -100,16 +100,273 @@ export const CSS = `
   color: var(--dsw-alias-label-tertiary);
   font-size: 14px;
   line-height: 20px;
+  transition:
+    max-width .18s var(--ds-ease-in-out, ease-in-out),
+    margin-right .18s var(--ds-ease-in-out, ease-in-out),
+    opacity .12s var(--ds-ease-in-out, ease-in-out),
+    transform .18s var(--ds-ease-in-out, ease-in-out),
+    visibility 0s linear;
+}
+
+/* 搜索展开时标题让位：宽度收成 0、向左移一点并淡出，整行只剩搜索框。
+   四条属性与官方 .sectionLabelHidden 一致，时长取官方那套 .18s/.12s */
+.wg-header-label-hidden {
+  opacity: 0;
+  visibility: hidden;
+  max-width: 0;
+  margin-right: -4px;
+  /* visibility 要等淡出走完再切，否则标题会当场消失、没有过渡 */
+  transition-delay: 0s, 0s, 0s, 0s, .18s;
+  transform: translate(-4px);
 }
 
 .wg-header-actions {
-  max-width: 100%;
+  /* 两个 28px 入口加一格 4px 间距；官方 .headerActions 同此上限 */
+  max-width: 60px;
   flex: none;
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto;
+  /* 不设 margin-left: auto：把整组推向右缘的是前面搜索槽位那一个 auto，
+     多一个 auto 会与它平分剩余空间，把搜索框挤到行中间 */
   overflow: hidden;
+  transition:
+    max-width .18s var(--ds-ease-in-out, ease-in-out),
+    opacity .12s var(--ds-ease-in-out, ease-in-out),
+    transform .18s var(--ds-ease-in-out, ease-in-out),
+    visibility 0s linear;
+}
+
+/* 视图选项与「添加工作区」在搜索展开时整体让位：向右收拢并淡出，与标题对称 */
+.wg-header-actions-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  max-width: 0;
+  transition-delay: 0s, 0s, 0s, .18s;
+  transform: translate(4px);
+}
+
+/* 搜索槽位：收起时只有图标按钮那么宽（28px），展开后拉满整行剩余宽度。
+   宽度走 max-width 而不是 flex-basis，因为整行是「标题 + 搜索 + 入口组」的
+   定宽组合，搜索要吃掉前两者让出的那部分
+
+   把右侧这一组推向左的是这里自己的 margin-left: auto（官方 .searchSlot 就是
+   这么写的）。后面那组入口不能再写 auto——两个 auto 会平分剩余空间，搜索框
+   会被推到中间，而不是紧挨着入口组 */
+.wg-search-slot {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 28px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  transition: max-width .18s var(--ds-ease-in-out, ease-in-out);
+}
+.wg-search-slot-expanded { max-width: 100%; }
+
+/* 搜索框本体：收起时是 28px 正圆（与相邻的 header 图标按钮同形），展开后
+   变成 30px 高的圆角输入框。border 从「无」切到 .5px，因此收起态不能写
+   border: none——那会让展开瞬间抖 1px */
+.wg-search {
+  box-sizing: border-box;
+  cursor: text;
+  width: 100%;
+  height: 28px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  background: 0 0;
+  border: none;
+  border-radius: 50%;
+  corner-shape: round;
+  transition:
+    width .18s var(--ds-ease-in-out, ease-in-out),
+    padding .18s var(--ds-ease-in-out, ease-in-out),
+    border-color .18s var(--ds-ease-in-out, ease-in-out),
+    background-color .18s var(--ds-ease-in-out, ease-in-out);
+}
+.wg-search-expanded {
+  width: calc(100% + 4px);
+  height: 30px;
+  margin-inline: -2px;
+  padding: 0 4px 0 0;
+  color: var(--dsw-alias-label-caption);
+  background: 0 0;
+  border: .5px solid var(--dsw-alias-border-l4);
+  border-radius: 10px;
+}
+
+.wg-search-button {
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  color: inherit;
+  background: 0 0;
+  border: none;
+  border-radius: 50%;
+  corner-shape: round;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.wg-search-expanded .wg-search-button { width: 28px; height: 30px; }
+.wg-search-button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+/* 展开后按钮与输入框是同一个整体，按钮不再单独出悬停底色 */
+.wg-search-expanded .wg-search-button:hover { background: 0 0; }
+
+/* 输入框：收起时不可见、不占宽、也拿不到焦点（tabIndex 同步为 -1） */
+.wg-search-input {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+  padding: 0;
+  color: var(--dsw-alias-label-primary);
+  background: 0 0;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  line-height: 18px;
+  transition: opacity .12s var(--ds-ease-in-out, ease-in-out);
+}
+.wg-search-expanded .wg-search-input {
+  opacity: 1;
+  pointer-events: auto;
+  margin-left: -2px;
+}
+.wg-search-input::placeholder { color: var(--dsw-alias-label-tertiary); }
+
+.wg-search-clear {
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+  background: 0 0;
+  border: none;
+  border-radius: 50%;
+  corner-shape: round;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.wg-search-clear:hover { background: var(--dsw-alias-interactive-bg-hover); }
+
+/* 搜索结果行：官方 .searchResultRow 的几何。它比常规会话行高——两行内容
+   （标题 + 路径），因此 min-height 而不是固定高度 */
+.wg-search-results > * + * { margin-top: 2px; }
+.wg-search-result {
+  box-sizing: border-box;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  min-height: 48px;
+  padding: 4px 8px;
+  color: var(--dsw-alias-label-primary);
+  background: 0 0;
+  border: none;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.wg-search-result:hover,
+.wg-search-result-selected { background: var(--dsw-alias-interactive-bg-hover); }
+
+.wg-search-result-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+/* 标题与状态位之间那 4px：状态位槽自己是 16px，官方用 margin 而不是 gap */
+.wg-search-result-title {
+  min-width: 0;
+  flex: 0 auto;
+  margin-left: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* 第二行整体缩进一个状态位槽宽（16 + 4），与标题左缘对齐 */
+/* 第二行整行：官方这里放的是「工作区名 +（内容搜索的）摘录」两格，因此带 6px
+   gap。本包没有摘录，这一行只剩路径一项，gap 用不上。
+
+   gap 本身保留（与官方同构，日后真加摘录就位），但路径必须整体作为一个 flex
+   项：路径内部是两段着色，若让它们直接做这一行的子项，那个 6px 会落到
+   「工作区」与「分组」之间，把一条连续的路径读成两截 */
+.wg-search-result-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 20px;
+}
+
+/* 路径：两段着色在内部紧邻。自身是 gap 为 0 的 flex 行——外面的 6px 属于
+   「路径 / 摘录」之间，不能渗进这两段；同时两段仍要参与伸缩与截断，
+   因此不能退回行内布局（行内元素上 max-width 与省略号都不生效）
+
+   宽度上限挂在这一层而不是段上：官方给工作区名 40%，本包那格后面还要接分组，
+   整条路径放宽到 60%。写成段级百分比会按本条路径的宽度算，越窄越缩，长名字
+   一开始就被截断 */
+.wg-search-result-path {
+  min-width: 0;
+  max-width: 60%;
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+/* 工作区那一格：两级都可见时才与分组争宽度，因此给它更大的收缩权重，
+   空间不够时先截它、把分组留住——分组是本包相对官方多出来的那一段信息 */
+.wg-search-result-workspace {
+  min-width: 0;
+  flex: 0 2 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* 工作区用二级色阶：官方那格只到 tertiary，这里要靠色阶与分组拉开对比 */
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+/* 分组是路径的第二段，比工作区明显弱一档：两段同色的话，分隔符两侧只是一条
+   长名字，看不出哪段是容器、哪段是组。这里取比官方那格（tertiary）更弱的
+   caption，与工作区的 secondary 拉开一整档 */
+.wg-search-result-group {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-caption, var(--dsw-alias-label-tertiary));
+  font-size: 12px;
+  line-height: 17px;
+}
+/* 分隔符没有自己的样式：它在分组那一段里，继承同一个色阶，两段之间因此
+   只有「工作区 / 分组」这两档，不会多出第三个视觉层级 */
+
+.wg-search-status {
+  color: var(--dsw-alias-label-tertiary);
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 /* header 里的图标按钮：官方 .iconButton 的几何（28px 正圆、label-secondary、
@@ -151,6 +408,21 @@ export const CSS = `
   height: 36px;
   color: var(--dsw-alias-label-primary);
 }
+/* 窄栏的搜索入口：header 下方独立的一个 36px 正圆块，与官方 rail 下那条
+   .search 规则同形（自带下边距 12px）。它不做展开动画——那个输入框在宽栏里，
+   点下去整列会滑开 */
+.wg-search-rail {
+  width: 36px;
+  height: 36px;
+  margin: 0 0 12px;
+  color: var(--dsw-alias-label-primary);
+  border-color: transparent;
+}
+.wg-search-rail .wg-search-button {
+  width: 36px;
+  height: 36px;
+  color: var(--dsw-alias-label-primary);
+}
 
 .wg-rail { box-sizing: border-box; display: flex; flex-direction: column; }
 .wg-rail-button {
@@ -175,7 +447,13 @@ export const CSS = `
  * 官方把「留白」拆成两步：.listArea 用 -edge-inset 抵掉根节点的右留白，让列表
  * 靠到栏缘；再由 .list 自己的 scrollbar-offset 与 padding-right 把内容推回到离
  * 栏缘 edge-inset 处（scrollbar 沟槽 width + offset + padding-right）。
- * 本包没有 .listArea 那一层，因此把它的 -edge-inset 折进这里的 margin-right */
+ * 本包没有 .listArea 那一层，因此把它的 -edge-inset 折进这里的 margin-right
+ *
+ * 面板整体淡入：官方给三种内容体（会话树 / 单列表 / 搜索结果）共用的 .treeBody
+ * 挂了 .2s 的 wide-in 动画，那三者在它的三元分支里是不同的元素，因此每次切换
+ * 内容体都会重新挂载、动画重放——搜索态进出时整块面板因此各有一次淡入。
+ * 本包的常规列表与搜索结果也各有自己的根节点（同一条三元分支），因此同样套
+ * 这条规则；两处都挂 .wg-list 之外的面板类，见 .wg-panel */
 .wg-list {
   box-sizing: border-box;
   min-height: 0;
@@ -192,6 +470,16 @@ export const CSS = `
       var(--dsh-session-list-scrollbar-offset)
   );
   padding-bottom: 16px;
+}
+
+/* 面板级淡入：与官方 .treeBody 的 wide-in 同一条动画（时长与缓动都取官方值）。
+   它是「换了一块内容」的提示，与折叠体的逐行淡入是两回事——后者管的是展开
+   折叠体时行逐个露面 */
+.wg-panel {
+  animation: wg-panel-in .2s var(--ds-ease-in-out, ease-in-out);
+}
+@keyframes wg-panel-in {
+  0% { opacity: 0; }
 }
 
 .wg-workspace { position: relative; display: flex; flex-direction: column; }
@@ -541,6 +829,15 @@ body[data-wg-menu-flip] [role='menu'] [role='menu']::before {
 
 @media (prefers-reduced-motion: reduce) {
   .wg-arrow { transition: none; }
+  /* 面板淡入整条撤掉。它的初态是 opacity: 0，撤掉动画即落回自然的不透明——
+     若只撤 transition 而留着动画，reduced-motion 下面板反而会一直不可见 */
+  .wg-panel { animation: none; }
+  /* 搜索的展开、标题与入口组的让位都直接落位 */
+  .wg-search,
+  .wg-search-slot,
+  .wg-search-input,
+  .wg-header-label,
+  .wg-header-actions { transition: none; }
   /* 折叠体直接落位，不做撑开/收回动作；visibility 的延时也要一并去掉，
      否则收起后仍会多挡一个容器时长才交出焦点 */
   .wg-collapse { transition: none; }

@@ -10,6 +10,7 @@ export {
   Button,
   IconArchiveOutline20,
   IconBranchOutline16,
+  IconCloseFill14,
   IconEditOutline16,
   IconEllipsisOutline16,
   IconFolderClose16,
