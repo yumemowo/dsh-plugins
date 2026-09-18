@@ -48,12 +48,17 @@ export const OFFICIAL_WORKSPACE_ZH: Record<string, string> = {
   'status.planReview': '计划待审',
   'status.waitingAnswer': '等待回答',
   'status.completed': '已完成',
+  'status.idle': '空闲',
+  'hover.created': '创建于 {time}',
+  'hover.copied': '已复制',
+  'date.ymd': '{y}年{m}月{d}日',
   'time.now': '刚刚',
   'time.minutes': '{n}分钟',
   'time.hours': '{n}小时',
   'time.days': '{n}天',
   'time.months': '{n}个月',
   'time.years': '{n}年',
+  'time.ago': '{t}前',
 }
 
 /** 官方 `common` 命名空间里的通用词，本包与官方共用 */
@@ -62,6 +67,7 @@ const COMMON_ZH: Record<string, string> = {
   cancel: '取消',
   close: '关闭',
   search: '搜索',
+  copy: '复制',
 }
 
 /**

@@ -105,6 +105,28 @@ export function officialSearchLabels(t: WorkspaceTranslate): OfficialSearchLabel
   }
 }
 
+/** 官方悬停卡片（工作区与会话共用）的文案与格式 */
+export interface OfficialHoverLabels {
+  /**
+   * 卡片的复制提示，取官方 `common` 命名空间的通用词
+   *
+   * 卡片整体可点即复制，文案同时充当它的无障碍标签（官方
+   * `HoverCard` 的 `copyLabel`），因此要用通用词而不是点明对象的说法
+   */
+  copy: string
+  /** 复制成功后的反馈文案，由原语在卡片内原地替换显示 */
+  copied: string
+  /**
+   * 绝对创建时刻（`创建于 2026年9月14日 03:31`）
+   *
+   * 年月日走官方 `date.ymd` 模板，时钟部分补零；不调 `toLocaleString`——那会跟着
+   * 浏览器语言走，与界面语言不一致时同一张卡片里会出现两种语言
+   */
+  created: (createdAt: number) => string
+  /** 悬停卡片形态的相对时间（`5分钟前`）；`刚刚` 那一档不加后缀 */
+  timeAgo: (updatedAt: number, now: number) => string
+}
+
 /**
  * 把官方语言包绑成三项操作的文案表
  *
@@ -121,6 +143,57 @@ export function officialSessionLabels(t: WorkspaceTranslate): OfficialSessionLab
     fork: t('menu.fork'),
     archive: t('menu.archiveSession'),
   }
+}
+
+/**
+ * 把官方语言包绑成悬停卡片的文案与格式
+ *
+ * 与官方 `ui-workspace` 的 `WorkspaceHoverContent` / `SessionHoverContent` 逐键取用
+ * 同一批键（`hover.created` / `hover.copied` / `date.ymd` / `time.ago`），因此官方
+ * 改措辞或改日期形态时本包自动跟随
+ * @param t - 官方 `workspace` 命名空间的翻译函数
+ * @returns 卡片文案与两个格式化函数
+ */
+export function officialHoverLabels(t: WorkspaceTranslate): OfficialHoverLabels {
+  return {
+    // 「复制」是跨功能通用词，落在官方 common 命名空间，由查找链兜住
+    copy: t('copy'),
+    copied: t('hover.copied'),
+    created: (createdAt: number) => createdLabel(createdAt, t),
+    timeAgo: (updatedAt: number, now: number) => hoverTimeLabel(updatedAt, now, t),
+  }
+}
+
+/** 补零到两位；时钟部分用 */
+function pad2(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+/**
+ * 绝对创建时刻
+ * @param createdAt - 创建时刻（epoch ms）
+ * @param t - 官方 `workspace` 命名空间的翻译函数
+ * @returns `创建于 2026年9月14日 03:31` 形态的文案
+ */
+function createdLabel(createdAt: number, t: WorkspaceTranslate): string {
+  const d = new Date(createdAt)
+  const ymd = t('date.ymd', { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() })
+  return t('hover.created', { time: `${ymd} ${pad2(d.getHours())}:${pad2(d.getMinutes())}` })
+}
+
+/**
+ * 悬停卡片形态的相对时间
+ *
+ * 与行尾那份的区别只有一层：距离套上官方 `time.ago` 的模板（`{t}前`），而 `刚刚`
+ * 那一档保持原样——官方的注释写明了理由，「now ago」不成话
+ * @param updatedAt - 会话最近更新时间（epoch ms）
+ * @param now - 当前时刻（epoch ms）
+ * @param t - 官方 `workspace` 命名空间的翻译函数
+ * @returns 可直接显示的相对时间文案
+ */
+function hoverTimeLabel(updatedAt: number, now: number, t: WorkspaceTranslate): string {
+  const { unit, n } = relativeTime(updatedAt, now)
+  return unit === 'now' ? t('time.now') : t('time.ago', { t: t(`time.${unit}`, { n }) })
 }
 
 /**

@@ -6,7 +6,12 @@ import { WorkspaceSection } from '../src/client/components/WorkspaceSection.tsx'
 import type { WorkspaceSectionProps } from '../src/client/components/WorkspaceSection.tsx'
 import { WorkspaceGroupsRegion } from '../src/client/components/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/components/WorkspaceGroupsRegion.tsx'
-import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
+import {
+  officialAddLabels,
+  officialHoverLabels,
+  officialSessionLabels,
+  timeLabel,
+} from '../src/client/official.ts'
 import { regionTranslate, sidebarTranslate, translateWith, workspaceTranslate } from './locale-stub.ts'
 
 /**
@@ -66,9 +71,11 @@ function renderingDispatcher(): {
       return [
         owner[index],
         // setter 绑定调用时的状态桶：effect 在渲染结束后才跑，那时游标已经在
-        // 别的组件上，按当前位置写会写错组件的槽位
+        // 别的组件上，按当前位置写会写错组件的槽位。
+        // 函数式更新与 React 同义（取旧值算新值），否则 `setX(v => !v)` 会把那个
+        // 函数本身存成状态
         (value: unknown) => {
-          owner[index] = value
+          owner[index] = typeof value === 'function' ? (value as (prev: unknown) => unknown)(owner[index]) : value
         },
       ]
     },
@@ -141,6 +148,8 @@ function render(
     hosts?: unknown[]
     /** 搜索结果第二行（路径）的元信息元素，按文档序 */
     metas?: unknown[]
+    /** 悬停卡片元素，按文档序；正文从它的 `content` prop 上读 */
+    cards?: unknown[]
   },
   active: unknown = dispatcher,
   enter?: (type: unknown) => () => void,
@@ -174,6 +183,17 @@ function render(
       if (Array.isArray(el.props.items) && el.props.anchor !== undefined) {
         if (el.props.anchor === null) out.contextMenus?.push(el)
         else out.menus.push(el)
+        return
+      }
+      // 悬停卡片的替身只渲染锚点那一半，正文留在 props 上。收下卡片后仍要走进
+      // 锚点：行本身与行上的菜单都在里面，否则这些结构会整段读不到
+      if (
+        el.props.content !== undefined &&
+        el.props.content !== null &&
+        el.props.anchor !== undefined
+      ) {
+        out.cards?.push(el)
+        walk(el.props.anchor)
         return
       }
       const prev = internals.ReactCurrentDispatcher.current
@@ -555,10 +575,20 @@ function props(
     searchResultLimit?: number
     /** 分组元数据；缺省给一个空组 */
     groups?: Record<string, { id: string; name: string; sessionIds: string[] }[]>
+    /** 宿主 home；用于断言工作区卡片里的路径缩写 */
+    home?: string | undefined
+    /** 会话 a 的最近更新时间；用于断言卡片里的相对时间与行尾那份不同 */
+    updatedAt?: number
   } = {},
 ): WorkspaceGroupsProps {
   const byId: Record<string, unknown> = {
-    a: { id: 'a', displayTitle: 'A', running: false, blank: false, updatedAt: Date.now() - 300_000 },
+    a: {
+      id: 'a',
+      displayTitle: 'A',
+      running: false,
+      blank: false,
+      updatedAt: options.updatedAt ?? Date.now() - 300_000,
+    },
     orphan: {
       id: 'orphan',
       displayTitle: 'Orphan',
@@ -604,6 +634,8 @@ function props(
       select(options.pending ?? new Map())) as never,
     useDirectoryFlow: ((select: (occupied: boolean) => unknown) =>
       select(options.flowOccupied ?? true)) as never,
+    useHostInfo: ((select: (info: { home: string | undefined }) => unknown) =>
+      select({ home: options.home })) as never,
     openSession: () => {},
     // startReturns 显式给了就用它（undefined 表示导航被取代），否则给一个 id
     startSession: async () =>
@@ -1071,6 +1103,260 @@ describe('WorkspaceGroupsRegion render', () => {
 
     // 官方窄栏也放这个入口（36px、label-primary），这里保持一致
     expect(rowButtons(out).map((b) => b.label)).toContain('添加工作区')
+  })
+})
+
+/**
+ * 悬停详情卡片
+ *
+ * 与官方 ui-workspace 的两张卡片对齐：工作区那张是「名称 / 目录路径 / 创建时刻」
+ * 并复制完整路径，会话那张是「完整标题 / 相对时间 / 逐条状态」并复制标题。
+ * 卡片外框与浮出时机属官方 HoverCard 原语，这里只断言本包传下去的内容与开关
+ */
+describe('hover cards', () => {
+  /** 卡片正文里的文本，按文档序；替身不渲染正文，只能从 props 上读 */
+  function cardText(card: unknown): string[] {
+    const out = { menus: [] as unknown[], text: [] as string[] }
+    render((card as { props: Record<string, unknown> }).props['content'], out)
+    return out.text
+  }
+
+  /** 卡片元素的某个 prop */
+  function cardProp(card: unknown, name: string): unknown {
+    return (card as { props: Record<string, unknown> }).props[name]
+  }
+
+  /** 渲染整个区域并收集卡片 */
+  function renderRegion(options: Parameters<typeof props>[1] = {}) {
+    const out = { menus: [] as unknown[], text: [] as string[], cards: [] as unknown[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true, options)), out)
+    return out
+  }
+
+  /**
+   * 一张卡片是给哪种行挂的
+   *
+   * 锚点就是那行本身，因此按行类名认；卡片按文档序发出，工作区行在会话行之前
+   */
+  function anchorClass(card: unknown): string {
+    const anchor = (card as { props: { anchor?: { props?: Record<string, unknown> } } }).props
+      .anchor
+    return String(anchor?.props?.['className'] ?? '')
+  }
+
+  it('hangs one card on the workspace row and one on each session row', () => {
+    const out = renderRegion()
+
+    // 一条工作区行 + 一条工作区内的会话行 + 未分组桶里那条会话行
+    expect(out.cards).toHaveLength(3)
+    expect(out.cards.map(anchorClass).filter((c) => c.startsWith('wg-workspace-head'))).toHaveLength(
+      1,
+    )
+    expect(out.cards.map(anchorClass).filter((c) => c.startsWith('wg-row'))).toHaveLength(2)
+  })
+
+  it('reads the workspace card from name, directory path and creation instant', () => {
+    const out = renderRegion()
+    const card = out.cards.find((c) => anchorClass(c).startsWith('wg-workspace-head'))
+
+    // 创建时刻按**本地**时区渲染（官方卡片用的就是 getHours/getMinutes），因此这里
+    // 拿同一个 Date 现算一遍期望值，而不是写死一个只在某个时区成立的钟点
+    const created = new Date('2026-01-01T00:00:00.000Z')
+    const pad = (v: number) => String(v).padStart(2, '0')
+    const clock = `${pad(created.getHours())}:${pad(created.getMinutes())}`
+
+    // 目录路径与创建时刻都按官方那两行给出；工作区名是宿主给的标题
+    expect(cardText(card)).toEqual(['W1', '/tmp/w1', `创建于 2026年1月1日 ${clock}`])
+  })
+
+  it('abbreviates the home directory in the card path but copies the full one', () => {
+    const out = renderRegion({ home: '/tmp' })
+    const card = out.cards.find((c) => anchorClass(c).startsWith('wg-workspace-head'))
+
+    // 卡片里显示缩写，复制出去的仍是完整路径：缩写只是排版
+    expect(cardText(card)).toContain('~/w1')
+    expect(cardProp(card, 'copyText')).toBe('/tmp/w1')
+  })
+
+  it('copies the workspace path and the session title through the official labels', () => {
+    const out = renderRegion()
+    const workspaceCard = out.cards.find((c) => anchorClass(c).startsWith('wg-workspace-head'))
+    const sessionCard = out.cards.find((c) => anchorClass(c).startsWith('wg-row'))
+
+    // 复制提示取官方 common 的通用词，成功反馈取官方 hover.copied
+    for (const card of [workspaceCard, sessionCard]) {
+      expect(cardProp(card, 'copyLabel')).toBe('复制')
+      expect(cardProp(card, 'copiedLabel')).toBe('已复制')
+    }
+    expect(cardProp(sessionCard, 'copyText')).toBe('A')
+  })
+
+  it('reads the session card from title, relative time and every status', () => {
+    const out = renderRegion()
+    const card = out.cards.find((c) => anchorClass(c).startsWith('wg-row'))
+
+    // 空闲会话在行上不画点，卡片里仍按官方列一条「空闲」
+    expect(cardText(card)).toContain('A')
+    expect(cardText(card)).toContain('空闲')
+  })
+
+  it('uses the ago template for the card time, unlike the bare row time', () => {
+    const out = { menus: [] as unknown[], text: [] as string[], cards: [] as unknown[] }
+    // 5 分钟前更新的会话：行尾显示「5分钟」，卡片显示「5分钟前」
+    render(
+      React.createElement(
+        WorkspaceGroupsRegion,
+        props(true, { updatedAt: Date.now() - 5 * 60_000 }),
+      ),
+      out,
+    )
+    const card = out.cards.find((c) => anchorClass(c).startsWith('wg-row'))
+
+    expect(cardText(card)).toContain('5分钟前')
+  })
+
+  it('lists the pending interaction on the row that waits for the user', () => {
+    const pending = new Map([['orphan', { kind: 'approval' }]])
+    const out = renderRegion({ pending })
+    // 卡片按文档序发出，两条会话行里第二条是未分组桶里的 Orphan
+    const cards = out.cards.filter((c) => anchorClass(c).startsWith('wg-row'))
+    const orphanCard = cards[cards.length - 1]
+
+    // 在等审批的那条会话，卡片里要出现审批那一条
+    expect(cardText(orphanCard)).toContain('等待审批')
+    // 另一条空闲会话不受影响
+    expect(cardText(cards[0])).toContain('空闲')
+  })
+
+  it('hangs no card at all when the official copy is unavailable', () => {
+    const out = { menus: [] as unknown[], text: [] as string[], cards: [] as unknown[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true, { official: false })), out)
+
+    // 官方文案拿不到时浮出来的只是空壳，因此整体不挂
+    expect(out.cards).toEqual([])
+  })
+
+  it('gives the ungrouped bucket workspace row no card', () => {
+    const out = { menus: [] as unknown[], text: [] as string[], cards: [] as unknown[] }
+    // props 里那条 orphan 会话无所属，末尾的隐式「未分组」区段因此出现
+    const base = props(true)
+    render(React.createElement(WorkspaceGroupsRegion, base), out)
+
+    // 未分组桶不是真实工作区（没有目录与创建时刻），官方在那里同样不给卡片：
+    // 工作区行有两行（真实工作区 + 未分组桶），卡片却只有一张
+    const workspaceCards = out.cards.filter((c) => anchorClass(c).startsWith('wg-workspace-head'))
+    expect(workspaceCards).toHaveLength(1)
+    // 那唯一一张挂在真实工作区上：它的正文是 W1 的路径，不是未分组桶
+    expect(cardText(workspaceCards[0])).toContain('/tmp/w1')
+  })
+
+  it('gives the blank session row a card without a copy affordance', () => {
+    const out = { menus: [] as unknown[], text: [] as string[], cards: [] as unknown[] }
+    render(
+      React.createElement(WorkspaceGroupsRegion, props(true, { blankCurrent: true })),
+      out,
+    )
+    // 空白行的标题是语言包的固定名，不是会话内容
+    const blank = out.cards.find((card) => cardText(card).includes('新会话'))
+
+    expect(blank).toBeDefined()
+    expect(cardProp(blank, 'copyText')).toBeUndefined()
+    // 同屏的常规会话行仍带着可复制标题，说明上一条断言不是因为整片都没有复制入口
+    const named = out.cards.find((card) => cardText(card).includes('A'))
+    expect(cardProp(named, 'copyText')).toBe('A')
+  })
+
+  it('suppresses the card on a row while either of its panels is open', () => {
+    // 单行渲染：测试替身按组件类型给状态分桶，同一类型的多个实例共用一份状态，
+    // 整片列表里所有会话行会一起「被右键」，那样断言不出「只有这一行让位」
+    const node = React.createElement(SessionRowMenu, {
+      row: {
+        id: 's1',
+        title: '会话一',
+        blank: false,
+        running: false,
+        runningSubagentCount: 0,
+        completed: false,
+        updatedAt: 0,
+      },
+      title: '会话一',
+      selected: false,
+      statuses: [{ state: 'done', label: '空闲' }],
+      hoverTime: '5分钟前',
+      hoverLabels: officialHoverLabels(workspaceTranslate()),
+      actionsLabel: (name: string) => `会话“${name}”的操作`,
+      onOpenSession: () => {},
+      t: regionTranslate(),
+      official: {
+        renameSession: async () => {},
+        forkSession: () => {},
+        archiveSession: async () => {},
+        labels: officialSessionLabels(workspaceTranslate()),
+        relativeTime: () => '',
+      },
+    })
+
+    const harness = renderingDispatcher()
+    const before = {
+      menus: [] as unknown[],
+      text: [] as string[],
+      cards: [] as unknown[],
+      hosts: [] as unknown[],
+    }
+    harness.render(node, before)
+
+    // 初始态没有面板，卡片启用
+    expect(before.cards).toHaveLength(1)
+    expect(cardProp(before.cards[0], 'disabled')).toBe(false)
+
+    // 右键开出面板：同一处再浮一张卡片会互相遮挡
+    fireContextMenu(before.hosts[0])
+    const afterRightClick = { menus: [] as unknown[], text: [] as string[], cards: [] as unknown[] }
+    harness.render(node, afterRightClick)
+    expect(cardProp(afterRightClick.cards[0], 'disabled')).toBe(true)
+  })
+
+  it('suppresses the card while the row own menu is open', () => {
+    // 行内 `...` 菜单是另一处浮在行上的面板，两条路径都要让位
+    const node = React.createElement(SessionRowMenu, {
+      row: {
+        id: 's1',
+        title: '会话一',
+        blank: false,
+        running: false,
+        runningSubagentCount: 0,
+        completed: false,
+        updatedAt: 0,
+      },
+      title: '会话一',
+      selected: false,
+      hoverTime: '5分钟前',
+      hoverLabels: officialHoverLabels(workspaceTranslate()),
+      actionsLabel: (name: string) => `会话“${name}”的操作`,
+      onOpenSession: () => {},
+      t: regionTranslate(),
+      official: {
+        renameSession: async () => {},
+        forkSession: () => {},
+        archiveSession: async () => {},
+        labels: officialSessionLabels(workspaceTranslate()),
+        relativeTime: () => '',
+      },
+    })
+
+    const harness = renderingDispatcher()
+    const before = { menus: [] as unknown[], text: [] as string[], cards: [] as unknown[] }
+    harness.render(node, before)
+
+    // 菜单锚点是 Menu 原语的 anchor 按钮；点一下即展开
+    const anchor = (
+      before.menus[0] as { props: { anchor: { props: { onClick: (e: unknown) => void } } } }
+    ).props.anchor
+    anchor.props.onClick({ stopPropagation: () => {} })
+
+    const after = { menus: [] as unknown[], text: [] as string[], cards: [] as unknown[] }
+    harness.render(node, after)
+    expect(cardProp(after.cards[0], 'disabled')).toBe(true)
   })
 })
 

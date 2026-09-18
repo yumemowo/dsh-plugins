@@ -23,6 +23,7 @@ import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { Group } from '../remote.ts'
+import type { HostInfo } from '../hostInfo.ts'
 import type { RegionActions, RegionDataHooks } from '../actions.ts'
 import { regionLabels } from '../labels.ts'
 import type { RegionTranslate } from '../locales.ts'
@@ -30,8 +31,10 @@ import { buildLayout, containsSession, groupIdOfSession } from '../data/layout.t
 import { groupSessionsByWorkspace, straySessions } from '../data/sessions.ts'
 import { searchSessions } from '../data/search.ts'
 import type { SearchMatch } from '../data/search.ts'
-import { sessionStatus } from '../data/status.ts'
+import { rowStatusDot, sessionStatuses } from '../data/status.ts'
 import type { SessionStatus } from '../data/status.ts'
+import { abbreviateHomePath } from '../utils/pathUtils.ts'
+import { useFlipMarker } from '../useFlipMarker.ts'
 import type { GroupNameDraft, SessionRow, WorkspaceNameDraft } from '../data/types.ts'
 import { SessionRowMenu } from './SessionRowMenu.tsx'
 import type { SessionGroupingContext } from './SessionRowMenu.tsx'
@@ -68,6 +71,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     useSessions,
     useSessionPendingInteraction,
     useDirectoryFlow,
+    useHostInfo,
     openSession,
     startSession,
     onReady,
@@ -122,6 +126,12 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   /** 从搜索结果打开、等待滚进可视区的那一行；滚动完成后由行自己回报清除 */
   const [revealSessionId, setRevealSessionId] = useState<string | undefined>(undefined)
 
+  /**
+   * 量出区域右缘到窗口右缘的距离，据此决定悬停卡片是否要翻向左侧——对照模式下
+   * 区域挂右侧栏、贴着窗口右缘，官方卡片固定向右展开会开到屏幕外
+   */
+  const flipRef = useFlipMarker()
+
   const currentSessionId = sessions.current === undefined ? undefined : String(sessions.current)
 
   // 搜索状态留在这里而不是 header 内部：窄栏入口要触发宽栏输入框的聚焦，
@@ -142,16 +152,18 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const addWorkspace = flowOccupied ? resolveAddWorkspace?.() : undefined
 
   /**
-   * 一个会话行要显示的状态位
+   * 一个会话行的全部状态，供行首那个点与悬停卡片共同消费
    *
-   * 待交互种类从快照里按会话 id 取；空闲返回 undefined，槽位仍占位。在这里算是为了
-   * 让状态位与时间文案作为内容稳定的 prop 参与行级 memo 的比对：被 memo 挡下的行不会
-   * 重算，按渲染当刻取时间会停住
+   * 待交互种类从快照里按会话 id 取。在这里算是为了让状态位与时间文案作为内容稳定的
+   * prop 参与行级 memo 的比对：被 memo 挡下的行不会重算，按渲染当刻取时间会停住
+   *
+   * 卡片要连空闲也列一条，行首则不画点——那一层取舍由 `data/status.ts` 的
+   * `rowStatusDot` 承担，两个消费方因此不会各推导一套
    * @param row - 会话渲染行
-   * @returns 状态位或 undefined
+   * @returns 按优先级排列的状态
    */
-  const statusOf = (row: SessionRow): SessionStatus | undefined =>
-    sessionStatus(row, pendingInteractions.get(row.id as SessionId)?.kind, labels.status)
+  const statusesOf = (row: SessionRow): SessionStatus[] =>
+    sessionStatuses(row, pendingInteractions.get(row.id as SessionId)?.kind, labels.status)
 
   /**
    * 一个会话行行尾要显示的相对时间
@@ -162,6 +174,26 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    */
   const timeOf = (row: SessionRow): string | undefined =>
     row.blank || official === undefined ? undefined : official.relativeTime(row.updatedAt, now)
+
+  /**
+   * 一个会话行悬停卡片里的相对时间
+   *
+   * 与行尾那份的区别只有一层：距离要套官方的「…前」模板（见 `officialHoverLabels`）。
+   * 官方同样分两个函数——行上那份是 `timeLabel`，卡片那份是 `hoverTimeLabel`
+   * @param row - 会话渲染行
+   * @returns 相对时间文案；空白行不显示时为 undefined
+   */
+  const hoverTimeOf = (row: SessionRow): string | undefined =>
+    row.blank || official === undefined
+      ? undefined
+      : labels.hover.timeAgo(row.updatedAt, now)
+
+  /** 悬停卡片只在官方文案在场时挂：缺了它卡片只是个空壳 */
+  const hoverLabels = official === undefined ? undefined : labels.hover
+
+  // 宿主 home 用于把工作区目录缩写成 `~`。走全局标准 hook 而不是 inject：渲染器会
+  // 缓存注册项的 inject 结果整个注册周期，在 inject 里读会冻结在首次渲染那一刻
+  const home = useHostInfo((info: HostInfo) => info.home) as string | undefined
 
   /** 被打开的那一行滚进可视区后清掉标记，避免它在后续重新挂载时再滚一次 */
   const acknowledgeReveal = useCallback((sessionId: string) => {
@@ -427,7 +459,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const searching = search.normalized !== ''
 
   return (
-    <div className="wg-root">
+    <div className="wg-root" ref={flipRef}>
       <RegionHeader
         title={labels.title}
         addWorkspace={addWorkspace}
@@ -440,7 +472,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
           result={searchResult}
           limit={searchResultLimit}
           currentSessionId={currentSessionId}
-          statusOf={(match) => statusOf(match.row)}
+          statusOf={(match) => rowStatusDot(match.row, statusesOf(match.row))}
           ungrouped={labels.ungrouped}
           labels={labels.search}
           onOpen={openSearchResult}
@@ -471,6 +503,9 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
               // 这个代价只落在该行上
               const reveal =
                 row.id === revealSessionId ? () => acknowledgeReveal(row.id) : undefined
+              // 状态只推导一次：行首那个点与卡片那几条取自同一份结果
+              const statuses = statusesOf(row)
+              const status = rowStatusDot(row, statuses)
               if (row.blank) {
                 return (
                   <SessionRowView
@@ -478,8 +513,11 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
                     sessionId={row.id}
                     title={labels.newSession}
                     selected={row.id === currentSessionId}
-                    status={statusOf(row)}
+                    status={status}
                     time={timeOf(row)}
+                    statuses={statuses}
+                    hoverTime={hoverTimeOf(row)}
+                    hoverLabels={hoverLabels}
                     onOpenSession={openSession}
                     onReveal={reveal}
                   />
@@ -491,8 +529,11 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
                   row={row}
                   title={row.title}
                   selected={row.id === currentSessionId}
-                  status={statusOf(row)}
+                  status={status}
                   time={timeOf(row)}
+                  statuses={statuses}
+                  hoverTime={hoverTimeOf(row)}
+                  hoverLabels={hoverLabels}
                   grouping={grouping}
                   official={official}
                   actionsLabel={labels.sessionActions}
@@ -519,6 +560,13 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
                 }
                 labels={workspaceRowLabels}
                 emptyLabel={labels.empty}
+                hover={{
+                  label: workspace.title,
+                  path: abbreviateHomePath(workspace.path, home),
+                  created: labels.hover.created(Date.parse(workspace.createdAt)),
+                }}
+                hoverCopy={workspace.path}
+                hoverLabels={hoverLabels}
                 groupActionLabels={{
                   actions: labels.groupActions,
                   newSessionItem: labels.newSessionItem,
@@ -568,19 +616,26 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
                       官方三项（归组项无处落）。宿主未提供官方服务时菜单会是
                       空的，那时直接渲染无菜单的行，不留点不动的省略号 */}
                   <div className="wg-sessions">
-                    {stray.map((row) =>
-                      official === undefined || row.blank ? (
+                    {stray.map((row) => {
+                      // 状态只推导一次：行首那个点与卡片那几条取自同一份结果
+                      const statuses = statusesOf(row)
+                      const status = rowStatusDot(row, statuses)
+                      const reveal =
+                        row.id === revealSessionId ? () => acknowledgeReveal(row.id) : undefined
+                      return official === undefined || row.blank ? (
                         <SessionRowView
                           key={row.id}
                           sessionId={row.id}
                           title={row.blank ? labels.newSession : row.title}
                           selected={row.id === currentSessionId}
-                          status={statusOf(row)}
+                          status={status}
                           time={timeOf(row)}
+                          statuses={statuses}
+                          hoverTime={hoverTimeOf(row)}
+                          hoverCopy={row.blank ? undefined : row.title}
+                          hoverLabels={hoverLabels}
                           onOpenSession={openSession}
-                          onReveal={
-                            row.id === revealSessionId ? () => acknowledgeReveal(row.id) : undefined
-                          }
+                          onReveal={reveal}
                         />
                       ) : (
                         <SessionRowMenu
@@ -588,18 +643,19 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
                           row={row}
                           title={row.title}
                           selected={row.id === currentSessionId}
-                          status={statusOf(row)}
+                          status={status}
                           time={timeOf(row)}
+                          statuses={statuses}
+                          hoverTime={hoverTimeOf(row)}
+                          hoverLabels={hoverLabels}
                           official={official}
                           onOpenSession={openSession}
                           actionsLabel={labels.sessionActions}
                           t={t}
-                          onReveal={
-                            row.id === revealSessionId ? () => acknowledgeReveal(row.id) : undefined
-                          }
+                          onReveal={reveal}
                         />
-                      ),
-                    )}
+                      )
+                    })}
                   </div>
                 </div>
               </CollapsibleBody>

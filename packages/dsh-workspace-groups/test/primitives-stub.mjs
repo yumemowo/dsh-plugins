@@ -3,7 +3,11 @@
  *
  * node 环境不渲染组件：测试只断言菜单条目数据、图标引用与注册行为，
  * 因此这里的组件一律返回 null、图标返回一个可断言的标记元素
+ *
+ * 例外是 HoverCard：它那层包装会改变 DOM 结构，样式里有对应的选择器，
+ * 因此替身照真原语套一同样的盒
  */
+import { createElement } from 'react'
 
 const nullComponent = () => null
 
@@ -46,6 +50,20 @@ export const relativeTime = (from, to) => {
 /** 悬停提示替身：只渲染子节点，label 另行断言 */
 export const Tooltip = ({ children }) => children
 
+/**
+ * 悬停卡片替身：只渲染锚点那一半，外面套一层行内盒
+ *
+ * 卡片正文是 portal 到 body 的浮层，node 环境既没有 body 也不该让它混进被断言的
+ * 结构里；测试改为从卡片元素的 `content` prop 上直接读正文（见 render.test.ts 的
+ * `cards` 分桶）
+ *
+ * 那一层盒与真原语一致（根节点是个 display:block 的 span）：它会让行不再是
+ * 列表容器的直接子项，样式里的层级缩进选择器必须为此多写一档。替身不套这层的话，
+ * 这条结构差异在 jsdom 冒烟里就看不见了
+ */
+export const HoverCard = ({ anchor }) =>
+  createElement('span', { 'data-wg-hover-anchor': '' }, anchor)
+
 export const IconProjectAddOutline16 = icon('IconProjectAddOutline16')
 export const IconSearchOutline16 = icon('IconSearchOutline16')
 export const IconPersonalizationOutline16 = icon('IconPersonalizationOutline16')
@@ -58,6 +76,7 @@ export default {
   Input,
   StateDot,
   Tooltip,
+  HoverCard,
   relativeTime,
   IconFolderClose16,
   IconFolderOpen16,

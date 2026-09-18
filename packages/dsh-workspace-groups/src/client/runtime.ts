@@ -8,6 +8,7 @@
 
 export {
   Button,
+  HoverCard,
   IconArchiveOutline20,
   IconBranchOutline16,
   IconCloseFill14,

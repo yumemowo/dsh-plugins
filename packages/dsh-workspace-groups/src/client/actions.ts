@@ -10,6 +10,7 @@ import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/c
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { Group } from './remote.ts'
+import type { HostInfo } from './hostInfo.ts'
 import type { GroupChoice } from './data/types.ts'
 import type { OfficialAddLabels, OfficialSessionLabels, SidebarTranslate, WorkspaceTranslate } from './official.ts'
 
@@ -84,6 +85,14 @@ export interface RegionDataHooks {
    * inject 面的 `hooks` 隔间里，由渲染器绑成这个选择器
    */
   useDirectoryFlow: (selector: (occupied: boolean) => unknown) => unknown
+  /**
+   * 宿主固定事实（home 目录）的选择器
+   *
+   * 工作区悬停卡片要像官方一样把 home 下的路径缩写成 `~`。与官方
+   * `WorkspaceBrowserInjected` 的 `hostInfo` 同一个源（`ctx.remote.$host`，
+   * 连接重置时重新读），同样经 inject 面的 `hooks` 隔间绑成选择器
+   */
+  useHostInfo: (selector: (info: HostInfo) => unknown) => unknown
 }
 
 /** 区域组件需要的动作 */

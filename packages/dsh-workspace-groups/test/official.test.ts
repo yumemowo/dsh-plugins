@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   officialAddLabels,
+  officialHoverLabels,
   officialSearchLabels,
   officialSessionLabels,
   timeLabel,
@@ -91,5 +92,44 @@ describe('timeLabel', () => {  const t = workspaceTranslate()
     // 同一个 updatedAt 在不同 now 下读出不同的文案
     expect(timeLabel(earlier, now, t)).toBe('10分钟')
     expect(timeLabel(earlier, now + 60 * 60_000, t)).toBe('1小时')
+  })
+})
+
+/**
+ * 悬停卡片的文案与格式
+ *
+ * 与行尾那份相对时间的区别只有一层：距离要套官方的「…前」模板。这里同时钉住
+ * 「刚刚那一档不加后缀」——官方的注释写明了理由，「now ago」不成话
+ */
+describe('officialHoverLabels', () => {
+  const t = workspaceTranslate()
+  const labels = officialHoverLabels(t)
+  const now = 1_700_000_000_000
+
+  it('takes the copy affordance from the shared common vocabulary', () => {
+    // 卡片整体可点即复制，因此用通用词而不是点明对象的说法；它在 common 里
+    expect(labels.copy).toBe('复制')
+    expect(labels.copied).toBe('已复制')
+  })
+
+  it('wraps distances in the ago template', () => {
+    expect(labels.timeAgo(now - 5 * 60_000, now)).toBe('5分钟前')
+    expect(labels.timeAgo(now - 3 * 60 * 60_000, now)).toBe('3小时前')
+    expect(labels.timeAgo(now - 2 * 24 * 60 * 60_000, now)).toBe('2天前')
+  })
+
+  it('leaves the now bucket bare rather than saying now ago', () => {
+    expect(labels.timeAgo(now - 30_000, now)).toBe('刚刚')
+  })
+
+  it('formats the creation instant through the official date template', () => {
+    // 年月日走 date.ymd，时钟部分补零；不用 toLocaleString——那会跟着浏览器语言走
+    const createdAt = new Date(2026, 8, 14, 3, 31).getTime()
+    expect(labels.created(createdAt)).toBe('创建于 2026年9月14日 03:31')
+  })
+
+  it('pads single-digit clock parts to two places', () => {
+    const createdAt = new Date(2026, 0, 5, 9, 7).getTime()
+    expect(labels.created(createdAt)).toBe('创建于 2026年1月5日 09:07')
   })
 })

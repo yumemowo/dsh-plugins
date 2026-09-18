@@ -17,6 +17,8 @@ import type { LocaleRuntime, LocaleSnapshot } from '@deepseek-ai/dsh-client-loca
 import type { RegionActions, WorkspaceState } from './actions.ts'
 import { NS } from './locales.ts'
 import { directoryFlowSource } from './directoryFlow.ts'
+import { hostInfoSource } from './hostInfo.ts'
+import type { HostInfo } from './hostInfo.ts'
 import { WorkspaceGroupsRegion } from './components/WorkspaceGroupsRegion.tsx'
 
 /** 注册进 better-sidebar 的 tab 身份，同时也是 `openTab` 的 `type` */
@@ -86,10 +88,26 @@ function localeSource(locale: LocaleRuntime): SnapshotSource<LocaleSnapshot> {
 /** 右侧栏 tab 的 tab 体：套上与侧边栏一致的内边距后渲染区域 */
 function CompareTabBody({
   ctx,
+  hostInfo,
   actions,
   locale,
 }: {
+  /**
+   * better-sidebar 交给 tab 的那个 context
+   *
+   * **不能从它读服务依赖以外的东西**：它不是本包的 fiber，没有 inject 本包声明的
+   * 服务，而 cordis 的服务代理对未 inject 的属性直接抛错（`cannot get property
+   * "remote" without inject`），因此 `ctx.remote` 这类读取必须由调用方在**本包
+   * 自己的** context 上先解析好再传进来
+   */
   ctx: Context
+  /**
+   * 宿主固定事实源
+   *
+   * 由 `registerCompareTab` 在本包自己的 context 上起（那里 inject 了 `remote`），
+   * 这里只消费
+   */
+  hostInfo: SnapshotSource<HostInfo>
   actions: RegionActions
   locale: LocaleRuntime
 }): ReactElement {
@@ -130,6 +148,16 @@ function CompareTabBody({
     [useDirectoryFlowSource],
   )
 
+  // 宿主 home 与 directoryFlow 同理：它也是 inject 面 hooks 隔间里的一个源（见
+  // index.ts），对照模式没有 shell 注入，因此在这里包成同形的选择器。源本身由
+  // registerCompareTab 在本包自己的 context 上起好——tab 这个 context 读不到
+  // ctx.remote（见上面 ctx 的说明）
+  const useHostInfoSource = useMemo(() => useSnapshotSelector(hostInfo), [hostInfo])
+  const useHostInfo = useCallback(
+    (selector: (info: HostInfo) => unknown) => useHostInfoSource(selector),
+    [useHostInfoSource],
+  )
+
   return (
     <div className="wg-tab">
       <WorkspaceGroupsRegion
@@ -142,6 +170,7 @@ function CompareTabBody({
         useSessions={useSessions}
         useSessionPendingInteraction={useSessionPendingInteraction}
         useDirectoryFlow={useDirectoryFlow as never}
+        useHostInfo={useHostInfo as never}
       />
     </div>
   )
@@ -175,6 +204,14 @@ const EMPTY_FLOW: SnapshotSource<boolean> = {
   subscribe: () => () => {},
 }
 
+// 远端面缺失时的空宿主事实：home 未知，工作区卡片因此只显示原始路径（见
+// utils/pathUtils.ts 的缺省行为）。留这份兜底是因为 `remote` 虽在本包的 inject
+// 列表里，服务本身仍可能没人提供
+const EMPTY_HOST_INFO: SnapshotSource<HostInfo> = {
+  getSnapshot: () => ({ home: undefined }),
+  subscribe: () => () => {},
+}
+
 /**
  * 把分组区域注册成 better-sidebar 的一个右侧栏 tab
  *
@@ -184,7 +221,7 @@ const EMPTY_FLOW: SnapshotSource<boolean> = {
  *
  * `betterSidebar` 缺失时静默跳过：宿主半边与存储不受影响，
  * 只是对照界面不出现
- * @param ctx - 客户端根 context
+ * @param ctx - 客户端根 context（本包自己的，已 inject `remote`）
  * @param actions - 注入的动作与文案
  * @returns 反注册回调
  */
@@ -193,6 +230,14 @@ export function registerCompareTab(
   actions: RegionActions,
   locale: LocaleRuntime,
 ): () => void {
+  // 宿主固定事实源在本包自己的 context 上起：`ctx.remote` 要求 remote 在本
+  // context 的 inject 列表里，而 tab 拿到的那个 context 不是本包的 fiber，
+  // 在它上面读 `ctx.remote` 会直接抛「cannot get property "remote" without
+  // inject」。源起好后随组件传下去，tab 体只消费。
+  // `get` 不抛（属性代理才抛），因此用它判断服务是否真的有人提供
+  const remote = ctx.get('remote')
+  const hostInfo = remote === undefined ? EMPTY_HOST_INFO : hostInfoSource(ctx)
+
   // 注册可能发生在 betterSidebar 出现之后，因此把 disposer 放在外面：
   // 卸载时无论回调是否已经跑过都能正确收尾
   let disposeTab: (() => void) | undefined
@@ -210,7 +255,12 @@ export function registerCompareTab(
       order: 200,
       single: true,
       component: (tabProps) => (
-        <CompareTabBody ctx={tabProps.ctx} actions={actions} locale={locale} />
+        <CompareTabBody
+          ctx={tabProps.ctx}
+          hostInfo={hostInfo}
+          actions={actions}
+          locale={locale}
+        />
       ),
     })
 

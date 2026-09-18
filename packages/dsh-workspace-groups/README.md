@@ -45,6 +45,23 @@
 **同步注册进 DSH 原生右侧栏**，所以外部插件不需要直接碰 `ctx.sidebarRightTabs`。
 `betterSidebar` 缺失时静默跳过，宿主半边与存储不受影响。
 
+**tab 拿到的那个 context 不是本包的 fiber。** better-sidebar 把 tab 的
+`ctx` 交给 `component`，而它上面只 inject 了 better-sidebar 自己声明的服务。
+cordis 的服务代理对未 inject 的属性**直接抛错**（`cannot get property "remote"
+without inject`），因此区域需要的一切都必须由 `registerCompareTab` 在**本包自己的**
+context（那里 `inject` 里有 `remote`）上先解析好，再随 props 传进 tab 体：
+
+| 需要的东西 | 来源 |
+| --- | --- |
+| 全局 hook（`useSessions` / `useWorkspaces` / …） | tab 体自己用 `ctx.get(...)` 取服务再包成选择器——服务查找走 `get`，它不抛 |
+| 宿主 home（悬停卡片的路径缩写） | `registerCompareTab` 在本包 context 上起 `hostInfoSource`，随 props 传入 |
+| 文案座位 `t` | tab 体自己 `locale.bind(NS)` |
+
+只有 `ctx.get()` 与已 inject 的属性是安全的；`ctx.remote` 这类属性读取在 tab 体里
+一律会炸。`test/compareDom.test.tsx` 按 cordis 的代理语义造了一个会抛错的 tab
+context 并把组件渲染一遍，专门守这条边界——只调 `registerCompareTab` 的测试看不到
+它，因为异常要等 tab 真的挂上才发生。
+
 ## 已提供的功能
 
 - **添加工作区**：区域 header 右侧的图标入口，借用官方目录选择交互选中一个
@@ -80,6 +97,9 @@
   面板落在指针处（见「行右键菜单」）。
 - **行尾最近更新时间**：官方风格的紧凑相对时间，格式化完全复用官方原语与
   语言包（见「行尾最近更新时间」）。
+- **悬停详情卡片**：工作区行与会话行悬停后浮出官方 `HoverCard`，工作区那张给出
+  名称、目录路径与创建时刻，会话那张给出完整标题、相对时间与逐条状态；两张都可以
+  点一下复制被截断的那份值（见「悬停详情卡片」）。
 
 ### 工作区行与分组行的按钮形态
 
@@ -282,6 +302,69 @@
 空闲态**不画点但保留槽位**，因此标题的横向位置与工作区标题始终对齐。
 不认识的待交互种类（其他插件发布的）会被忽略，而不是画一个没有文案的点。
 
+### 悬停详情卡片
+
+工作区行与会话行悬停后浮出官方 `HoverCard`，把行上被截断的值补全。两张卡片都复用
+官方 `ui-workspace` 的既有实现与语言包，不另造浮层：
+
+| 行 | 卡片正文 | 点一下复制 |
+| --- | --- | --- |
+| 工作区 | 工作区名 / 目录路径（home 缩写）/ `创建于 2026年9月14日 03:31` | 完整目录路径 |
+| 会话 | 完整标题 / `5分钟前` / 逐条状态（状态点 + 文案） | 会话标题 |
+
+三种取舍与官方逐条对齐：
+
+- **缩写只影响排版**：POSIX home 及其后代缩成 `~` / `~/…`（`utils/pathUtils.ts`，
+  与官方 `abbreviateHomePath` 同规则，Windows 风格路径整条跳过），复制出去的仍是
+  完整路径。home 来自宿主固定事实 `ctx.remote.$host`，本包照官方 `hostInfo` 的做
+  法把这个源放进 inject 面的 `hooks` 隔间，由渲染器绑成 `useHostInfo` 选择器。
+- **会话卡片连空闲也列一条**（官方 `status.idle`），行首那个点则不画：两者从
+  `data/status.ts` 的 `sessionStatuses` 同一次推导出发，取舍只在 `rowStatusDot`
+  那一层，因此卡片与行首的点不会各说一套。卡片那份相对时间套官方 `time.ago` 的
+  「…前」模板，`刚刚` 那一档保持原样——官方注明「now ago」不成话。
+- **两种面板开着时都让位**：行内 `...` 菜单与行右键菜单。官方只抑制前者；本包多
+  出一个右键菜单，两处都叠卡片会互相遮挡，因此那两份开合状态一起参与判断（右键
+  菜单由此多暴露一个 `open`）。
+
+另有两条降级路径：宿主没加载官方 `ui-workspace` 时官方文案整体拿不到，卡片**整体
+不挂**而不是浮一个空壳；「未分组」桶的工作区行不是真实工作区（没有目录与创建时
+刻），官方在那里同样不给卡片，本包照此。空白（新建中）会话行的标题是语言包的占位
+文案而非会话内容，那张卡片只读、不带复制入口。
+
+卡片正文的样式取官方 `ui-workspace` 的三档文字色常量：卡片底色在两种主题下都是
+原语写死的深色（`--dsw-hovercard-bg`），因此**不能**用随主题翻转的
+`--dsw-alias-label-*`——浅色主题下那些是近黑色，落在深色卡片上会看不见。
+
+卡片那层包装（官方 `HoverCard` 的根节点是个 `display:block` 的 span）会让会话行
+不再是 `.wg-sessions` 的直接子项，因此层级缩进的选择器多写一档 `> * >`（见
+「层级缩进」）。
+
+#### 贴右缘时的翻转
+
+官方 `HoverCard` 自己算位置：取锚点矩形的 `right + 8` 当 `left`，**只夹垂直方向**，
+也没有给调用方任何方位选项。产品形态下区域在左侧栏，向右展开正好；对照模式下区域
+挂在右侧栏、贴着窗口右缘，卡片就会整块开到屏幕外。官方 `Menu` 的二级面板
+（`left: calc(100% + 10px)`）是同一个毛病。
+
+两处都靠 `body` 上的 `data-wg-flip` 标记翻转，但难点不同：
+
+| 浮层 | 位置来源 | 翻转方式 |
+| --- | --- | --- |
+| `Menu` 二级面板 | 样式表里的 `left` | 改 `left` / `right`，常规选择器即可 |
+| `HoverCard` 卡片 | 原语算出的**内联** `left`，随滚动与改变尺寸重写 | `!important` 压过内联样式 |
+
+卡片还多一层麻烦：它的盒子 portal 到 `document.body`，与官方左侧栏的卡片同处一个
+父节点，因此选择器必须限定在本包自己的卡片上——正文通过 `ref` 给自己那张卡片打上
+`data-wg-hover-card`，样式靠它区分。这个标记**刻意不清理**：正文在复制反馈的 1 秒里
+会被原语换成「已复制」提示，那次卸载若顺手摘掉标记，卡片刚好在用户盯着的时候弹回
+屏幕外。
+
+要不要翻由区域**实测**的矩形决定（`utils/flip.ts` 的 `flipPlacement` + `useFlipMarker`），
+而不是 `COMPARE_MODE` 常量：宿主列是拖出来的，编译期常量只能表达「在对照模式」，
+表达不了「此刻右边还剩多少地方」。落点写成卡片右缘距窗口右缘的距离，经
+`--wg-flip-right` 传给样式——用具体像素而不用 `calc(100vw - …)`，`100vw` 含滚动条
+宽度，与 fixed 定位的参照系不是同一个。
+
 ### 展开折叠的过渡
 
 折叠由 `CollapsibleBody` 套一层可收放的**轨道**：展开时轨道向下撑开，收起时收回，
@@ -386,6 +469,10 @@
 | 分组内会话 | `40px` | 同上 |
 
 缩进步进与层级结构效果参考取自 [`liceses/dsh-workspace-tree`](https://github.com/liceses/dsh-workspace-tree)
+
+挂上悬停卡片的会话行外面会多一层包装（官方 `HoverCard` 的根节点），行因此不再是
+`.wg-sessions` 的直接子项；缩进选择器为此把 `> .wg-row` 与 `> * > .wg-row` 两档
+都写着，有没有卡片缩进都一致。
 
 ### 未分组的工作区
 
@@ -623,9 +710,12 @@ picking 交互本身不重写：它整段来自官方 `sidebar.workspaces.direct
 | 行尾相对时间 | `relativeTime`（官方 `timeLabel` 用的同一个分桶函数，文案走官方语言包） |
 | 「添加工作区」入口提示 | `Tooltip`（与官方 header 同一 `delayMs` 与展开方向） |
 | 行内 `...` 菜单与行右键菜单 | `Menu`（右键那份走它的 `getAnchorRect`，官方 `WorkspacePickFlow` 用的同一入口） |
+| 工作区行与会话行的悬停详情 | `HoverCard`（外框、浮出时机与复制反馈都由原语拥有，本包只组装正文） |
 
 原语的样式属于 ui-theme / ui-primitives：本包不为它们写颜色、阈值或高亮，
-只在 `styles.ts` 里保留自己的布局约定。
+只在 `styles.ts` 里保留自己的布局约定。唯一的例外是悬停卡片正文那三档文字色
+（`.wg-hover-*`）：卡片底色由原语写死为深色，随主题翻转的色阶在上面读不出来，
+只能照官方 `ui-workspace` 的取值为卡片单独定色。
 
 两处刻意的取舍：
 
@@ -661,6 +751,11 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 `status.*` 等），本包字典里不存副本。这样官方改措辞时本包自动跟随，两处同屏
 也不会出现两套说法。这也是官方的既有做法：`ui-attachment` 就注册自己的
 命名空间，却用 `locale: "conversation"` 读 `ui-conversation` 的文案。
+
+悬停卡片的文案同样一个键都不用加：创建时刻取官方 `hover.created` + `date.ymd`，
+复制提示取 `common` 的通用词 `copy`、成功反馈取 `hover.copied`，卡片那份相对
+时间取 `time.ago`；会话卡片里「空闲」那一条取官方的 `status.idle`——行首不画点
+但卡片要把它列出来，那个词官方本来就有，不另造。
 
 本包字典只剩官方没有对应词的 10 个键：`actions.group.aria` / `newGroup` /
 `renameGroup` / `deleteGroup` / `groupNamePrompt` / `delete.desc.group` /
@@ -824,6 +919,8 @@ src/client/
 ├── labels.ts                   文案契约与投影（TranslateNS → RegionLabels）
 ├── official.ts                 官方 workspace 语言包与相对时间的复用面
 ├── directoryFlow.ts            官方 directoryFlow 洞的占用者读数（添加工作区的交互来源）
+├── hostInfo.ts                 宿主固定事实（home 目录）的读数（悬停卡片的路径缩写要用）
+├── useFlipMarker.ts            量区域矩形、按需在 body 上挂浮层翻转标记
 ├── actions.ts                  RegionActions / RegionDataHooks（组件与宿主的接口）
 ├── compare.tsx                 对照模式：挂进 better-sidebar 右侧栏 tab
 ├── remote.ts                   Remote 贡献声明与调用封装
@@ -837,18 +934,21 @@ src/client/
 │   ├── search.ts               按标题搜索（查询净化、匹配、排序与截断）
 │   └── sessions.ts             会话快照 → 渲染行（含可见性过滤、空白行命名、未分组收集）
 ├── utils/                      组件与样式表共用的零散常量
-│   └── collapseMotion.ts       折叠动画节奏常量（只 import React 类型，运行时无依赖）
+│   ├── collapseMotion.ts       折叠动画节奏常量（只 import React 类型，运行时无依赖）
+│   ├── flip.ts                 浮层翻转的几何判定与标记名（纯函数，无 React 依赖）
+│   └── pathUtils.ts             目录路径的 `~` 缩写（与官方同规则）
 └── components/
     ├── WorkspaceGroupsRegion.tsx   区域容器：状态与编排
     ├── RegionHeader.tsx            区域 section header（标题 + 搜索 + 入口组）
     ├── SearchControl.tsx           搜索状态、入口、输入框与结果列表
     ├── AddWorkspaceControl.tsx     「添加工作区」入口与 picking 流程
     ├── WorkspaceSection.tsx        一个工作区区块（标题 + 折叠体 + 空态）
-    ├── WorkspaceRow.tsx            工作区标题行（文件夹/箭头、`...`、`+`）
+    ├── WorkspaceRow.tsx            工作区标题行（文件夹/箭头、`...`、`+`、悬停卡片）
     ├── GroupSection.tsx            一个分组（分组头 + 组内会话）
     ├── CollapsibleBody.tsx         折叠体（撑开/收回/行逐个淡入）
+    ├── HoverCards.tsx              悬停卡片的正文（工作区那张与会话那张）
     ├── RowActions.tsx              容器行行尾操作位（`...` 菜单 + `+`），两行共用
-    ├── SessionRowView.tsx          会话行外壳（状态位列、标题、时间、操作位）
+    ├── SessionRowView.tsx          会话行外壳（状态位列、标题、时间、操作位、悬停卡片）
     ├── SessionRowMenu.tsx          带会话操作菜单的会话行
     ├── RowContextMenu.tsx          行右键菜单（指针定位、与 `...` 菜单共用条目与分派）
     ├── WorkspaceRail.tsx           窄栏展开入口

@@ -7,14 +7,25 @@
  *
  * 「新建分组」不像「新建会话」那样高频，因此不占行内位置，收进菜单。未分组桶
  * 没有工作区归属，管理回调都不传，行尾操作位整体不渲染
+ *
+ * 悬停后浮出官方 `HoverCard`：卡片里是工作区名、目录路径（home 缩写）与绝对创建
+ * 时刻，整卡可点即复制完整路径。未分组桶不是真实工作区（没有目录与创建时刻），
+ * 官方在那里同样不给卡片，因此 `hover` 缺省即整卡不渲染
  */
 import { useState } from 'react'
 import type { ReactElement } from 'react'
-import { IconFolderClose16, IconFolderOpen16, IconTriangleRightFill14 } from '../runtime.ts'
+import {
+  HoverCard,
+  IconFolderClose16,
+  IconFolderOpen16,
+  IconTriangleRightFill14,
+} from '../runtime.ts'
 import { ROW_MENU, WORKSPACE_MENU, buildRowContextMenuItems, buildWorkspaceMenuItems } from '../menus.tsx'
 import { RowActions } from './RowActions.tsx'
+import { WorkspaceHoverContent } from './HoverCards.tsx'
 import { useRowContextMenu } from './RowContextMenu.tsx'
 import { handleRowKeyDown } from './rowKeyboard.ts'
+import type { OfficialHoverLabels } from '../official.ts'
 
 /** 工作区标题行的文案与无障碍标签 */
 export interface WorkspaceRowLabels {
@@ -32,6 +43,16 @@ export interface WorkspaceRowLabels {
   delete: string
 }
 
+/** 工作区悬停卡片要显示的正文 */
+export interface WorkspaceHoverData {
+  /** 工作区名 */
+  label: string
+  /** 已按宿主 home 缩写的目录路径 */
+  path: string
+  /** 绝对创建时刻文案 */
+  created: string
+}
+
 export interface WorkspaceRowProps {
   title: string
   collapsed: boolean
@@ -43,6 +64,12 @@ export interface WorkspaceRowProps {
   onNewGroup?: () => void
   onRename?: () => void
   onDelete?: () => void
+  /** 悬停卡片正文；缺省表示该行不挂卡片（未分组桶） */
+  hover?: WorkspaceHoverData | undefined
+  /** 悬停卡片可复制的内容，取完整目录路径；缺省表示卡片只读 */
+  hoverCopy?: string | undefined
+  /** 悬停卡片的文案 */
+  hoverLabels?: OfficialHoverLabels | undefined
   labels: WorkspaceRowLabels
 }
 
@@ -55,6 +82,9 @@ export function WorkspaceRow({
   onNewGroup,
   onRename,
   onDelete,
+  hover,
+  hoverCopy,
+  hoverLabels,
   labels,
 }: WorkspaceRowProps): ReactElement {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -95,7 +125,7 @@ export function WorkspaceRow({
     onSelect: select,
   })
 
-  return (
+  const row = (
     <div
       className={'wg-workspace-head' + (menuOpen ? ' wg-row-menu-open' : '')}
       role="button"
@@ -125,5 +155,24 @@ export function WorkspaceRow({
         }
       />
     </div>
+  )
+
+  // 没有正文（未分组桶）或拿不到官方文案时不挂浮层：卡片里那几行文案与复制反馈
+  // 都属官方语言包，缺了它们只会浮出一个空壳
+  if (hover === undefined || hoverLabels === undefined) return row
+
+  return (
+    <HoverCard
+      anchor={row}
+      content={
+        <WorkspaceHoverContent label={hover.label} path={hover.path} created={hover.created} />
+      }
+      // 两种面板开着时都不挂卡片：行内 `...` 菜单与行右键菜单
+      disabled={menuOpen || contextMenu.open}
+      // 复制的是完整路径而不是卡片里那份缩写：缩写只是排版，用户要的是能直接用的路径
+      copyText={hoverCopy}
+      copyLabel={hoverLabels.copy}
+      copiedLabel={hoverLabels.copied}
+    />
   )
 }

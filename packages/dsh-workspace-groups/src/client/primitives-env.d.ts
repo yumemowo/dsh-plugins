@@ -84,6 +84,25 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     children?: ReactNode
   }) => ReactNode
 
+  /**
+   * 悬停详情卡片；指针在锚点上停留一段时间后在它右侧浮出内容
+   *
+   * 给了 `copyText` 时卡片整体可点即复制，并额外给出一个读屏状态位：
+   * `copyLabel` 是它的无障碍标签，`copiedLabel` 是复制成功后就地替换显示的反馈。
+   * 不给 `copyText` 时卡片只读
+   */
+  export const HoverCard: (props: {
+    anchor: ReactNode
+    content: ReactNode
+    /** 指针停留多久才浮出；原语默认 500ms */
+    openDelayMs?: number
+    /** 为真时不显示，用于菜单展开等不该再叠一层浮层的时刻 */
+    disabled?: boolean
+    copyText?: string | undefined
+    copyLabel?: string
+    copiedLabel?: string
+  }) => ReactNode
+
   /** 居中对话框；页脚按钮由调用方组装 */
   export const Modal: (props: {
     open: boolean

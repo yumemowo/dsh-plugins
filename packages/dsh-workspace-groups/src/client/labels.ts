@@ -15,9 +15,10 @@
  */
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
-import { officialAddLabels, officialSearchLabels } from './official.ts'
+import { officialAddLabels, officialHoverLabels, officialSearchLabels } from './official.ts'
 import type {
   OfficialAddLabels,
+  OfficialHoverLabels,
   OfficialSearchLabels,
   SidebarTranslate,
   WorkspaceTranslate,
@@ -37,6 +38,12 @@ export interface SessionStatusLabels {
   waitingAnswer: string
   /** 本轮已完成、尚未打开（绿色提醒点） */
   completed: string
+  /**
+   * 空闲
+   *
+   * 行首不画点，但悬停卡片要像官方一样把它列成一条，因此这一格仍需有文案
+   */
+  idle: string
 }
 
 /** 区域组件消费的文案表 */
@@ -99,6 +106,8 @@ export interface RegionLabels {
   ungroup: string
   /** 会话状态位的无障碍文案 */
   status: SessionStatusLabels
+  /** 工作区与会话行的悬停详情卡片文案 */
+  hover: OfficialHoverLabels
   /** 「添加工作区」入口与失败错误框的文案 */
   add: OfficialAddLabels
   /** 搜索入口、输入框与结果列表的文案 */
@@ -157,7 +166,9 @@ export function regionLabels(
       planReview: tw('status.planReview'),
       waitingAnswer: tw('status.waitingAnswer'),
       completed: tw('status.completed'),
+      idle: tw('status.idle'),
     },
+    hover: officialHoverLabels(tw),
     compareTabDescription: t('compareTabDescription'),
     add: officialAddLabels(tw),
     search: officialSearchLabels(tw),

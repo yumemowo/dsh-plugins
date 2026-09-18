@@ -574,11 +574,19 @@ export const CSS = `
 /* 层级缩进：工作区行（第 0 层）保持官方的 8px，以下每层再让出 16px，因此
    子级内容落在 8 + 16 × 深度上。深度只有三层且固定，直接按结构写死选择器，
    比在 JSX 里逐行下发内联 style 更好读，也不给行组件添 props。
-   —— 分组头 24px、分组内会话 40px、工作区直接子会话 24px */
+   —— 分组头 24px、分组内会话 40px、工作区直接子会话 24px
+
+   会话行多出「> *」那一档：挂了悬停卡片的行被官方 HoverCard 的根节点包了一层
+   （那是个 display:block 的 span），行就不再是 .wg-sessions 的直接子项。两条都写，
+   有没有卡片缩进都一致 */
 .wg-workspace-head { padding: 0 8px; }
 .wg-group-head { padding: 0 8px 0 24px; }
-.wg-workspace-body > .wg-sessions > .wg-row { padding-left: 24px; }
-.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions > .wg-row { padding-left: 40px; }
+.wg-workspace-body > .wg-sessions > .wg-row,
+.wg-workspace-body > .wg-sessions > * > .wg-row { padding-left: 24px; }
+.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions > .wg-row,
+.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions > * > .wg-row {
+  padding-left: 40px;
+}
 
 /* 竖向引导线：落在父级图标列的中心（工作区 8 + 16/2 = 16，分组 24 + 16/2 = 32），
    把「这组行属于上一行」画出来。行本身是 position: relative 的定位元素，按树序
@@ -797,17 +805,64 @@ export const CSS = `
   line-height: 18px;
 }
 
-/* 官方二级菜单面板固定向右展开（left: calc(100% + 10px)）。对照模式下
-   区域挂在右侧栏、贴近窗口右缘，面板会开出屏幕外：宿主在 body 上挂
-   data-wg-menu-flip 标记（由 COMPARE_MODE 决定），样式只在该标记下把
-   面板翻到列表左侧，不依赖官方 hash 类名 */
-body[data-wg-menu-flip] [role='menu'] [role='menu'] {
+/* 悬停详情卡片的正文。卡片外框（宽度、内边距、圆角、投影、底色）全属官方
+   HoverCard 原语，这里只排它内部这几行
+
+   三档文字色与官方 ui-workspace 的 hover 卡片同值：卡片底色在两种主题下都是原语
+   写死的深色（--dsw-hovercard-bg 为 #2C2C2E），因此**不能**用随主题翻转的
+   --dsw-alias-label-*——浅色主题下那些是近黑色，落在深色卡片上会看不见 */
+.wg-hover-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wg-hover-title {
+  color: #fff;
+  overflow-wrap: break-word;
+  font-size: 14px;
+  line-height: 20px;
+}
+.wg-hover-path {
+  color: #cfd3d6;
+  word-break: break-all;
+  font-size: 12px;
+  line-height: 16px;
+}
+.wg-hover-time {
+  color: #cfd3d6;
+  font-size: 12px;
+  line-height: 16px;
+}
+.wg-hover-status {
+  color: #adb2b8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+/* 官方浮层都固定向右展开，对照模式下区域挂在右侧栏、贴近窗口右缘，它们会开到
+   屏幕外。区域量出自己的矩形后、在放不下时才于 body 上挂 data-wg-flip 标记，
+   样式只在该标记下把这些浮层翻到列表左侧，不依赖官方 hash 类名 */
+body[data-wg-flip] [role='menu'] [role='menu'] {
   left: auto;
   right: calc(100% + 10px);
 }
-body[data-wg-menu-flip] [role='menu'] [role='menu']::before {
+body[data-wg-flip] [role='menu'] [role='menu']::before {
   left: auto;
   right: -10px;
+}
+
+/* 悬停卡片的位置由官方原语算成内联的 left，只有 !important 压得过它；原语在滚动
+   与改变尺寸时重算的也是同一条内联声明，因此这里不会被它重写覆盖。
+
+   落点取 body 上的 --wg-flip-right（卡片右缘距窗口右缘的距离），由区域量得。
+   选择器只用本包给卡片打的标记：卡片 portal 到 document.body，与官方左侧栏的
+   卡片同处一个父节点，不加这层限定会连官方卡片一起翻出屏幕 */
+body[data-wg-flip] [data-wg-hover-card] {
+  left: auto !important;
+  right: var(--wg-flip-right) !important;
 }
 
 .wg-empty {

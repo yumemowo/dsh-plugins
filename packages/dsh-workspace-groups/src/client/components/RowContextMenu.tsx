@@ -68,6 +68,13 @@ export interface RowContextMenu {
   onContextMenu: ((event: RowContextMenuEvent) => void) | undefined
   /** 随行渲染的菜单元素；没有菜单时为 null */
   menu: ReactElement | null
+  /**
+   * 右键面板是否开着
+   *
+   * 面板是第二处会浮在行上的东西（行内 `...` 菜单是另一处），悬停卡片据此在
+   * 两种面板开着时都让位，否则同一个位置会叠上两层浮层
+   */
+  open: boolean
 }
 
 export function useRowContextMenu({ items, onSelect }: RowContextMenuOptions): RowContextMenu {
@@ -85,10 +92,13 @@ export function useRowContextMenu({ items, onSelect }: RowContextMenuOptions): R
     setAnchor(rectAt(event))
   }, [])
 
-  if (items === undefined || items.length === 0) return { onContextMenu: undefined, menu: null }
+  if (items === undefined || items.length === 0) {
+    return { onContextMenu: undefined, menu: null, open: false }
+  }
 
   return {
     onContextMenu,
+    open: anchor !== null,
     menu: (
       <Menu
         open={anchor !== null}

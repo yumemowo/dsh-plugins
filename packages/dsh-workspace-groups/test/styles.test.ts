@@ -522,4 +522,91 @@ describe('client stylesheet', () => {
     // 一个只给分隔符用的颜色规则
     expect(bodyOf('.wg-search-result-separator')).toBe('')
   })
+
+  it('indents a session row whether or not a hover card wraps it', () => {
+    // 挂了悬停卡片的会话行会被官方 HoverCard 的根节点包一层，行就不再是
+    // .wg-sessions 的直接子项。两条选择器都要在，缩进才不会因为有没有卡片而不同
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    /** 某条选择器声明的 padding-left */
+    const indentOf = (selector: string): string | undefined =>
+      rules
+        .filter((rule) => rule.selectors.includes(selector))
+        .map((rule) => /padding-left:\s*([^;]+)/.exec(rule.body)?.[1]?.trim())
+        .find((value) => value !== undefined)
+
+    const wrapped = '.wg-workspace-body > .wg-sessions > * > .wg-row'
+    const groupedWrapped =
+      '.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions > * > .wg-row'
+
+    expect(indentOf(wrapped)).toBe('24px')
+    expect(indentOf(groupedWrapped)).toBe('40px')
+  })
+
+  it('paints the hover card text for a dark card rather than a theme-tinted one', () => {
+    // 卡片底色在两种主题下都是原语写死的深色，因此三档文字色必须是浅色常量：
+    // 用随主题翻转的 --dsw-alias-label-* 会在浅色主题下变成近黑的字压在深色卡片上
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    for (const selector of [
+      '.wg-hover-title',
+      '.wg-hover-path',
+      '.wg-hover-time',
+      '.wg-hover-status',
+    ]) {
+      const body = bodyOf(selector)
+      expect(body, `${selector} is missing`).not.toBe('')
+      expect(body, `${selector} must not use a theme-tinted label token`).not.toContain(
+        '--dsw-alias-label',
+      )
+    }
+
+    // 长路径要能断行，否则卡片那 244px 宽的盒子里会被撑破
+    expect(bodyOf('.wg-hover-path')).toMatch(/word-break:\s*break-all/)
+    // 标题同理：行上被省略号截断，卡片就是「看清全名」的入口
+    expect(bodyOf('.wg-hover-title')).toMatch(/overflow-wrap:\s*break-word/)
+
+    // 状态行是「点 + 文案」，间距取官方卡片那 8px
+    expect(bodyOf('.wg-hover-status')).toMatch(/gap:\s*8px/)
+    expect(bodyOf('.wg-hover-content')).toMatch(/gap:\s*8px/)
+  })
+
+  it('flips the official floating panels only under the body marker', () => {
+    // 官方浮层固定向右展开，对照模式下区域贴窗口右缘会把它们顶到屏幕外。翻转必须
+    // 收在 body 的标记之下：产品形态（左侧栏）要保留原语的向右展开
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 二级菜单面板：翻到列表左侧，并把它那条「悬停缓冲区」伪元素一起翻过去
+    expect(bodyOf("body[data-wg-flip] [role='menu'] [role='menu']")).toMatch(/right:\s*calc\(100% \+ 10px\)/)
+    expect(bodyOf("body[data-wg-flip] [role='menu'] [role='menu']::before")).toMatch(/right:\s*-10px/)
+
+    // 悬停卡片：位置是原语算出来的内联 left，只有 !important 压得过；落点取 body
+    // 上那个由宿主量得的变量
+    const card = bodyOf('body[data-wg-flip] [data-wg-hover-card]')
+    expect(card).toMatch(/left:\s*auto\s*!important/)
+    expect(card).toMatch(/right:\s*var\(--wg-flip-right\)\s*!important/)
+
+    // 选择器必须带本包的卡片标记：卡片 portal 到 document.body，与官方左侧栏的
+    // 卡片同处一个父节点，少了这层限定会把官方卡片一起翻出屏幕
+    expect(card).not.toBe('')
+    for (const rule of rules) {
+      if (!/--wg-flip-right/.test(rule.body)) continue
+      expect(rule.selectors.some((s) => s.includes('[data-wg-hover-card]'))).toBe(true)
+    }
+  })
 })

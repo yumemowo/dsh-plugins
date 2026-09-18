@@ -8,7 +8,8 @@ import type { ReactElement, ReactNode } from "react";
 import { CollapsibleBody } from "./CollapsibleBody.tsx";
 import { GroupSection } from "./GroupSection.tsx";
 import { WorkspaceRow } from "./WorkspaceRow.tsx";
-import type { WorkspaceRowLabels } from "./WorkspaceRow.tsx";
+import type { WorkspaceHoverData, WorkspaceRowLabels } from "./WorkspaceRow.tsx";
+import type { OfficialHoverLabels } from "../official.ts";
 import type { SessionRow, WorkspaceLayout } from "../data/types.ts";
 
 export interface WorkspaceSectionProps {
@@ -34,6 +35,12 @@ export interface WorkspaceSectionProps {
     /** `+` 按钮的无障碍标签，取分组名 */
     newSession: (name: string) => string;
   };
+  /** 工作区行悬停卡片的正文；缺省表示不挂卡片 */
+  hover?: WorkspaceHoverData | undefined;
+  /** 悬停卡片可复制的内容，取完整目录路径 */
+  hoverCopy?: string | undefined;
+  /** 悬停卡片的文案；缺省表示官方文案不在场，卡片整体不挂 */
+  hoverLabels?: OfficialHoverLabels | undefined;
   onToggle: () => void;
   onCreateSession: () => void;
   onNewGroup: () => void;
@@ -70,6 +77,9 @@ export function WorkspaceSection({
   labels,
   emptyLabel,
   groupActionLabels,
+  hover,
+  hoverCopy,
+  hoverLabels,
   onToggle,
   onCreateSession,
   onNewGroup,
@@ -93,6 +103,9 @@ export function WorkspaceSection({
         onNewGroup={onNewGroup}
         onRename={onRenameWorkspace}
         onDelete={onDeleteWorkspace}
+        hover={hover}
+        hoverCopy={hoverCopy}
+        hoverLabels={hoverLabels}
         labels={labels}
       />
       <CollapsibleBody open={!collapsed}>

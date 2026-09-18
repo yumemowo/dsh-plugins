@@ -40,6 +40,7 @@ import { NS, en, zh } from './locales.ts'
 import { officialAddLabels, officialSessionLabels, timeLabel } from './official.ts'
 import type { RegionActions, AddWorkspaceActions, OfficialSessionActions } from './actions.ts'
 import { directoryFlowOccupant, directoryFlowSource } from './directoryFlow.ts'
+import { hostInfoSource } from './hostInfo.ts'
 import { WorkspaceGroupsRegion } from './components/WorkspaceGroupsRegion.tsx'
 import { insertStyles } from './styles.ts'
 
@@ -240,17 +241,24 @@ export function apply(ctx: Context): void {
   /**
    * 注入面
    *
-   * 除动作外还带一个 `hooks` 隔间：渲染器会把里面的每个源绑成同名的选择器
-   * hook 交给组件（`directoryFlow` → `useDirectoryFlow`），官方
-   * `WorkspaceBrowserInjected` 用的就是这套机制。洞的占用情况因此是可订阅的，
-   * 目录选择器插件晚于本包加载时入口按钮照样会出现
+   * 除动作外还带一个 `hooks` 隔间：渲染器会把里面的每个源绑成
+   * `use<Source>` 选择器 hook 交给组件（`directoryFlow` → `useDirectoryFlow`、
+   * `hostInfo` → `useHostInfo`），官方 `WorkspaceBrowserInjected` 用的就是这套
+   * 机制。洞的占用情况因此是可订阅的，目录选择器插件晚于本包加载时入口按钮照样
+   * 会出现；宿主的 home 也同理可订阅（首个 ready 帧到达前是空的）
    */
   type InjectedFace = RegionActions & {
-    hooks: { directoryFlow: ReturnType<typeof directoryFlowSource> }
+    hooks: {
+      directoryFlow: ReturnType<typeof directoryFlowSource>
+      hostInfo: ReturnType<typeof hostInfoSource>
+    }
   }
 
   const injected = (): InjectedFace => {
-    const hooks = { directoryFlow: directoryFlowSource(ctx.slots) }
+    const hooks = {
+      directoryFlow: directoryFlowSource(ctx.slots),
+      hostInfo: hostInfoSource(ctx),
+    }
     if (sessions === undefined || workspaces === undefined) {
       // 依赖缺失时给出空实现：组件仍可渲染，只是没有可操作的动作。
       return {
@@ -339,25 +347,6 @@ export function apply(ctx: Context): void {
 
   // 样式随插件挂载注入；卸载由模块系统的样式记账处理，无需显式移除。
   insertStyles()
-
-  /**
-   * 二级菜单面板的展开方向标记
-   *
-   * 对照模式下区域在右侧栏、贴近窗口右缘，官方 Menu 的二级面板固定
-   * 向右展开会开出屏幕外，样式表只在该标记下把面板翻向左侧。
-   * 用编译期常量做参考而不是运行期测量：宿主列由 COMPARE_MODE 唯一
-   * 决定，插件卸载时 effect 收尾会摘掉标记
-   */
-  ctx.effect(
-    () => {
-      if (typeof document === 'undefined' || !COMPARE_MODE) return () => {}
-      document.body.setAttribute('data-wg-menu-flip', '')
-      return () => {
-        document.body.removeAttribute('data-wg-menu-flip')
-      }
-    },
-    'workspace-groups: menu flip marker',
-  )
 
   // 对照模式：把左侧 `sidebar.workspaces` 交还官方 ui-workspace，
   // 本区域改挂进 dsh-better-sidebar 的右侧栏 tab，好和官方渲染同屏比对。

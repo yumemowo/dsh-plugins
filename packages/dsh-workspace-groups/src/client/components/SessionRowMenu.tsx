@@ -18,11 +18,12 @@ import type { ReactElement } from 'react'
 import { IconEllipsisOutline16, Menu } from '../runtime.ts'
 import { buildSessionMenuItems } from '../menus.tsx'
 import { sameGroupSections } from '../data/layout.ts'
-import { sameSessionStatus } from '../data/status.ts'
+import { sameSessionStatuses } from '../data/status.ts'
 import { SessionRowView } from './SessionRowView.tsx'
 import { useRowContextMenu } from './RowContextMenu.tsx'
 import { NameDialog } from './dialogs/NameDialog.tsx'
 import type { OfficialSessionActions } from '../actions.ts'
+import type { OfficialHoverLabels } from '../official.ts'
 import type { RegionTranslate } from '../locales.ts'
 import type { SessionStatus } from '../data/status.ts'
 import type { GroupSection, SessionRow } from '../data/types.ts'
@@ -62,6 +63,12 @@ export interface SessionRowMenuProps {
   status?: SessionStatus | undefined
   /** 行尾相对时间文案；空白行不显示 */
   time?: string | undefined
+  /** 该行悬停卡片里逐条列出的状态；缺省回退成只有 `status` 一条 */
+  statuses?: readonly SessionStatus[] | undefined
+  /** 悬停卡片里的相对时间文案（`5分钟前`）；缺省时卡片里不显示这一行 */
+  hoverTime?: string | undefined
+  /** 悬停卡片的文案；缺省表示官方文案不在场，卡片整体不挂 */
+  hoverLabels?: OfficialHoverLabels | undefined
   /** 归组上下文；缺省时菜单里没有归组项 */
   grouping?: SessionGroupingContext | undefined
   /** 官方三项会话操作；缺省时菜单里没有官方三项 */
@@ -111,12 +118,16 @@ function sameGrouping(
  * 传进来的都是原语或稳定引用，因此逐格比即可；状态位与归组上下文按内容比
  */
 function sameRowMenuProps(prev: SessionRowMenuProps, next: SessionRowMenuProps): boolean {
+  const prevStatuses = prev.statuses ?? (prev.status === undefined ? [] : [prev.status])
+  const nextStatuses = next.statuses ?? (next.status === undefined ? [] : [next.status])
   return (
     prev.row === next.row &&
     prev.title === next.title &&
     prev.selected === next.selected &&
     prev.time === next.time &&
-    sameSessionStatus(prev.status, next.status) &&
+    prev.hoverTime === next.hoverTime &&
+    prev.hoverLabels === next.hoverLabels &&
+    sameSessionStatuses(prevStatuses, nextStatuses) &&
     prev.official === next.official &&
     prev.onOpenSession === next.onOpenSession &&
     prev.actionsLabel === next.actionsLabel &&
@@ -132,6 +143,9 @@ function SessionRowMenuView({
   selected,
   status,
   time,
+  statuses,
+  hoverTime,
+  hoverLabels,
   grouping,
   official,
   onOpenSession,
@@ -178,7 +192,14 @@ function SessionRowMenuView({
         selected={selected}
         status={status}
         time={time}
+        statuses={statuses}
+        hoverTime={hoverTime}
+        // 空白行由调用方整段不渲染，因此走到这里的标题一定是会话内容，可复制
+        hoverCopy={title}
+        hoverLabels={hoverLabels}
         menuOpen={menuOpen}
+        // 卡片要在两种面板开着时都让位：行内 `...` 菜单与行右键菜单
+        hoverDisabled={menuOpen || contextMenu.open}
         onOpenSession={onOpenSession}
         onReveal={onReveal}
         onContextMenu={contextMenu.onContextMenu}
@@ -188,8 +209,8 @@ function SessionRowMenuView({
             onClose={() => setMenuOpen(false)}
             onSelect={select}
             // portal 进 document.body：本区域的列表容器 overflow 裁剪会把
-            // 就近渲染的菜单裁掉。二级面板的方向由宿主挂的 body 标记控制
-            //（见 index.ts），这里不感知宿主差异
+            // 就近渲染的菜单裁掉。二级面板的方向由区域挂在 body 上的翻转标记
+            // 控制（见 useFlipMarker），这里不感知宿主差异
             portal
             closeOnPointerLeave
             anchor={

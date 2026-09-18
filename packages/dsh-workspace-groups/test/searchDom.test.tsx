@@ -48,6 +48,8 @@ function props(wide = true): WorkspaceGroupsProps {
     useSessionPendingInteraction: ((select: (s: unknown) => unknown) =>
       select(new Map())) as never,
     useDirectoryFlow: ((select: (occupied: boolean) => unknown) => select(true)) as never,
+    useHostInfo: ((select: (info: { home: string | undefined }) => unknown) =>
+      select({ home: undefined })) as never,
     openSession: () => {},
     startSession: async () => 'fresh',
     loadGroups: async () => ({ w1: [{ id: 'g1', name: '前端', sessionIds: ['a'] }] }),
