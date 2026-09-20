@@ -27,6 +27,12 @@ const groupIdCodec = {
   schema: z.string(),
 }
 
+const virtualWorkspaceIdCodec = {
+  mode: 'strict',
+  typeSymbol: '@your-scope/dsh-workspace-groups#VirtualWorkspaceId',
+  schema: z.string(),
+}
+
 const sessionIdCodec = {
   mode: 'strict',
   typeSymbol: '@your-scope/dsh-workspace-groups#SessionId',
@@ -98,12 +104,28 @@ export const TYPERT = {
       { name: 'sessionId', wire: 'sessionId', codec: sessionIdCodec },
       { name: 'groupId', wire: 'groupId', codec: nullableGroupIdCodec },
     ]),
+    direct('createVirtualWorkspace', [{ name: 'name', wire: 'name', codec: nameCodec }]),
+    direct('renameVirtualWorkspace', [
+      { name: 'groupId', wire: 'groupId', codec: virtualWorkspaceIdCodec },
+      { name: 'name', wire: 'name', codec: nameCodec },
+    ]),
+    direct('deleteVirtualWorkspace', [
+      { name: 'groupId', wire: 'groupId', codec: virtualWorkspaceIdCodec },
+    ]),
+    direct('moveWorkspace', [
+      { name: 'workspaceId', wire: 'workspaceId', codec: workspaceIdCodec },
+      { name: 'groupId', wire: 'groupId', codec: nullableGroupIdCodec },
+    ]),
+    direct('forgetWorkspace', [
+      { name: 'workspaceId', wire: 'workspaceId', codec: workspaceIdCodec },
+    ]),
   ],
   model: {
     services: [
       {
-        description: '按工作区维护会话分组。',
-        summary: '会话分组的读写；分组只保存结构信息，不改变工作区的会话归属。',
+        description: '按工作区维护会话分组，并在根节点维护工作区分组。',
+        summary:
+          '会话分组与工作区分组的读写；两者都只保存结构信息，不改变工作区或会话本身的归属。',
         tags: [],
         jsDoc: '/** 按工作区维护会话分组。 */',
         key: SERVICE,
@@ -132,13 +154,45 @@ export const TYPERT = {
             signature:
               'moveSession(workspaceId: string, sessionId: string, groupId: string | null): Promise<WorkspaceGroupsSnapshot>',
           },
+          {
+            kind: 'method',
+            name: 'createVirtualWorkspace',
+            signature: 'createVirtualWorkspace(name: string): Promise<WorkspaceGroupsSnapshot>',
+          },
+          {
+            kind: 'method',
+            name: 'renameVirtualWorkspace',
+            signature:
+              'renameVirtualWorkspace(groupId: string, name: string): Promise<WorkspaceGroupsSnapshot>',
+          },
+          {
+            kind: 'method',
+            name: 'deleteVirtualWorkspace',
+            signature: 'deleteVirtualWorkspace(groupId: string): Promise<WorkspaceGroupsSnapshot>',
+          },
+          {
+            kind: 'method',
+            name: 'moveWorkspace',
+            signature:
+              'moveWorkspace(workspaceId: string, groupId: string | null): Promise<WorkspaceGroupsSnapshot>',
+          },
+          {
+            kind: 'method',
+            name: 'forgetWorkspace',
+            signature: 'forgetWorkspace(workspaceId: string): Promise<WorkspaceGroupsSnapshot>',
+          },
         ],
         types: [
           { name: 'Group', declaration: 'export interface Group { id: string; name: string; sessionIds: string[] }' },
           {
+            name: 'VirtualWorkspace',
+            declaration:
+              'export interface VirtualWorkspace { id: string; name: string; workspaceIds: string[] }',
+          },
+          {
             name: 'WorkspaceGroupsSnapshot',
             declaration:
-              'export interface WorkspaceGroupsSnapshot { byWorkspace: Record<string, Group[]> }',
+              'export interface WorkspaceGroupsSnapshot { byWorkspace: Record<string, Group[]>; workspaceGroups: VirtualWorkspace[] }',
           },
         ],
       },

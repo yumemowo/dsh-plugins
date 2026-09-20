@@ -244,6 +244,58 @@ describe('client stylesheet', () => {
     expect(rules.some((rule) => rule.selectors.includes('.wg-header-action:disabled'))).toBe(true)
   })
 
+  it('sizes the header entry group for every entry it can show', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 容器带 overflow:hidden，而宽栏能同时出现三个 28px 入口（视图选项 /
+    // 新建工作区分组 / 添加工作区），因此宽度上限必须容得下 28*3 + 4*2 = 92。
+    // 给小了不会报错，只是把最右边那个入口整个裁掉——界面上平白少一个按钮
+    const cap = /max-width:\s*(\d+)px/.exec(bodyOf('.wg-header-actions'))?.[1]
+    expect(cap).toBe('92')
+    expect(bodyOf('.wg-header-actions')).toMatch(/overflow:\s*hidden/)
+  })
+
+  it('gives the workspace group row the same folder/chevron swap as a workspace row', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim().replace(/\s+/g, ' ')),
+      body: m[2] ?? '',
+    }))
+    /** 某个选择器是否在规则表里，且声明匹配 */
+    const has = (selector: string, pattern: RegExp): boolean =>
+      rules.some((rule) => rule.selectors.includes(selector) && pattern.test(rule.body))
+
+    // 分组头复用工作区行那一套两个槽：静止显示文件夹、悬停换成箭头。
+    // 少了分组头这几条，它的箭头会常驻（或文件夹不会让位），与工作区行不一致
+    const head = '.wg-virtual-workspace-head'
+    expect(has(`${head} .wg-chevron`, /display:\s*none/)).toBe(true)
+    expect(has(`${head}:hover .wg-chevron`, /display:\s*inline-flex/)).toBe(true)
+    expect(has(`${head}:hover .wg-folder`, /display:\s*none/)).toBe(true)
+  })
+
+  it('stacks the rail entries instead of clipping them', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 窄栏一行放不下两个 36px 入口，因此改成竖排；定高与裁剪都要撤掉，
+    // 否则第二个入口看不见（宽栏那条基线规则是给单行写的）
+    const rail = bodyOf('.wg-header-rail')
+    expect(rail).toMatch(/flex-direction:\s*column/)
+    expect(rail).toMatch(/height:\s*auto/)
+    expect(rail).toMatch(/overflow:\s*visible/)
+  })
+
   it('enlarges the header entry in the narrow rail like official does', () => {
     // 官方 rail 下这个入口是 36px、label-primary；宽栏 28px、label-secondary
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
@@ -395,6 +447,29 @@ describe('client stylesheet', () => {
     // 逐个淡入也要一并落位。延迟由组件逐个下发，因此那条展开态规则要一起清掉，
     // 否则 reduced-motion 下行仍是逐个出现
     expect(reduced).toMatch(/\[data-wg-stagger\][\s\S]*?transition:\s*none/)
+  })
+
+  it('indents a grouped workspace one more level and draws its guide line', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim().replace(/\s+/g, ' ')),
+      body: m[2] ?? '',
+    }))
+    /** 命中该选择器的规则里，是否有一条声明了给定的属性值 */
+    const hasRule = (selector: string, pattern: RegExp): boolean =>
+      rules.some((rule) => rule.selectors.includes(selector) && pattern.test(rule.body))
+
+    // 工作区分组行本身落在根节点上：缩进与工作区行同为 8px，不是会话分组那档 24px
+    expect(hasRule('.wg-group-head.wg-virtual-workspace-head', /padding:\s*0 8px/)).toBe(true)
+    // 组内工作区再让出一格，层级因此读得出来
+    expect(
+      hasRule(
+        '.wg-virtual-workspace-body > .wg-workspace > .wg-workspace-head',
+        /padding-left:\s*24px/,
+      ),
+    ).toBe(true)
+    // 引导线落在父级图标列中心：根 8 + 16/2 = 16
+    expect(hasRule('.wg-virtual-workspace-body::before', /left:\s*16px/)).toBe(true)
   })
 
   it('fades the whole panel in like the official tree body', () => {

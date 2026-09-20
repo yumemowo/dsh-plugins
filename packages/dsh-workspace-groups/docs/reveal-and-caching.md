@@ -273,6 +273,7 @@ export function sameSessionStatus(a, b): boolean {
 | 行上不得出现任何可能丢失的显隐类 | `never gates row visibility on a class the renderer could lose` |
 | 组件里不得再出现 `useState` / `transitionend` / `setTimeout` / `classList` 写显隐 | `collapsible.test.ts` 的 `fail-open reveal` 一组 |
 | 基准规则里不得声明 `opacity` | `styles.test.ts` |
+| 层级缩进的每条选择器都真的命中渲染出的 DOM | `virtualWorkspaceDom.test.tsx` 的 `matches the nested indentation selectors against the rendered tree` |
 
 最后一类值得单独说：`fail-open reveal` 那组测试**检查组件源码文本**，断言它不再包含任何
 会过期的显隐机制。这种测试通常不该写（绑实现），但这里被断言的恰恰是「不要引入某种模式」，

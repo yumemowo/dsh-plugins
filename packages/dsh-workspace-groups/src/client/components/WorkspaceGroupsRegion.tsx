@@ -22,12 +22,19 @@ import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/c
 import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { Group } from '../remote.ts'
+import { normalizeSnapshot } from '../remote.ts'
+import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import type { HostInfo } from '../hostInfo.ts'
 import type { RegionActions, RegionDataHooks } from '../actions.ts'
 import { regionLabels } from '../labels.ts'
 import type { RegionTranslate } from '../locales.ts'
-import { buildLayout, containsSession, groupIdOfSession } from '../data/layout.ts'
+import {
+  buildLayout,
+  buildRootLayout,
+  containsSession,
+  groupIdOfSession,
+  virtualWorkspaceIdOf,
+} from '../data/layout.ts'
 import { groupSessionsByWorkspace, straySessions } from '../data/sessions.ts'
 import { searchSessions } from '../data/search.ts'
 import type { SearchMatch } from '../data/search.ts'
@@ -35,7 +42,12 @@ import { rowStatusDot, sessionStatuses } from '../data/status.ts'
 import type { SessionStatus } from '../data/status.ts'
 import { abbreviateHomePath } from '../utils/pathUtils.ts'
 import { useFlipMarker } from '../useFlipMarker.ts'
-import type { GroupNameDraft, SessionRow, WorkspaceNameDraft } from '../data/types.ts'
+import type {
+  GroupNameDraft,
+  SessionRow,
+  VirtualWorkspaceNameDraft,
+  WorkspaceNameDraft,
+} from '../data/types.ts'
 import { SessionRowMenu } from './SessionRowMenu.tsx'
 import type { SessionGroupingContext } from './SessionRowMenu.tsx'
 import { CollapsibleBody } from './CollapsibleBody.tsx'
@@ -46,6 +58,9 @@ import { WorkspaceRail } from './WorkspaceRail.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
 import type { WorkspaceRowLabels } from './WorkspaceRow.tsx'
 import { WorkspaceSection } from './WorkspaceSection.tsx'
+import { VirtualWorkspaceSection } from './VirtualWorkspaceSection.tsx'
+import { VIRTUAL_WORKSPACE_ITEM, VIRTUAL_WORKSPACE_PREFIX } from '../menus.tsx'
+import type { VirtualWorkspaceMenuInput } from '../menus.tsx'
 import { DeleteDialog } from './dialogs/DeleteDialog.tsx'
 import { NameDialog } from './dialogs/NameDialog.tsx'
 
@@ -80,6 +95,11 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     renameGroup,
     deleteGroup,
     moveSession,
+    createVirtualWorkspace,
+    renameVirtualWorkspace,
+    deleteVirtualWorkspace,
+    moveWorkspace,
+    forgetWorkspace,
     renameWorkspace,
     deleteWorkspace,
     searchResultLimit,
@@ -108,9 +128,16 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const pendingInteractions = useSessionPendingInteraction(
     (state) => state,
   ) as SessionPendingInteractionSnapshot
-  const [groups, setGroups] = useState<Record<string, Group[]>>({})
+  const [snapshot, setSnapshot] = useState<WorkspaceGroupsSnapshot>({
+    byWorkspace: {},
+    workspaceGroups: [],
+  })
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Record<string, boolean>>({})
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+  // 工作区分组与工作区的折叠态各记一份，键的构成也各自独立，因此两层开合互不影响
+  const [collapsedVirtualWorkspaces, setCollapsedVirtualWorkspaces] = useState<
+    Record<string, boolean>
+  >({})
   // 建组与改名共用一个对话框：groupId 为空串时是新建
   const [nameDraft, setNameDraft] = useState<GroupNameDraft | null>(null)
   const [groupDelete, setGroupDelete] = useState<{
@@ -121,6 +148,13 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const [workspaceRename, setWorkspaceRename] = useState<WorkspaceNameDraft | null>(null)
   const [workspaceDelete, setWorkspaceDelete] = useState<{
     workspaceId: string
+    label: string
+  } | null>(null)
+  // 建组与改名共用一个对话框：groupId 为空串时是新建（与 `nameDraft` 同构）
+  const [virtualWorkspaceDraft, setVirtualWorkspaceDraft] =
+    useState<VirtualWorkspaceNameDraft | null>(null)
+  const [virtualWorkspaceDelete, setVirtualWorkspaceDelete] = useState<{
+    groupId: string
     label: string
   } | null>(null)
   /** 从搜索结果打开、等待滚进可视区的那一行；滚动完成后由行自己回报清除 */
@@ -200,6 +234,34 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     setRevealSessionId((current) => (current === sessionId ? undefined : current))
   }, [])
 
+  /**
+   * 根节点上的工作区布局
+   *
+   * 工作区 id 按宿主顺序排（`workspaces` 本身就是那个顺序），因此没有建过工作区
+   * 分组时 `loose` 就是全部工作区，这一层不改变任何行的位置——界面与没有这个
+   * 功能时完全一致
+   */
+  const workspaceIds = useMemo(
+    () => workspaces.map((workspace) => String(workspace.workspaceId)),
+    [workspaces],
+  )
+  /**
+   * workspaceId → 工作区视图
+   *
+   * 根节点按 id 排布（分组里记的也是 id），渲染每行时都要按 id 取回视图；流式
+   * 期间每次活动都会重渲染整片区域，逐个 `find` 会让这一层退化成与工作区数平方
+   * 成正比。索引只随工作区快照重建一次
+   */
+  const workspaceById = useMemo(() => {
+    const index = new Map<string, WorkspaceView>()
+    for (const workspace of workspaces) index.set(String(workspace.workspaceId), workspace)
+    return index
+  }, [workspaces])
+  const rootLayout = useMemo(
+    () => buildRootLayout(workspaceIds, snapshot.workspaceGroups),
+    [workspaceIds, snapshot.workspaceGroups],
+  )
+
   // 本次搜索的结果页。计算是纯的且输入都来自快照，因此跟着这些输入走 memo：
   // 流式期间每次活动都会重渲染整片区域，不缓存就要在每次活动重扫一遍全部会话
   const searchResult = useMemo(
@@ -207,12 +269,19 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
       searchSessions(
         sessions,
         workspaces,
-        groups,
+        snapshot.byWorkspace,
         archivedSessionIds,
         search.normalized,
         searchResultLimit,
       ),
-    [sessions, workspaces, groups, archivedSessionIds, search.normalized, searchResultLimit],
+    [
+      sessions,
+      workspaces,
+      snapshot.byWorkspace,
+      archivedSessionIds,
+      search.normalized,
+      searchResultLimit,
+    ],
   )
 
   /**
@@ -235,6 +304,14 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
         prev[UNGROUPED_KEY] === true ? { ...prev, [UNGROUPED_KEY]: false } : prev,
       )
     } else {
+      // 工作区本身可能还躺在一个收起的工作区分组里，与外层两层一样要先展开，
+      // 否则揭示的那一行落在看不见的地方
+      const rootGroupId = virtualWorkspaceIdOf(rootLayout.groups, workspaceId)
+      if (rootGroupId !== '') {
+        setCollapsedVirtualWorkspaces((prev) =>
+          prev[rootGroupId] === true ? { ...prev, [rootGroupId]: false } : prev,
+        )
+      }
       setCollapsedWorkspaces((prev) =>
         prev[workspaceId] === true ? { ...prev, [workspaceId]: false } : prev,
       )
@@ -252,11 +329,12 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     let cancelled = false
     loadGroups()
       .then((next) => {
-        if (!cancelled) setGroups(next)
+        if (!cancelled) setSnapshot(normalizeSnapshot(next))
       })
       .catch(() => {
-        // 元数据不可用时退化为「全部分组消失」，会话仍按未归组平铺，界面可用
-        if (!cancelled) setGroups({})
+        // 元数据不可用时退化为「全部分组消失」，会话仍按未归组平铺、工作区仍
+        // 平铺在根节点上，界面可用
+        if (!cancelled) setSnapshot({ byWorkspace: {}, workspaceGroups: [] })
       })
     return () => {
       cancelled = true
@@ -280,9 +358,9 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    * 与宿主对齐
    */
   const apply = useCallback(
-    (action: Promise<Record<string, Group[]>>) => {
+    (action: Promise<WorkspaceGroupsSnapshot>) => {
       void action.then(
-        (next) => setGroups(next),
+        (next) => setSnapshot(normalizeSnapshot(next)),
         (reason: unknown) => {
           console.error('workspace-groups: group change failed', reason)
           reload()
@@ -299,6 +377,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
 
   const toggleGroup = useCallback((key: string) => {
     setCollapsedGroups((prev) => ({ ...prev, [key]: prev[key] !== true }))
+  }, [])
+
+  const toggleVirtualWorkspace = useCallback((key: string) => {
+    setCollapsedVirtualWorkspaces((prev) => ({ ...prev, [key]: prev[key] !== true }))
   }, [])
 
   /** 提交建组或改名；空名与取消都不写 */
@@ -318,6 +400,44 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     if (groupDelete === null) return
     setGroupDelete(null)
     apply(deleteGroup(groupDelete.workspaceId, groupDelete.groupId))
+  }
+
+  /**
+   * 提交工作区分组的建组或改名；空名与取消都不写
+   *
+   * 新建时把草稿里指定的工作区一并放进去：入口就在那个工作区行上，点完立刻
+   * 看到它进了新分组，比「建完再把工作区拖进去」少一步，也不会出现「建完分组
+   * 却不知道它在哪」的空档。归属与建组分两次写，因此建组成功而归组失败时，
+   * 会留下一个空分组——那是可恢复的状态，下次移入即可
+   */
+  const commitVirtualWorkspaceDraft = (): void => {
+    if (virtualWorkspaceDraft === null) return
+    const name = virtualWorkspaceDraft.value.trim()
+    if (name === '') return
+    const { groupId, workspaceId } = virtualWorkspaceDraft
+    setVirtualWorkspaceDraft(null)
+    if (groupId !== '') {
+      apply(renameVirtualWorkspace(groupId, name))
+      return
+    }
+    if (workspaceId === undefined) {
+      apply(createVirtualWorkspace(name))
+      return
+    }
+    apply(
+      createVirtualWorkspace(name).then(async (next) => {
+        // 新建的分组排在最末；宿主回的是整份快照，取它新增的那一个
+        const created = next.workspaceGroups[next.workspaceGroups.length - 1]
+        if (created === undefined) return next
+        return moveWorkspace(workspaceId, created.id)
+      }),
+    )
+  }
+
+  const commitVirtualWorkspaceDelete = (): void => {
+    if (virtualWorkspaceDelete === null) return
+    setVirtualWorkspaceDelete(null)
+    apply(deleteVirtualWorkspace(virtualWorkspaceDelete.groupId))
   }
 
   /** 工作区当前的名字；用于判断改名是否真的改变了内容 */
@@ -341,23 +461,25 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   /**
    * 删除工作区
    *
-   * 先删注册再清分组元数据：工作区没了，它名下的分组再也不会被渲染，
-   * 留着就是读不到的记录；反过来的话，删组成功而删工作区失败会把分组
-   * 提前丢掉。清理由既有的 `deleteGroup` 承担，不新增宿主接口
+   * 先删注册再清分组元数据：工作区没了，它名下的会话分组与根节点归属记录都
+   * 再也不会被渲染，留着就是读不到的记录；反过来的话，清理成功而删工作区失败
+   * 会把分组提前丢掉。两处清理由既有的 `deleteGroup` / `forgetWorkspace` 承担，
+   * 不新增宿主接口
    *
    * 每一步都回整份快照，取最后一步的那份即可：删工作区本身不动分组元数据，
-   * 因此最终状态就是最后一次删组的结果（没有分组可清时退回删工作区前的本地值）
+   * 因此最终状态就是最后一次清理的结果（没有分组可清时退回删工作区前的本地值）
    */
   const commitWorkspaceDelete = (): void => {
     if (workspaceDelete === null) return
     const { workspaceId } = workspaceDelete
     setWorkspaceDelete(null)
-    const orphanGroups = groups[workspaceId] ?? []
+    const orphanGroups = snapshot.byWorkspace[workspaceId] ?? []
     apply(
       deleteWorkspace(workspaceId).then(async () => {
-        let snapshot: Record<string, Group[]> = groups
-        for (const group of orphanGroups) snapshot = await deleteGroup(workspaceId, group.id)
-        return snapshot
+        // 先把这个工作区从根节点的归属里摘掉：干净的分组不该永久挂着一个已删除的 id
+        let next = await forgetWorkspace(workspaceId)
+        for (const group of orphanGroups) next = await deleteGroup(workspaceId, group.id)
+        return next
       }),
     )
   }
@@ -411,6 +533,44 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     [apply, moveSession],
   )
 
+  /**
+   * header 入口：新建一个工作区分组
+   *
+   * 入口在区域顶部、与具体工作区无关，因此建出的是**空分组**（新分组会渲染在
+   * 列表最前，用户随即能往里移工作区）。工作区行菜单里那个同名项则把
+   * 「建组 + 移入当前工作区」压成一步，两者是同一动作的两种入口，不是两套实现
+   *
+   * 是 `useCallback` 而不是每次渲染新建：它随 inject 结果传给 header，每渲染
+   * 新建一份会让 header 每帧都判定为变过
+   */
+  const startVirtualWorkspaceCreate = useCallback(() => {
+    setVirtualWorkspaceDraft({ groupId: '', value: '' })
+  }, [])
+
+  /**
+   * 工作区行「移动到…」子菜单与「移出工作区分组」一级项的选中项
+   *
+   * 三个分支：新建一个分组并把该工作区放进去、移出当前分组、或移入
+   * `vw:<id>` 指名的分组。与 `selectSessionGroup` 一样是 `useCallback`：
+   * 它会随菜单上下文传到每一行，行级 memo 按引用比对
+   */
+  const selectVirtualWorkspace = useCallback(
+    (workspaceId: string, id: string): void => {
+      if (id === VIRTUAL_WORKSPACE_ITEM.create) {
+        setVirtualWorkspaceDraft({ groupId: '', workspaceId, value: '' })
+        return
+      }
+      if (id === VIRTUAL_WORKSPACE_ITEM.ungroup) {
+        apply(moveWorkspace(workspaceId, ''))
+        return
+      }
+      if (id.startsWith(VIRTUAL_WORKSPACE_PREFIX)) {
+        apply(moveWorkspace(workspaceId, id.slice(VIRTUAL_WORKSPACE_PREFIX.length)))
+      }
+    },
+    [apply, moveWorkspace],
+  )
+
   // 待改的工作区名是否与另一个工作区撞名
   const renameConflict =
     workspaceRename === null
@@ -438,6 +598,23 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     delete: labels.deleteWorkspace,
   }
 
+  /**
+   * 某个工作区行上那份「移动工作区分组」菜单的选项集
+   *
+   * 归属与可选分组都随行而变，因此不能与 `workspaceRowLabels` 一起缓存；每行
+   * 一份新对象，行级 memo 因此按内容比对（`sameVirtualWorkspaceMenu`）
+   * @param workspaceId - 该工作区 id
+   * @returns 该行的分组选项集
+   */
+  const virtualWorkspaceMenuOf = (workspaceId: string): VirtualWorkspaceMenuInput => ({
+    sections: rootLayout.groups,
+    currentGroupId: virtualWorkspaceIdOf(rootLayout.groups, workspaceId),
+    // 菜单项用带省略号的那份：点下去还要再填一次名字
+    newLabel: labels.newVirtualWorkspaceMenu,
+    moveToLabel: labels.moveToVirtualWorkspace,
+    ungroupLabel: labels.ungroupWorkspace,
+  })
+
   // 窄栏：官方在这里也只留搜索与「添加工作区」两个入口（外加 shell 的展开入口）
   if (!wide) {
     return (
@@ -445,6 +622,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
         <RegionRailHeader
           addWorkspace={addWorkspace}
           search={{ state: search, labels: labels.search }}
+          newVirtualWorkspace={{
+            label: labels.newVirtualWorkspace,
+            onCreate: startVirtualWorkspaceCreate,
+          }}
           t={t}
         />
         <WorkspaceRail label={labels.title} onExpand={expandSidebar} />
@@ -458,6 +639,143 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const ungroupedCollapsed = collapsedWorkspaces[UNGROUPED_KEY] === true
   const searching = search.normalized !== ''
 
+  /**
+   * 渲染一个工作区区块
+   *
+   * 行级 memo 的前提是 props 身份稳定，因此这里传下去的都是原语或内容稳定值
+   * @param workspace - 工作区视图
+   * @returns 该工作区的区块元素
+   */
+  const renderWorkspace = (workspaceId: string): ReactElement | null => {
+    const workspace = workspaceById.get(workspaceId)
+    // 布局只包含快照里存在的工作区，因此这里不会落空；防御一下避免类型断言
+    if (workspace === undefined) return null
+    const layout = buildLayout(
+      rowsByWorkspace.get(workspaceId) ?? [],
+      snapshot.byWorkspace[workspaceId] ?? [],
+    )
+    const collapsed = collapsedWorkspaces[workspaceId] === true
+
+    /**
+     * 渲染一个会话行
+     *
+     * 空白行的名字取语言包的固定名（官方 `session.new`），并且像官方一样
+     * 不挂行尾菜单——它只是「准备开始一个新会话」的占位，没有会话可重命名
+     * 或归档。`grouping` 缺省表示该行没有分组可归（「未分组」桶）
+     *
+     * 传下去的字段都是原语或稳定引用，动作传的是未绑定的函数本身：行级
+     * memo 要按字段比对，任何一处每渲染新建都会让它整片失效
+     */
+    const renderSession = (
+      row: SessionRow,
+      grouping?: SessionGroupingContext,
+    ): ReactElement => {
+      // 只有被打开的那一行带揭示请求；它的闭包每渲染新建一份，因此每次
+      // 重渲染会让这一行重渲染一次——行滚进可视区并回报后标记即被清掉，
+      // 这个代价只落在该行上
+      const reveal =
+        row.id === revealSessionId ? () => acknowledgeReveal(row.id) : undefined
+      // 状态只推导一次：行首那个点与卡片那几条取自同一份结果
+      const statuses = statusesOf(row)
+      const status = rowStatusDot(row, statuses)
+      if (row.blank) {
+        return (
+          <SessionRowView
+            key={row.id}
+            sessionId={row.id}
+            title={labels.newSession}
+            selected={row.id === currentSessionId}
+            status={status}
+            time={timeOf(row)}
+            statuses={statuses}
+            hoverTime={hoverTimeOf(row)}
+            hoverLabels={hoverLabels}
+            onOpenSession={openSession}
+            onReveal={reveal}
+          />
+        )
+      }
+      return (
+        <SessionRowMenu
+          key={row.id}
+          row={row}
+          title={row.title}
+          selected={row.id === currentSessionId}
+          status={status}
+          time={timeOf(row)}
+          statuses={statuses}
+          hoverTime={hoverTimeOf(row)}
+          hoverLabels={hoverLabels}
+          grouping={grouping}
+          official={official}
+          actionsLabel={labels.sessionActions}
+          onOpenSession={openSession}
+          t={t}
+          onReveal={reveal}
+        />
+      )
+    }
+
+    return (
+      <WorkspaceSection
+        key={workspaceId}
+        title={workspace.title}
+        collapsed={collapsed}
+        // 官方只在「展开且含当前会话」时把文件夹染成强调色
+        folderActive={
+          !collapsed &&
+          containsSession(rowsByWorkspace.get(workspaceId) ?? [], currentSessionId)
+        }
+        layout={layout}
+        isGroupCollapsed={(groupId) =>
+          collapsedGroups[`${workspaceId}:${groupId}`] === true
+        }
+        labels={workspaceRowLabels}
+        virtualWorkspace={virtualWorkspaceMenuOf(workspaceId)}
+        emptyLabel={labels.empty}
+        hover={{
+          label: workspace.title,
+          path: abbreviateHomePath(workspace.path, home),
+          created: labels.hover.created(Date.parse(workspace.createdAt)),
+        }}
+        hoverCopy={workspace.path}
+        hoverLabels={hoverLabels}
+        groupActionLabels={{
+          actions: labels.groupActions,
+          newSessionItem: labels.newSessionItem,
+          rename: labels.rename,
+          delete: labels.deleteGroup,
+          newSession: labels.newSessionInGroup,
+        }}
+        onToggle={() => toggleWorkspace(workspaceId)}
+        onCreateSession={() => createSessionIn(workspaceId, '')}
+        onNewGroup={() => setNameDraft({ workspaceId, groupId: '', value: '' })}
+        onRenameWorkspace={() => setWorkspaceRename({ workspaceId, value: workspace.title })}
+        onDeleteWorkspace={() => setWorkspaceDelete({ workspaceId, label: workspace.title })}
+        // 「移动工作区分组」入口：把该工作区放进某个根节点分组，或先建一个再放
+        onSelectVirtualWorkspace={(id) => selectVirtualWorkspace(workspaceId, id)}
+        onToggleGroup={(groupId) => toggleGroup(`${workspaceId}:${groupId}`)}
+        onRenameGroup={(section) =>
+          setNameDraft({ workspaceId, groupId: section.id, value: section.label })
+        }
+        onDeleteGroup={(section) =>
+          setGroupDelete({ workspaceId, groupId: section.id, label: section.label })
+        }
+        onCreateSessionInGroup={(section) => createSessionIn(workspaceId, section.id)}
+        renderSession={(row) =>
+          renderSession(row, {
+            workspaceId,
+            sections: layout.groups,
+            currentGroupId: groupIdOfSession(layout.groups, row.id),
+            groupLabel: labels.moveToGroup,
+            ungroupLabel: labels.ungroup,
+            onSelectGroup: selectSessionGroup,
+          })
+        }
+      />
+    )
+  }
+
   return (
     <div className="wg-root" ref={flipRef}>
       <RegionHeader
@@ -465,6 +783,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
         addWorkspace={addWorkspace}
         search={{ state: search, labels: labels.search }}
         viewOptionsLabel={labels.add.viewOptions}
+        newVirtualWorkspace={{
+          label: labels.newVirtualWorkspace,
+          onCreate: startVirtualWorkspaceCreate,
+        }}
         t={t}
       />
       {searching ? (
@@ -479,127 +801,34 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
         />
       ) : (
         <div className="wg-list wg-panel">
-          {workspaces.map((workspace) => {
-            const workspaceId = String(workspace.workspaceId)
-            const layout = buildLayout(rowsByWorkspace.get(workspaceId) ?? [], groups[workspaceId] ?? [])
-            const collapsed = collapsedWorkspaces[workspaceId] === true
-
-            /**
-             * 渲染一个会话行
-             *
-             * 空白行的名字取语言包的固定名（官方 `session.new`），并且像官方一样
-             * 不挂行尾菜单——它只是「准备开始一个新会话」的占位，没有会话可重命名
-             * 或归档。`grouping` 缺省表示该行没有分组可归（「未分组」桶）
-             *
-             * 传下去的字段都是原语或稳定引用，动作传的是未绑定的函数本身：行级
-             * memo 要按字段比对，任何一处每渲染新建都会让它整片失效
-             */
-            const renderSession = (
-              row: SessionRow,
-              grouping?: SessionGroupingContext,
-            ): ReactElement => {
-              // 只有被打开的那一行带揭示请求；它的闭包每渲染新建一份，因此每次
-              // 重渲染会让这一行重渲染一次——行滚进可视区并回报后标记即被清掉，
-              // 这个代价只落在该行上
-              const reveal =
-                row.id === revealSessionId ? () => acknowledgeReveal(row.id) : undefined
-              // 状态只推导一次：行首那个点与卡片那几条取自同一份结果
-              const statuses = statusesOf(row)
-              const status = rowStatusDot(row, statuses)
-              if (row.blank) {
-                return (
-                  <SessionRowView
-                    key={row.id}
-                    sessionId={row.id}
-                    title={labels.newSession}
-                    selected={row.id === currentSessionId}
-                    status={status}
-                    time={timeOf(row)}
-                    statuses={statuses}
-                    hoverTime={hoverTimeOf(row)}
-                    hoverLabels={hoverLabels}
-                    onOpenSession={openSession}
-                    onReveal={reveal}
-                  />
-                )
+          {/* 工作区分组段排在前面，未归组的工作区平铺在其后、不带区段头。
+              没有建过分组时 rootLayout.groups 为空、全部工作区都在 loose 里，
+              这一层因此不改变任何行的位置 */}
+          {rootLayout.groups.map((section) => (
+            <VirtualWorkspaceSection
+              key={section.id}
+              section={section}
+              collapsed={collapsedVirtualWorkspaces[section.id] === true}
+              emptyLabel={labels.virtualWorkspaceEmpty}
+              labels={{
+                actions: labels.virtualWorkspaceActions,
+                // 菜单项用通用动词，与工作区行、会话分组行同一分工：只有对话框
+                // 标题才点明对象（`renameVirtualWorkspace`，见下方 NameDialog）
+                rename: labels.rename,
+                delete: labels.deleteVirtualWorkspace,
+              }}
+              onToggle={() => toggleVirtualWorkspace(section.id)}
+              onRename={() =>
+                setVirtualWorkspaceDraft({ groupId: section.id, value: section.label })
               }
-              return (
-                <SessionRowMenu
-                  key={row.id}
-                  row={row}
-                  title={row.title}
-                  selected={row.id === currentSessionId}
-                  status={status}
-                  time={timeOf(row)}
-                  statuses={statuses}
-                  hoverTime={hoverTimeOf(row)}
-                  hoverLabels={hoverLabels}
-                  grouping={grouping}
-                  official={official}
-                  actionsLabel={labels.sessionActions}
-                  onOpenSession={openSession}
-                  t={t}
-                  onReveal={reveal}
-                />
-              )
-            }
-
-            return (
-              <WorkspaceSection
-                key={workspaceId}
-                title={workspace.title}
-                collapsed={collapsed}
-                // 官方只在「展开且含当前会话」时把文件夹染成强调色
-                folderActive={
-                  !collapsed &&
-                  containsSession(rowsByWorkspace.get(workspaceId) ?? [], currentSessionId)
-                }
-                layout={layout}
-                isGroupCollapsed={(groupId) =>
-                  collapsedGroups[`${workspaceId}:${groupId}`] === true
-                }
-                labels={workspaceRowLabels}
-                emptyLabel={labels.empty}
-                hover={{
-                  label: workspace.title,
-                  path: abbreviateHomePath(workspace.path, home),
-                  created: labels.hover.created(Date.parse(workspace.createdAt)),
-                }}
-                hoverCopy={workspace.path}
-                hoverLabels={hoverLabels}
-                groupActionLabels={{
-                  actions: labels.groupActions,
-                  newSessionItem: labels.newSessionItem,
-                  rename: labels.rename,
-                  delete: labels.deleteGroup,
-                  newSession: labels.newSessionInGroup,
-                }}
-                onToggle={() => toggleWorkspace(workspaceId)}
-                onCreateSession={() => createSessionIn(workspaceId, '')}
-                onNewGroup={() => setNameDraft({ workspaceId, groupId: '', value: '' })}
-                onRenameWorkspace={() => setWorkspaceRename({ workspaceId, value: workspace.title })}
-                onDeleteWorkspace={() => setWorkspaceDelete({ workspaceId, label: workspace.title })}
-                onToggleGroup={(groupId) => toggleGroup(`${workspaceId}:${groupId}`)}
-                onRenameGroup={(section) =>
-                  setNameDraft({ workspaceId, groupId: section.id, value: section.label })
-                }
-                onDeleteGroup={(section) =>
-                  setGroupDelete({ workspaceId, groupId: section.id, label: section.label })
-                }
-                onCreateSessionInGroup={(section) => createSessionIn(workspaceId, section.id)}
-                renderSession={(row) =>
-                  renderSession(row, {
-                    workspaceId,
-                    sections: layout.groups,
-                    currentGroupId: groupIdOfSession(layout.groups, row.id),
-                    groupLabel: labels.moveToGroup,
-                    ungroupLabel: labels.ungroup,
-                    onSelectGroup: selectSessionGroup,
-                  })
-                }
-              />
-            )
-          })}
+              onDelete={() =>
+                setVirtualWorkspaceDelete({ groupId: section.id, label: section.label })
+              }
+            >
+              {section.workspaceIds.map(renderWorkspace)}
+            </VirtualWorkspaceSection>
+          ))}
+          {rootLayout.loose.map(renderWorkspace)}
           {/* 未分组桶排在全部工作区之后，与官方一致；空则整段不渲染 */}
           {stray.length === 0 ? null : (
             <section className="wg-workspace">
@@ -678,6 +907,36 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
           onValueChange={(value) => setNameDraft({ ...nameDraft, value })}
           onConfirm={commitNameDraft}
           onClose={() => setNameDraft(null)}
+        />
+      )}
+      {virtualWorkspaceDraft === null ? null : (
+        <NameDialog
+          title={
+            virtualWorkspaceDraft.groupId === ''
+              ? labels.newVirtualWorkspace
+              : labels.renameVirtualWorkspace
+          }
+          value={virtualWorkspaceDraft.value}
+          placeholder={labels.virtualWorkspaceNamePrompt}
+          // 新建走通用词的「确定」；改名用官方 workspace 语言包的短动词，与官方改名对话框同词
+          confirmLabel={
+            virtualWorkspaceDraft.groupId === '' ? t('ok') : official?.labels.rename ?? t('ok')
+          }
+          t={t}
+          confirmDisabled={virtualWorkspaceDraft.value.trim() === ''}
+          onValueChange={(value) => setVirtualWorkspaceDraft({ ...virtualWorkspaceDraft, value })}
+          onConfirm={commitVirtualWorkspaceDraft}
+          onClose={() => setVirtualWorkspaceDraft(null)}
+        />
+      )}
+      {virtualWorkspaceDelete === null ? null : (
+        <DeleteDialog
+          title={labels.deleteVirtualWorkspace}
+          description={labels.confirmDeleteVirtualWorkspace(virtualWorkspaceDelete.label)}
+          confirmLabel={labels.deleteVirtualWorkspace}
+          t={t}
+          onConfirm={commitVirtualWorkspaceDelete}
+          onClose={() => setVirtualWorkspaceDelete(null)}
         />
       )}
       {workspaceRename === null ? null : (

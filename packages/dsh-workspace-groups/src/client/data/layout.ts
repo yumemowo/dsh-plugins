@@ -1,10 +1,17 @@
 /**
  * 分组元数据到渲染布局的切分
  *
- * 纯数据变换：输入工作区当前的会话行与分组定义，输出「分组段 + 未归组行」
+ * 纯数据变换：一层把工作区当前的会话行与分组定义切成「分组段 + 未归组行」，
+ * 另一层把工作区列表与工作区分组切成「分组段 + 未归组工作区」
  */
-import type { Group } from '../remote.ts'
-import type { GroupSection, SessionRow, WorkspaceLayout } from './types.ts'
+import type { Group, VirtualWorkspace } from '../remote.ts'
+import type {
+  GroupSection,
+  RootLayout,
+  SessionRow,
+  VirtualWorkspaceSection,
+  WorkspaceLayout,
+} from './types.ts'
 
 /**
  * 把工作区的会话按分组元数据切成「分组」与「未归组」两部分
@@ -86,4 +93,55 @@ export function containsSession(
 ): boolean {
   if (currentSessionId === undefined) return false
   return rows.some((row) => row.id === currentSessionId)
+}
+
+/**
+ * 把工作区列表按工作区分组切成「分组」与「未归组」两部分
+ *
+ * 与会话那一层同一取舍：分组里记录的工作区若已不在列表中（被删除），会被静默
+ * 跳过，元数据与真实列表出现偏差时界面也不会丢工作区；一个工作区被两个分组同时
+ * 记录时以先出现的为准，因此渲染出的每个工作区都只有一个位置
+ * @param workspaceIds - 当前可见的工作区 id，按宿主顺序
+ * @param groups - 根节点上的工作区分组定义
+ * @returns 分组段与未归组工作区 id
+ */
+export function buildRootLayout(
+  workspaceIds: readonly string[],
+  groups: readonly VirtualWorkspace[] | undefined,
+): RootLayout {
+  const known = new Set(workspaceIds)
+  const claimed = new Set<string>()
+  const sections: VirtualWorkspaceSection[] = []
+
+  // 分组定义可能整格缺席：浏览器半边热重载会先换上新的客户端，而宿主半边要重启
+  // `dsh` 才换，那段窗口里收到的是旧形状的快照（没有这一格）。缺格时退化成
+  // 「没有工作区分组」而不是抛错
+  for (const group of groups ?? []) {
+    const ids: string[] = []
+    for (const id of group.workspaceIds) {
+      // 元数据里存在的工作区可能已被删除；列表是事实来源，跳过即可
+      if (!known.has(id) || claimed.has(id)) continue
+      claimed.add(id)
+      ids.push(id)
+    }
+    sections.push({ id: group.id, label: group.name, workspaceIds: ids })
+  }
+
+  return { groups: sections, loose: workspaceIds.filter((id) => !claimed.has(id)) }
+}
+
+/**
+ * 判定一个工作区当前所属的工作区分组
+ * @param sections - 已切分好的工作区分组段
+ * @param workspaceId - 目标工作区
+ * @returns 所属分组 id；不属于任何分组时返回空串
+ */
+export function virtualWorkspaceIdOf(
+  sections: readonly VirtualWorkspaceSection[],
+  workspaceId: string,
+): string {
+  for (const section of sections) {
+    if (section.workspaceIds.includes(workspaceId)) return section.id
+  }
+  return ''
 }

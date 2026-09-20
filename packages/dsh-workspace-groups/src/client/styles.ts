@@ -121,8 +121,10 @@ export const CSS = `
 }
 
 .wg-header-actions {
-  /* 两个 28px 入口加一格 4px 间距；官方 .headerActions 同此上限 */
-  max-width: 60px;
+  /* 三个 28px 入口加两格 4px 间距 = 92px（视图选项 / 新建工作区分组 / 添加工作区）。
+     这里必须给足，否则 overflow: hidden 会把最右边那个入口整个裁掉——它不会
+     报错，只是界面上少一个按钮 */
+  max-width: 92px;
   flex: none;
   display: flex;
   align-items: center;
@@ -395,9 +397,16 @@ export const CSS = `
 }
 
 /* 窄栏：官方 rail 下 header 只留一个 36px 的入口，标题与搜索都不渲染 */
+/* 窄栏一行放不下两个 36px 入口（栏宽不足 72px），因此每个入口各占一行，与官方
+   rail 的节奏一致（那里也是「添加」一行、搜索一行）。基线那条 36px 定高与
+   overflow:hidden 是为宽栏单行写的，这里必须撤掉，否则第二个入口被裁掉 */
 .wg-header-rail {
   justify-content: flex-start;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0;
+  height: auto;
+  overflow: visible;
   margin-bottom: 12px;
   margin-top: 0;
   margin-right: 0;
@@ -535,10 +544,51 @@ export const CSS = `
   transition-delay: 0ms;
 }
 
+/* 工作区分组：根节点上的容器行 + 折叠体
+ *
+ * 行本身复用会话分组那一套（同一 .wg-group-head 基类、同一行尾操作位与可收放
+ * 槽位），因此工作区数、悬停让位、操作位显隐都由既有规则承担；这里只覆盖两处：
+ * 它在根节点上，缩进取 8px（分组头是 24px，因为它落在工作区内部） */
+.wg-group-head.wg-virtual-workspace-head { padding: 0 8px; }
+.wg-virtual-workspace { position: relative; display: flex; flex-direction: column; }
+.wg-virtual-workspace-body { display: flex; flex-direction: column; position: relative; }
+/* 组内工作区比根节点再深一层：每层让出一个 16px 图标列，与「工作区 → 分组 →
+   组内会话」那三级同一套步进，因此工作区分组是这条链上的第 0 层 */
+/* 工作区行挂了悬停卡片时被官方 HoverCard 的根节点包了一层（那是个 display:block
+   的 span），行就不再是 .wg-workspace 的直接子项——与下面会话行那条同理，两档都写 */
+.wg-virtual-workspace-body > .wg-workspace > .wg-workspace-head,
+.wg-virtual-workspace-body > .wg-workspace > * > .wg-workspace-head { padding-left: 24px; }
+.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
+  .wg-workspace-body > .wg-sessions > .wg-row,
+.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
+  .wg-workspace-body > .wg-sessions > * > .wg-row { padding-left: 40px; }
+.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
+  .wg-workspace-body > .wg-group > .wg-group-head { padding-left: 40px; }
+.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
+  .wg-workspace-body > .wg-group > .wg-collapse > .wg-collapse-clip >
+  .wg-sessions > .wg-row,
+.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
+  .wg-workspace-body > .wg-group > .wg-collapse > .wg-collapse-clip >
+  .wg-sessions > * > .wg-row { padding-left: 56px; }
+
+/* 引导线落在父级图标列的中心，与上面几级同一条规则：工作区分组 8 + 16/2 = 16，
+   组内工作区 24 + 16/2 = 32，组内工作区的会话分组 40 + 16/2 = 48 */
+.wg-virtual-workspace-body::before { left: 16px; }
+.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
+  .wg-workspace-body::before { left: 32px; }
+.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
+  .wg-workspace-body > .wg-group > .wg-collapse > .wg-collapse-clip >
+  .wg-sessions::before { left: 48px; }
+
+/* 组内空态与组内工作区行落在同一缩进起点：那句占位文案是「这个分组里还没有
+   东西」，浮在分组头左侧会读成根节点的内容 */
+.wg-virtual-workspace-body > .wg-empty { padding-left: 24px; }
+
 /* 折叠体自己承担「上一行与它之间」的那 2px：这段间距要连同内容一起收掉，
    否则收起后行下会留一条 2px 空档。间距取内层容器的上内边距——它落在
    clip 的裁剪区内，轨道合拢时随之被裁掉 */
 .wg-collapse-clip > .wg-workspace-body,
+.wg-collapse-clip > .wg-virtual-workspace-body,
 .wg-collapse-clip > .wg-sessions { padding-top: 2px; }
 
 /* 图标列：工作区的文件夹/箭头、分组的箭头、会话的状态位共用同一列宽 */
@@ -609,7 +659,8 @@ export const CSS = `
 
 /* 字号与行高成对写在叶子上（官方 .title 即如此），根节点不设 line-height */
 .wg-workspace-title,
-.wg-group-label {
+.wg-group-label,
+.wg-virtual-workspace-label {
   min-width: 0;
   flex: 1;
   overflow: hidden;
@@ -623,6 +674,8 @@ export const CSS = `
 .wg-workspace-title { color: var(--dsw-alias-label-primary); }
 /* 分组是工作区之下的一层，靠更暗的色阶表示「低一级」 */
 .wg-group-label { color: var(--dsw-alias-label-tertiary); }
+/* 工作区分组在根节点上，是容器而不是工作区本身，因此与分组同一档色阶 */
+.wg-virtual-workspace-label { color: var(--dsw-alias-label-tertiary); }
 
 /* 分组的会话数：与 session 行的 .wg-row-time 同格同形（tertiary、12px/20px），
    内容为纯数字。它排在可收放的操作槽之前，正对 time 相对操作槽的位置：槽位
@@ -640,9 +693,12 @@ export const CSS = `
 /* 工作区行静止时是文件夹，悬停时换成箭头：两个槽都在文档流里，
    各自 16px，因此切换不会让标题横向跳动。悬停箭头的色阶同官方 .chevron */
 .wg-folder-active { color: var(--dsw-alias-state-business-primary); }
-.wg-workspace-head .wg-chevron { display: none; color: var(--dsw-alias-label-caption); }
-.wg-workspace-head:hover .wg-chevron { display: inline-flex; }
-.wg-workspace-head:hover .wg-folder { display: none; }
+.wg-workspace-head .wg-chevron,
+.wg-virtual-workspace-head .wg-chevron { display: none; color: var(--dsw-alias-label-caption); }
+.wg-workspace-head:hover .wg-chevron,
+.wg-virtual-workspace-head:hover .wg-chevron { display: inline-flex; }
+.wg-workspace-head:hover .wg-folder,
+.wg-virtual-workspace-head:hover .wg-folder { display: none; }
 
 .wg-arrow { transition: transform .15s var(--ds-ease-in-out, ease-in-out); }
 .wg-arrow-open { transform: rotate(90deg); }
@@ -656,6 +712,7 @@ export const CSS = `
 .wg-group,
 .wg-sessions { display: flex; flex-direction: column; }
 
+.wg-virtual-workspace > * + *,
 .wg-workspace > * + *,
 .wg-workspace-body > * + *,
 .wg-group > * + *,
@@ -663,6 +720,7 @@ export const CSS = `
 
 /* 折叠体要抵消上一条规则给它写上的 margin-top：那段间距由 clip 内部的上内边距
    承担（见折叠体规则处），这样它会落在裁剪区内，能随内容一起收掉 */
+.wg-virtual-workspace > .wg-collapse,
 .wg-workspace > .wg-collapse,
 .wg-group > .wg-collapse { margin-top: 0; }
 

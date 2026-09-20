@@ -20,7 +20,15 @@ import {
   IconFolderOpen16,
   IconTriangleRightFill14,
 } from '../runtime.ts'
-import { ROW_MENU, WORKSPACE_MENU, buildRowContextMenuItems, buildWorkspaceMenuItems } from '../menus.tsx'
+import {
+  ROW_MENU,
+  VIRTUAL_WORKSPACE_ITEM,
+  VIRTUAL_WORKSPACE_PREFIX,
+  WORKSPACE_MENU,
+  buildRowContextMenuItems,
+  buildWorkspaceMenuItems,
+} from '../menus.tsx'
+import type { VirtualWorkspaceMenuInput } from '../menus.tsx'
 import { RowActions } from './RowActions.tsx'
 import { WorkspaceHoverContent } from './HoverCards.tsx'
 import { useRowContextMenu } from './RowContextMenu.tsx'
@@ -64,12 +72,24 @@ export interface WorkspaceRowProps {
   onNewGroup?: () => void
   onRename?: () => void
   onDelete?: () => void
+  /**
+   * 工作区分组选中项：`create-virtual-workspace` / `ungroup-workspace` / `vw:<id>`
+   *
+   * 与其它回调平级；缺省表示该行不提供工作区分组入口（未分组桶的工作区行）
+   */
+  onSelectVirtualWorkspace?: ((id: string) => void) | undefined
   /** 悬停卡片正文；缺省表示该行不挂卡片（未分组桶） */
   hover?: WorkspaceHoverData | undefined
   /** 悬停卡片可复制的内容，取完整目录路径；缺省表示卡片只读 */
   hoverCopy?: string | undefined
   /** 悬停卡片的文案 */
   hoverLabels?: OfficialHoverLabels | undefined
+  /**
+   * 该行「移动工作区分组」一级项及其子菜单的选项集
+   *
+   * 与 `labels` 分开传：文案对所有行相同，归属却逐行不同
+   */
+  virtualWorkspace?: VirtualWorkspaceMenuInput | undefined
   labels: WorkspaceRowLabels
 }
 
@@ -82,9 +102,11 @@ export function WorkspaceRow({
   onNewGroup,
   onRename,
   onDelete,
+  onSelectVirtualWorkspace,
   hover,
   hoverCopy,
   hoverLabels,
+  virtualWorkspace,
   labels,
 }: WorkspaceRowProps): ReactElement {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -103,6 +125,13 @@ export function WorkspaceRow({
     else if (id === WORKSPACE_MENU.newGroup) onNewGroup?.()
     else if (id === WORKSPACE_MENU.rename) onRename?.()
     else if (id === WORKSPACE_MENU.delete) onDelete?.()
+    else if (
+      id === VIRTUAL_WORKSPACE_ITEM.create ||
+      id === VIRTUAL_WORKSPACE_ITEM.ungroup ||
+      id.startsWith(VIRTUAL_WORKSPACE_PREFIX)
+    ) {
+      onSelectVirtualWorkspace?.(id)
+    }
   }
 
   const menuItems = manageable
@@ -110,6 +139,8 @@ export function WorkspaceRow({
         newGroupLabel: labels.newGroup,
         renameLabel: labels.rename,
         deleteLabel: labels.delete,
+        // 没有移入入口的行（未分组桶）不出现这一项，否则是个点不动的死入口
+        virtualWorkspaceGrouping: onSelectVirtualWorkspace === undefined ? undefined : virtualWorkspace,
       })
     : undefined
 

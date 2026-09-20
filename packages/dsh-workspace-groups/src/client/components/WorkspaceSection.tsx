@@ -8,7 +8,8 @@ import type { ReactElement, ReactNode } from "react";
 import { CollapsibleBody } from "./CollapsibleBody.tsx";
 import { GroupSection } from "./GroupSection.tsx";
 import { WorkspaceRow } from "./WorkspaceRow.tsx";
-import type { WorkspaceHoverData, WorkspaceRowLabels } from "./WorkspaceRow.tsx";
+import type { WorkspaceHoverData, WorkspaceRowLabels, WorkspaceRowProps } from "./WorkspaceRow.tsx";
+
 import type { OfficialHoverLabels } from "../official.ts";
 import type { SessionRow, WorkspaceLayout } from "../data/types.ts";
 
@@ -21,6 +22,14 @@ export interface WorkspaceSectionProps {
   isGroupCollapsed: (groupId: string) => boolean;
   /** 分组头与工作区行共用的文案 */
   labels: WorkspaceRowLabels;
+  /**
+   * 该工作区行上的「移动工作区分组」选项集
+   *
+   * 与 `labels` 分开传：文案对所有行相同，归属却逐行不同
+   */
+  virtualWorkspace: WorkspaceRowProps['virtualWorkspace'];
+  /** 该行「移动工作区分组」子菜单的选中分派 */
+  onSelectVirtualWorkspace: (id: string) => void;
   emptyLabel: string;
   /** 分组行行尾操作位的文案 */
   groupActionLabels: {
@@ -75,6 +84,8 @@ export function WorkspaceSection({
   layout,
   isGroupCollapsed,
   labels,
+  virtualWorkspace,
+  onSelectVirtualWorkspace,
   emptyLabel,
   groupActionLabels,
   hover,
@@ -107,6 +118,8 @@ export function WorkspaceSection({
         hoverCopy={hoverCopy}
         hoverLabels={hoverLabels}
         labels={labels}
+        virtualWorkspace={virtualWorkspace}
+        onSelectVirtualWorkspace={onSelectVirtualWorkspace}
       />
       <CollapsibleBody open={!collapsed}>
         <div className="wg-workspace-body">

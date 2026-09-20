@@ -94,6 +94,32 @@ export interface RegionLabels {
   renameGroup: string
   /** 分组行「更多操作」按钮的无障碍标签；分组名由调用方传入 */
   groupActions: (name: string) => string
+  /** 工作区行菜单里的「移动到…」一级项文案 */
+  moveToVirtualWorkspace: string
+  /** 该一级项的子菜单里「新建工作区分组」一项 */
+  newVirtualWorkspace: string
+  /**
+   * 二级菜单里那一项的文案，带省略号
+   *
+   * 与 {@link newVirtualWorkspace} 分开：菜单项带省略号表示「点下去还要再填一次」，
+   * 而 header 入口与命名框标题是不带省略号的完整说法（官方 `menu.addWorkspace`
+   * 与 `workspace.add` 就是这个分工）
+   */
+  newVirtualWorkspaceMenu: string
+  /** 工作区已归组时，「移动到…」下方那一项「移出工作区分组」的文案 */
+  ungroupWorkspace: string
+  /** 工作区分组行「更多操作」按钮的无障碍标签；分组名由调用方传入 */
+  virtualWorkspaceActions: (name: string) => string
+  /** 重命名工作区分组对话框的标题 */
+  renameVirtualWorkspace: string
+  /** 「删除工作区分组」菜单项、对话框标题与确认按钮 */
+  deleteVirtualWorkspace: string
+  /** 删除工作区分组的说明文案；分组名由调用方传入 */
+  confirmDeleteVirtualWorkspace: (name: string) => string
+  /** 工作区分组名输入框的占位与无障碍标签 */
+  virtualWorkspaceNamePrompt: string
+  /** 空的工作区分组里的占位文案 */
+  virtualWorkspaceEmpty: string
   /** 在分组内新建会话的无障碍标签；分组名由调用方传入 */
   newSessionInGroup: (name: string) => string
   /** 删除分组的说明文案；分组名由调用方传入 */
@@ -151,6 +177,16 @@ export function regionLabels(
     renameGroup: t('renameGroup'),
     confirmDeleteGroup: (name: string) => t('delete.desc.group', { name }),
     groupActions: (name: string) => t('actions.group.aria', { name }),
+    moveToVirtualWorkspace: t('moveToVirtualWorkspace'),
+    newVirtualWorkspace: t('newVirtualWorkspace'),
+    newVirtualWorkspaceMenu: t('menu.newVirtualWorkspace'),
+    ungroupWorkspace: t('ungroupWorkspace'),
+    virtualWorkspaceActions: (name: string) => t('actions.virtualWorkspace.aria', { name }),
+    renameVirtualWorkspace: t('renameVirtualWorkspace'),
+    deleteVirtualWorkspace: t('deleteVirtualWorkspace'),
+    confirmDeleteVirtualWorkspace: (name: string) => t('delete.desc.virtualWorkspace', { name }),
+    virtualWorkspaceNamePrompt: t('virtualWorkspaceNamePrompt'),
+    virtualWorkspaceEmpty: t('virtualWorkspaceEmpty'),
     newSessionInGroup: (name: string) => tw('actions.newSession.aria', { name }),
     sessionActions: (name: string) => tw('actions.session.aria', { name }),
     moveToGroup: t('moveToGroup'),

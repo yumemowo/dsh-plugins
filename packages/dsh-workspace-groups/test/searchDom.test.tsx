@@ -11,6 +11,7 @@ import {
   timeLabel,
 } from '../src/client/official.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
+import { snapshot } from './snapshot-stub.ts'
 
 /**
  * 搜索的真实 DOM 冒烟
@@ -52,12 +53,17 @@ function props(wide = true): WorkspaceGroupsProps {
       select({ home: undefined })) as never,
     openSession: () => {},
     startSession: async () => 'fresh',
-    loadGroups: async () => ({ w1: [{ id: 'g1', name: '前端', sessionIds: ['a'] }] }),
+    loadGroups: async () => snapshot({ byWorkspace: { w1: [{ id: 'g1', name: '前端', sessionIds: ['a'] }] } }),
     onReady: () => () => {},
-    createGroup: async () => ({}),
-    renameGroup: async () => ({}),
-    deleteGroup: async () => ({}),
-    moveSession: async () => ({}),
+    createGroup: async () => snapshot(),
+    renameGroup: async () => snapshot(),
+    deleteGroup: async () => snapshot(),
+    moveSession: async () => snapshot(),
+    createVirtualWorkspace: async () => snapshot(),
+    renameVirtualWorkspace: async () => snapshot(),
+    deleteVirtualWorkspace: async () => snapshot(),
+    moveWorkspace: async () => snapshot(),
+    forgetWorkspace: async () => snapshot(),
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,

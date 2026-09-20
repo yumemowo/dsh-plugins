@@ -21,7 +21,7 @@ export const name = 'workspace-groups'
 /** 分组存储依赖宿主已挂载的存储域设施 */
 export const inject = ['storageDomain']
 
-export type { Group, WorkspaceGroupsSnapshot } from './spec.ts'
+export type { Group, VirtualWorkspace, WorkspaceGroupsSnapshot } from './spec.ts'
 export type { WorkspaceGroupsService } from './service.ts'
 
 /**
@@ -41,6 +41,13 @@ export function apply(ctx: Context): void {
     deleteGroup: async (workspaceId, groupId) => (await service).deleteGroup(workspaceId, groupId),
     moveSession: async (workspaceId, sessionId, groupId) =>
       (await service).moveSession(workspaceId, sessionId, groupId),
+    createVirtualWorkspace: async (groupName) => (await service).createVirtualWorkspace(groupName),
+    renameVirtualWorkspace: async (groupId, groupName) =>
+      (await service).renameVirtualWorkspace(groupId, groupName),
+    deleteVirtualWorkspace: async (groupId) => (await service).deleteVirtualWorkspace(groupId),
+    moveWorkspace: async (workspaceId, groupId) =>
+      (await service).moveWorkspace(workspaceId, groupId),
+    forgetWorkspace: async (workspaceId) => (await service).forgetWorkspace(workspaceId),
   }
 
   // typert-loader 按这份绑定把 facade 的方法挂到网关上

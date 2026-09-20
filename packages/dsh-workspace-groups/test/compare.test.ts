@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { COMPARE_TAB_ID, registerCompareTab } from '../src/client/compare.tsx'
 import type { RegionActions } from '../src/client/actions.ts'
 import { sidebarTranslate, translateFor, workspaceTranslate } from './locale-stub.ts'
+import { snapshot } from './snapshot-stub.ts'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { Context } from '@deepseek-ai/cordis'
 
@@ -11,11 +12,16 @@ function actions(): RegionActions {
     openSession: () => {},
     startSession: async () => '',
     onReady: () => () => {},
-    loadGroups: async () => ({}),
-    createGroup: async () => ({}),
-    renameGroup: async () => ({}),
-    deleteGroup: async () => ({}),
-    moveSession: async () => ({}),
+    loadGroups: async () => snapshot(),
+    createGroup: async () => snapshot(),
+    renameGroup: async () => snapshot(),
+    deleteGroup: async () => snapshot(),
+    moveSession: async () => snapshot(),
+    createVirtualWorkspace: async () => snapshot(),
+    renameVirtualWorkspace: async () => snapshot(),
+    deleteVirtualWorkspace: async () => snapshot(),
+    moveWorkspace: async () => snapshot(),
+    forgetWorkspace: async () => snapshot(),
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,

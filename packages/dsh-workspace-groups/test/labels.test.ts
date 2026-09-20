@@ -39,15 +39,25 @@ describe('locales', () => {
     // 自有键不多，逐个列出；新增文案时这里会提醒重新确认它是否真的官方没有。
     expect(Object.keys(zh).sort()).toEqual([
       'actions.group.aria',
+      'actions.virtualWorkspace.aria',
       'compareTabDescription',
       'delete.desc.group',
+      'delete.desc.virtualWorkspace',
       'deleteGroup',
+      'deleteVirtualWorkspace',
       'groupNamePrompt',
+      'menu.newVirtualWorkspace',
       'moveToGroup',
+      'moveToVirtualWorkspace',
       'newGroup',
+      'newVirtualWorkspace',
       'renameGroup',
+      'renameVirtualWorkspace',
       'ungroup',
+      'ungroupWorkspace',
       'unimplemented',
+      'virtualWorkspaceEmpty',
+      'virtualWorkspaceNamePrompt',
     ])
   })
 })
@@ -145,6 +155,30 @@ describe('regionLabels', () => {
     )
     expect(labels.moveToGroup).toBe('分组')
     expect(labels.ungroup).toBe('取消分组')
+  })
+
+  it('keeps the virtual-workspace copy under its own keys', () => {
+    expect(labels.newVirtualWorkspace).toBe('新建工作区分组')
+    expect(labels.renameVirtualWorkspace).toBe('重命名工作区分组')
+    expect(labels.deleteVirtualWorkspace).toBe('删除工作区分组')
+    // 一级菜单项说「移动到…」，省略号表示点下去还要选一个目标
+    expect(labels.moveToVirtualWorkspace).toBe('移动到…')
+    expect(labels.ungroupWorkspace).toBe('移出工作区分组')
+    expect(labels.virtualWorkspaceNamePrompt).toBe('工作区分组名称')
+    expect(labels.virtualWorkspaceEmpty).toBe('这个工作区分组里还没有工作区')
+    expect(labels.confirmDeleteVirtualWorkspace('g1')).toBe(
+      '删除工作区分组“g1”？组内工作区会移出分组，工作区本身不受影响。',
+    )
+    expect(labels.virtualWorkspaceActions('g1')).toBe('工作区分组“g1”的操作')
+  })
+
+  it('keeps the two grouping levels apart by name', () => {
+    // 根级与会话级各有一套「新建 / 重命名 / 删除」，措辞必须能区分层级
+    expect(labels.newGroup).not.toBe(labels.newVirtualWorkspace)
+    expect(labels.renameGroup).not.toBe(labels.renameVirtualWorkspace)
+    expect(labels.deleteGroup).not.toBe(labels.deleteVirtualWorkspace)
+    // 两层的删除说明也是两句话，指向的对象不同
+    expect(labels.confirmDeleteGroup('x')).not.toBe(labels.confirmDeleteVirtualWorkspace('x'))
   })
 
   it('splits the group rename menu item from its dialog title', () => {

@@ -41,6 +41,25 @@ export interface WorkspaceLayout {
   loose: SessionRow[]
 }
 
+/** 一个工作区分组段：分组头 + 组内的工作区 id，按传入顺序 */
+export interface VirtualWorkspaceSection {
+  id: string
+  label: string
+  workspaceIds: string[]
+}
+
+/**
+ * 根节点的渲染布局
+ *
+ * 与 {@link WorkspaceLayout} 是同一个形状在两个层级上的用法：这里是工作区
+ * 被分组，那里是会话被分组。`loose` 是没有归入任何分组的工作区 id，
+ * 它们平铺在全部工作区分组之后、不带区段头
+ */
+export interface RootLayout {
+  groups: VirtualWorkspaceSection[]
+  loose: string[]
+}
+
 /**
  * 一个待编辑的分组名，指名编辑对象与当前草稿
  *
@@ -49,6 +68,20 @@ export interface WorkspaceLayout {
 export interface GroupNameDraft {
   workspaceId: string
   groupId: string
+  value: string
+}
+
+/**
+ * 一个待编辑的工作区分组名，指名编辑对象与当前草稿
+ *
+ * 与 {@link GroupNameDraft} 同形但不同层级：那个落在某个工作区内部，这个落在
+ * 根节点。`groupId` 为空串表示新建；那时 `workspaceId` 是发起这次新建的那个
+ * 工作区——入口在它的行菜单里，建完要把它一并放进去
+ */
+export interface VirtualWorkspaceNameDraft {
+  groupId: string
+  /** 新建时随建组一并移入的工作区；改名时为 undefined */
+  workspaceId?: string | undefined
   value: string
 }
 

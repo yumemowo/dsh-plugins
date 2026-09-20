@@ -14,8 +14,15 @@ const groupSchema = z.object({
   sessionIds: z.array(z.string()),
 })
 
+const virtualWorkspaceSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  workspaceIds: z.array(z.string()),
+})
+
 const snapshotSchema = z.object({
   byWorkspace: z.record(z.string(), z.array(groupSchema)),
+  workspaceGroups: z.array(virtualWorkspaceSchema),
 })
 
 const codec = (typeSymbol: string, schema: z.ZodType) => ({
@@ -75,6 +82,19 @@ export const REMOTE_CONTRIBUTION = {
       { name: 'sessionId', codec: str('SessionId') },
       { name: 'groupId', codec: codec('NullableGroupId', z.string().nullable()) },
     ]),
+    descriptor('createVirtualWorkspace', [{ name: 'name', codec: str('GroupName') }]),
+    descriptor('renameVirtualWorkspace', [
+      { name: 'groupId', codec: str('VirtualWorkspaceId') },
+      { name: 'name', codec: str('GroupName') },
+    ]),
+    descriptor('deleteVirtualWorkspace', [
+      { name: 'groupId', codec: str('VirtualWorkspaceId') },
+    ]),
+    descriptor('moveWorkspace', [
+      { name: 'workspaceId', codec: str('WorkspaceId') },
+      { name: 'groupId', codec: codec('NullableGroupId', z.string().nullable()) },
+    ]),
+    descriptor('forgetWorkspace', [{ name: 'workspaceId', codec: str('WorkspaceId') }]),
   ],
 }
 
@@ -85,8 +105,34 @@ export interface Group {
   sessionIds: string[]
 }
 
+/** 一个工作区分组：把若干工作区打包在一起的根节点 */
+export interface VirtualWorkspace {
+  id: string
+  name: string
+  workspaceIds: string[]
+}
+
 export interface WorkspaceGroupsSnapshot {
   byWorkspace: Record<string, Group[]>
+  workspaceGroups: VirtualWorkspace[]
+}
+
+/**
+ * 把一个远端快照收成完整形状
+ *
+ * 浏览器半边会随热重载换新，而宿主半边要重启 `dsh` 才换——两端版本因此可能短暂
+ * 不一致：新客户端可能收到旧宿主回的、没有 `workspaceGroups` 这一格的快照。
+ * 直接迭代那个字段会抛 `groups is not iterable`，把整片区域（对照模式下还包括
+ * 承载它的右侧栏）打挂。缺什么补什么，界面退化成「没有工作区分组」而不是崩掉
+ * @param value - 远端回的快照，字段可能不全
+ * @returns 两个字段都在的快照
+ */
+export function normalizeSnapshot(value: unknown): WorkspaceGroupsSnapshot {
+  const raw = (value ?? {}) as Partial<WorkspaceGroupsSnapshot>
+  return {
+    byWorkspace: raw.byWorkspace ?? {},
+    workspaceGroups: Array.isArray(raw.workspaceGroups) ? raw.workspaceGroups : [],
+  }
 }
 
 /** 走网关调用时返回的 Remote 结果信封 */

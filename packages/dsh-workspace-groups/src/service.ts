@@ -1,24 +1,47 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { workspaceGroupsSpec } from './spec.ts'
-import type { Group, WorkspaceGroupsSnapshot } from './spec.ts'
+import type { Group, VirtualWorkspace, WorkspaceGroupsSnapshot } from './spec.ts'
 
 /** 分组存储与变更操作的实现，注册为 `ctx.workspaceGroups` */
 export interface WorkspaceGroupsService {
-  /** 读取全部工作区的分组 */
+  /** 读取全部工作区的会话分组与根节点上的工作区分组 */
   list(): Promise<WorkspaceGroupsSnapshot>
-  /** 在工作区下新建一个分组 */
+  /** 在工作区下新建一个会话分组 */
   createGroup(workspaceId: string, name: string): Promise<WorkspaceGroupsSnapshot>
-  /** 重命名分组 */
+  /** 重命名会话分组 */
   renameGroup(workspaceId: string, groupId: string, name: string): Promise<WorkspaceGroupsSnapshot>
-  /** 删除分组；组内会话回到未分组，会话本身不受影响 */
+  /** 删除会话分组；组内会话回到未分组，会话本身不受影响 */
   deleteGroup(workspaceId: string, groupId: string): Promise<WorkspaceGroupsSnapshot>
   /** 把会话移入分组；`groupId` 为 null 表示移出到未分组 */
   moveSession(workspaceId: string, sessionId: string, groupId: string | null): Promise<WorkspaceGroupsSnapshot>
+  /** 在根节点新建一个工作区分组 */
+  createVirtualWorkspace(name: string): Promise<WorkspaceGroupsSnapshot>
+  /** 重命名工作区分组 */
+  renameVirtualWorkspace(groupId: string, name: string): Promise<WorkspaceGroupsSnapshot>
+  /** 删除工作区分组；组内工作区回到未分组，工作区本身不受影响 */
+  deleteVirtualWorkspace(groupId: string): Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把工作区移入分组；`groupId` 为 null 表示移出到未分组
+   *
+   * 一个工作区至多属于一个分组，移入时自动从原分组摘除
+   */
+  moveWorkspace(workspaceId: string, groupId: string | null): Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把一个工作区从所有分组里摘除
+   *
+   * 删除工作区时清理由此留下的归属记录，不另开一套删除接口
+   */
+  forgetWorkspace(workspaceId: string): Promise<WorkspaceGroupsSnapshot>
 }
 
-/** 生成一个分组 id；同工作区内唯一即可，无需全局唯一 */
+/** 生成一个会话分组 id；同工作区内唯一即可，无需全局唯一 */
 function newGroupId(): string {
   return `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+}
+
+/** 生成一个工作区分组 id；与会话分组的 id 前缀区分开，便于排查元数据 */
+function newVirtualWorkspaceId(): string {
+  return `wg${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
 }
 
 /**
@@ -32,25 +55,42 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
   const domain = await ctx.storageDomain.open(workspaceGroupsSpec)
   ctx.effect(() => () => domain.close(), 'workspace-groups: domain close')
   const table = domain.table('by_workspace')
+  const tree = domain.global
 
-  /** 读取全部记录，按 workspaceId 归集 */
+  /** 读取全部记录，按 workspaceId 归集会话分组 */
   function snapshot(): WorkspaceGroupsSnapshot {
     const byWorkspace: Record<string, Group[]> = {}
     for (const [workspaceId, record] of table.entries()) {
       byWorkspace[workspaceId] = record.groups
     }
-    return { byWorkspace }
+    return { byWorkspace, workspaceGroups: tree.get().virtualWorkspaces }
   }
 
-  /** 取某工作区的分组；不存在时视为空列表，不写盘 */
+  /**
+   * 取某工作区的会话分组；不存在时视为空列表，不写盘
+   *
+   * 返回副本：域把存储的对象原样交出来（不做防御性拷贝），就地改它会直接改到
+   * 域内存里的权威状态
+   */
   function groupsOf(workspaceId: string): Group[] {
-    return table.get(workspaceId)?.groups ?? []
+    return [...(table.get(workspaceId)?.groups ?? [])]
   }
 
-  /** 写回某工作区的分组；空列表表示删除该记录 */
+  /** 取根节点上的工作区分组；返回副本，理由同上 */
+  function treeGroups(): VirtualWorkspace[] {
+    return [...tree.get().virtualWorkspaces]
+  }
+
+  /** 写回某工作区的会话分组；空列表表示删除该记录 */
   async function save(workspaceId: string, groups: Group[]): Promise<WorkspaceGroupsSnapshot> {
     if (groups.length === 0) await table.delete(workspaceId)
     else await table.put(workspaceId, { groups })
+    return snapshot()
+  }
+
+  /** 写回根节点上的工作区分组列表 */
+  async function saveTree(groups: VirtualWorkspace[]): Promise<WorkspaceGroupsSnapshot> {
+    await tree.set({ virtualWorkspaces: groups })
     return snapshot()
   }
 
@@ -90,6 +130,52 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
         target.sessionIds.push(sessionId)
       }
       return save(workspaceId, groups)
+    },
+
+    async createVirtualWorkspace(name) {
+      const groups = treeGroups()
+      groups.push({ id: newVirtualWorkspaceId(), name, workspaceIds: [] })
+      return saveTree(groups)
+    },
+
+    async renameVirtualWorkspace(groupId, name) {
+      const groups = treeGroups().map((group) =>
+        group.id === groupId ? { ...group, name } : group,
+      )
+      return saveTree(groups)
+    },
+
+    async deleteVirtualWorkspace(groupId) {
+      // 只解散分组：组内工作区回到未分组，工作区及其会话都不受影响。
+      return saveTree(treeGroups().filter((group) => group.id !== groupId))
+    },
+
+    async moveWorkspace(workspaceId, groupId) {
+      // 先在所有分组中摘除该工作区，保证一个工作区至多属于一个分组。
+      const groups = treeGroups().map((group) => ({
+        ...group,
+        workspaceIds: group.workspaceIds.filter((id) => id !== workspaceId),
+      }))
+      if (groupId !== null) {
+        const target = groups.find((group) => group.id === groupId)
+        if (target === undefined) throw new Error(`unknown workspace group "${groupId}"`)
+        target.workspaceIds.push(workspaceId)
+      }
+      return saveTree(groups)
+    },
+
+    async forgetWorkspace(workspaceId) {
+      // 工作区已被删除，它留下的归属记录再也不会被渲染；元数据里挂着不存在的
+      // id 只会让两边长期偏离。没有该工作区的记录时不写盘
+      const groups = treeGroups()
+      const pruned = groups.map((group) => ({
+        ...group,
+        workspaceIds: group.workspaceIds.filter((id) => id !== workspaceId),
+      }))
+      const changed = pruned.some(
+        (group, index) => group.workspaceIds.length !== (groups[index]?.workspaceIds.length ?? 0),
+      )
+      return changed ? saveTree(pruned) : snapshot()
     },
   }
 }

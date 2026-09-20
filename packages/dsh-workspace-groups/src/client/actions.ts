@@ -9,7 +9,7 @@ import type { ComponentType } from 'react'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
-import type { Group } from './remote.ts'
+import type { WorkspaceGroupsSnapshot } from './remote.ts'
 import type { HostInfo } from './hostInfo.ts'
 import type { GroupChoice } from './data/types.ts'
 import type { OfficialAddLabels, OfficialSessionLabels, SidebarTranslate, WorkspaceTranslate } from './official.ts'
@@ -116,15 +116,15 @@ export interface RegionActions {
    */
   startSession: (workspaceId: string) => Promise<string | undefined>
   /** 读取分组快照 */
-  loadGroups: () => Promise<Record<string, Group[]>>
+  loadGroups: () => Promise<WorkspaceGroupsSnapshot>
   /** 远程数据面就绪后回调一次；返回反注册函数 */
   onReady: (listener: () => void) => () => void
-  /** 新建分组；返回替换用的完整快照 */
-  createGroup: (workspaceId: string, name: string) => Promise<Record<string, Group[]>>
-  /** 重命名分组；返回替换用的完整快照 */
-  renameGroup: (workspaceId: string, groupId: string, name: string) => Promise<Record<string, Group[]>>
-  /** 删除分组，组内会话回到未归组；返回替换用的完整快照 */
-  deleteGroup: (workspaceId: string, groupId: string) => Promise<Record<string, Group[]>>
+  /** 在工作区下新建会话分组；返回替换用的完整快照 */
+  createGroup: (workspaceId: string, name: string) => Promise<WorkspaceGroupsSnapshot>
+  /** 重命名会话分组；返回替换用的完整快照 */
+  renameGroup: (workspaceId: string, groupId: string, name: string) => Promise<WorkspaceGroupsSnapshot>
+  /** 删除会话分组，组内会话回到未归组；返回替换用的完整快照 */
+  deleteGroup: (workspaceId: string, groupId: string) => Promise<WorkspaceGroupsSnapshot>
   /**
    * 把会话移入分组；空串表示移出分组
    *
@@ -136,7 +136,21 @@ export interface RegionActions {
     workspaceId: string,
     sessionId: string,
     groupId: GroupChoice,
-  ) => Promise<Record<string, Group[]>>
+  ) => Promise<WorkspaceGroupsSnapshot>
+  /** 在根节点新建工作区分组；返回替换用的完整快照 */
+  createVirtualWorkspace: (name: string) => Promise<WorkspaceGroupsSnapshot>
+  /** 重命名工作区分组；返回替换用的完整快照 */
+  renameVirtualWorkspace: (groupId: string, name: string) => Promise<WorkspaceGroupsSnapshot>
+  /** 删除工作区分组，组内工作区回到未归组；返回替换用的完整快照 */
+  deleteVirtualWorkspace: (groupId: string) => Promise<WorkspaceGroupsSnapshot>
+  /** 把工作区移入分组；空串表示移出分组 */
+  moveWorkspace: (workspaceId: string, groupId: GroupChoice) => Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把一个工作区从所有工作区分组里摘除
+   *
+   * 删除工作区时调用：工作区没了，它留下的归属记录再也不会被渲染
+   */
+  forgetWorkspace: (workspaceId: string) => Promise<WorkspaceGroupsSnapshot>
   /** 重命名工作区 */
   renameWorkspace: (workspaceId: string, title: string) => Promise<void>
   /** 删除工作区注册；文件夹与会话记录保留 */

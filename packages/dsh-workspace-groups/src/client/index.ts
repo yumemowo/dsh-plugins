@@ -33,8 +33,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 // ctx.uiWorkspace 的服务类型——本包复用官方文案与官方动作，靠这份声明让
 // 官方改键名时在 tsc 阶段就暴露，而不是运行期显示原始键名
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
-import { REMOTE_CONTRIBUTION, SERVICE, callRemote } from './remote.ts'
-import type { Group, WorkspaceGroupsSnapshot } from './remote.ts'
+import { REMOTE_CONTRIBUTION, SERVICE, callRemote, normalizeSnapshot } from './remote.ts'
+import type { WorkspaceGroupsSnapshot } from './remote.ts'
 import { registerCompareTab } from './compare.tsx'
 import { NS, en, zh } from './locales.ts'
 import { officialAddLabels, officialSessionLabels, timeLabel } from './official.ts'
@@ -46,6 +46,9 @@ import { insertStyles } from './styles.ts'
 
 /** 浏览器半边声明的服务依赖 */
 export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'remote']
+
+/** 远程面缺失或依赖不全时的空快照：两个字段都空，界面退化成全部平铺 */
+const EMPTY_SNAPSHOT: WorkspaceGroupsSnapshot = { byWorkspace: {}, workspaceGroups: [] }
 
 /**
  * 对照模式开关
@@ -155,10 +158,24 @@ export function apply(ctx: Context): void {
    */
   let cachedOfficial: { service: UiWorkspace; value: OfficialSessionActions } | undefined
 
-  const loadGroups = async (): Promise<Record<string, Group[]>> => {
-    const snapshot = await callRemote<WorkspaceGroupsSnapshot>(requireApi(), 'list')
-    return snapshot.byWorkspace
+  /**
+   * 调一个宿主方法并取回完整形状的快照
+   *
+   * 每个方法都回整份快照，因此收口在这里统一补齐缺格：浏览器半边热重载会换到
+   * 新客户端，而宿主半边要重启 `dsh` 才换，中间那段窗口里收到的是旧形状
+   *（没有 `workspaceGroups`），缺格不补会在遍历时抛错、把整片区域打挂
+   * @param method - 宿主方法名
+   * @param args - 该方法的参数
+   * @returns 两个字段都在的快照
+   */
+  const callSnapshot = async (
+    method: string,
+    args: unknown[] = [],
+  ): Promise<WorkspaceGroupsSnapshot> => {
+    return normalizeSnapshot(await callRemote<unknown>(requireApi(), method, args))
   }
+
+  const loadGroups = (): Promise<WorkspaceGroupsSnapshot> => callSnapshot('list')
 
   /**
    * 官方三项会话操作的复用面
@@ -267,11 +284,16 @@ export function apply(ctx: Context): void {
           throw new Error('workspace-groups requires the workspace and session controllers')
         },
         onReady: () => () => {},
-        loadGroups: async () => ({}),
-        createGroup: async () => ({}),
-        renameGroup: async () => ({}),
-        deleteGroup: async () => ({}),
-        moveSession: async () => ({}),
+        loadGroups: async () => EMPTY_SNAPSHOT,
+        createGroup: async () => EMPTY_SNAPSHOT,
+        renameGroup: async () => EMPTY_SNAPSHOT,
+        deleteGroup: async () => EMPTY_SNAPSHOT,
+        moveSession: async () => EMPTY_SNAPSHOT,
+        createVirtualWorkspace: async () => EMPTY_SNAPSHOT,
+        renameVirtualWorkspace: async () => EMPTY_SNAPSHOT,
+        deleteVirtualWorkspace: async () => EMPTY_SNAPSHOT,
+        moveWorkspace: async () => EMPTY_SNAPSHOT,
+        forgetWorkspace: async () => EMPTY_SNAPSHOT,
         renameWorkspace: async () => {},
         deleteWorkspace: async () => {},
         // 会话控制器缺失时退回线上契约里那个固定值（见 RegionActions）
@@ -305,28 +327,20 @@ export function apply(ctx: Context): void {
       },
       onReady,
       loadGroups,
-      createGroup: (workspaceId, name) =>
-        callRemote<WorkspaceGroupsSnapshot>(requireApi(), 'createGroup', [workspaceId, name]).then(
-          (snapshot) => snapshot.byWorkspace,
-        ),
+      createGroup: (workspaceId, name) => callSnapshot('createGroup', [workspaceId, name]),
       renameGroup: (workspaceId, groupId, name) =>
-        callRemote<WorkspaceGroupsSnapshot>(requireApi(), 'renameGroup', [
-          workspaceId,
-          groupId,
-          name,
-        ]).then((snapshot) => snapshot.byWorkspace),
-      deleteGroup: (workspaceId, groupId) =>
-        callRemote<WorkspaceGroupsSnapshot>(requireApi(), 'deleteGroup', [
-          workspaceId,
-          groupId,
-        ]).then((snapshot) => snapshot.byWorkspace),
+        callSnapshot('renameGroup', [workspaceId, groupId, name]),
+      deleteGroup: (workspaceId, groupId) => callSnapshot('deleteGroup', [workspaceId, groupId]),
       // 选择器用空串表示「不属于任何分组」，宿主接口用 null 表达同一含义。
       moveSession: (workspaceId, sessionId, groupId) =>
-        callRemote<WorkspaceGroupsSnapshot>(requireApi(), 'moveSession', [
-          workspaceId,
-          sessionId,
-          groupId === '' ? null : groupId,
-        ]).then((snapshot) => snapshot.byWorkspace),
+        callSnapshot('moveSession', [workspaceId, sessionId, groupId === '' ? null : groupId]),
+      createVirtualWorkspace: (name) => callSnapshot('createVirtualWorkspace', [name]),
+      renameVirtualWorkspace: (groupId, name) =>
+        callSnapshot('renameVirtualWorkspace', [groupId, name]),
+      deleteVirtualWorkspace: (groupId) => callSnapshot('deleteVirtualWorkspace', [groupId]),
+      moveWorkspace: (workspaceId, groupId) =>
+        callSnapshot('moveWorkspace', [workspaceId, groupId === '' ? null : groupId]),
+      forgetWorkspace: (workspaceId) => callSnapshot('forgetWorkspace', [workspaceId]),
       // 工作区自身的改名与删除直接走官方工作区控制器，不另造 RPC：
       // 删除只移除注册，文件夹与会话记录都由宿主保留。
       renameWorkspace: (workspaceId, title) =>

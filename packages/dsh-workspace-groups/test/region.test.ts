@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildLayout,
+  buildRootLayout,
   containsSession,
   groupIdOfSession,
   sameGroupSections,
+  virtualWorkspaceIdOf,
 } from '../src/client/data/layout.ts'
 import { sameSessionStatus } from '../src/client/data/status.ts'
 import { groupSessionsByWorkspace, straySessions } from '../src/client/data/sessions.ts'
@@ -11,10 +13,13 @@ import {
   buildGroupMenuItems,
   buildRowContextMenuItems,
   buildSessionMenuItems,
+  buildVirtualWorkspaceMenuItem,
+  buildVirtualWorkspaceMenuItems,
   buildWorkspaceMenuItems,
 } from '../src/client/menus.tsx'
 import type { SessionRow } from '../src/client/data/types.ts'
 import { officialSessionLabels } from '../src/client/official.ts'
+import { normalizeSnapshot } from '../src/client/remote.ts'
 import { workspaceTranslate } from './locale-stub.ts'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -325,6 +330,172 @@ describe('buildWorkspaceMenuItems', () => {
 
     // 「新建分组」不是高频操作，因此不占行内位置（行内只有 `...` 与 `+`）
     expect(items[0]).toMatchObject({ id: 'new-group', label: '新建分组' })
+  })
+
+  it('omits the virtual-workspace entry when the row offers none', () => {
+    const items = buildWorkspaceMenuItems(labels)
+
+    // 未分组桶的工作区行没有可移入的地方，补一项就是点不动的死入口
+    expect(items.some((item) => (item as { id?: string }).id === 'move-virtual-workspace')).toBe(
+      false,
+    )
+  })
+
+  it('puts rename above the move-to entry, and omits ungroup until grouped', () => {
+    const items = buildWorkspaceMenuItems({
+      ...labels,
+      virtualWorkspaceGrouping: {
+        sections: [],
+        currentGroupId: '',
+        newLabel: '新建工作区分组',
+        moveToLabel: '移动到…',
+        ungroupLabel: '移出工作区分组',
+      },
+    })
+
+    // 改名紧挨在「新建分组」之后、归类操作之前；未归组时没有「移出」这一格
+    expect(items.map((item) => (item as { id?: string }).id)).toEqual([
+      'new-group',
+      'rename',
+      'move-virtual-workspace',
+      'delete',
+    ])
+  })
+
+  it('shows ungroup right below move-to once the workspace is grouped', () => {
+    const items = buildWorkspaceMenuItems({
+      ...labels,
+      virtualWorkspaceGrouping: {
+        sections: [],
+        currentGroupId: 'wg1',
+        newLabel: '新建工作区分组',
+        moveToLabel: '移动到…',
+        ungroupLabel: '移出工作区分组',
+      },
+    })
+
+    // 「移动到…」与「移出工作区分组」是一对归类操作，平级相邻
+    expect(items.map((item) => (item as { id?: string }).id)).toEqual([
+      'new-group',
+      'rename',
+      'move-virtual-workspace',
+      'ungroup-workspace',
+      'delete',
+    ])
+  })
+
+  it('leaves the top-level ungroup entry without an icon', () => {
+    const items = buildWorkspaceMenuItems({
+      ...labels,
+      virtualWorkspaceGrouping: {
+        sections: [],
+        currentGroupId: 'wg1',
+        newLabel: '新建工作区分组',
+        moveToLabel: '移动到…',
+        ungroupLabel: '移出工作区分组',
+      },
+    })
+    const ungroup = items.find((item) => (item as { id?: string }).id === 'ungroup-workspace')
+
+    // 移出是动作而不是可移入的目标，因此不带图标
+    expect(ungroup).toMatchObject({ label: '移出工作区分组' })
+    expect((ungroup as { icon?: unknown }).icon).toBeUndefined()
+  })
+})
+
+/**
+ * 工作区行「移动工作区分组」子菜单
+ *
+ * 建组与移入合成一条动作：入口在工作区行上，用户点下去要么放进已有分组、
+ * 要么先建一个再放，因此二级菜单把「新建 → 各分组 → 移出」三段排在一起
+ */
+describe('buildVirtualWorkspaceMenuItem', () => {
+  /** 造选项集；分组顺序即传入顺序 */
+  function input(currentGroupId: string) {
+    return {
+      sections: [
+        { id: 'wg1', label: '前端', workspaceIds: ['w1'] },
+        { id: 'wg2', label: '后端', workspaceIds: [] },
+        { id: 'wg3', label: '工具', workspaceIds: [] },
+      ],
+      currentGroupId,
+      newLabel: '新建工作区分组',
+      moveToLabel: '移动到…',
+      ungroupLabel: '移出工作区分组',
+    }
+  }
+
+  it('offers create first, then the candidate groups', () => {
+    const item = buildVirtualWorkspaceMenuItem(input(''))
+
+    expect(item.id).toBe('move-virtual-workspace')
+    expect(item.label).toBe('移动到…')
+    expect(item.submenu?.map((entry) => entry.id)).toEqual([
+      'create-virtual-workspace',
+      'vw:wg1',
+      'vw:wg2',
+      'vw:wg3',
+    ])
+  })
+
+  it('drops the group the workspace is already in', () => {
+    const item = buildVirtualWorkspaceMenuItem(input('wg2'))
+
+    // 把工作区移动到它已经在的分组是无意义的操作
+    expect(item.submenu?.some((entry) => entry.id === 'vw:wg2')).toBe(false)
+  })
+
+  it('keeps ungroup out of the submenu, which is for moving into a group', () => {
+    // 「移出」不是「移动」：它由工作区菜单作为一级项渲染，见
+    // buildWorkspaceMenuItems 的「shows ungroup right below move-to」一例
+    expect(
+      buildVirtualWorkspaceMenuItem(input('wg1')).submenu?.some(
+        (entry) => entry.id === 'ungroup-workspace',
+      ),
+    ).toBe(false)
+  })
+
+  it('leaves the create entry without an icon and with the ellipsis label', () => {
+    const item = buildVirtualWorkspaceMenuItem(input(''))
+
+    // 建组是子菜单里唯一的独立动作，不是一个可以移入的目标：靠省略号表明
+    // 「点下去还要再填一次」，且不带图标（带图标会与上面带 `+` 的「新建分组」撞形）
+    const create = item.submenu?.[0]
+    expect(create?.id).toBe('create-virtual-workspace')
+    expect(create?.label).toBe('新建工作区分组')
+    expect(create?.icon).toBeUndefined()
+    // 其余候选分组同样不带图标，因此子菜单里的标签左缘是对齐的
+    expect(item.submenu?.slice(1).every((entry) => entry.icon === undefined)).toBe(true)
+  })
+
+  it('stays usable with no group at all because create leads the submenu', () => {
+    const item = buildVirtualWorkspaceMenuItem({
+      sections: [],
+      currentGroupId: '',
+      newLabel: '新建工作区分组',
+      moveToLabel: '移动到…',
+      ungroupLabel: '移出工作区分组',
+    })
+
+    // 一级项不禁用：即便一个分组都没有，它下面还有「新建」可点
+    expect(item.disabled).toBe(false)
+    expect(item.submenu?.map((entry) => entry.id)).toEqual(['create-virtual-workspace'])
+  })
+})
+
+describe('buildVirtualWorkspaceMenuItems', () => {
+  const labels = { renameLabel: '重命名工作区分组', deleteLabel: '删除工作区分组' }
+
+  it('offers rename and delete in that order', () => {
+    const items = buildVirtualWorkspaceMenuItems(labels)
+
+    expect(items.map((item) => (item as { id?: string }).id)).toEqual(['rename', 'delete'])
+  })
+
+  it('marks only the delete entry as dangerous', () => {
+    const items = buildVirtualWorkspaceMenuItems(labels) as readonly { id: string; danger?: boolean }[]
+
+    expect(items.filter((item) => item.danger === true).map((item) => item.id)).toEqual(['delete'])
   })
 })
 
@@ -742,5 +913,146 @@ describe('sameSessionStatus', () => {
     expect(sameSessionStatus(undefined, { state: 'done', label: '已完成' })).toBe(false)
     expect(sameSessionStatus({ state: 'done', label: '已完成' }, undefined)).toBe(false)
     expect(sameSessionStatus(undefined, undefined)).toBe(true)
+  })
+})
+
+/**
+ * 根节点上的切分
+ *
+ * 与会话那一层同一套取舍，只是输入换成工作区列表与工作区分组定义
+ */
+describe('buildRootLayout', () => {
+  /** 造一个工作区分组定义 */
+  function wgroup(id: string, name: string, workspaceIds: string[]) {
+    return { id, name, workspaceIds }
+  }
+
+  it('keeps a workspace inside its group in metadata order', () => {
+    const layout = buildRootLayout(
+      ['w1', 'w2', 'w3'],
+      [wgroup('g1', '前端', ['w3', 'w1'])],
+    )
+
+    expect(layout.groups.map((section) => section.label)).toEqual(['前端'])
+    expect(layout.groups[0]?.workspaceIds).toEqual(['w3', 'w1'])
+    expect(layout.loose).toEqual(['w2'])
+  })
+
+  it('leaves every workspace loose when the user has created no group', () => {
+    const layout = buildRootLayout(['w1', 'w2'], [])
+
+    // 没有用户分组时这一层不改变任何行的位置：界面与没有这个功能时一致
+    expect(layout.groups).toEqual([])
+    expect(layout.loose).toEqual(['w1', 'w2'])
+  })
+
+  it('invents no ungrouped bucket of its own', () => {
+    const layout = buildRootLayout(['w1', 'w2'], [wgroup('g1', '前端', ['w1'])])
+
+    // 未归组的工作区平铺在分组之后，不占一个显式的区段
+    expect(layout.groups.map((section) => section.id)).toEqual(['g1'])
+    expect(layout.loose).toEqual(['w2'])
+  })
+
+  it('skips metadata entries whose workspace no longer exists', () => {
+    const layout = buildRootLayout(['w1'], [wgroup('g1', '前端', ['w1', 'gone'])])
+
+    expect(layout.groups[0]?.workspaceIds).toEqual(['w1'])
+  })
+
+  it('treats a workspace listed in two groups as belonging to the first only', () => {
+    const layout = buildRootLayout(
+      ['w1'],
+      [wgroup('g1', '第一', ['w1']), wgroup('g2', '第二', ['w1'])],
+    )
+
+    expect(layout.groups[0]?.workspaceIds).toEqual(['w1'])
+    expect(layout.groups[1]?.workspaceIds).toEqual([])
+    // 被分组认领过的工作区不会再出现在平铺区，避免重复渲染
+    expect(layout.loose).toEqual([])
+  })
+
+  it('renders an empty group rather than dropping it', () => {
+    const layout = buildRootLayout([], [wgroup('g1', '空组', [])])
+
+    // 空分组是「刚建完还没移入工作区」的通常状态，不能悄悄消失
+    expect(layout.groups).toHaveLength(1)
+    expect(layout.groups[0]?.workspaceIds).toEqual([])
+  })
+
+  it('keeps group identity stable across rebuilds', () => {
+    const groups = [wgroup('g1', '前端', ['w1']), wgroup('g2', '后端', [])]
+    const first = buildRootLayout(['w1'], groups)
+    const second = buildRootLayout(['w1'], groups)
+
+    // 分组 id 必须逐次一致，否则展开折叠状态会每次都重置
+    expect(first.groups.map((s) => s.id)).toEqual(second.groups.map((s) => s.id))
+  })
+})
+
+describe('virtualWorkspaceIdOf', () => {
+  it('reports the group that holds the workspace', () => {
+    const sections = buildRootLayout(['w1', 'w2'], [
+      { id: 'g1', name: '前端', workspaceIds: ['w1'] },
+    ]).groups
+
+    expect(virtualWorkspaceIdOf(sections, 'w1')).toBe('g1')
+  })
+
+  it('reports an empty id for a workspace outside every group', () => {
+    const sections = buildRootLayout(['w1', 'w2'], [
+      { id: 'g1', name: '前端', workspaceIds: ['w1'] },
+    ]).groups
+
+    // 空串对应菜单里的「不在任何工作区分组」这一事实
+    expect(virtualWorkspaceIdOf(sections, 'w2')).toBe('')
+  })
+
+  it('reports an empty id when no group exists', () => {
+    expect(virtualWorkspaceIdOf([], 'w1')).toBe('')
+  })
+})
+
+/**
+ * 两端版本错位
+ *
+ * 浏览器半边随热重载换新，宿主半边要重启 `dsh` 才换，因此新客户端可能收到旧宿主
+ * 回的、没有 `workspaceGroups` 这一格的快照。缺格直接遍历会抛 `groups is not
+ * iterable`，把整片区域（对照模式下还包括承载它的右侧栏）打挂——这里固化降级行为
+ */
+describe('normalizeSnapshot', () => {
+  it('fills in the grouping field a pre-upgrade host omits', () => {
+    const normalized = normalizeSnapshot({ byWorkspace: {} })
+
+    expect(normalized.workspaceGroups).toEqual([])
+  })
+
+  it('keeps a complete snapshot as it is', () => {
+    const normalized = normalizeSnapshot({
+      byWorkspace: { w1: [] },
+      workspaceGroups: [{ id: 'wg1', name: '前端', workspaceIds: [] }],
+    })
+
+    expect(normalized.workspaceGroups.map((group) => group.id)).toEqual(['wg1'])
+  })
+
+  it('treats a non-array grouping field as absent', () => {
+    // 字段在但形状不对时同样不能交给遍历
+    expect(normalizeSnapshot({ workspaceGroups: null }).workspaceGroups).toEqual([])
+    expect(normalizeSnapshot(undefined).workspaceGroups).toEqual([])
+  })
+})
+
+describe('buildRootLayout with a pre-upgrade snapshot', () => {
+  it('treats a missing grouping field as no workspace group', () => {
+    // 旧宿主半边回的只有 byWorkspace 那一格
+    const layout = buildRootLayout(['w1', 'w2'], undefined)
+
+    expect(layout.groups).toEqual([])
+    expect(layout.loose).toEqual(['w1', 'w2'])
+  })
+
+  it('keeps every workspace loose rather than throwing', () => {
+    expect(() => buildRootLayout(['w1'], undefined)).not.toThrow()
   })
 })
