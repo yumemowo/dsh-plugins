@@ -6,7 +6,7 @@ import { IconVirtualFolder16, IconVirtualWorkspace16 } from '../src/client/icons
  * 自绘图标的几何
  *
  * 这个字形是照官方 primitives 的比例量出来再画的（网格边距、圆角、壁厚都写在
- * README 的「自绘图标」一节），而不是「看着差不多」的近似值。这里把它固定下来：
+ * `docs/custom-icons.md`），而不是「看着差不多」的近似值。这里把它固定下来：
  * 后续若有人顺手改窄一格或换掉圆角，会在这里失败，而不是等到界面上与官方图标
  * 并排时才发现不同族
  *

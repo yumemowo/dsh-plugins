@@ -13,7 +13,7 @@
  *   2.1 / 0.9、容器圆角 1.9、壁厚 1.3），两者因此同族
  *
  * 两个造型都在小尺寸下验证过：16px 时轮廓清晰、互不粘连或断开（验证方式见
- * README「自绘图标」）
+ * `docs/custom-icons.md`）
  */
 import type { ReactElement } from 'react'
 
