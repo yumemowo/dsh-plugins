@@ -75,6 +75,7 @@
 | header 的添加工作区 / 搜索 / 视图选项 | `IconProjectAddOutline16` / `IconSearchOutline16` / `IconPersonalizationOutline16`（与官方 header 同字形）；搜索框的清除按钮用 `IconCloseFill14` |
 | header 的新建工作区分组、菜单里的工作区分组项 | **本包自绘** `IconVirtualWorkspace16`（见 [自绘图标](custom-icons.md)） |
 | 会话菜单的分叉 / 归档项 | `IconBranchOutline16` / `IconArchiveOutline20`（与官方会话菜单同字形） |
+| 子菜单父项的行尾箭头 | `IconChevronRightOutline14`（与 composer slash 菜单给「可进入目录」候选画的箭头同字形） |
 | 窄栏展开入口 | `IconPanelLeftOutline16`（与官方侧栏折叠按钮同一字形） |
 | 会话状态点 | `StateDot`（运行态画追光方阵，其余画圆点；颜色由原语的主题规则给出） |
 | 行尾相对时间 | `relativeTime`（官方 `timeLabel` 用的同一个分桶函数，文案走官方语言包） |

@@ -33,6 +33,7 @@ export const IconTrashOutline16 = icon('IconTrashOutline16')
 export const IconPanelLeftOutline16 = icon('IconPanelLeftOutline16')
 export const IconBranchOutline16 = icon('IconBranchOutline16')
 export const IconArchiveOutline20 = icon('IconArchiveOutline20')
+export const IconChevronRightOutline14 = icon('IconChevronRightOutline14')
 
 /**
  * 相对时间替身：分桶规则与本包 `official.ts` 的契约一致，文案由调用方决定。
@@ -89,6 +90,7 @@ export default {
   IconPanelLeftOutline16,
   IconBranchOutline16,
   IconArchiveOutline20,
+  IconChevronRightOutline14,
   IconProjectAddOutline16,
   IconSearchOutline16,
   IconPersonalizationOutline16,

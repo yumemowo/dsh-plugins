@@ -7,15 +7,40 @@
 import {
   IconArchiveOutline20,
   IconBranchOutline16,
+  IconChevronRightOutline14,
   IconEditOutline16,
   IconNewChatOutline16,
   IconPlusOutline16,
   IconTrashOutline16,
 } from './runtime.ts'
+import type { ReactNode } from 'react'
 import type { MenuActionItem, MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconVirtualWorkspace16 } from './icons.tsx'
 import type { OfficialSessionLabels } from './official.ts'
 import type { GroupSection, VirtualWorkspaceSection } from './data/types.ts'
+
+/**
+ * 给带二级菜单的一级项补一个行尾箭头
+ *
+ * 官方 `Menu` 的项只有「前导图标 → 文案 → 尾部选中标记」三个槽，没有表达
+ * 「悬停展开二级菜单」的槽位，只给 `aria-haspopup` / `aria-expanded` 这类
+ * 无障碍信号。箭头因此塞进 `label` 里，由 `.wg-menu-label` 两端对齐推到行尾
+ *
+ * 子菜单为空时不加：原语只在 `submenu` 非空时才把该项当子菜单父项（展开、
+ * 键盘进入、`aria-haspopup` 都按这个判断），加了箭头就是在指一个展不开的菜单
+ * @param label - 一级项文案
+ * @param entries - 该项的二级子菜单
+ * @returns 有子菜单时是两端对齐的行，否则原样返回文案
+ */
+function submenuParentLabel(label: string, entries: readonly MenuActionItem[]): ReactNode {
+  if (entries.length === 0) return label
+  return (
+    <span className="wg-menu-label">
+      <span className="wg-menu-label-text">{label}</span>
+      <IconChevronRightOutline14 className="wg-menu-arrow" />
+    </span>
+  )
+}
 
 /** 会话「更多操作」菜单里分组项的选项集 */
 export interface GroupMenuInput {
@@ -23,7 +48,7 @@ export interface GroupMenuInput {
   sections: readonly GroupSection[]
   /** 目标会话当前所属分组 id；空串表示未归组 */
   currentGroupId: string
-  /** 「分组」一级项文案 */
+  /** 「移动到…」一级项文案；省略号表示点下去还要选一个目标 */
   groupLabel: string
   /** 「取消分组」文案 */
   ungroupLabel: string
@@ -55,7 +80,7 @@ export function buildGroupMenuItem(input: GroupMenuInput): MenuActionItem {
     .map((section) => ({ id: `group:${section.id}`, label: section.label }))
   return {
     id: 'group',
-    label: input.groupLabel,
+    label: submenuParentLabel(input.groupLabel, candidates),
     disabled: candidates.length === 0,
     submenu: candidates,
   }
@@ -238,7 +263,7 @@ export function buildVirtualWorkspaceMenuItem(input: VirtualWorkspaceMenuInput):
   submenu.push(...candidates)
   return {
     id: 'move-virtual-workspace',
-    label: input.moveToLabel,
+    label: submenuParentLabel(input.moveToLabel, submenu),
     icon: <IconVirtualWorkspace16 />,
     disabled: false,
     submenu,

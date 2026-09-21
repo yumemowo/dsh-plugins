@@ -94,7 +94,7 @@ export interface RegionLabels {
   renameGroup: string
   /** 分组行「更多操作」按钮的无障碍标签；分组名由调用方传入 */
   groupActions: (name: string) => string
-  /** 工作区行菜单里的「移动到…」一级项文案 */
+  /** 工作区行菜单里的「移动到…」一级项文案；二级子菜单列工作区分组 */
   moveToVirtualWorkspace: string
   /** 该一级项的子菜单里「新建工作区分组」一项 */
   newVirtualWorkspace: string
@@ -126,7 +126,7 @@ export interface RegionLabels {
   confirmDeleteGroup: (name: string) => string
   /** 会话行尾操作位的无障碍标签；会话标题由调用方传入 */
   sessionActions: (name: string) => string
-  /** 「分组」一级菜单项文案 */
+  /** 会话行菜单里的「移动到…」一级项文案；二级子菜单列同工作区的其他分组 */
   moveToGroup: string
   /** 「取消分组」一级菜单项文案 */
   ungroup: string

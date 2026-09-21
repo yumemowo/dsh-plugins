@@ -22,7 +22,7 @@ export const zh = {
   'deleteGroup': '删除分组',
   'groupNamePrompt': '分组名称',
   'delete.desc.group': '删除分组“{name}”？组内会话会移出分组，会话本身不受影响。',
-  'moveToGroup': '分组',
+  'moveToGroup': '移动到…',
   'ungroup': '取消分组',
   'actions.virtualWorkspace.aria': '工作区分组“{name}”的操作',
   'newVirtualWorkspace': '新建工作区分组',
@@ -48,7 +48,7 @@ export const en = {
   'groupNamePrompt': 'Group name',
   'delete.desc.group':
     'Delete group “{name}”? Its sessions leave the group; the sessions themselves are unaffected.',
-  'moveToGroup': 'Group',
+  'moveToGroup': 'Move to…',
   'ungroup': 'Ungroup',
   'actions.virtualWorkspace.aria': 'Workspace group actions for {name}',
   'newVirtualWorkspace': 'New workspace group',

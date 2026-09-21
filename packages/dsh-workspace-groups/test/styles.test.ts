@@ -684,4 +684,39 @@ describe('client stylesheet', () => {
       expect(rule.selectors.some((s) => s.includes('[data-wg-hover-card]'))).toBe(true)
     }
   })
+
+  it('pushes the submenu arrow to the right edge of the item', () => {
+    // 官方 Menu 的项没有「悬停展开」槽位，箭头由本包塞进 label（见 menus.tsx
+    // 的 submenuParentLabel）。文案必须吃掉余量、箭头不参与伸缩，箭头才会落在
+    // 项的最右缘；反过来写会让箭头跟着文字长度浮动
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    expect(bodyOf('.wg-menu-label')).toMatch(/display:\s*flex/)
+    const text = bodyOf('.wg-menu-label-text')
+    expect(text).toMatch(/flex:\s*1/)
+    // 缺了 min-width: 0，长文案会把箭头挤出项外而不是走省略号
+    expect(text).toMatch(/min-width:\s*0/)
+    expect(text).toMatch(/text-overflow:\s*ellipsis/)
+    expect(bodyOf('.wg-menu-arrow')).toMatch(/flex:\s*none/)
+
+    // 箭头色阶与官方项图标同档，不抢文案权重
+    expect(bodyOf('.wg-menu-arrow')).toContain('var(--dsw-alias-label-tertiary)')
+
+    // 箭头恒指向右：翻转态下二级面板改从左侧展开，箭头也不跟着镜像。
+    // 断言落在「没有任何一条含 .wg-menu-arrow 的规则声明 transform」上——
+    // 只要有人给箭头加了翻转，这条就失败
+    expect(
+      rules.filter((rule) => rule.selectors.some((s) => s.includes('.wg-menu-arrow'))),
+    ).not.toHaveLength(0)
+    for (const rule of rules) {
+      if (!rule.selectors.some((s) => s.includes('.wg-menu-arrow'))) continue
+      expect(rule.body).not.toMatch(/transform/)
+    }
+  })
 })

@@ -153,7 +153,8 @@ describe('regionLabels', () => {
     expect(labels.confirmDeleteGroup('g1')).toBe(
       '删除分组“g1”？组内会话会移出分组，会话本身不受影响。',
     )
-    expect(labels.moveToGroup).toBe('分组')
+    // 一级菜单项说「移动到…」，省略号表示点下去还要选一个目标
+    expect(labels.moveToGroup).toBe('移动到…')
     expect(labels.ungroup).toBe('取消分组')
   })
 
@@ -170,6 +171,13 @@ describe('regionLabels', () => {
       '删除工作区分组“g1”？组内工作区会移出分组，工作区本身不受影响。',
     )
     expect(labels.virtualWorkspaceActions('g1')).toBe('工作区分组“g1”的操作')
+  })
+
+  it('shares one move-to wording across the two grouping levels', () => {
+    // 两个层级的归组一级项都是「点下去还要选一个目标」的二级菜单父项，措辞分工
+    // 一致，因此共用同一句；层级由所在菜单本身区分，文案不必再加限定词
+    expect(labels.moveToGroup).toBe(labels.moveToVirtualWorkspace)
+    expect(labels.moveToGroup).toBe('移动到…')
   })
 
   it('keeps the two grouping levels apart by name', () => {

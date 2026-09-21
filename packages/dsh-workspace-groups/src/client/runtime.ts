@@ -11,6 +11,7 @@ export {
   HoverCard,
   IconArchiveOutline20,
   IconBranchOutline16,
+  IconChevronRightOutline14,
   IconCloseFill14,
   IconEditOutline16,
   IconEllipsisOutline16,

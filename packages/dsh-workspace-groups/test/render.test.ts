@@ -13,6 +13,7 @@ import {
   timeLabel,
 } from '../src/client/official.ts'
 import { regionTranslate, sidebarTranslate, translateWith, workspaceTranslate } from './locale-stub.ts'
+import { menuLabelArrow, menuLabelText } from './menu-label.ts'
 import { snapshot } from './snapshot-stub.ts'
 
 /**
@@ -281,8 +282,8 @@ function rowButtons(
 function menuLabels(out: { menus: unknown[] }): string[] {
   return out.menus.flatMap((m) =>
     (m as { props: { items: { label?: unknown }[] } }).props.items
-      .map((item) => item.label)
-      .filter((label): label is string => typeof label === 'string'),
+      .map((item) => menuLabelText(item.label))
+      .filter((label) => label !== ''),
   )
 }
 
@@ -430,8 +431,13 @@ function contextMenuAnchorRect(out: { contextMenus?: unknown[] }): unknown {
  * 实例共用一份状态，整片列表里所有会话行会一起"被右键"
  * @param options.official - 是否给官方三项操作；false 时该行完全没有菜单
  * @param options.grouping - 归组上下文；缺省表示该行没有分组可归
+ * @param options.groupSections - 可移入的分组；只给 `grouping` 为真时有意义
  */
-function sessionRowNode(options: { official?: boolean; grouping?: boolean } = {}): unknown {
+function sessionRowNode(options: {
+  official?: boolean
+  grouping?: boolean
+  groupSections?: { id: string; label: string; sessions: [] }[]
+} = {}): unknown {
   return React.createElement(SessionRowMenu, {
     row: {
       id: 's1',
@@ -462,9 +468,9 @@ function sessionRowNode(options: { official?: boolean; grouping?: boolean } = {}
       ? {
           grouping: {
             workspaceId: 'w1',
-            sections: [],
+            sections: options.groupSections ?? [],
             currentGroupId: '',
-            groupLabel: '分组',
+            groupLabel: '移动到…',
             ungroupLabel: '取消分组',
             onSelectGroup: () => {},
           },
@@ -973,6 +979,50 @@ describe('WorkspaceGroupsRegion render', () => {
       '移动到…',
       '删除工作区',
     ])
+  })
+
+  it('marks only the entries that really open a submenu with a trailing arrow', () => {
+    // 区域里那一行工作区菜单：「移动到…」带二级菜单，其余项不带
+    const region = { menus: [] as unknown[], text: [] as string[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), region)
+
+    const workspaceMenu = region.menus.find(
+      (m) =>
+        (
+          m as { props: { items: { id?: string }[] } }
+        ).props.items.map((item) => item.id).join() ===
+        'new-group,rename,move-virtual-workspace,delete',
+    )
+    const workspaceItems = (
+      workspaceMenu as { props: { items: { id?: string; label?: unknown }[] } }
+    ).props.items
+    expect(
+      workspaceItems.filter((item) => menuLabelArrow(item.label) !== undefined).map((i) => i.id),
+    ).toEqual(['move-virtual-workspace'])
+
+    // 会话行的「移动到…」项：候选分组非空时带箭头
+    const grouped = { menus: [] as unknown[], text: [] as string[] }
+    render(
+      sessionRowNode({ grouping: true, groupSections: [{ id: 'g1', label: '前端', sessions: [] }] }),
+      grouped,
+    )
+    const groupItems = (
+      grouped.menus[0] as { props: { items: { id?: string; label?: unknown }[] } }
+    ).props.items
+    expect(
+      groupItems.filter((item) => menuLabelArrow(item.label) !== undefined).map((i) => i.id),
+    ).toEqual(['group'])
+  })
+
+  it('keeps the arrow off a submenu parent whose submenu is empty', () => {
+    // 会话已在唯一分组里时候选为空，原语不把该项当子菜单父项（不展开、不给
+    // aria-haspopup），此时箭头会在指一个展不开的菜单
+    const out = { menus: [] as unknown[], text: [] as string[] }
+    render(sessionRowNode({ grouping: true }), out)
+
+    const items = (out.menus[0] as { props: { items: { id?: string; label?: unknown }[] } }).props
+      .items
+    expect(items.every((item) => menuLabelArrow(item.label) === undefined)).toBe(true)
   })
 
   it('gives the ungrouped row the official actions without a group item', () => {

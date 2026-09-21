@@ -41,7 +41,7 @@ export interface SessionGroupingContext {
   sections: readonly GroupSection[]
   /** 目标会话当前所属分组 id；空串表示未归组 */
   currentGroupId: string
-  /** 「分组」一级项文案 */
+  /** 「移动到…」一级项文案；省略号表示点下去还要选一个目标 */
   groupLabel: string
   /** 「取消分组」文案 */
   ungroupLabel: string

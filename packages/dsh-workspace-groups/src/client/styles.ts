@@ -855,6 +855,33 @@ export const CSS = `
    而插件的样式标签与基线样式表的先后不由本包决定 */
 .wg-context-menu.wg-context-menu { display: contents; }
 
+/* 带二级菜单的一级项：把文字与行尾箭头分成两端。官方 Menu 的项只有「前导图标
+   → 文案 → 尾部选中标记」三个槽，没有表达「悬停展开」的槽位（见 menus.tsx 的
+   submenuParentLabel），因此这里补一个自己的行盒：文案侧 flex:1 吃掉余量，
+   箭头被推到项的最右缘。
+
+   这个行盒落在官方 .itemLabel 里。.itemLabel 是 flex 项（已被块化）且带
+   flex:1 / min-width:0 / 省略号：文字因此要在这里再包一层可收缩的槽，
+   长文案省略的是文字本身，而不是把箭头压扁或挤出项外 */
+.wg-menu-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wg-menu-label-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 箭头与官方项图标同一档色阶（tertiary），不抢文案的视觉权重；不参与伸缩，
+   因此长文案省略的是文字而不是把箭头压扁 */
+.wg-menu-arrow {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 /* 对话框内的错误提示（如工作区重名）：只上错误色，几何走官方 Modal */
 .wg-dialog-error {
   color: var(--dsw-alias-state-error-primary);

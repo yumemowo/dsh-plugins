@@ -166,6 +166,8 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const IconFolderClose16: IconComponent
   export const IconFolderOpen16: IconComponent
   export const IconTriangleRightFill14: IconComponent
+  /** composer slash 菜单给「可深入」候选用的行尾箭头，用来表达此处有二级菜单 */
+  export const IconChevronRightOutline14: IconComponent
   export const IconEllipsisOutline16: IconComponent
   export const IconPlusOutline16: IconComponent
   /** 官方 sidebar「新建会话」按钮的图标 */

@@ -20,6 +20,7 @@ import {
 import type { SessionRow } from '../src/client/data/types.ts'
 import { officialSessionLabels } from '../src/client/official.ts'
 import { normalizeSnapshot } from '../src/client/remote.ts'
+import { menuLabelArrow, menuLabelText } from './menu-label.ts'
 import { workspaceTranslate } from './locale-stub.ts'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -164,7 +165,7 @@ describe('buildSessionMenuItems', () => {
         { id: 'g3', label: '工具', sessions: [] },
       ],
       currentGroupId,
-      groupLabel: '分组',
+      groupLabel: '移动到…',
       ungroupLabel: '取消分组',
     }
   }
@@ -226,6 +227,14 @@ describe('buildSessionMenuItems', () => {
     expect(groupItem.submenu?.map((entry) => entry.id)).toEqual(['group:g1', 'group:g2', 'group:g3'])
   })
 
+  it('gives the group item a trailing arrow because it opens a submenu', () => {
+    const items = buildSessionMenuItems({ grouping: grouping('') })
+    const groupItem = items.find((item) => (item as { id?: string }).id === 'group')
+
+    // 二级菜单只靠悬停展开，行尾箭头是菜单上唯一的可见提示
+    expect(menuLabelArrow((groupItem as { label?: unknown }).label)).toBeDefined()
+  })
+
   it('hides the session own group from the submenu', () => {
     const items = buildSessionMenuItems({ grouping: grouping('g2') })
 
@@ -252,14 +261,18 @@ describe('buildSessionMenuItems', () => {
       grouping: {
         sections: [{ id: 'g1', label: '前端', sessions: [] }],
         currentGroupId: 'g1',
-        groupLabel: '分组',
+        groupLabel: '移动到…',
         ungroupLabel: '取消分组',
       },
     }
     const items = buildSessionMenuItems(input)
 
-    const groupItem = items[0] as { disabled?: boolean }
+    const groupItem = items[0] as { label?: unknown; disabled?: boolean }
     expect(groupItem.disabled).toBe(true)
+    // 候选为空时原语不把该项当子菜单父项（既不展开也不给 aria-haspopup），
+    // 此时画箭头就是在指一个展不开的菜单
+    expect(menuLabelArrow(groupItem.label)).toBeUndefined()
+    expect(menuLabelText(groupItem.label)).toBe('移动到…')
   })
 })
 
@@ -429,7 +442,9 @@ describe('buildVirtualWorkspaceMenuItem', () => {
     const item = buildVirtualWorkspaceMenuItem(input(''))
 
     expect(item.id).toBe('move-virtual-workspace')
-    expect(item.label).toBe('移动到…')
+    expect(menuLabelText(item.label)).toBe('移动到…')
+    // 二级菜单只靠悬停展开，行尾箭头是菜单上唯一的可见提示
+    expect(menuLabelArrow(item.label)).toBeDefined()
     expect(item.submenu?.map((entry) => entry.id)).toEqual([
       'create-virtual-workspace',
       'vw:wg1',
