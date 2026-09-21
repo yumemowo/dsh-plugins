@@ -4,8 +4,8 @@ import { snapshotSchema } from './spec.ts'
 /**
  * Host 面 Typert 清单
  *
- * typert-loader 按 package.json 的 `exports["./typert"]` 自动发现并注册本对象，
- * 客户端据此通过 `remote.workspaceGroups.*` 调用宿主方法。
+ * typert-loader 按 package.json 的 `exports["./typert"]` 自动发现并注册本对象
+ * 客户端据此通过 `remote.workspaceGroups.*` 调用宿主方法
  * 所有 codec 必须是 zod v4 实例，且为 strict 形态
  */
 
@@ -50,6 +50,13 @@ const nullableGroupIdCodec = {
   mode: 'strict',
   typeSymbol: '@your-scope/dsh-workspace-groups#NullableGroupId',
   schema: z.string().nullable(),
+}
+
+/** 菜单条目键：工作区与工作区分组共用一套带前缀的键（见 `rootEntry.ts`） */
+const entryKeyCodec = {
+  mode: 'strict',
+  typeSymbol: '@your-scope/dsh-workspace-groups#RootEntryKey',
+  schema: z.string(),
 }
 
 const PACKAGE = '@your-scope/dsh-workspace-groups'
@@ -119,6 +126,8 @@ export const TYPERT = {
     direct('forgetWorkspace', [
       { name: 'workspaceId', wire: 'workspaceId', codec: workspaceIdCodec },
     ]),
+    direct('focusEntry', [{ name: 'key', wire: 'key', codec: entryKeyCodec }]),
+    direct('togglePinned', [{ name: 'key', wire: 'key', codec: entryKeyCodec }]),
   ],
   model: {
     services: [
@@ -181,6 +190,16 @@ export const TYPERT = {
             name: 'forgetWorkspace',
             signature: 'forgetWorkspace(workspaceId: string): Promise<WorkspaceGroupsSnapshot>',
           },
+          {
+            kind: 'method',
+            name: 'focusEntry',
+            signature: 'focusEntry(key: string): Promise<WorkspaceGroupsSnapshot>',
+          },
+          {
+            kind: 'method',
+            name: 'togglePinned',
+            signature: 'togglePinned(key: string): Promise<WorkspaceGroupsSnapshot>',
+          },
         ],
         types: [
           { name: 'Group', declaration: 'export interface Group { id: string; name: string; sessionIds: string[] }' },
@@ -190,9 +209,14 @@ export const TYPERT = {
               'export interface VirtualWorkspace { id: string; name: string; workspaceIds: string[] }',
           },
           {
+            name: 'PickerSnapshot',
+            declaration:
+              'export interface PickerSnapshot { focused: string; recent: string[]; pinned: string[] }',
+          },
+          {
             name: 'WorkspaceGroupsSnapshot',
             declaration:
-              'export interface WorkspaceGroupsSnapshot { byWorkspace: Record<string, Group[]>; workspaceGroups: VirtualWorkspace[] }',
+              'export interface WorkspaceGroupsSnapshot { byWorkspace: Record<string, Group[]>; workspaceGroups: VirtualWorkspace[]; picker: PickerSnapshot }',
           },
         ],
       },

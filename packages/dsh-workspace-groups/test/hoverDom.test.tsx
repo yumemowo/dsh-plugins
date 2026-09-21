@@ -20,10 +20,10 @@ import { snapshot } from './snapshot-stub.ts'
 /**
  * 悬停卡片的真实 DOM 冒烟
  *
- * `render.test.ts` 用自制 dispatcher 直接调用函数组件，卡片替身只渲染锚点，因此
- * 看不到包一层之后行在 DOM 里的实际位置。这里用真 `react-dom` 渲染一遍，断言两件
- * 只有真实渲染才暴露的事：卡片确实浮出来了，以及多出来的那层包装没有破坏行的结构
- *（行的定位、层级缩进与淡入标记都还在）
+ * `render.test.ts` 用自制 dispatcher 直接调用函数组件，卡片替身只渲染锚点
+ * 因此看不到包一层之后行在 DOM 里的实际位置。这里用真 `react-dom` 渲染一遍
+ * 断言两件只有真实渲染才暴露的事：卡片确实浮出来了
+ * 以及多出来的那层包装没有破坏行的结构（行的定位、层级缩进与淡入标记都还在）
  *
  * 本包其余测试仍跑 node 环境；原语替身见 vitest.config.ts 的 alias
  */
@@ -70,6 +70,8 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     deleteVirtualWorkspace: async () => snapshot(),
     moveWorkspace: async () => snapshot(),
     forgetWorkspace: async () => snapshot(),
+    focusEntry: async () => snapshot(),
+    togglePinned: async () => snapshot(),
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,
@@ -112,8 +114,9 @@ async function mount(overrides: Partial<WorkspaceGroupsProps> = {}): Promise<HTM
 /**
  * 挂载区域并交出根
  *
- * 翻转标记落在 `document.body` 上，测试之间必须靠卸载把标记收回去，否则前一条
- * 用例留下的标记会污染下一条；上面那个只返回容器的 {@link mount} 做不到这一点
+ * 翻转标记落在 `document.body` 上，测试之间必须靠卸载把标记收回去
+ * 否则前一条用例留下的标记会污染下一条；
+ * 上面那个只返回容器的 {@link mount} 做不到这一点
  */
 async function mountRoot(
   overrides: Partial<WorkspaceGroupsProps> = {},
@@ -134,11 +137,12 @@ async function mountRoot(
 /**
  * 伪造区域的实测位置与窗口宽度
  *
- * jsdom 不做布局：`getBoundingClientRect` 一律返回全 0，`documentElement.clientWidth`
- * 也是 0，翻转判定因此永远不触发。这里给出真实浏览器里会出现的两种几何
+ * jsdom 不做布局：`getBoundingClientRect` 一律返回全 0
+ * `documentElement.clientWidth` 也是 0，翻转判定因此永远不触发
+ * 这里给出真实浏览器里会出现的两种几何
  *
- * 区域节点必须从**本次挂载的容器**里取：同文件其他用例挂载后不收尾，按文档查
- * `.wg-root` 会拿到先前那次留下的旧节点，而 resize 监听挂在本次这个节点上
+ * 区域节点必须从**本次挂载的容器**里取：同文件其他用例挂载后不收尾
+ * 按文档查 `.wg-root` 会拿到先前那次留下的旧节点，而 resize 监听挂在本次这个节点上
  * @param container - 本次挂载的容器
  * @param viewportWidth - 布局视口宽度
  * @param rect - 区域矩形的左右边
@@ -179,8 +183,8 @@ describe('hover cards in a real DOM', () => {
   it('keeps the wrapped session row reachable and tagged for the stagger fade', async () => {
     const container = await mount()
 
-    // 行现在被 HoverCard 那层包装包着，但它仍要能被选择器找到——层级缩进、引导线
-    // 与逐个淡入都按行自身的选择器生效
+    // 行现在被 HoverCard 那层包装包着，但它仍要能被选择器找到——层级缩进
+    // 引导线与逐个淡入都按行自身的选择器生效
     const rows = container.querySelectorAll('.wg-row')
     expect(rows.length).toBeGreaterThan(0)
     for (const row of Array.from(rows)) {
@@ -223,7 +227,7 @@ describe('hover cards in a real DOM', () => {
   })
 
   it('lays out both card bodies with the classes the stylesheet targets', async () => {
-    // 卡片正文本身是 portal 到 body 的，挂载时看不到；这里直接渲染两个正文组件，
+    // 卡片正文本身是 portal 到 body 的，挂载时看不到；这里直接渲染两个正文组件
     // 断言样式表依赖的那几个类真的落到了节点上、文本也照常渲染
     const container = document.createElement('div')
     document.body.appendChild(container)
@@ -243,7 +247,7 @@ describe('hover cards in a real DOM', () => {
     expect(container.querySelector('.wg-hover-path')?.textContent).toBe('~/src/dsh_plugins')
     expect(container.querySelector('.wg-hover-time')?.textContent).toBe('创建于 2026年1月1日 00:00')
 
-    // 会话卡片多一列状态：每条都是「状态点 + 文案」。状态点替身返回一个字符串，
+    // 会话卡片多一列状态：每条都是「状态点 + 文案」。状态点替身返回一个字符串
     // 因此这里读到的文本里带它的标记
     const sessionContainer = document.createElement('div')
     document.body.appendChild(sessionContainer)
@@ -272,9 +276,9 @@ describe('hover cards in a real DOM', () => {
 /**
  * 对照模式下的翻转标记
  *
- * 官方卡片固定向右展开且位置是内联样式，区域贴窗口右缘时会整块开到屏幕外，因此
- * 由区域量出自己的矩形后在 body 上挂标记与落点，样式据此把卡片翻到左侧。这里跑
- * 真 DOM 一遍，钉住「什么时候挂、挂的是什么、卸载后收干净」三件事
+ * 官方卡片固定向右展开且位置是内联样式，区域贴窗口右缘时会整块开到屏幕外
+ * 因此由区域量出自己的矩形后在 body 上挂标记与落点，样式据此把卡片翻到左侧
+ * 这里跑真 DOM 一遍，钉住「什么时候挂、挂的是什么、卸载后收干净」三件事
  */
 describe('flip marker for a region against the right edge', () => {
   const FLIP = 'data-wg-flip'
@@ -330,8 +334,9 @@ describe('flip marker for a region against the right edge', () => {
   })
 
   it('tags the card box so the stylesheet can tell our cards from the official ones', async () => {
-    // 卡片盒由官方原语渲染、且 portal 到 document.body，官方左侧栏的卡片就在同一个
-    // 父节点上；样式只能靠本包给卡片打的标记区分，因此正文必须把它打上去
+    // 卡片盒由官方原语渲染、且 portal 到 document.body
+    // 官方左侧栏的卡片就在同一个父节点上；样式只能靠本包给卡片打的标记区分
+    // 因此正文必须把它打上去
     const container = document.createElement('div')
     document.body.appendChild(container)
     // 照原语的结构预置一层外层盒：正文是卡片的唯一子节点

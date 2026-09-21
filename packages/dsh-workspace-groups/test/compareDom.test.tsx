@@ -13,14 +13,14 @@ import type { Context } from '@deepseek-ai/cordis'
 /**
  * 对照 tab 的服务读取边界
  *
- * better-sidebar 交给 tab 的 context **不是本包的 fiber**，没有 inject 本包声明的
- * 服务。cordis 的服务代理对未 inject 的属性直接抛错（`cannot get property
- * "remote" without inject`），因此凡是 `ctx.xxx` 形态的读取都必须在本包自己的
- * context 上先解析好。
+ * better-sidebar 交给 tab 的 context **不是本包的 fiber**
+ * 没有 inject 本包声明的服务
+ * cordis 的服务代理对未 inject 的属性直接抛错（`cannot get property "remote" without inject`）
+ * 因此凡是 `ctx.xxx` 形态的读取都必须在本包自己的 context 上先解析好
  *
- * 这类问题在只调 `registerCompareTab` 的测试里看不出来——注册本身不渲染组件，
- * 异常要等 tab 真的挂上才发生。这里按 cordis 的代理语义造出那个会抛错的 tab
- * context，把组件渲染一遍
+ * 这类问题在只调 `registerCompareTab` 的测试里看不出来——注册本身不渲染组件
+ * 异常要等 tab 真的挂上才发生
+ * 这里按 cordis 的代理语义造出那个会抛错的 tab context，把组件渲染一遍
  */
 
 /** 最小可用的注入动作 */
@@ -39,6 +39,8 @@ function actions(): RegionActions {
     deleteVirtualWorkspace: async () => snapshot(),
     moveWorkspace: async () => snapshot(),
     forgetWorkspace: async () => snapshot(),
+    focusEntry: async () => snapshot(),
+    togglePinned: async () => snapshot(),
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,
@@ -83,8 +85,8 @@ function fakeContext(
 /**
  * 语言服务替身：bind 按命名空间给翻译函数，subscribe 记订阅者
  *
- * 快照必须是**稳定引用**：`useSyncExternalStore` 按 `Object.is` 比较，每次新建
- * 对象会被判定为「一直在变」而把组件转进无限重渲染
+ * 快照必须是**稳定引用**：`useSyncExternalStore` 按 `Object.is` 比较
+ * 每次新建对象会被判定为「一直在变」而把组件转进无限重渲染
  */
 function fakeLocale(): LocaleRuntime {
   const bound = new Map<string, unknown>()
@@ -106,8 +108,8 @@ function fakeLocale(): LocaleRuntime {
 /**
  * 注册一次对照 tab，返回描述符与那个会抛错的 tab context
  *
- * 注册 context 声明了 `remote`（本包 `inject` 列表里本来就有），因此它读得到
- * 宿主固定事实；tab context 什么都不声明
+ * 注册 context 声明了 `remote`（本包 `inject` 列表里本来就有）
+ * 因此它读得到宿主固定事实；tab context 什么都不声明
  */
 function register() {
   const registered: {
@@ -155,8 +157,8 @@ describe('compare tab service reads', () => {
   })
 
   it('keeps the tab context free of every property read the package needs', () => {
-    // 这条断言把边界写成契约：tab context 上任何属性读取都会抛错，因此组件
-    // 只能用它的 `get`。若以后又有人从 tabProps.ctx 上直接读服务，这里会先炸
+    // 这条断言把边界写成契约：tab context 上任何属性读取都会抛错
+    // 因此组件只能用它的 `get`。若以后又有人从 tabProps.ctx 上直接读服务，这里会先炸
     const tabCtx = fakeContext({})
 
     expect(() => (tabCtx as unknown as { remote: unknown }).remote).toThrow(

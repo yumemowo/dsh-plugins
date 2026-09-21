@@ -2,8 +2,9 @@
  * 单行输入对话框：建组、改名与工作区重命名共用
  *
  * 输入法组合期间的 Enter 属于候选词确认，不能当提交用
- * 「取消」与「关闭」是通用词，直接取插槽注入的 `t` 座位：本包命名空间没有
- * 这两个键，查找链会回退到官方 `common` 命名空间
+ * 
+ * 「取消」与「关闭」是通用词，直接取插槽注入的 `t` 座位
+ * 本包命名空间没有这两个键，查找链会回退到官方 `common` 命名空间
  */
 import { useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
@@ -20,6 +21,15 @@ export interface NameDialogProps {
   confirmDisabled: boolean
   /** 校验失败时的提示，如工作区重名 */
   error?: ReactNode
+  /**
+   * 可选的勾选项，排在输入框下方
+   *
+   * 用原生 `checkbox` 而不是官方原语
+   * primitives 只有 `Switch`，没有 checkbox
+   * 而官方在自己的 `RiskConfirmation` 里也是直接用一个原生 checkbox + label
+   * 这里沿用同一种形态
+   */
+  check?: { label: string; checked: boolean; onChange: (checked: boolean) => void } | undefined
   /** 本包命名空间的翻译座位（解析通用词） */
   t: RegionTranslate
   onValueChange: (value: string) => void
@@ -34,6 +44,7 @@ export function NameDialog({
   confirmLabel,
   confirmDisabled,
   error,
+  check,
   t,
   onValueChange,
   onConfirm,
@@ -76,6 +87,17 @@ export function NameDialog({
           onConfirm()
         }}
       />
+      {check === undefined ? null : (
+        // 整行可点：勾选框自己只有 16px，而这句话是要读的
+        <label className="wg-dialog-check">
+          <input
+            type="checkbox"
+            checked={check.checked}
+            onChange={(event) => check.onChange(event.currentTarget.checked)}
+          />
+          <span>{check.label}</span>
+        </label>
+      )}
       {error === undefined || error === null ? null : (
         <div className="wg-dialog-error" role="alert">
           {error}

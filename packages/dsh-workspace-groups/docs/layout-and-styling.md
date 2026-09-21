@@ -43,7 +43,13 @@
 | 项 | 取值 |
 | --- | --- |
 | 区域右侧整块留白 | `var(--dsh-session-list-edge-inset)`（侧栏里 = 12px，同官方根节点） |
-| 区域 section header 高 / 圆角 / 控件间距 | `36px` / `12px` / `4px`（同官方 `.sectionHeader`） |
+| 区域 section header 高 / 圆角 / 控件间距 | 窄栏 `36px`；宽栏 `auto` / `12px` / `4px`（同官方 `.sectionHeader`，高度因两行标题放开，见「区域头部」） |
+| 两行标题（上行「工作区」+ 下行聚焦对象） | 上行 `14px` / `20px` + `label-tertiary`，下行 `12px` / `17px` + `label-secondary`（两个层级的信息）；宽度上限 `45%` 挂在整个标题块上 |
+| 标题块（一个按钮） | 命中余量 `padding: 2px 4px`、圆角 `8px`、悬停 `--dsw-alias-interactive-bg-hover` |
+| 标题旁的菜单箭头 | `16px`，`--dsw-alias-label-tertiary`；开合时旋转 `180°` |
+| 工作区选择器面板 | 底色 `--dsw-specific-menu`、投影 `--dsw-elevation-prominent`、圆角 `20px`、内边距 `4px`、`min-width: 218px` / `max-width: 360px`、高度上限 `calc(100vh - 24px)`、边距 `12px`、缝隙 `4px`、`z-index: 1100`（全部同官方 `.list` / `.submenu` / `.portal` 面板） |
+| 选择器条目行 / 分区头 | 条目 `min-height: 34px`、`5px 10px`、圆角 `10px`、14px/22px；分区头 `32px`、`8px 10px`、12px/16px（同官方 `.item` / `.label`） |
+| 条目行尾的置顶按钮 | `20px` 方块、`--dsw-alias-label-tertiary`；未置顶时 `opacity: 0` 且关掉指针事件，已置顶常驻可见 |
 | header 图标按钮 | `28px` 正圆、`--dsw-alias-label-secondary`、悬停 `-hover`（同官方 `.iconButton`） |
 | 窄栏 header 图标按钮 | `36px` 正圆、`--dsw-alias-label-primary`（同官方 `.rail .iconButton`） |
 | 搜索框（收起 / 展开） | `28px` 正圆 → `30px` 高、圆角 `10px`、`.5px` 边框 `--dsw-alias-border-l4`（同官方 `.search` / `.searchExpanded`） |

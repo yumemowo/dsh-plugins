@@ -37,6 +37,16 @@ export const zh = {
   'virtualWorkspaceEmpty': '这个工作区分组里还没有工作区',
   'compareTabDescription': '分组区域的对照视图（左侧为官方工作区列表）',
   'unimplemented': '分组为实验特性：归档、拖拽暂未提供。',
+  'picker.entry': '选择工作区',
+  'picker.change': '切换工作区：{name}',
+  'picker.all': '全部工作区',
+  'picker.recent': '最近使用',
+  'picker.pinned': '置顶',
+  'picker.pin': '置顶“{name}”',
+  'picker.unpin': '取消置顶“{name}”',
+  'picker.rename': '重命名“{name}”',
+  'picker.remove': '删除“{name}”',
+  'picker.followFocus': '切换到新工作区',
 }
 
 /** 英文字典，键集与 {@link zh} 完全一致 */
@@ -63,6 +73,16 @@ export const en = {
   'virtualWorkspaceEmpty': 'No workspace in this workspace group yet',
   'compareTabDescription': 'Grouping region for side-by-side comparison with the official list',
   'unimplemented': 'Groups are experimental: archive and drag are not available yet.',
+  'picker.entry': 'Select a workspace',
+  'picker.change': 'Switch workspace: {name}',
+  'picker.all': 'All workspaces',
+  'picker.recent': 'Recent',
+  'picker.pinned': 'Pinned',
+  'picker.pin': 'Pin {name}',
+  'picker.unpin': 'Unpin {name}',
+  'picker.rename': 'Rename {name}',
+  'picker.remove': 'Delete {name}',
+  'picker.followFocus': 'Switch to the new workspace',
 } as const
 
 /** 本命名空间的键域，同时是 {@link zh} 的键集 */

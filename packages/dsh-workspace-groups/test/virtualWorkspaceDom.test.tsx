@@ -13,10 +13,10 @@ import { snapshot } from './snapshot-stub.ts'
 /**
  * 工作区分组的真实 DOM 结构
  *
- * `render.test.ts` 用自制 dispatcher 直接调用函数组件，只能看到元素树；层级缩进
- * 却是一组按**真实 DOM 结构**写的选择器（`.wg-virtual-workspace-body > .wg-workspace
- * > .wg-collapse > ...`），选择器写错时界面只是「没有缩进」，不会有任何报错。这里
- * 用真 `react-dom` 渲染一遍并断言那些选择器确实命中，守住这条静默失效的边界
+ * `render.test.ts` 用自制 dispatcher 直接调用函数组件，只能看到元素树；
+ * 层级缩进却是一组按**真实 DOM 结构**写的选择器（`.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > ...`）
+ * 选择器写错时界面只是「没有缩进」，不会有任何报错
+ * 这里用真 `react-dom` 渲染一遍并断言那些选择器确实命中，守住这条静默失效的边界
  *
  * 套用与 hoverDom.test.tsx 同一份注入面构造
  */
@@ -26,7 +26,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
   const created = new Date(2026, 0, 1, 0, 0).getTime()
   const byId: Record<string, unknown> = {
     a: { id: 'a', displayTitle: '修复登录超时', running: false, blank: false, updatedAt: 1_000 },
-    // 未归组的会话：它的缩进走 `.wg-sessions > .wg-row` 那一档，与组内会话不同，
+    // 未归组的会话：它的缩进走 `.wg-sessions > .wg-row` 那一档，与组内会话不同
     // 缺了它那条规则就无从验证
     b: { id: 'b', displayTitle: '散落会话', running: false, blank: false, updatedAt: 1_000 },
     orphan: { id: 'orphan', displayTitle: 'Orphan', running: false, blank: false, updatedAt: 1_000 },
@@ -68,7 +68,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
         byWorkspace: { w1: [{ id: 'g1', name: '会话分组', sessionIds: ['a'] }] },
         workspaceGroups: [
           { id: 'wg1', name: '工作区分组', workspaceIds: ['w1'] },
-          // 空分组一起渲染：它的空态占位也有一条按结构写的缩进规则，
+          // 空分组一起渲染：它的空态占位也有一条按结构写的缩进规则
           // 缺了它那条规则在下面那条「逐条命中」的断言里无从验证
           { id: 'wg2', name: '空组', workspaceIds: [] },
         ],
@@ -83,6 +83,8 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     deleteVirtualWorkspace: async () => snapshot(),
     moveWorkspace: async () => snapshot(),
     forgetWorkspace: async () => snapshot(),
+    focusEntry: async () => snapshot(),
+    togglePinned: async () => snapshot(),
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,
@@ -127,8 +129,8 @@ async function mount(
 /**
  * 取样式表里那些按工作区分组结构写的缩进 / 引导线选择器
  *
- * 读的是 `styles.ts` 导出的源文本（也就是插件注入到页面的那一份）：本测试直接
- * 挂载组件、不走 `apply`，因此页面上并没有本包的 style 标签
+ * 读的是 `styles.ts` 导出的源文本（也就是插件注入到页面的那一份）：
+ * 本测试直接挂载组件、不走 `apply`，因此页面上并没有本包的 style 标签
  */
 function groupScopedRules(): { selectors: string[]; body: string }[] {
   const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '')
@@ -165,20 +167,20 @@ describe('workspace group DOM structure', () => {
   it('matches the nested indentation selectors against the rendered tree', async () => {
     const { container, root } = await mount()
 
-    // 逐条把样式表里那批选择器拿去真实 DOM 里查：任何一条都不命中，
+    // 逐条把样式表里那批选择器拿去真实 DOM 里查：任何一条都不命中
     // 就说明它对应的那一层没有缩进——界面静默失效，不会有报错
     const rules = groupScopedRules()
-    // 这批规则是本包为工作区分组新写的，先守住「确实读到了它们」，否则下面的
-    // 断言会在空列表上假通过
+    // 这批规则是本包为工作区分组新写的，先守住「确实读到了它们」
+    // 否则下面的断言会在空列表上假通过
     expect(rules.length).toBeGreaterThan(0)
 
-    // 每条规则至少有一个选择器命中真实 DOM。规则里常同时写「直接子项」与
-    // 「隔一层包装」两档（挂了悬停卡片的工作区行会被官方 HoverCard 的根节点
-    // 包一层），因此按规则而不是按单个选择器断言：任一档命中就说明这层缩进
-    // 真的作用到了行上
+    // 每条规则至少有一个选择器命中真实 DOM
+    // 规则里常同时写「直接子项」与「隔一层包装」两档（挂了悬停卡片的工作区行会被官方 HoverCard 的根节点包一层）
+    // 因此按规则而不是按单个选择器断言：任一档命中就说明这层缩进真的作用到了行上
     for (const { selectors, body } of rules) {
-      // 伪元素本身没有可查询的节点，但它的宿主元素有：剥掉 ::before 后照样能
-      // 验证引导线挂在哪个元素上——宿主不存在的话，那条线根本不会画出来
+      // 伪元素本身没有可查询的节点，但它的宿主元素有：
+      // 剥掉 ::before 后照样能验证引导线挂在哪个元素上——宿主不存在的话
+      // 那条线根本不会画出来
       const queryable = selectors.map((selector) => selector.split('::')[0] ?? selector)
       const matched = queryable.filter(
         (selector) => container.querySelectorAll(selector).length > 0,
@@ -211,9 +213,10 @@ describe('workspace group DOM structure', () => {
   })
 
   it('survives a host half that has not been restarted yet', async () => {
-    // 浏览器半边随热重载换新，宿主半边要重启 dsh 才换：那段窗口里收到的是旧形状
-    // 的快照（只有 byWorkspace）。缺格直接遍历会抛 `groups is not iterable`，
-    // 把整片区域打挂——这里用真 DOM 走一遍，确认它退化成「没有工作区分组」
+    // 浏览器半边随热重载换新，宿主半边要重启 dsh 才换：
+    // 那段窗口里收到的是旧形状的快照（只有 byWorkspace）
+    // 缺格直接遍历会抛 `groups is not iterable`，把整片区域打挂——这里用真 DOM 走一遍
+    // 确认它退化成「没有工作区分组」
     const { container, root } = await mount({
       loadGroups: async () => ({ byWorkspace: {} }) as never,
     })
@@ -229,8 +232,8 @@ describe('workspace group DOM structure', () => {
   it('marks the group row with the dashed folder, not a real one', async () => {
     const { container, root } = await mount()
 
-    // 分组头的文件夹槽走虚线：工作区分组形状上像一个工作区，但本身不是一个真实
-    // 工作区（没有目录、没有会话）。实线文件夹留给真实的工作区行
+    // 分组头的文件夹槽走虚线：工作区分组形状上像一个工作区
+    // 但本身不是一个真实工作区（没有目录、没有会话）。实线文件夹留给真实的工作区行
     const folder = container.querySelector('.wg-virtual-workspace-head .wg-folder')
     expect(folder?.innerHTML).toContain('stroke-dasharray')
     // 它也有独立的箭头槽，与工作区行同一套「悬停时文件夹换成箭头」

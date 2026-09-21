@@ -14,7 +14,7 @@ import {
  * 文案分两个来源，这里同时固化这条边界：
  *
  * - 官方 `workspace` 已有的文案只从官方命名空间取，本包字典里不复制一份；
- * - 只有官方没有对应词的自有文案才在本包字典里。
+ * - 只有官方没有对应词的自有文案才在本包字典里
  */
 describe('locales', () => {
   it('keeps the English dictionary complete against the Chinese key set', () => {
@@ -22,12 +22,12 @@ describe('locales', () => {
   })
 
   it('owns a short namespace name rather than the package name', () => {
-    // 官方插件的命名空间都是短名（workspace / sidebar / goal …）。
+    // 官方插件的命名空间都是短名（workspace / sidebar / goal …）
     expect(NS).toBe('workspaceGroups')
   })
 
   it('holds only the copy the official namespace does not already have', () => {
-    // 键名与官方字典重合即意味着又复制了一份官方译文。
+    // 键名与官方字典重合即意味着又复制了一份官方译文
     const duplicated = Object.keys(zh).filter(
       (key) => key in OFFICIAL_WORKSPACE_ZH || key in OFFICIAL_SIDEBAR_ZH,
     )
@@ -36,7 +36,7 @@ describe('locales', () => {
   })
 
   it('lists every package-owned key explicitly', () => {
-    // 自有键不多，逐个列出；新增文案时这里会提醒重新确认它是否真的官方没有。
+    // 自有键不多，逐个列出；新增文案时这里会提醒重新确认它是否真的官方没有
     expect(Object.keys(zh).sort()).toEqual([
       'actions.group.aria',
       'actions.virtualWorkspace.aria',
@@ -51,6 +51,16 @@ describe('locales', () => {
       'moveToVirtualWorkspace',
       'newGroup',
       'newVirtualWorkspace',
+      'picker.all',
+      'picker.change',
+      'picker.entry',
+      'picker.followFocus',
+      'picker.pin',
+      'picker.pinned',
+      'picker.recent',
+      'picker.remove',
+      'picker.rename',
+      'picker.unpin',
       'renameGroup',
       'renameVirtualWorkspace',
       'ungroup',
@@ -78,8 +88,8 @@ describe('regionLabels', () => {
   })
 
   it('reads the new-session row name from the official session.new key', () => {
-    // 空白（新建中）会话行的固定名是官方词，本包字典里不存副本；会话正式
-    // 启用后的名字由标题服务投影，不走这一格
+    // 空白（新建中）会话行的固定名是官方词，本包字典里不存副本；
+    // 会话正式启用后的名字由标题服务投影，不走这一格
     expect(labels.newSession).toBe('新会话')
   })
 
@@ -105,7 +115,7 @@ describe('regionLabels', () => {
   })
 
   it('reads the row menu new-session item from the official sidebar key', () => {
-    // 菜单项是一次性动作，读作动词短语；它取官方 sidebar 新建按钮的文案，
+    // 菜单项是一次性动作，读作动词短语；它取官方 sidebar 新建按钮的文案
     // 与行内 `+` 的无障碍标签（带对象名的 actions.newSession.aria）分工不同
     expect(labels.newSessionItem).toBe('新建会话')
     expect(labels.newSessionItem).not.toBe(labels.newSessionIn('w1'))
@@ -134,7 +144,7 @@ describe('regionLabels', () => {
   })
 
   it('reads the search copy from the official keys', () => {
-    // 搜索自身已实现，文案与官方同一套键：入口 tooltip 用通用词「搜索」，
+    // 搜索自身已实现，文案与官方同一套键：入口 tooltip 用通用词「搜索」
     // 无障碍标签与结果区各自点明对象
     expect(labels.search.hint).toBe('搜索')
     expect(labels.search.entry).toBe('搜索会话')
@@ -174,8 +184,8 @@ describe('regionLabels', () => {
   })
 
   it('shares one move-to wording across the two grouping levels', () => {
-    // 两个层级的归组一级项都是「点下去还要选一个目标」的二级菜单父项，措辞分工
-    // 一致，因此共用同一句；层级由所在菜单本身区分，文案不必再加限定词
+    // 两个层级的归组一级项都是「点下去还要选一个目标」的二级菜单父项，措辞分工一致
+    // 因此共用同一句；层级由所在菜单本身区分，文案不必再加限定词
     expect(labels.moveToGroup).toBe(labels.moveToVirtualWorkspace)
     expect(labels.moveToGroup).toBe('移动到…')
   })
@@ -198,9 +208,44 @@ describe('regionLabels', () => {
     expect(new Set([labels.renameGroup, labels.renameWorkspace])).toHaveLength(2)
   })
 
+  it('projects the picker copy from our own namespace', () => {
+    // 「换一个工作区看」这件事官方没有对应词（官方的 header 没有这一层）
+    // 因此这一组全部取本包命名空间
+    expect(labels.picker.entry).toBe('选择工作区')
+    expect(labels.picker.all).toBe('全部工作区')
+    expect(labels.picker.recent).toBe('最近使用')
+    expect(labels.picker.pinned).toBe('置顶')
+  })
+
+  it('names the row actions after the entry they act on', () => {
+    // 行尾三枚按钮只有字形，读屏要靠标签读出「对谁做什么」
+    expect(labels.picker.rename('前端仓库')).toBe('重命名“前端仓库”')
+    expect(labels.picker.remove('前端仓库')).toBe('删除“前端仓库”')
+  })
+
+  it('drops the all-section title since that column has no heading', () => {
+    // 「全部」那一栏是**没有标题时默认的那一栏**
+    // 上面两栏的标题正是因为要与它区分才需要；它自己再写一个标题就是同义反复
+    expect('allSection' in labels.picker).toBe(false)
+  })
+
+  it('names the focused entry in the second-line entry label', () => {
+    // 第二行可见的文字只是一个名字；读屏要靠这个标签读出「点它是做什么用的」
+    expect(labels.picker.change('前端仓库')).toBe('切换工作区：前端仓库')
+    expect(labels.picker.change('全部工作区')).toBe('切换工作区：全部工作区')
+  })
+
+  it('names the pin target in the pin button labels', () => {
+    // 一枚按钮上只有字形，读屏要靠它读出「对谁做什么」
+    expect(labels.picker.pin('前端仓库')).toBe('置顶“前端仓库”')
+    expect(labels.picker.unpin('前端仓库')).toBe('取消置顶“前端仓库”')
+  })
+
+
+
   it('resolves official copy through the official namespace, not our dictionary', () => {
-    // 本包自己的翻译函数里没有官方那些键（类型上也不允许传），运行期只能
-    // 拿到原始键名；因此这类文案必须由官方命名空间提供。
+    // 本包自己的翻译函数里没有官方那些键（类型上也不允许传），运行期只能拿到原始键名；
+    // 因此这类文案必须由官方命名空间提供
     const ours = regionTranslate() as unknown as (key: string) => string
     const official = workspaceTranslate() as unknown as (key: string) => string
 
@@ -219,7 +264,7 @@ describe('translateFor', () => {
   })
 
   it('falls back to the shared common vocabulary from both namespaces', () => {
-    // 确认/取消/关闭是通用词，两个命名空间的字典里都没有，查找链回退到 common。
+    // 确认/取消/关闭是通用词，两个命名空间的字典里都没有，查找链回退到 common
     for (const ns of [NS, 'workspace']) {
       expect(translateFor(ns)('ok')).toBe('确定')
       expect(translateFor(ns)('cancel')).toBe('取消')

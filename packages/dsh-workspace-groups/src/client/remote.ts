@@ -1,10 +1,11 @@
 import { z } from 'zod'
+import { normalizePickerState } from '../pickerState.ts'
 
 /**
  * 客户端侧的 Remote 贡献声明
  *
  * 宿主把 `./typert` 清单注册进 typert 注册表；浏览器这一侧则必须显式
- * `ctx.remote.$mount(...)` 自己需要的命名空间，网关才会响应调用。
+ * `ctx.remote.$mount(...)` 自己需要的命名空间，网关才会响应调用
  * 这里的 codec 同样必须是 zod v4 的 strict 实例
  */
 
@@ -20,9 +21,16 @@ const virtualWorkspaceSchema = z.object({
   workspaceIds: z.array(z.string()),
 })
 
+const pickerSchema = z.object({
+  focused: z.string(),
+  recent: z.array(z.string()),
+  pinned: z.array(z.string()),
+})
+
 const snapshotSchema = z.object({
   byWorkspace: z.record(z.string(), z.array(groupSchema)),
   workspaceGroups: z.array(virtualWorkspaceSchema),
+  picker: pickerSchema,
 })
 
 const codec = (typeSymbol: string, schema: z.ZodType) => ({
@@ -95,6 +103,8 @@ export const REMOTE_CONTRIBUTION = {
       { name: 'groupId', codec: codec('NullableGroupId', z.string().nullable()) },
     ]),
     descriptor('forgetWorkspace', [{ name: 'workspaceId', codec: str('WorkspaceId') }]),
+    descriptor('focusEntry', [{ name: 'key', codec: str('RootEntryKey') }]),
+    descriptor('togglePinned', [{ name: 'key', codec: str('RootEntryKey') }]),
   ],
 }
 
@@ -112,26 +122,36 @@ export interface VirtualWorkspace {
   workspaceIds: string[]
 }
 
+/** 菜单的聚焦 / 最近使用 / 置顶记录，形状与宿主 `spec.ts` 一致 */
+export interface PickerSnapshot {
+  focused: string
+  recent: string[]
+  pinned: string[]
+}
+
 export interface WorkspaceGroupsSnapshot {
   byWorkspace: Record<string, Group[]>
   workspaceGroups: VirtualWorkspace[]
+  picker: PickerSnapshot
 }
 
 /**
  * 把一个远端快照收成完整形状
  *
  * 浏览器半边会随热重载换新，而宿主半边要重启 `dsh` 才换——两端版本因此可能短暂
- * 不一致：新客户端可能收到旧宿主回的、没有 `workspaceGroups` 这一格的快照。
+ * 不一致：新客户端可能收到旧宿主回的、没有 `workspaceGroups` 这一格的快照
  * 直接迭代那个字段会抛 `groups is not iterable`，把整片区域（对照模式下还包括
- * 承载它的右侧栏）打挂。缺什么补什么，界面退化成「没有工作区分组」而不是崩掉
+ * 承载它的右侧栏）打挂。缺什么补什么，界面退化成「没有工作区分组、没有菜单状态」
+ * 而不是崩掉
  * @param value - 远端回的快照，字段可能不全
- * @returns 两个字段都在的快照
+ * @returns 三个字段都在的快照
  */
 export function normalizeSnapshot(value: unknown): WorkspaceGroupsSnapshot {
   const raw = (value ?? {}) as Partial<WorkspaceGroupsSnapshot>
   return {
     byWorkspace: raw.byWorkspace ?? {},
     workspaceGroups: Array.isArray(raw.workspaceGroups) ? raw.workspaceGroups : [],
+    picker: normalizePickerState(raw.picker),
   }
 }
 

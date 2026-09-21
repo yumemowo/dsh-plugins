@@ -2,7 +2,7 @@
  * `@deepseek-ai/dsh-client-ui-primitives` 的 ambient 模块声明
  *
  * 该包没有独立安装形态（客户端把它编进基线静态模块表，运行期由模块
- * 系统解析）。本文件必须是全局脚本形态（无顶层 import/export），
+ * 系统解析）。本文件必须是全局脚本形态（无顶层 import/export）
  * declare module 才是环境声明而不是模块扩充
  *
  * 只声明本包实际用到的导出；props 只列本包会传的字段
@@ -88,7 +88,7 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
    * 悬停详情卡片；指针在锚点上停留一段时间后在它右侧浮出内容
    *
    * 给了 `copyText` 时卡片整体可点即复制，并额外给出一个读屏状态位：
-   * `copyLabel` 是它的无障碍标签，`copiedLabel` 是复制成功后就地替换显示的反馈。
+   * `copyLabel` 是它的无障碍标签，`copiedLabel` 是复制成功后就地替换显示的反馈
    * 不给 `copyText` 时卡片只读
    */
   export const HoverCard: (props: {
@@ -168,6 +168,10 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const IconTriangleRightFill14: IconComponent
   /** composer slash 菜单给「可深入」候选用的行尾箭头，用来表达此处有二级菜单 */
   export const IconChevronRightOutline14: IconComponent
+  /** 下拉箭头；本包用它做菜单里可折叠分区的开合指示与 header 的菜单入口 */
+  export const IconChevronDownOutline14: IconComponent
+  /** 勾选标记；本包用它标出菜单里当前聚焦的那一条 */
+  export const IconCheckOutline14: IconComponent
   export const IconEllipsisOutline16: IconComponent
   export const IconPlusOutline16: IconComponent
   /** 官方 sidebar「新建会话」按钮的图标 */

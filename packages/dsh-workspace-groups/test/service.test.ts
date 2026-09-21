@@ -1,19 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { createWorkspaceGroupsService } from '../src/service.ts'
-import { workspaceGroupsSpec } from '../src/spec.ts'
+import { workspaceGroupsSpec, workspaceTreeSchema } from '../src/spec.ts'
+import { rootVirtualKey, rootWorkspaceKey } from '../src/rootEntry.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Group } from '../src/spec.ts'
 
 /**
  * 一个内存版的存储域替身
  *
- * 只实现服务实际用到的那部分契约（`open` / `table` / `effect`），
+ * 只实现服务实际用到的那部分契约（`open` / `table` / `effect`）
  * 这样测试聚焦分组逻辑本身，而不是存储后端的持久化细节
  */
-function createFakeContext(): {
+function createFakeContext(initialGlobal?: unknown): {
   ctx: Context
   records: Map<string, { groups: Group[] }>
-  tree: { virtualWorkspaces: { id: string; name: string; workspaceIds: string[] }[] }
+  /** 落盘的那份 global（未解析的原始形状）；读取时按真实 schema 解析 */
+  readStored: () => unknown
 } {
   const records = new Map<string, { groups: Group[] }>()
 
@@ -26,14 +28,18 @@ function createFakeContext(): {
     delete: async (key: string) => records.delete(key),
   }
 
-  // 根节点上的工作区分组走域的 global 槽位；这里同样只实现服务用到的那部分
-  const tree = {
-    virtualWorkspaces: [] as { id: string; name: string; workspaceIds: string[] }[],
-  }
+  // 根节点那份（工作区分组 + 菜单三份记录）走域的 global 槽位；这里同样只实现
+  // 服务用到的那部分
+  //
+  // 写入要**过一遍真实的 schema**：真域只在持久读边界上校验（`global.set` 的契约
+  // 写明「不在这里复查」），因此写进去一份形状不对的 global 只会在下一次 open 时
+  // 才炸。替身若只做赋值，这一类错误在本文件里永远看不见
+  // 未给初值时按「旧宿主写的那份」起步：没有 picker 那一格，正是真实文件里的形状
+  let stored: unknown = initialGlobal ?? { virtualWorkspaces: [] }
   const global = {
-    get: () => tree,
-    set: async (value: typeof tree) => {
-      tree.virtualWorkspaces = value.virtualWorkspaces
+    get: () => workspaceTreeSchema.parse(stored),
+    set: async (value: unknown) => {
+      stored = JSON.parse(JSON.stringify(workspaceTreeSchema.parse(value)))
     },
   }
 
@@ -47,7 +53,7 @@ function createFakeContext(): {
     effect: (install: () => () => void) => install(),
   } as unknown as Context
 
-  return { ctx, records, tree }
+  return { ctx, records, readStored: () => stored }
 }
 
 describe('workspace groups service', () => {
@@ -55,7 +61,11 @@ describe('workspace groups service', () => {
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
 
-    expect(await service.list()).toEqual({ byWorkspace: {}, workspaceGroups: [] })
+    expect(await service.list()).toEqual({
+      byWorkspace: {},
+      workspaceGroups: [],
+      picker: { focused: '', recent: [], pinned: [] },
+    })
   })
 
   it('creates a group under its workspace', async () => {
@@ -146,8 +156,8 @@ describe('workspace groups service', () => {
 
     const snapshot = await service.deleteGroup('w1', groupId)
 
-    // 最后一个分组被删除后整条工作区记录一并消失，
-    // 因此该工作区回到「没有任何分组」，其会话即未分组
+    // 最后一个分组被删除后整条工作区记录一并消失，因此该工作区回到「没有任何分组」
+    // 其会话即未分组
     const remaining = snapshot.byWorkspace['w1'] ?? []
     expect(remaining).toEqual([])
     expect(remaining.some((group) => group.sessionIds.includes('s1'))).toBe(false)
@@ -179,9 +189,9 @@ describe('workspace groups service', () => {
 /**
  * 根节点上的工作区分组
  *
- * 与会话分组是两个层级的概念，走域的 global 槽位而不是表；这一段固化它的
- * 几条结构约束：一个工作区至多属于一个分组、删除只解散分组、工作区删除后
- * 归属记录被清掉
+ * 与会话分组是两个层级的概念，走域的 global 槽位而不是表；
+ * 这一段固化它的几条结构约束：一个工作区至多属于一个分组、删除只解散分组
+ * 工作区删除后归属记录被清掉
  */
 describe('root-level workspace groups', () => {
   it('reports no workspace groups before anything is written', async () => {
@@ -311,5 +321,135 @@ describe('root-level workspace groups', () => {
 
     const ids = snapshot.workspaceGroups.map((g) => g.id)
     expect(new Set(ids).size).toBe(2)
+  })
+})
+
+/**
+ * 菜单的聚焦 / 最近使用 / 置顶
+ *
+ * 三份记录与工作区分组同处 global 槽位；这一段固化它们与既有变更操作的配合：
+ * 聚焦要落盘并保持最近一次在最前，删除对象时三处一起清掉
+ */
+describe('picker state', () => {
+  it('starts empty', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+
+    expect((await service.list()).picker).toEqual({ focused: '', recent: [], pinned: [] })
+  })
+
+  it('records a focus with the newest first', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+
+    await service.focusEntry(rootWorkspaceKey('w1'))
+    const focused = await service.focusEntry(rootVirtualKey('vg1'))
+
+    expect(focused.picker.focused).toBe(rootVirtualKey('vg1'))
+    expect(focused.picker.recent).toEqual([rootVirtualKey('vg1'), rootWorkspaceKey('w1')])
+  })
+
+  it('accepts the empty key as a focus back to everything', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    await service.focusEntry(rootWorkspaceKey('w1'))
+
+    const cleared = await service.focusEntry('')
+
+    expect(cleared.picker.focused).toBe('')
+    // 退回「全部」也是一次使用，因此它照样留在最近使用里
+    expect(cleared.picker.recent).toContain('')
+  })
+
+  it('toggles a pin on and off', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+
+    const on = await service.togglePinned(rootWorkspaceKey('w1'))
+    expect(on.picker.pinned).toEqual([rootWorkspaceKey('w1')])
+
+    const off = await service.togglePinned(rootWorkspaceKey('w1'))
+    expect(off.picker.pinned).toEqual([])
+  })
+
+  it('keeps the picker state when a workspace group is renamed', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const groupId = (await service.createVirtualWorkspace('旧名')).workspaceGroups[0]?.id ?? ''
+    await service.focusEntry(rootVirtualKey(groupId))
+    await service.togglePinned(rootVirtualKey(groupId))
+
+    const renamed = await service.renameVirtualWorkspace(groupId, '新名')
+
+    // 改名不动 id，聚焦与置顶因此仍然指着同一个对象
+    expect(renamed.picker.focused).toBe(rootVirtualKey(groupId))
+    expect(renamed.picker.pinned).toEqual([rootVirtualKey(groupId)])
+  })
+
+  it('clears a deleted group from all three records', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const groupId = (await service.createVirtualWorkspace('前端')).workspaceGroups[0]?.id ?? ''
+    const key = rootVirtualKey(groupId)
+    await service.focusEntry(key)
+    await service.togglePinned(key)
+
+    const deleted = await service.deleteVirtualWorkspace(groupId)
+
+    // 分组没了，聚焦若还指着它，列表会整片空掉而第二行写着一个不存在的名字
+    expect(deleted.picker).toEqual({ focused: '', recent: [], pinned: [] })
+  })
+
+  it('clears a forgotten workspace from all three records', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const key = rootWorkspaceKey('w1')
+    await service.focusEntry(key)
+    await service.togglePinned(key)
+
+    const forgotten = await service.forgetWorkspace('w1')
+
+    expect(forgotten.picker).toEqual({ focused: '', recent: [], pinned: [] })
+  })
+
+  it('keeps the picker state of other entries when one is deleted', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    await service.focusEntry(rootWorkspaceKey('w2'))
+    await service.focusEntry(rootWorkspaceKey('w1'))
+    await service.togglePinned(rootWorkspaceKey('w2'))
+
+    const forgotten = await service.forgetWorkspace('w1')
+
+    expect(forgotten.picker).toEqual({
+      focused: '',
+      recent: [rootWorkspaceKey('w2')],
+      pinned: [rootWorkspaceKey('w2')],
+    })
+  })
+
+  it('reads back a global record written without the picker fields', async () => {
+    // 旧宿主写的 global 没有这一格（真实文件里就是这个形状）；
+    // schema 的默认值要把它补成空状态，否则读一条旧文件就会整片区域打挂
+    const { ctx } = createFakeContext({ virtualWorkspaces: [] })
+    const service = await createWorkspaceGroupsService(ctx)
+
+    expect((await service.list()).picker).toEqual({ focused: '', recent: [], pinned: [] })
+  })
+
+  it('writes a global that still parses on the next open', async () => {
+    // 真域只在持久读边界上校验，因此「写进去的形状对不对」只有下次 open 才知道
+    // 每个变更方法写回的 global 都必须带上三个字段，缺一个就等于把文件写坏
+    const { ctx, readStored } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const groupId = (await service.createVirtualWorkspace('前端')).workspaceGroups[0]?.id ?? ''
+    await service.focusEntry(rootVirtualKey(groupId))
+    await service.togglePinned(rootWorkspaceKey('w1'))
+    await service.moveWorkspace('w1', groupId)
+
+    const stored = readStored() as { virtualWorkspaces: unknown[]; picker: unknown }
+    expect(Object.keys(stored).sort()).toEqual(['picker', 'virtualWorkspaces'])
+    expect(stored.virtualWorkspaces).toHaveLength(1)
+    expect(workspaceTreeSchema.safeParse(stored).success).toBe(true)
   })
 })

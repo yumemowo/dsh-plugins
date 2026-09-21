@@ -22,6 +22,8 @@ function actions(): RegionActions {
     deleteVirtualWorkspace: async () => snapshot(),
     moveWorkspace: async () => snapshot(),
     forgetWorkspace: async () => snapshot(),
+    focusEntry: async () => snapshot(),
+    togglePinned: async () => snapshot(),
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,
@@ -33,8 +35,9 @@ function actions(): RegionActions {
 /**
  * 造一个语言服务替身
  *
- * `bind` 按命名空间给翻译函数：本包命名空间给真实字典，官方 `workspace`
- * 命名空间给官方键名的替身。`subscribe` 只记录订阅者，供断言订阅路径存在
+ * `bind` 按命名空间给翻译函数：本包命名空间给真实字典
+ * 官方 `workspace` 命名空间给官方键名的替身。`subscribe` 只记录订阅者
+ * 供断言订阅路径存在
  */
 function fakeLocale() {
   const listeners = new Set<() => void>()

@@ -4,8 +4,9 @@ import { CSS } from '../src/client/styles.ts'
 /**
  * 取样式表文本
  *
- * 直接读**求值后**的导出：节奏参数以插值进入 CSS，按源文本切割只会拿到 ${...}
- * 字面量。同理不按反引号定界解析：那会与被测对象互相污染
+ * 直接读**求值后**的导出：节奏参数以插值进入 CSS
+ * 按源文本切割只会拿到 ${...} 字面量。同理不按反引号定界解析：
+ * 那会与被测对象互相污染
  */
 function readCss(): string {
   return CSS
@@ -35,25 +36,24 @@ describe('client stylesheet', () => {
           /margin-top:\s*2px/.test(rule.body),
       )
 
-    // 分组结构多包了几层包装元素，每条 `X > * + *` 只作用于自己的直接子项，
-    // 因此每一层都必须有一条规则，否则「分组头 → 首个会话行」这类
-    // 跨层相邻会漏掉间距
+    // 分组结构多包了几层包装元素，每条 `X > * + *` 只作用于自己的直接子项
+    // 因此每一层都必须有一条规则，否则「分组头 → 首个会话行」这类跨层相邻会漏掉间距
     for (const container of ['wg-workspace', 'wg-workspace-body', 'wg-group', 'wg-sessions']) {
       expect(hasGapRule(`.${container} > * + *`), `missing 2px gap rule for .${container}`).toBe(true)
     }
   })
 
   it('reveals row actions on hover, menu-open, or keyboard focus only', () => {
-    // 先剥注释：注释里的示例选择器不该参与断言。
+    // 先剥注释：注释里的示例选择器不该参与断言
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
 
-    // 隐藏的按钮必须同时关掉指针事件，否则会留下一个看不见却能点中的热区。
+    // 隐藏的按钮必须同时关掉指针事件，否则会留下一个看不见却能点中的热区
     const base = [...css.matchAll(/\.wg-row-action\s*\{([^{}]*)\}/g)].map((m) => m[1] ?? '')
     expect(base.length).toBeGreaterThan(0)
     expect(base.some((body) => /opacity:\s*0/.test(body))).toBe(true)
     expect(base.some((body) => /pointer-events:\s*none/.test(body))).toBe(true)
 
-    // 只保留悬停 / 菜单展开 / 键盘焦点三条显示路径。
+    // 只保留悬停 / 菜单展开 / 键盘焦点三条显示路径
     const reveal = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
       .filter((m) => /\.wg-row-action/.test(m[1] ?? '') && /opacity:\s*1/.test(m[2] ?? ''))
       .flatMap((m) => (m[1] ?? '').split(',').map((s) => s.trim()))
@@ -62,8 +62,8 @@ describe('client stylesheet', () => {
     expect(reveal.some((s) => s.includes(':hover'))).toBe(true)
     expect(reveal).toContain('.wg-row-menu-open .wg-row-action')
 
-    // 这些写法会让按钮在鼠标点过之后常驻：:focus / :focus-within 在点击后
-    // 持续为真，而选中态与点击无关（当前会话一直是选中的）。
+    // 这些写法会让按钮在鼠标点过之后常驻：:focus / :focus-within 在点击后持续为真
+    // 而选中态与点击无关（当前会话一直是选中的）
     for (const bad of ['.wg-row-action:focus', '.wg-row:focus-within .wg-row-action']) {
       expect(reveal, `${bad} makes actions stick after a click`).not.toContain(bad)
     }
@@ -71,7 +71,7 @@ describe('client stylesheet', () => {
   })
 
   it('indents each hierarchy level by one icon-column step', () => {
-    // 注释会连同其后的选择器一起落进 [^{}]+ 里，先把注释剥掉再解析规则。
+    // 注释会连同其后的选择器一起落进 [^{}]+ 里，先把注释剥掉再解析规则
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     /** 取某条选择器规则里的某个声明值 */
     const declared = (selector: string, property: string): string | undefined =>
@@ -80,9 +80,9 @@ describe('client stylesheet', () => {
         .map((m) => new RegExp(`${property}:\\s*([^;]+)`).exec(m[2] ?? '')?.[1]?.trim())
         .find((value) => value !== undefined)
 
-    // 工作区行保持官方几何；分组层与组内会话各再让出一层，层级因此可读。
-    // padding 简写按「上 右 下 左」读，左边即该层的缩进量。分组的会话行多了
-    // 折叠体两层包装，选择器要跟着写穿
+    // 工作区行保持官方几何；分组层与组内会话各再让出一层，层级因此可读
+    // padding 简写按「上 右 下 左」读，左边即该层的缩进量
+    // 分组的会话行多了折叠体两层包装，选择器要跟着写穿
     expect(declared('.wg-workspace-head', 'padding')).toBe('0 8px')
     expect(declared('.wg-group-head', 'padding')).toBe('0 8px 0 24px')
     expect(declared('.wg-workspace-body > .wg-sessions > .wg-row', 'padding-left')).toBe('24px')
@@ -106,10 +106,10 @@ describe('client stylesheet', () => {
 
     const groupSessions = '.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions'
 
-    // 引导线落在父级图标列的中心：工作区是 8 + 16/2，分组是 24 + 16/2。
+    // 引导线落在父级图标列的中心：工作区是 8 + 16/2，分组是 24 + 16/2
     expect(hasRule('.wg-workspace-body::before', /left:\s*16px/)).toBe(true)
     expect(hasRule(`${groupSessions}::before`, /left:\s*32px/)).toBe(true)
-    // 线要跟着主题走，不能写死颜色。
+    // 线要跟着主题走，不能写死颜色
     expect(hasRule('.wg-workspace-body::before', /background:\s*var\(--dsw-alias-border-l1\)/)).toBe(
       true,
     )
@@ -125,12 +125,11 @@ describe('client stylesheet', () => {
     const hasRule = (selector: string, pattern: RegExp): boolean =>
       rules.some((rule) => rule.selectors.includes(selector) && pattern.test(rule.body))
 
-    // 静止时操作位必须收成 0 宽，否则会把行尾时间顶到左侧，两者右缘错开
-    // 一个图标列宽
+    // 静止时操作位必须收成 0 宽，否则会把行尾时间顶到左侧，两者右缘错开一个图标列宽
     expect(hasRule('.wg-row-action-slot', /width:\s*0/)).toBe(true)
     expect(hasRule('.wg-row-action-slot', /overflow:\s*hidden/)).toBe(true)
 
-    // 时间隐藏与操作位展开必须由同一组触发条件驱动，任一时刻只有一方占行尾。
+    // 时间隐藏与操作位展开必须由同一组触发条件驱动，任一时刻只有一方占行尾
     const triggers = ['hover', 'wg-row-menu-open', 'focus-visible']
     for (const trigger of triggers) {
       const hidesTime = rules.some(
@@ -156,8 +155,9 @@ describe('client stylesheet', () => {
     }))
     const root = rules.find((rule) => rule.selectors.includes('.wg-context-menu.wg-context-menu'))
 
-    // 原语根节点是 position: relative 的行内盒，没有 DOM 子节点（面板 portal 到
-    // body）。留在流里会成为一个空 flex 项，行的 gap 照样算，标题与会话数会被推开
+    // 原语根节点是 position: relative 的行内盒
+    // 没有 DOM 子节点（面板 portal 到 body）。留在流里会成为一个空 flex 项
+    // 行的 gap 照样算，标题与会话数会被推开
     expect(root?.body).toMatch(/display:\s*contents/)
     // 类名写两遍抬一次优先级：原语自己的单类规则谁后注入谁赢，先后不由本包决定
     expect(root).toBeDefined()
@@ -171,8 +171,9 @@ describe('client stylesheet', () => {
         .map((m) => new RegExp(`${property}:\\s*([^;]+)`).exec(m[2] ?? '')?.[1]?.trim())
         .find((value) => value !== undefined)
 
-    // 官方 WorkspaceBrowser 的根节点自己带整块右留白；官方那份定义随被接替的
-    // 组件一起没了，本包必须自己重新定义这三个量，header 与列表才能落回原位
+    // 官方 WorkspaceBrowser 的根节点自己带整块右留白；
+    // 官方那份定义随被接替的组件一起没了，本包必须自己重新定义这三个量
+    // header 与列表才能落回原位
     expect(declared('.wg-root', '--dsh-session-list-edge-inset')).toBe(
       'var(--dsh-sidebar-inline-padding, 12px)',
     )
@@ -192,8 +193,8 @@ describe('client stylesheet', () => {
         .map((m) => new RegExp(`${property}:\\s*([^;]+)`).exec(m[2] ?? '')?.[1]?.trim())
         .find((value) => value !== undefined)
 
-    // 官方 header 的 -4px 是相对「自带右留白」的根节点写的；本包根节点有
-    // 同一份留白，因此这一条照抄即可，相抵后按钮右缘离栏缘 8px，不贴边
+    // 官方 header 的 -4px 是相对「自带右留白」的根节点写的；本包根节点有同一份留白
+    // 因此这一条照抄即可，相抵后按钮右缘离栏缘 8px，不贴边
     expect(declared('.wg-header', 'margin-right')).toBe('-4px')
     expect(declared('.wg-header', 'height')).toBe('36px')
     expect(declared('.wg-header', 'gap')).toBe('4px')
@@ -221,8 +222,8 @@ describe('client stylesheet', () => {
   })
 
   it('gives the header entry the official icon-button geometry', () => {
-    // 官方 header 图标按钮是 28px 正圆（.iconButton），与行内 16px 按钮
-    // 不是一套；这些几何按官方外观取，不能被行内那套带跑
+    // 官方 header 图标按钮是 28px 正圆（.iconButton），与行内 16px 按钮不是一套；
+    // 这些几何按官方外观取，不能被行内那套带跑
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
       selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
@@ -253,9 +254,10 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    // 容器带 overflow:hidden，而宽栏能同时出现三个 28px 入口（视图选项 /
-    // 新建工作区分组 / 添加工作区），因此宽度上限必须容得下 28*3 + 4*2 = 92。
-    // 给小了不会报错，只是把最右边那个入口整个裁掉——界面上平白少一个按钮
+    // 容器带 overflow:hidden
+    // 而宽栏能同时出现三个 28px 入口（视图选项 / 新建工作区分组 / 添加工作区）
+    // 因此宽度上限必须容得下 28*3 + 4*2 = 92。给小了不会报错
+    // 只是把最右边那个入口整个裁掉——界面上平白少一个按钮
     const cap = /max-width:\s*(\d+)px/.exec(bodyOf('.wg-header-actions'))?.[1]
     expect(cap).toBe('92')
     expect(bodyOf('.wg-header-actions')).toMatch(/overflow:\s*hidden/)
@@ -271,8 +273,8 @@ describe('client stylesheet', () => {
     const has = (selector: string, pattern: RegExp): boolean =>
       rules.some((rule) => rule.selectors.includes(selector) && pattern.test(rule.body))
 
-    // 分组头复用工作区行那一套两个槽：静止显示文件夹、悬停换成箭头。
-    // 少了分组头这几条，它的箭头会常驻（或文件夹不会让位），与工作区行不一致
+    // 分组头复用工作区行那一套两个槽：静止显示文件夹、悬停换成箭头。少了分组头这几条
+    // 它的箭头会常驻（或文件夹不会让位），与工作区行不一致
     const head = '.wg-virtual-workspace-head'
     expect(has(`${head} .wg-chevron`, /display:\s*none/)).toBe(true)
     expect(has(`${head}:hover .wg-chevron`, /display:\s*inline-flex/)).toBe(true)
@@ -288,7 +290,7 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    // 窄栏一行放不下两个 36px 入口，因此改成竖排；定高与裁剪都要撤掉，
+    // 窄栏一行放不下两个 36px 入口，因此改成竖排；定高与裁剪都要撤掉
     // 否则第二个入口看不见（宽栏那条基线规则是给单行写的）
     const rail = bodyOf('.wg-header-rail')
     expect(rail).toMatch(/flex-direction:\s*column/)
@@ -331,7 +333,7 @@ describe('client stylesheet', () => {
     expect(count).toMatch(/font-size:\s*12px/)
     expect(count).toMatch(/line-height:\s*20px/)
 
-    // 分组头是 gap:6px，而 session 行是 gap:0；差的那份 gap 要还回去，
+    // 分组头是 gap:6px，而 session 行是 gap:0；差的那份 gap 要还回去
     // 会话数才会落在与 time 同一条右缘线上
     expect(count).toMatch(/margin-right:\s*-6px/)
 
@@ -350,7 +352,7 @@ describe('client stylesheet', () => {
   })
 
   it('gives the group row the same collapsible action slot as the session row', () => {
-    // 会话数要贴到行右，操作位就必须像 session 行那样静止时不占宽。
+    // 会话数要贴到行右，操作位就必须像 session 行那样静止时不占宽
     // 三条展开触发条件与上面隐去会话数的那组一一对应，这样两者严格互换
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
@@ -380,12 +382,12 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    // 收起态与展开态只差轨道高度（0fr ↔ 1fr）：轨道高度由内容自身决定，
+    // 收起态与展开态只差轨道高度（0fr ↔ 1fr）：轨道高度由内容自身决定
     // 因此子元素有多少个、各自多高都不需要预先知道
     expect(bodyOf('.wg-collapse')).toMatch(/grid-template-rows:\s*0fr/)
     expect(bodyOf('.wg-collapse-open')).toMatch(/grid-template-rows:\s*1fr/)
 
-    // 轨道高度可动画的前提是内层裁剪 + 自动最小尺寸归零：缺了任一条，
+    // 轨道高度可动画的前提是内层裁剪 + 自动最小尺寸归零：缺了任一条
     // 内容都会把 0fr 的轨道顶开，收不到底
     const clip = bodyOf('.wg-collapse-clip')
     expect(clip).toMatch(/overflow:\s*hidden/)
@@ -393,8 +395,13 @@ describe('client stylesheet', () => {
     // 收起后内容仍在文档里，必须自己让出焦点顺序
     expect(clip).toMatch(/visibility:\s*hidden/)
 
-    // 这套做法不依赖任何写死的尺寸或序号
-    expect(css).not.toMatch(/max-height/)
+    // 这套做法不依赖任何写死的尺寸或序号。只查折叠相关的规则：
+    // 样式表里别处出现 max-height（如下拉菜单的高度上限）与这条取舍无关
+    const collapseBodies = rules
+      .filter((rule) => rule.selectors.some((selector) => selector.includes('wg-collapse')))
+      .map((rule) => rule.body)
+      .join('\n')
+    expect(collapseBodies).not.toMatch(/max-height/)
     expect(css).not.toMatch(/nth-child/)
   })
 
@@ -407,8 +414,9 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    // 不透明是元素的自然状态：展开态不得有任何规则写 opacity，否则过渡没跑或主线程
-    // 被占住时元素会留在透明上。透明只挂在「所在折叠体还没展开」这条结构条件上
+    // 不透明是元素的自然状态：展开态不得有任何规则写 opacity
+    // 否则过渡没跑或主线程被占住时元素会留在透明上
+    // 透明只挂在「所在折叠体还没展开」这条结构条件上
     expect(bodyOf('.wg-collapse-clip [data-wg-stagger]')).not.toMatch(/opacity\s*:/)
     expect(
       bodyOf('.wg-collapse:not(.wg-collapse-open) > .wg-collapse-clip [data-wg-stagger]'),
@@ -440,11 +448,11 @@ describe('client stylesheet', () => {
     const reduced =
       /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
 
-    // 关掉动画还不够：visibility 的延时不跟着去掉，收起后内容仍会多挡
-    // 一个动画时长才交出焦点
+    // 关掉动画还不够：visibility 的延时不跟着去掉
+    // 收起后内容仍会多挡一个动画时长才交出焦点
     expect(reduced).toMatch(/\.wg-collapse\s*\{\s*transition:\s*none/)
     expect(reduced).toMatch(/\.wg-collapse-clip\s*\{\s*transition:\s*visibility 0s linear/)
-    // 逐个淡入也要一并落位。延迟由组件逐个下发，因此那条展开态规则要一起清掉，
+    // 逐个淡入也要一并落位。延迟由组件逐个下发，因此那条展开态规则要一起清掉
     // 否则 reduced-motion 下行仍是逐个出现
     expect(reduced).toMatch(/\[data-wg-stagger\][\s\S]*?transition:\s*none/)
   })
@@ -481,14 +489,14 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    // 官方给三种内容体共用的 .treeBody 挂了 .2s 的 wide-in 动画，本包的面板
-    // 类取同一条节奏
+    // 官方给三种内容体共用的 .treeBody 挂了 .2s 的 wide-in 动画
+    // 本包的面板类取同一条节奏
     const panel = bodyOf('.wg-panel')
     expect(panel).toMatch(/animation:\s*wg-panel-in\s*\.2s/)
     expect(panel).toMatch(/var\(--ds-ease-in-out/)
-    // 只从 0% 的不透明起，终态留给元素自然状态——这样动画没跑或被打断时
-    // 面板仍是可见的，不会停在透明上。关键帧内部的 `0%` 会连同外层选择器一起
-    // 落进 [^{}]+，因此按整块文本查
+    // 只从 0% 的不透明起，终态留给元素自然状态——这样动画没跑或被打断时面板仍是可见的
+    // 不会停在透明上。关键帧内部的 `0%` 会连同外层选择器一起落进 [^{}]+
+    // 因此按整块文本查
     expect(css).toMatch(/@keyframes wg-panel-in\s*\{\s*0%\s*\{\s*opacity:\s*0/)
   })
 
@@ -497,8 +505,8 @@ describe('client stylesheet', () => {
     const reduced =
       /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
 
-    // 面板动画的初态是 opacity: 0，这里必须整条 animation 撤掉而不是只撤
-    // transition——否则 reduced-motion 下面板会一直停在不可见
+    // 面板动画的初态是 opacity: 0，这里必须整条 animation 撤掉而不是只撤 transition——
+    // 否则 reduced-motion 下面板会一直停在不可见
     expect(reduced).toMatch(/\.wg-panel\s*\{\s*animation:\s*none/)
   })
 
@@ -507,14 +515,17 @@ describe('client stylesheet', () => {
     const reduced =
       /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
 
-    // 展开、输入框淡入、标题与入口组的让位都要一起落位；漏掉哪一条，那一项
-    // 就会在 reduced-motion 下继续动
+    // 展开、输入框淡入、标题与入口组的让位都要一起落位；漏掉哪一条
+    // 那一项就会在 reduced-motion 下继续动
     for (const selector of [
       '.wg-search',
       '.wg-search-slot',
       '.wg-search-input',
-      '.wg-header-label',
+      '.wg-header-title',
       '.wg-header-actions',
+      // 两处箭头也要一起落位
+      '.wg-header-caret',
+      '.wg-picker-caret',
     ]) {
       expect(reduced, `${selector} keeps animating`).toContain(selector)
     }
@@ -542,8 +553,9 @@ describe('client stylesheet', () => {
     expect(bodyOf('.wg-search-input')).toMatch(/\.12s var\(--ds-ease-in-out/)
 
     // 标题与入口组的让位是对称的两条：一个向左收、一个向右收
-    expect(bodyOf('.wg-header-label-hidden')).toMatch(/max-width:\s*0/)
-    expect(bodyOf('.wg-header-label-hidden')).toMatch(/transform:\s*translate\(-4px\)/)
+    // 宽度上限挂在整个标题块上（两行共用一条右缘），因此收拢也发生在那一层
+    expect(bodyOf('.wg-header-title-hidden')).toMatch(/max-width:\s*0/)
+    expect(bodyOf('.wg-header-title-hidden')).toMatch(/transform:\s*translate\(-4px\)/)
     expect(bodyOf('.wg-header-actions-hidden')).toMatch(/max-width:\s*0/)
     expect(bodyOf('.wg-header-actions-hidden')).toMatch(/transform:\s*translate\(4px\)/)
   })
@@ -566,19 +578,18 @@ describe('client stylesheet', () => {
     // 第二行整体缩进一个状态位槽（16 + 4），与标题左缘对齐
     expect(bodyOf('.wg-search-result-meta')).toMatch(/margin-left:\s*20px/)
 
-    // 那一行的 6px gap 是官方给「工作区名 / 摘录」两格用的；本包没有摘录，
-    // 路径必须整体成项，否则 gap 会落进「工作区 / 分组」之间，把一条连续
-    // 路径读成两截
+    // 那一行的 6px gap 是官方给「工作区名 / 摘录」两格用的；本包没有摘录
+    // 路径必须整体成项，否则 gap 会落进「工作区 / 分组」之间，把一条连续路径读成两截
     expect(bodyOf('.wg-search-result-meta')).toMatch(/gap:\s*6px/)
     const path = bodyOf('.wg-search-result-path')
     expect(path).toMatch(/gap:\s*0/)
     expect(path).toMatch(/flex:/)
-    // 宽度上限挂在路径这一层：挂到段上会按路径自身宽度算百分比，越窄越缩，
+    // 宽度上限挂在路径这一层：挂到段上会按路径自身宽度算百分比，越窄越缩
     // 长工作区名一开始就被截断
     expect(path).toMatch(/max-width:\s*60%/)
     expect(bodyOf('.wg-search-result-workspace')).not.toMatch(/max-width/)
 
-    // 路径两段同格（12px/17px）但不同色阶：工作区更强、分组更弱，
+    // 路径两段同格（12px/17px）但不同色阶：工作区更强、分组更弱
     // 靠对比区分「容器」与「组」
     const workspace = bodyOf('.wg-search-result-workspace')
     expect(workspace).toMatch(/color:\s*var\(--dsw-alias-label-secondary\)/)
@@ -593,14 +604,15 @@ describe('client stylesheet', () => {
 
     // 两段必须真的是两档色阶——写成同一个变量就退化成一条长名字
     expect(workspace).not.toBe(group)
-    // 分隔符不单独着色：它作为分组那一段的文本继承同一色阶，样式里不该有
-    // 一个只给分隔符用的颜色规则
+    // 分隔符不单独着色：它作为分组那一段的文本继承同一色阶
+    // 样式里不该有一个只给分隔符用的颜色规则
     expect(bodyOf('.wg-search-result-separator')).toBe('')
   })
 
   it('indents a session row whether or not a hover card wraps it', () => {
-    // 挂了悬停卡片的会话行会被官方 HoverCard 的根节点包一层，行就不再是
-    // .wg-sessions 的直接子项。两条选择器都要在，缩进才不会因为有没有卡片而不同
+    // 挂了悬停卡片的会话行会被官方 HoverCard 的根节点包一层
+    // 行就不再是 .wg-sessions 的直接子项。两条选择器都要在
+    // 缩进才不会因为有没有卡片而不同
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
       selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
@@ -656,8 +668,8 @@ describe('client stylesheet', () => {
   })
 
   it('flips the official floating panels only under the body marker', () => {
-    // 官方浮层固定向右展开，对照模式下区域贴窗口右缘会把它们顶到屏幕外。翻转必须
-    // 收在 body 的标记之下：产品形态（左侧栏）要保留原语的向右展开
+    // 官方浮层固定向右展开，对照模式下区域贴窗口右缘会把它们顶到屏幕外
+    // 翻转必须收在 body 的标记之下：产品形态（左侧栏）要保留原语的向右展开
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
       selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
@@ -670,14 +682,14 @@ describe('client stylesheet', () => {
     expect(bodyOf("body[data-wg-flip] [role='menu'] [role='menu']")).toMatch(/right:\s*calc\(100% \+ 10px\)/)
     expect(bodyOf("body[data-wg-flip] [role='menu'] [role='menu']::before")).toMatch(/right:\s*-10px/)
 
-    // 悬停卡片：位置是原语算出来的内联 left，只有 !important 压得过；落点取 body
-    // 上那个由宿主量得的变量
+    // 悬停卡片：位置是原语算出来的内联 left，只有 !important 压得过；
+    // 落点取 body 上那个由宿主量得的变量
     const card = bodyOf('body[data-wg-flip] [data-wg-hover-card]')
     expect(card).toMatch(/left:\s*auto\s*!important/)
     expect(card).toMatch(/right:\s*var\(--wg-flip-right\)\s*!important/)
 
-    // 选择器必须带本包的卡片标记：卡片 portal 到 document.body，与官方左侧栏的
-    // 卡片同处一个父节点，少了这层限定会把官方卡片一起翻出屏幕
+    // 选择器必须带本包的卡片标记：卡片 portal 到 document.body
+    // 与官方左侧栏的卡片同处一个父节点，少了这层限定会把官方卡片一起翻出屏幕
     expect(card).not.toBe('')
     for (const rule of rules) {
       if (!/--wg-flip-right/.test(rule.body)) continue
@@ -685,10 +697,191 @@ describe('client stylesheet', () => {
     }
   })
 
+  it('lets the two-line title size the header instead of the official 36px', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 基线那条 36px 定高是官方为**单行**标题写的；两行各 20px 行高放不下
+    // 而 header 带 overflow:hidden——沿用定高只会把第二行连同裁剪一起吞掉
+    // 界面上就是「聚焦的那一行不见了」，不会有任何报错
+    expect(bodyOf('.wg-header-titled')).toMatch(/height:\s*auto/)
+
+    // 宽度上限挂在整个标题块上：两行共用同一条右缘。挂到行上会让较窄的那行先截断
+    // 而较宽的那行顶出 45% 的约束
+    expect(bodyOf('.wg-header-title')).toMatch(/max-width:\s*45%/)
+
+    // 命中余量由标题块这一个按钮自己带，基线那条要撤掉，否则叠加成 8px 而标题缩进
+    expect(bodyOf('.wg-header-titled')).toMatch(/padding-left:\s*0/)
+    expect(bodyOf('.wg-header-title')).toMatch(/padding:\s*2px 4px/)
+    // 第二行不能再自己带横向内边距：两行在同一个按钮盒子里
+    // 各自加偏移会让它们的左缘错开
+    expect(bodyOf('.wg-header-focus')).not.toMatch(/padding/)
+  })
+
+  it('makes the whole two-line title one button', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 两行是同一个按钮：标题块本身是可点的那一层，两行都只是它的内容
+    expect(bodyOf('.wg-header-title')).toMatch(/cursor:\s*pointer/)
+    expect(bodyOf('.wg-header-title')).toMatch(/background:\s*0 0/)
+    expect(bodyOf('.wg-header-title')).toMatch(/border:\s*none/)
+    // 悬停反馈挂在整块上，而不是其中某一行
+    expect(bodyOf('.wg-header-title:hover')).toMatch(/--dsw-alias-interactive-bg-hover/)
+
+    // 箭头不再是独立按钮，它只是这块按钮的开合指示；开合之间翻转
+    expect(bodyOf('.wg-header-heading')).toMatch(/gap:\s*2px/)
+    expect(bodyOf('.wg-header-caret-open')).toMatch(/transform:\s*rotate\(180deg\)/)
+  })
+
+  it('steps the focused line down in size and up in contrast', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    /** 取某条规则里某个声明的数值；没有该声明时为 NaN */
+    const px = (selector: string, property: string): number => {
+      const found = new RegExp(`${property}:\\s*(\\d+)px`).exec(bodyOf(selector))
+      return found === null ? Number.NaN : Number(found[1])
+    }
+
+    // 上行是层级名（工作区），下行是层级里的取值——两个层级的信息，字号与色阶都要分开
+    // 两行同色同字号时读起来像同一个标题被折成了两行
+    expect(px('.wg-header-focus', 'font-size')).toBeLessThan(px('.wg-header-label', 'font-size'))
+    expect(px('.wg-header-focus', 'line-height')).toBeLessThan(
+      px('.wg-header-label', 'line-height'),
+    )
+    // 下行更亮一档：它是当前真正在看的东西，上行只是分类名。两行各自声明色阶
+    // 因此不必回到按钮那一层去找继承来的值
+    expect(bodyOf('.wg-header-heading')).toMatch(/--dsw-alias-label-tertiary/)
+    expect(bodyOf('.wg-header-focus')).toMatch(/--dsw-alias-label-secondary/)
+    expect(bodyOf('.wg-header-title')).not.toMatch(/color:/)
+  })
+
+  it('reuses the shared row-action reveal for the picker rows', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const selectorsOf = (pattern: RegExp): string[] =>
+      rules.filter((rule) => pattern.test(rule.body)).flatMap((rule) => rule.selectors)
+
+    // 菜单里的条目行与列表行共用同一套操作位：
+    // `.wg-row-action` 的隐藏与三条显示路径都只有一份，因此两处的显隐语义不可能漂移
+    const base = rules.find((rule) => rule.selectors.includes('.wg-row-action'))?.body ?? ''
+    expect(base).toMatch(/opacity:\s*0/)
+    expect(base).toMatch(/pointer-events:\s*none/)
+
+    const reveal = selectorsOf(/opacity:\s*1/)
+    expect(reveal).toContain('.wg-row-action:focus-visible')
+    expect(reveal).toContain('.wg-row:hover .wg-row-action')
+
+    // 菜单里只覆盖两处：置顶按下时常驻可见、删除悬停时用错误色
+    // 样式认 aria-pressed，与 IconButton 声明的是同一个事实
+    expect(reveal.some((selector) => selector.includes("[aria-pressed='true']"))).toBe(true)
+    const danger = rules
+      .filter((rule) => rule.selectors.some((s) => s.includes('wg-row-action-danger')))
+      .map((rule) => rule.body)
+      .join('\n')
+    expect(danger).toMatch(/--dsw-alias-state-error-primary/)
+  })
+
+  it('shapes the picker row like the workspace row instead of two siblings', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 条目行是 `.wg-row` 那一套再加上菜单项的几何：行本身可点，三枚按钮嵌在行内
+    expect(bodyOf('.wg-picker-row')).toMatch(/min-height:\s*34px/)
+    expect(bodyOf('.wg-picker-row')).toMatch(/gap:\s*8px/)
+    expect(bodyOf('.wg-picker-row')).toMatch(/padding:\s*5px 10px/)
+    // 操作位在菜单里常驻占位（不是列表行那种从 0 宽展开）
+    expect(bodyOf('.wg-picker-row .wg-row-actions')).toMatch(/gap:\s*8px/)
+
+    // 旧的两个并排热区已经不存在：行按钮 + 兄弟按钮那套选择器不该留残骸
+    for (const gone of ['.wg-picker-item', '.wg-picker-action', '.wg-picker-row-focused']) {
+      expect(bodyOf(gone), `${gone} is a leftover from the sibling-button layout`).toBe('')
+    }
+  })
+
+  it('makes the dialog checkbox a full-row label', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 整行做成 label：勾选框自己只有 16px，而那句话是要读的，点文字也该切换它
+    expect(bodyOf('.wg-dialog-check')).toMatch(/cursor:\s*pointer/)
+    expect(bodyOf('.wg-dialog-check')).toMatch(/display:\s*flex/)
+    expect(bodyOf('.wg-dialog-check input')).toMatch(/width:\s*16px/)
+  })
+
+  it('floats the picker panel above the list', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const body = rules.find((rule) => rule.selectors.includes('.wg-picker-menu'))?.body ?? ''
+
+    // 面板 portal 到 body，落点由组件量出来写成内联的 left/top
+    expect(body).toMatch(/position:\s*fixed/)
+    // 与官方 .portal 面板同一个层级（官方菜单是 1100），不是随手取的小数字
+    expect(body).toMatch(/z-index:\s*1100/)
+    // 内容可能比窗口高：给它自己的滚动兜底
+    expect(body).toMatch(/max-height:/)
+    expect(body).toMatch(/overflow-y:\s*auto/)
+  })
+
+  it('paints the picker panel with the official menu surface tokens', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const body = rules.find((rule) => rule.selectors.includes('.wg-picker-menu'))?.body ?? ''
+
+    // 面板是不透明的浮层，底下就是会话列表：底色必须真的解析出来
+    // 这里只认官方菜单面板那两个 token——
+    // 写一个不存在的名字（如 --dsw-alias-bg-elevated）时 background 整条失效
+    // 面板变透明、后面的会话穿过来，而界面上不会有任何报错
+    expect(body).toMatch(/background:\s*var\(--dsw-specific-menu\)/)
+    expect(body).toMatch(/box-shadow:\s*var\(--dsw-elevation-prominent\)/)
+    expect(body).toMatch(/--dsw-elevation-stroke-color:\s*var\(--dsw-alias-border-l1\)/)
+    // 不写会让整条 background 失效的回退值：面板必须有底色
+    expect(body).not.toMatch(/background:\s*var\([^)]*,[^)]*\)/)
+
+    // 圆角与内边距取官方 .list / .submenu 面板的同一组值
+    expect(body).toMatch(/border-radius:\s*20px/)
+    expect(body).toMatch(/min-width:\s*218px/)
+  })
+
   it('pushes the submenu arrow to the right edge of the item', () => {
-    // 官方 Menu 的项没有「悬停展开」槽位，箭头由本包塞进 label（见 menus.tsx
-    // 的 submenuParentLabel）。文案必须吃掉余量、箭头不参与伸缩，箭头才会落在
-    // 项的最右缘；反过来写会让箭头跟着文字长度浮动
+    // 官方 Menu 的项没有「悬停展开」槽位
+    // 箭头由本包塞进 label（见 menus.tsx 的 submenuParentLabel）。文案必须吃掉余量
+    // 箭头不参与伸缩，箭头才会落在项的最右缘；反过来写会让箭头跟着文字长度浮动
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
       selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
@@ -708,7 +901,7 @@ describe('client stylesheet', () => {
     // 箭头色阶与官方项图标同档，不抢文案权重
     expect(bodyOf('.wg-menu-arrow')).toContain('var(--dsw-alias-label-tertiary)')
 
-    // 箭头恒指向右：翻转态下二级面板改从左侧展开，箭头也不跟着镜像。
+    // 箭头恒指向右：翻转态下二级面板改从左侧展开，箭头也不跟着镜像
     // 断言落在「没有任何一条含 .wg-menu-arrow 的规则声明 transform」上——
     // 只要有人给箭头加了翻转，这条就失败
     expect(

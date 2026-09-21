@@ -1,10 +1,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { workspaceGroupsSpec } from './spec.ts'
-import type { Group, VirtualWorkspace, WorkspaceGroupsSnapshot } from './spec.ts'
+import type { Group, PickerSnapshot, VirtualWorkspace, WorkspaceGroupsSnapshot } from './spec.ts'
+import { normalizePickerState, withFocus, withPinnedToggled, withoutEntry } from './pickerState.ts'
+import { rootVirtualKey, rootWorkspaceKey } from './rootEntry.ts'
 
 /** 分组存储与变更操作的实现，注册为 `ctx.workspaceGroups` */
 export interface WorkspaceGroupsService {
-  /** 读取全部工作区的会话分组与根节点上的工作区分组 */
+  /** 读取全部工作区的会话分组、根节点上的工作区分组与菜单状态 */
   list(): Promise<WorkspaceGroupsSnapshot>
   /** 在工作区下新建一个会话分组 */
   createGroup(workspaceId: string, name: string): Promise<WorkspaceGroupsSnapshot>
@@ -32,6 +34,16 @@ export interface WorkspaceGroupsService {
    * 删除工作区时清理由此留下的归属记录，不另开一套删除接口
    */
   forgetWorkspace(workspaceId: string): Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 聚焦一个根节点条目，并把它记入最近使用
+   * @param key - 条目键（见 `rootEntry.ts`）；空串表示退回「全部」
+   */
+  focusEntry(key: string): Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 切换一个根节点条目的置顶
+   * @param key - 条目键（见 `rootEntry.ts`）
+   */
+  togglePinned(key: string): Promise<WorkspaceGroupsSnapshot>
 }
 
 /** 生成一个会话分组 id；同工作区内唯一即可，无需全局唯一 */
@@ -63,7 +75,14 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
     for (const [workspaceId, record] of table.entries()) {
       byWorkspace[workspaceId] = record.groups
     }
-    return { byWorkspace, workspaceGroups: tree.get().virtualWorkspaces }
+    const global = tree.get()
+    return {
+      byWorkspace,
+      workspaceGroups: global.virtualWorkspaces,
+      // 走一次归一而不是直接交出这一格：global 记录可能来自一个没有这几格的
+      // 旧版本，缺格时下游（浏览器半边的菜单）会读到 undefined
+      picker: normalizePickerState(global.picker),
+    }
   }
 
   /**
@@ -88,9 +107,37 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
     return snapshot()
   }
 
-  /** 写回根节点上的工作区分组列表 */
+  /** 写回根节点上的工作区分组列表，菜单状态原样保留 */
   async function saveTree(groups: VirtualWorkspace[]): Promise<WorkspaceGroupsSnapshot> {
-    await tree.set({ virtualWorkspaces: groups })
+    await tree.set({ virtualWorkspaces: groups, picker: normalizePickerState(tree.get().picker) })
+    return snapshot()
+  }
+
+  /**
+   * 写回菜单状态；分组列表原样保留
+   *
+   * 三份记录都可能提到现已不存在的对象（记录比列表活得久），因此这里不做修剪：
+   * 唯一知道「哪些对象还在」的是渲染菜单的那一侧，宿主只管落盘
+   */
+  async function savePicker(picker: PickerSnapshot): Promise<WorkspaceGroupsSnapshot> {
+    await tree.set({ virtualWorkspaces: tree.get().virtualWorkspaces, picker })
+    return snapshot()
+  }
+
+  /**
+   * 删除一个根节点条目并同时摘掉它在菜单三份记录里的痕迹
+   *
+   * 两次写会让「分组已消失、聚焦还指着它」有一段可观察的窗口，因此合成一次
+   * @param key - 被删除条目的键
+   * @param groups - 删除后的分组列表
+   * @returns 变更后的快照
+   */
+  async function dropEntry(
+    key: string,
+    groups: VirtualWorkspace[],
+  ): Promise<WorkspaceGroupsSnapshot> {
+    const picker = withoutEntry(normalizePickerState(tree.get().picker), key)
+    await tree.set({ virtualWorkspaces: groups, picker })
     return snapshot()
   }
 
@@ -113,13 +160,13 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
     },
 
     async deleteGroup(workspaceId, groupId) {
-      // 只删除分组本身：组内会话回到未分组，会话与工作区归属都不受影响。
+      // 只删除分组本身：组内会话回到未分组，会话与工作区归属都不受影响
       const groups = groupsOf(workspaceId).filter((group) => group.id !== groupId)
       return save(workspaceId, groups)
     },
 
     async moveSession(workspaceId, sessionId, groupId) {
-      // 先在所有分组中摘除该会话，保证一个会话至多属于一个分组。
+      // 先在所有分组中摘除该会话，保证一个会话至多属于一个分组
       const groups = groupsOf(workspaceId).map((group) => ({
         ...group,
         sessionIds: group.sessionIds.filter((id) => id !== sessionId),
@@ -146,12 +193,16 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
     },
 
     async deleteVirtualWorkspace(groupId) {
-      // 只解散分组：组内工作区回到未分组，工作区及其会话都不受影响。
-      return saveTree(treeGroups().filter((group) => group.id !== groupId))
+      // 只解散分组：组内工作区回到未分组，工作区及其会话都不受影响。分组在菜单
+      // 三份记录里的条目一并摘掉，否则聚焦在一个已解散的分组上时列表会整片空掉
+      return dropEntry(
+        rootVirtualKey(groupId),
+        treeGroups().filter((group) => group.id !== groupId),
+      )
     },
 
     async moveWorkspace(workspaceId, groupId) {
-      // 先在所有分组中摘除该工作区，保证一个工作区至多属于一个分组。
+      // 先在所有分组中摘除该工作区，保证一个工作区至多属于一个分组
       const groups = treeGroups().map((group) => ({
         ...group,
         workspaceIds: group.workspaceIds.filter((id) => id !== workspaceId),
@@ -175,7 +226,15 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
       const changed = pruned.some(
         (group, index) => group.workspaceIds.length !== (groups[index]?.workspaceIds.length ?? 0),
       )
-      return changed ? saveTree(pruned) : snapshot()
+      return dropEntry(rootWorkspaceKey(workspaceId), changed ? pruned : groups)
+    },
+
+    async focusEntry(key) {
+      return savePicker(withFocus(normalizePickerState(tree.get().picker), key))
+    },
+
+    async togglePinned(key) {
+      return savePicker(withPinnedToggled(normalizePickerState(tree.get().picker), key))
     },
   }
 }

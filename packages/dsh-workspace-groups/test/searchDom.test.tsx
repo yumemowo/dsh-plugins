@@ -16,9 +16,10 @@ import { snapshot } from './snapshot-stub.ts'
 /**
  * 搜索的真实 DOM 冒烟
  *
- * `render.test.ts` 用自制 dispatcher 直接调用函数组件，看不到样式类是否真的
- * 落到节点上、受控输入是否真的驱动重渲染、以及原语替身是否缺导出。这里挂真
- * `react-dom` 渲染一遍，按 DOM 结构断言这几件只有真实渲染才暴露的事
+ * `render.test.ts` 用自制 dispatcher 直接调用函数组件
+ * 看不到样式类是否真的落到节点上、受控输入是否真的驱动重渲染
+ * 以及原语替身是否缺导出。这里挂真 `react-dom` 渲染一遍
+ * 按 DOM 结构断言这几件只有真实渲染才暴露的事
  *
  * 环境固定为 jsdom（文件头的注释指令），本包其余测试仍跑 node 环境
  */
@@ -64,6 +65,8 @@ function props(wide = true): WorkspaceGroupsProps {
     deleteVirtualWorkspace: async () => snapshot(),
     moveWorkspace: async () => snapshot(),
     forgetWorkspace: async () => snapshot(),
+    focusEntry: async () => snapshot(),
+    togglePinned: async () => snapshot(),
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,
@@ -128,8 +131,8 @@ describe('search in a real DOM', () => {
     const { container } = await mount()
 
     // 初始：标题与右侧入口都在，输入框收起
-    expect(container.querySelector('.wg-header-label')?.className).not.toContain(
-      'wg-header-label-hidden',
+    expect(container.querySelector('.wg-header-title')?.className).not.toContain(
+      'wg-header-title-hidden',
     )
     expect(container.querySelector('.wg-header-actions')?.className).not.toContain(
       'wg-header-actions-hidden',
@@ -138,8 +141,9 @@ describe('search in a real DOM', () => {
     await expandSearch(container)
 
     // 展开：标题向左让位、入口组向右让位，槽位与框体同时拉开
-    expect(container.querySelector('.wg-header-label')?.className).toContain(
-      'wg-header-label-hidden',
+    // 让位发生在整个标题块上（两行一起收），因此查的是它而不是其中某一行
+    expect(container.querySelector('.wg-header-title')?.className).toContain(
+      'wg-header-title-hidden',
     )
     expect(container.querySelector('.wg-header-actions')?.className).toContain(
       'wg-header-actions-hidden',
@@ -174,8 +178,9 @@ describe('search in a real DOM', () => {
   it('gives both panels the fade-in class so each switch replays it', async () => {
     const { container } = await mount()
 
-    // 常规列表与搜索结果各是一个面板；两者都带 wg-panel，切换内容体时
-    // React 换掉整个节点，动画因此重放（官方三种内容体共用 .treeBody 同理）
+    // 常规列表与搜索结果各是一个面板；两者都带 wg-panel
+    // 切换内容体时 React 换掉整个节点
+    // 动画因此重放（官方三种内容体共用 .treeBody 同理）
     const treePanel = container.querySelector('.wg-list')
     expect(treePanel?.className).toContain('wg-panel')
 
@@ -184,7 +189,7 @@ describe('search in a real DOM', () => {
 
     const searchPanel = container.querySelector('.wg-list')
     expect(searchPanel?.className).toContain('wg-panel')
-    // 关键：必须是另一个节点。若 React 原地复用同一个节点，动画不会重放，
+    // 关键：必须是另一个节点。若 React 原地复用同一个节点，动画不会重放
     // 淡入只在首次挂载时发生一次——这正是要防的退化
     expect(searchPanel).not.toBe(treePanel)
     expect(container.querySelector('.wg-search-results')).not.toBeNull()
@@ -195,10 +200,11 @@ describe('search in a real DOM', () => {
     await expandSearch(container)
     await type(container, '修复')
 
-    // 第二行那个容器带 6px gap（官方给「工作区名 / 摘录」用的）。路径两段若
-    // 直接做它的子项，那 6px 会插进「工作区」与「分组」之间，把一条连续的路径
-    // 读成两截。因此这里断言两段的从属结构：它们同属一个中间层，外层 gap
-    // 够不到两者之间（那条 gap 的取值本身由 styles.test.ts 从 CSS 文本上钉住）
+    // 第二行那个容器带 6px gap（官方给「工作区名 / 摘录」用的）
+    // 路径两段若直接做它的子项，那 6px 会插进「工作区」与「分组」之间
+    // 把一条连续的路径读成两截。因此这里断言两段的从属结构：它们同属一个中间层
+    // 外层 gap 够不到两者之间（那条 gap 的取值本身由 styles.test.ts 从 CSS
+    // 文本上钉住）
     const meta = container.querySelector('.wg-search-result-meta') as HTMLElement
     const path = container.querySelector('.wg-search-result-path') as HTMLElement
     const workspace = container.querySelector('.wg-search-result-workspace') as HTMLElement

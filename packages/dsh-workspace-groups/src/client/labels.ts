@@ -4,11 +4,11 @@
  * 字典本体在 `locales.ts`（只含本包自有文案），本模块把三个命名空间的翻译
  * 函数投影成组件消费的语义化文案表，让组件只认字段名，不认键名：
  *
- * - 官方 `workspace` 已有的文案（区域标题、工作区改名/删除、会话行标签、
- *   状态点、空态）直接用官方键，不复制官方译文——官方改措辞时本包自动跟随，
+ * - 官方 `workspace` 已有的文案（区域标题、工作区改名/删除、会话行标签
+ *   状态点、空态）直接用官方键，不复制官方译文——官方改措辞时本包自动跟随
  *   两处同屏也不会出现两套说法；
  * - 官方 `sidebar` 已有的文案（行右键菜单的「新建会话」）同样直接取官方键；
- * - 官方没有对应词的自有文案（建组、分组管理、实验特性说明）取本包命名空间。
+ * - 官方没有对应词的自有文案（建组、分组管理、实验特性说明）取本包命名空间
  *
  * 通用词（`ok` / `cancel` / `close`）三个命名空间都能解析：查找链在命名空间
  * 未命中后回退到官方 `common`
@@ -101,7 +101,7 @@ export interface RegionLabels {
   /**
    * 二级菜单里那一项的文案，带省略号
    *
-   * 与 {@link newVirtualWorkspace} 分开：菜单项带省略号表示「点下去还要再填一次」，
+   * 与 {@link newVirtualWorkspace} 分开：菜单项带省略号表示「点下去还要再填一次」
    * 而 header 入口与命名框标题是不带省略号的完整说法（官方 `menu.addWorkspace`
    * 与 `workspace.add` 就是这个分工）
    */
@@ -144,6 +144,52 @@ export interface RegionLabels {
   empty: string
   /** 列表底部的一行说明：本区域暂未提供的能力 */
   unimplemented: string
+  /** 下拉菜单与 header 两行标题的文案 */
+  picker: PickerLabels
+}
+
+/** 工作区下拉菜单的文案 */
+export interface PickerLabels {
+  /** 菜单面板的无障碍标签 */
+  entry: string
+  /**
+   * 两行标题那个按钮的无障碍标签；名称由调用方传入
+   *
+   * 它可见的文字是「工作区」+ 当前聚焦的对象，读屏要读出「点它是做什么用的」：
+   * 只报一个工作区名字的话，这行听上去是一段说明文字而不是一个入口
+   */
+  change: (name: string) => string
+  /** 第二行没有聚焦任何条目时的文案，也是菜单顶部那一项 */
+  all: string
+  /** 菜单里「最近使用」分区的标题 */
+  recent: string
+  /**
+   * 菜单里「置顶」分区的标题
+   *
+   * 「全部」那一栏没有标题：它是没有标题时默认的那一栏，上面两栏的标题正是因为
+   * 要与它区分才需要
+   */
+  pinned: string
+  /** 未置顶条目的置顶按钮标签；名称由调用方传入 */
+  pin: (name: string) => string
+  /** 已置顶条目的取消置顶按钮标签；名称由调用方传入 */
+  unpin: (name: string) => string
+  /** 条目行尾的重命名按钮标签；名称由调用方传入 */
+  rename: (name: string) => string
+  /**
+   * 条目行尾的删除按钮标签；名称由调用方传入
+   *
+   * 不叫 `delete`：那个名字留给菜单外层已有的「删除工作区 / 删除工作区分组」
+   * 这里指的是菜单里这一行的对象
+   */
+  remove: (name: string) => string
+  /**
+   * 新建工作区分组对话框里的「切换到新工作区」勾选项
+   *
+   * 只在当前不是「显示全部工作区」时才给：已经看着全部内容时，「切过去」没有
+   * 可切的目的地
+   */
+  followFocus: string
 }
 
 /**
@@ -193,7 +239,7 @@ export function regionLabels(
     ungroup: t('ungroup'),
     status: {
       running: tw('status.running'),
-      // 官方对单复数各有一条文案；中文两份相同，这里按 n 选键保持同一契约。
+      // 官方对单复数各有一条文案；中文两份相同，这里按 n 选键保持同一契约
       subagentsRunning: (n: number) =>
         n === 1
           ? tw('status.subagentsRunning.one', { n })
@@ -210,5 +256,18 @@ export function regionLabels(
     search: officialSearchLabels(tw),
     empty: tw('empty.none'),
     unimplemented: t('unimplemented'),
+    picker: {
+      // 官方没有「换一个工作区看」这件事的文案，入口与三个分区标题都取本包命名空间
+      entry: t('picker.entry'),
+      change: (name: string) => t('picker.change', { name }),
+      all: t('picker.all'),
+      recent: t('picker.recent'),
+      pinned: t('picker.pinned'),
+      pin: (name: string) => t('picker.pin', { name }),
+      unpin: (name: string) => t('picker.unpin', { name }),
+      rename: (name: string) => t('picker.rename', { name }),
+      remove: (name: string) => t('picker.remove', { name }),
+      followFocus: t('picker.followFocus'),
+    },
   }
 }
