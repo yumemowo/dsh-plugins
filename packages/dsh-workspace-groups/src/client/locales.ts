@@ -1,9 +1,9 @@
 /**
  * 本包占用的语言包命名空间与自有文案
  *
- * 只有官方 `workspace` 命名空间没有对应词的自有文案才在这里另起键名；
- * 官方已有的文案（区域标题、工作区改名/删除、状态点、相对时间等）不复制
- * 一份，直接读官方命名空间——见 `labels.ts` 的投影与 `official.ts`
+ * 只有官方 `workspace` 命名空间没有对应词的自有文案才在这里另起键名
+ * 官方已有的文案（区域标题、工作区改名/删除、状态点、相对时间等）不复制一份，直接读官方命名空间
+ * 见 `labels.ts` 的投影与 `official.ts`
  */
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 

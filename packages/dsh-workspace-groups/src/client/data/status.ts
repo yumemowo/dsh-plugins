@@ -1,12 +1,10 @@
 /**
  * 会话状态位的推导
  *
- * 取值与优先级照官方 `ui-workspace`：待交互（等待审批 / 计划待审 / 等待回答）
- * 压过运行，运行压过完成提醒
+ * 取值与优先级照官方 `ui-workspace`：待交互（等待审批 / 计划待审 / 等待回答）压过运行，运行压过完成提醒
  *
- * 同一个会话有两种消费形态，两者都从 {@link sessionStatuses} 出发，因此不会各自
- * 漂移：行首那个状态点取第一条、再按「没有要提醒的事就不画点」取舍（见
- * {@link rowStatusDot}），悬停卡片则逐条列出（空闲也列一条）
+ * 同一个会话有两种消费形态，两者都从 {@link sessionStatuses} 出发，因此不会各自漂移
+ * 行首那个状态点取第一条、再按「没有要提醒的事就不画点」取舍（见 {@link rowStatusDot}），悬停卡片则逐条列出（空闲也列一条）
  */
 import type { SessionStatusLabels } from '../labels.ts'
 import type { SessionRow } from './types.ts'
@@ -25,8 +23,6 @@ export interface SessionStatus {
  * 待交互种类到状态
  *
  * 只认官方登记的三种：其他插件发布的交互不在侧边栏表意，忽略即不画点
- * @param kind - 待交互的种类
- * @param labels - 状态文案
  * @returns 该种类的状态；不认识的种类返回 undefined
  */
 function pendingStatus(kind: string, labels: SessionStatusLabels): SessionStatus | undefined {
@@ -45,15 +41,11 @@ function pendingStatus(kind: string, labels: SessionStatusLabels): SessionStatus
 /**
  * 推导一个会话行当前要呈现的全部状态
  *
- * 顺序与官方 `sessionStatuses` 一致：待交互在前，运行中的子代理作为它的补充跟在
- * 后面。子代理会话本身不在侧边栏显示，但它们运行时要让祖先行亮起运行点，因此
- * 这里同时看本会话的 `running` 与子代理运行数
+ * 顺序与官方 `sessionStatuses` 一致：待交互在前，运行中的子代理作为它的补充跟在后面
+ * 子代理会话本身不在侧边栏显示，但它们运行时要让祖先行亮起运行点，因此这里同时看本会话的 `running` 与子代理运行数
  *
- * 空闲也返回一条（官方 `status.idle`），因为悬停卡片要把它列出来；行首那个点是否
- * 画由 {@link sessionStatus} 决定
- * @param row - 会话渲染行
+ * 空闲也返回一条（官方 `status.idle`），因为悬停卡片要把它列出来；行首那个点是否画由 {@link sessionStatus} 决定
  * @param pendingKind - 该会话当前待交互的种类；没有待交互时为空
- * @param labels - 状态文案
  * @returns 按优先级排列的状态；第一条是行首要显示的那一条
  */
 export function sessionStatuses(
@@ -80,9 +72,8 @@ export function sessionStatuses(
 /**
  * 推导行首那个状态点
  *
- * 空闲不画点（没有要提醒的事），槽位留空因此标题不位移；完成态仍是官方的绿色
- * 提醒点，照常画。判据与官方 `SessionNodeItem` 的 `showStatus` 相同
- * @param row - 会话渲染行
+ * 空闲不画点（没有要提醒的事），槽位留空因此标题不位移；完成态仍是官方的绿色提醒点，照常画
+ * 判据与官方 `SessionNodeItem` 的 `showStatus` 相同
  * @param statuses - 该行当前的全部状态，取自 {@link sessionStatuses}
  * @returns 要显示的状态位；空闲时返回 undefined
  */
@@ -99,9 +90,6 @@ export function rowStatusDot(
  * 比较两个状态位是否表示同一件事
  *
  * 供行级 memo 的比较器使用：决定显示结果的只有状态与文案这两格
- * @param a - 上一次的状态位
- * @param b - 这一次的状态位
- * @returns 显示结果相同为 true
  */
 export function sameSessionStatus(
   a: SessionStatus | undefined,
@@ -116,9 +104,6 @@ export function sameSessionStatus(
  * 比较两条状态列表是否表示同一件事
  *
  * 列表每次渲染都是新数组，行级 memo 因此只能按内容比
- * @param a - 上一次的列表
- * @param b - 这一次的列表
- * @returns 逐条相同时为 true
  */
 export function sameSessionStatuses(
   a: readonly SessionStatus[],

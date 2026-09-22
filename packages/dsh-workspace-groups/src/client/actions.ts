@@ -1,10 +1,8 @@
 /**
  * 区域所需的宿主数据与动作契约
  *
- * 数据走 shell 注入的全局 hook，动作与文案由插件入口闭合而成：
- * 区域组件因此不依赖 `ctx`
- * 既能在 `sidebar.workspaces` 插槽里渲染
- * 也能被对照模式挂进右侧栏 tab
+ * 数据走 shell 注入的全局 hook，动作与文案由插件入口闭合而成，因此区域组件不依赖 `ctx`
+ * 既能渲染进 `sidebar.workspaces` 插槽，也能被对照模式挂进右侧栏 tab
  */
 import type { ComponentType } from 'react'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -24,12 +22,10 @@ export interface WorkspaceState {
 /**
  * 官方 `sidebar.workspaces.directoryFlow` 洞的占用者面
  *
- * 官方 ui-workspace 声明了这个子洞（single 类型）
- * 目录选择器插件的浏览器半边注册进它：
- * `-native` 是驱动 OS 选择器的无渲染占用者
- * `-browse` 是应用内浏览对话框。本包接替父插槽后那条注册仍在 ledger 里
- * 洞的声明与占用者因此都还在，可以直接借用官方的整段 picking 交互
- * 而不是自己再实现一遍
+ * 官方 ui-workspace 声明了这个子洞（single 类型），目录选择器插件的浏览器半边注册进它
+ * `-native` 是驱动 OS 选择器的无渲染占用者，`-browse` 是应用内浏览对话框
+ * 本包接替父插槽后那条注册仍在 ledger 里，洞的声明与占用者因此都还在
+ * 可以直接借用官方的整段 picking 交互，而不是自己再实现一遍
  */
 export interface DirectoryFlowOccupant {
   /** 占用者组件；除 owner 会话外还接收下面那份 inject 面 */
@@ -84,19 +80,16 @@ export interface RegionDataHooks {
   /**
    * directoryFlow 洞是否被占用
    *
-   * 目录选择器插件的加载顺序不受本包约束，入口按钮要跟着它出现
-   * 因此占用与否必须可订阅
-   * 与官方 `DirectoryPickingInjected` 同一套做法：
-   * 源放在 inject 面的 `hooks` 隔间里，由渲染器绑成这个选择器
+   * 目录选择器插件的加载顺序不受本包约束，入口按钮要跟着它出现，因此占用与否必须可订阅
+   * 与官方 `DirectoryPickingInjected` 同一套做法：源放在 inject 面的 `hooks` 隔间里，由渲染器绑成这个选择器
    */
   useDirectoryFlow: (selector: (occupied: boolean) => unknown) => unknown
   /**
    * 宿主固定事实（home 目录）的选择器
    *
    * 工作区悬停卡片要像官方一样把 home 下的路径缩写成 `~`
-   * 与官方 `WorkspaceBrowserInjected` 的 `hostInfo` 同一个源 ——
-   * `ctx.remote.$host`连接重置时重新读
-   * 同样经 inject 面的 `hooks` 隔间绑成选择器
+   * 与官方 `WorkspaceBrowserInjected` 的 `hostInfo` 同一个源 —— `ctx.remote.$host`
+   * 连接重置时重新读，同样经 inject 面的 `hooks` 隔间绑成选择器
    */
   useHostInfo: (selector: (info: HostInfo) => unknown) => unknown
 }
@@ -110,15 +103,12 @@ export interface RegionActions {
   /**
    * 在指定工作区开一个新会话
    *
-   * 走官方导航服务的 `openWorkspace`
-   * 它复用该工作区已有的空白会话，没有才新建，并把它选中打开
-   * 后发的新建请求会取代先发的
+   * 走官方导航服务的 `openWorkspace`：它复用该工作区已有的空白会话，没有才新建
+   * 并把它选中打开，后发的新建请求会取代先发的
    *
-   * 返回会话 id 而不是空：
-   * 调用方要在建好之后把它摆到本次创建指定的位置（分组内或未分组）
+   * 返回会话 id 而不是空，是因为调用方要在建好之后把它摆到本次创建指定的位置（分组内或未分组）
    * 归组走既有的 `moveSession`，不另造「在分组内建会话」的宿主接口
-   * 返回 undefined 表示这次导航已被更晚的一次取代，会话虽已建好但不打开
-   * 调用方因此也不摆位置
+   * 返回 undefined 表示这次导航已被更晚的一次取代：会话虽已建好但不打开，调用方因此也不摆位置
    * @param workspaceId - 新会话所属工作区
    * @returns 新建或复用的会话 id；被取代时为 undefined
    */
@@ -136,8 +126,7 @@ export interface RegionActions {
   /**
    * 把会话移入分组；空串表示移出分组
    *
-   * 返回替换用的完整快照，而不是让调用方再拉一次：
-   * 宿主每个变更方法本来就回整份快照（见宿主 `service.ts`）
+   * 返回替换用的完整快照，而不是让调用方再拉一次：宿主每个变更方法本来就回整份快照（见宿主 `service.ts`）
    * 直接采用它既少一次往返，也让「摆位置」与「本地状态反映新位置」之间没有空档
    */
   moveSession: (
@@ -162,8 +151,8 @@ export interface RegionActions {
   /**
    * 聚焦一个根节点条目，并把它记入最近使用
    *
-   * 条目既可能是工作区也可能是工作区分组，因此参数是条目键而不是 id 键自带类别前缀
-   * 不会被两套 id 的取值混淆
+   * 条目既可能是工作区也可能是工作区分组，因此参数是条目键而不是 id
+   * 键自带类别前缀，不会被两套 id 的取值混淆
    * @param key - 条目键；空串表示退回「全部」
    */
   focusEntry: (key: string) => Promise<WorkspaceGroupsSnapshot>
@@ -176,46 +165,40 @@ export interface RegionActions {
   /**
    * 搜索结果的条数上限
    *
-   * 取官方会话控制器上的 `searchResultLimit`：
-   * 它是 `session.search` 线上响应契约固定下来的同一个数
+   * 取官方会话控制器上的 `searchResultLimit`：它是 `session.search` 线上响应契约固定下来的同一个数
    * 本包的结果虽然全部来自本地，也照它截断，界面因此与官方一致
    */
   searchResultLimit: number
   /**
    * 官方 `workspace` 命名空间的翻译函数
    *
-   * 由插件入口 `locale.bind('workspace')` 得到。绑定结果是稳定引用
-   * 且**在调用时才读当前语言**，因此可以安全地随 inject 结果一起缓存 ——
-   * 被缓存的是函数而非投影后的文案表，语言切换后调用它自然读到新语言
+   * 由插件入口 `locale.bind('workspace')` 得到。绑定结果是稳定引用，且在调用时才读当前语言
+   * 被缓存的是函数而非投影后的文案表，因此可以安全地随 inject 结果一起缓存，语言切换后调用它自然读到新语言
    * 本包命名空间的 `t` 走插槽座位（见 `WorkspaceGroupsProps`），官方这份不占座位
    */
   tWorkspace: WorkspaceTranslate
   /**
    * 官方 `sidebar` 命名空间的翻译函数
    *
-   * 容器行的右键菜单要复用官方新建会话按钮的动词短语
-   *（`session.new.label`），那个键在 `sidebar` 命名空间里。与 `tWorkspace`
-   * 同为稳定引用、调用时才读当前语言
+   * 容器行的右键菜单要复用官方新建会话按钮的动词短语（`session.new.label`），那个键在 `sidebar` 命名空间里
+   * 与 `tWorkspace` 同为稳定引用、调用时才读当前语言
    */
   tSidebar: SidebarTranslate
   /**
    * 官方三项会话操作与相对时间的解析器
    *
-   * 是函数而不是值：渲染器会把注册项的 inject 结果缓存整个注册生命周期
-   * 在 inject 里读到的服务会冻结在首次渲染那一刻
-   * 而官方 `ui-workspace` 的加载顺序并不受本包约束
-   * 延迟到渲染时解析才能拿到真正在场的服务
+   * 是函数而不是值：渲染器会把注册项的 inject 结果缓存整个注册生命周期，因此在 inject 里读到的服务会冻结在首次渲染那一刻
+   * 而官方 `ui-workspace` 的加载顺序并不受本包约束，延迟到渲染时解析才能拿到真正在场的服务
    *
-   * 解析结果为空表示宿主没有加载官方 `ui-workspace`（本包用它供的
-   * `useWorkspaces` 等全局 hook，正常情况下必然在场）；此时菜单里那三项与
-   * 行尾时间整体不渲染，而不是留下点不动的入口
+   * 解析结果为空表示宿主没有加载官方 `ui-workspace`（本包用它供的 `useWorkspaces` 等全局 hook，正常情况下必然在场）
+   * 此时菜单里那三项与行尾时间整体不渲染，而不是留下点不动的入口
    */
   official?: (() => OfficialSessionActions | undefined) | undefined
   /**
    * 「添加工作区」所需的官方服务面
    *
-   * 与 `official` 同为延迟解析器。解析结果为空表示本包没读到官方
-   * directoryFlow 洞的占用者（宿主没装目录选择器，或官方注册不在场）：
+   * 与 `official` 同为延迟解析器
+   * 解析结果为空表示本包没读到官方 directoryFlow 洞的占用者（宿主没装目录选择器，或官方注册不在场）
    * 此时入口按钮不渲染，不留点不动的死按钮
    */
   addWorkspace?: (() => AddWorkspaceActions | undefined) | undefined
@@ -224,9 +207,8 @@ export interface RegionActions {
 /**
  * 「添加工作区」直接转调的官方接口
  *
- * 采纳走官方工作区控制器的 `create`，选中后在建好的工作区里开新会话——
- * 两处都是官方 WorkspaceBrowser 内部调的同一批接口，因此官方改行为时本包自动跟随
- * 不另造 RPC
+ * 采纳走官方工作区控制器的 `create`，选中后在建好的工作区里开新会话
+ * 两处都是官方 WorkspaceBrowser 内部调的同一批接口，因此官方改行为时本包自动跟随，不另造 RPC
  */
 export interface AddWorkspaceActions {
   /** 把选中的宿主机目录登记为工作区 */
@@ -242,8 +224,7 @@ export interface AddWorkspaceActions {
 /**
  * 官方 `ui-workspace` 提供的会话操作
  *
- * 直接转调官方服务与控制器（`ctx.uiWorkspace` / `ctx.sessions`），不自行实现
- * 官方改行为时本包自动跟随
+ * 直接转调官方服务与控制器（`ctx.uiWorkspace` / `ctx.sessions`），不自行实现，官方改行为时本包自动跟随
  */
 export interface OfficialSessionActions {
   /** 官方菜单「重命名」；宿主负责弹出输入与提交 */

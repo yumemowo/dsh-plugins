@@ -1,8 +1,7 @@
 /**
  * 一个工作区区块：标题行 + 折叠体（分组、平铺的未归组会话、空态）
  *
- * 折叠状态由区域组件按 key 持有，这里只消费布尔值，因此不同工作区、
- * 不同分组之间的开合互不影响
+ * 折叠状态由区域组件按 key 持有，这里只消费布尔值，因此不同工作区、不同分组之间的开合互不影响
  */
 import type { ReactElement, ReactNode } from "react";
 import { CollapsibleBody } from "./CollapsibleBody.tsx";
@@ -67,9 +66,8 @@ export interface WorkspaceSectionProps {
 /**
  * 会话行的显示顺序：新建中的空白会话排最前，其余按最近更新倒序
  *
- * 空白会话是刚点出来的那条占位行，还没有自己的内容与时间，排在所属区段
- *（分组内或未归组区）的最前才符合「刚新建的就是这条」的预期；它一旦启用
- * 就回到与其他会话同一套排序里
+ * 空白会话是刚点出来的那条占位行，还没有自己的内容与时间，排在所属区段（分组内或未归组区）的最前才符合「刚新建的就是这条」的预期
+ * 它一旦启用就回到与其他会话同一套排序里
  * @returns 供 `Array.prototype.sort` 使用的比较值
  */
 function compareSessionRows(a: SessionRow, b: SessionRow): number {

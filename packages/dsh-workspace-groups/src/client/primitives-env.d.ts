@@ -1,9 +1,8 @@
 /**
  * `@deepseek-ai/dsh-client-ui-primitives` 的 ambient 模块声明
  *
- * 该包没有独立安装形态（客户端把它编进基线静态模块表，运行期由模块
- * 系统解析）。本文件必须是全局脚本形态（无顶层 import/export）
- * declare module 才是环境声明而不是模块扩充
+ * 该包没有独立安装形态（客户端把它编进基线静态模块表，运行期由模块系统解析）
+ * 本文件必须是全局脚本形态（无顶层 import/export），declare module 才是环境声明而不是模块扩充
  *
  * 只声明本包实际用到的导出；props 只列本包会传的字段
  */
@@ -49,8 +48,8 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     /**
      * 面板的定位矩形，只在 `portal` 下生效
      *
-     * 给了就按它定位，而不是去量锚点元素：右键菜单因此能落在指针处。原语只读
-     * 四条边，返回 null 表示本次没有可用的矩形，面板保持隐藏
+     * 给了就按它定位，而不是去量锚点元素：右键菜单因此能落在指针处
+     * 原语只读四条边，返回 null 表示本次没有可用的矩形，面板保持隐藏
      */
     getAnchorRect?: (() => {
       left: number
@@ -87,7 +86,7 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   /**
    * 悬停详情卡片；指针在锚点上停留一段时间后在它右侧浮出内容
    *
-   * 给了 `copyText` 时卡片整体可点即复制，并额外给出一个读屏状态位：
+   * 给了 `copyText` 时卡片整体可点即复制，并额外给出一个读屏状态位
    * `copyLabel` 是它的无障碍标签，`copiedLabel` 是复制成功后就地替换显示的反馈
    * 不给 `copyText` 时卡片只读
    */
@@ -153,8 +152,8 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   }) => ReactNode
 
   /**
-   * 相对时间分桶：把时间差归到 `now` / `minutes` / `hours` / `days` /
-   * `months` / `years` 之一并给出数量，文案由调用方的语言包决定
+   * 相对时间分桶：把时间差归到 `now` / `minutes` / `hours` / `days` / `months` / `years` 之一
+   * 并给出数量，文案由调用方的语言包决定
    * @param from - 起点（epoch ms）
    * @param to - 终点（epoch ms），通常是当前时刻
    */

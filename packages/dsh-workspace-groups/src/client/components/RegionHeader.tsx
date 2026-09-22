@@ -85,7 +85,7 @@ export function RegionHeader({
   const hidden = titleHidden || expanded
   return (
     <div className="wg-header wg-header-titled">
-      {/* 两行是**同一个按钮**：它们合起来表达一件事:当前在看哪个工作区，点开可以换一个
+      {/* 两行是同一个按钮：它们合起来表达一件事，即当前在看哪个工作区，点开可以换一个
           箭头因此也不是独立按钮，它就是这块按钮自己的开合指示 */}
       <button
         type="button"

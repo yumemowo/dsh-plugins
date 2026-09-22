@@ -1,21 +1,18 @@
 /**
  * 会话行：状态点位列、标题、最近更新时间与可选的行尾操作位
  *
- * 行首列放官方 `StateDot`：待交互、运行、完成未打开时显示，空闲时留空占位，
- * 因此标题与工作区标题的横向关系始终与官方一致。行尾在操作位之前放官方风格的
- * 相对时间，悬停时让位给操作位（与官方同为 CSS 切换）。`action` 缺省时不
- * 渲染行尾操作位——未分组桶里的会话不属于任何工作区，没有可用的归组操作
+ * 行首列放官方 `StateDot`：待交互、运行、完成未打开时显示，空闲时留空占位，因此标题与工作区标题的横向关系始终与官方一致
+ * 行尾在操作位之前放官方风格的相对时间，悬停时让位给操作位（与官方同为 CSS 切换）
+ * `action` 缺省时不渲染行尾操作位——未分组桶里的会话不属于任何工作区，没有可用的归组操作
  *
- * 状态位与相对时间由调用方算好传进来，两者都必须是内容稳定的值（时间文案的精度是
- * 分钟级），因此既能参与行级 memo 的比对，又能在任何一次区域重渲染时刷新。不要在行内
- * 按渲染当刻取时间：被 memo 挡下的行不会重算，文案会停住
+ * 状态位与相对时间由调用方算好传进来，两者都必须是内容稳定的值（时间文案的精度是分钟级），因此既能参与行级 memo 的比对，又能在任何一次区域重渲染时刷新
+ * 不要在行内按渲染当刻取时间：被 memo 挡下的行不会重算，文案会停住
  *
- * `reveal` 为真的那一行在挂载后把自己滚进可视区并回报一次（官方
- * `SessionNodeItem` 的 `onReveal` 就是这条路径）：从搜索结果打开一条会话时，
- * 列表要自动滚到它所在的那一行
+ * `reveal` 为真的那一行在挂载后把自己滚进可视区并回报一次（官方 `SessionNodeItem` 的 `onReveal` 就是这条路径）
+ * 从搜索结果打开一条会话时，列表要自动滚到它所在的那一行
  *
- * 悬停后浮出官方 `HoverCard`：卡片里是完整标题、相对时间与逐条状态，整卡可点即
- * 复制标题。标题在行上被省略号截断，卡片因此是「看清全名」的入口
+ * 悬停后浮出官方 `HoverCard`：卡片里是完整标题、相对时间与逐条状态，整卡可点即复制标题
+ * 标题在行上被省略号截断，卡片因此是「看清全名」的入口
  */
 import { memo, useEffect, useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
@@ -78,8 +75,7 @@ export interface SessionRowViewProps {
   /**
    * 打开会话
    *
-   * 传动作本身而不是绑好 id 的闭包：绑好的闭包每次渲染都是新引用，行级 memo
-   * 因此永远判定为变过
+   * 传动作本身而不是绑好 id 的闭包：绑好的闭包每次渲染都是新引用，行级 memo 因此永远判定为变过
    */
   onOpenSession: (sessionId: string) => void
   /**
@@ -111,8 +107,7 @@ function SessionRowViewImpl({
   const open = () => onOpenSession(sessionId)
   const rowRef = useRef<HTMLDivElement | null>(null)
 
-  // 挂载后把自己滚进可视区，并立刻回报一次：请求方要在收到回报后清掉标记，
-  // 否则该行会在后续每次重新挂载时再滚一次
+  // 挂载后把自己滚进可视区，并立刻回报一次：请求方要在收到回报后清掉标记，否则该行会在后续每次重新挂载时再滚一次
   useEffect(() => {
     if (onReveal === undefined) return
     rowRef.current?.scrollIntoView({ block: 'nearest' })
@@ -150,8 +145,8 @@ function SessionRowViewImpl({
     </div>
   )
 
-  // 卡片要的逐条状态缺省时退回行首那一条：两条渲染路径（带菜单的行与未分组桶里
-  // 的裸行）因此都能挂上卡片，不必各自去算一遍状态列表
+  // 卡片要的逐条状态缺省时退回行首那一条：两条渲染路径（带菜单的行与未分组桶里的裸行）因此都能挂上卡片
+  // 不必各自去算一遍状态列表
   const hoverStatuses = statuses ?? (status === undefined ? [] : [status])
   if (hover === false || hoverLabels === undefined) return row
 

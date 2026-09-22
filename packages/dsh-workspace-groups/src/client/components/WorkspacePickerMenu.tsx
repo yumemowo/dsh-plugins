@@ -1,21 +1,16 @@
 /**
  * 工作区下拉菜单：header 两行标题旁那个箭头打开的面板
  *
- * 这一份是**本包专用的菜单**，不是官方 `Menu` 原语：
- * 原语的条目只有「前导图标 → 文案 → 尾部选中标记」三个槽，放不下可折叠的分区头
- * 也放不下挂在条目行尾的第二个按钮（置顶）
- * 因此这里按原语的**外观与交互约定**自绘一份：面板的定位与夹取、指针离开关闭
- * Escape 关闭、方向键在条目间移动，都照原语的做法
+ * 这一份是本包专用的菜单，不是官方 `Menu` 原语：原语的条目只有「前导图标 → 文案 → 尾部选中标记」三个槽
+ * 放不下可折叠的分区头，也放不下挂在条目行尾的第二个按钮（置顶）
+ * 这里按原语的外观与交互约定自绘一份：面板的定位与夹取、指针离开关闭、Escape 关闭、方向键在条目间移动，都照原语的做法
  *
- * 无障碍上是**展开式弹出层**而不是 `role="menu"`：面板里既有可折叠的分区头
- * 也有挂在条目行尾的第二个按钮，而 `role="menu"` 只允许 `menuitem` 一类的子项
- * 分区头与行尾按钮都塞不进那个模型
- * 因此面板取 `role="group"`，触发器只声明 `aria-expanded`
- * 不写 `aria-haspopup`：那等于承诺一个 `menu` 角色
- * 键盘靠自然 Tab 顺序加上下面那套方向键
+ * 无障碍上是展开式弹出层而不是 `role="menu"`：面板里既有可折叠的分区头，也有挂在条目行尾的第二个按钮
+ * 而 `role="menu"` 只允许 `menuitem` 一类的子项
+ * 分区头与行尾按钮都塞不进那个模型，因此面板取 `role="group"`，触发器只声明 `aria-expanded`
+ * 不写 `aria-haspopup`：那等于承诺一个 `menu` 角色。键盘靠自然 Tab 顺序加上下面那套方向键
  *
- * 面板 portal 到 `document.body`：
- * header 自己带 `overflow: hidden`（搜索展开时整行要收拢淡出）
+ * 面板 portal 到 `document.body`：header 自己带 `overflow: hidden`（搜索展开时整行要收拢淡出）
  * 就近渲染的面板会被它整个裁掉
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -82,12 +77,10 @@ export interface WorkspacePickerMenuProps {
  * 三枚 16px 操作按钮嵌在行内的操作位里（`.wg-row-actions`）
  * 行的可点区不能做成与按钮并排的两个热区——那样行的可点范围会比看起来窄
  *
- * 行本体必须是 div 而不是 `<button>`：按钮不能嵌按钮
- * 键盘激活因此由 `handleRowKeyDown` 承担
+ * 行本体必须是 div 而不是 `<button>`：按钮不能嵌按钮，键盘激活因此由 `handleRowKeyDown` 承担
  * 与工作区行同一套（只认行自身拿到焦点的那一次按键，行内按钮的按键不冒泡上来）
  *
- * 三枚操作按钮各管一件事（重命名 / 删除 / 置顶），点击一律 `stopPropagation`
- * 否则会连带聚焦到那个工作区
+ * 三枚操作按钮各管一件事（重命名 / 删除 / 置顶），点击一律 `stopPropagation`，否则会连带聚焦到那个工作区
  */
 function PickerRow({
   entry,
@@ -209,7 +202,7 @@ export function WorkspacePickerMenu({
     const anchor = trigger.getBoundingClientRect()
     const width = panel.offsetWidth
     const height = panel.offsetHeight
-    // 量的是**布局视口**（documentElement.clientWidth）而不是 window.innerWidth
+    // 量的是布局视口（documentElement.clientWidth）而不是 window.innerWidth
     // 二者差一个经典滚动条宽度，而实测矩形以布局视口为参照
     const viewportWidth = document.documentElement.clientWidth
     const viewportHeight = document.documentElement.clientHeight
@@ -335,9 +328,7 @@ export function WorkspacePickerMenu({
       {/* 「全部工作区」只在已经聚焦时才出现
         * 它是恢复入口，没聚焦时点它不做任何事，留着就是一个点不动的死条目
         *
-        * 它不是菜单条目而是**一个动作**（退出聚焦、回到全部）
-        * 因此不带选中标记，也不带那三枚操作按钮：
-        * 这里的「全部」没有可重命名或删除的对象 */}
+        * 它不是菜单条目而是一个动作（退出聚焦、回到全部），因此不带选中标记，也不带那三枚操作按钮：这里的「全部」没有可重命名或删除的对象 */}
       {focused === '' ? null : (
         <div className="wg-picker-section">
           <button type="button" className="wg-picker-reset" onClick={() => onSelect('')}>
@@ -390,7 +381,7 @@ export function WorkspacePickerMenu({
           ))}
         </PickerGroup>
       )}
-      {/* 「全部」是这一个菜单的主体，因此不做折叠、也**不带标题**
+      {/* 「全部」是这一个菜单的主体，因此不做折叠、也不带标题
         * 它是没有标题时默认的那一栏，而上面两栏的标题正是因为要与它区分才需要
         * 分区之间的那条分隔线仍然画着，因此三栏的边界照旧读得出来 */}
       <section className="wg-picker-section">

@@ -79,8 +79,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
     return {
       byWorkspace,
       workspaceGroups: global.virtualWorkspaces,
-      // 走一次归一而不是直接交出这一格：global 记录可能来自一个没有这几格的
-      // 旧版本，缺格时下游（浏览器半边的菜单）会读到 undefined
+      // 走一次归一而不是直接交出这一格：global 记录可能来自一个没有这几格的旧版本，缺格时下游（浏览器半边的菜单）会读到 undefined
       picker: normalizePickerState(global.picker),
     }
   }
@@ -88,8 +87,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
   /**
    * 取某工作区的会话分组；不存在时视为空列表，不写盘
    *
-   * 返回副本：域把存储的对象原样交出来（不做防御性拷贝），就地改它会直接改到
-   * 域内存里的权威状态
+   * 返回副本：域把存储的对象原样交出来（不做防御性拷贝），就地改它会直接改到域内存里的权威状态
    */
   function groupsOf(workspaceId: string): Group[] {
     return [...(table.get(workspaceId)?.groups ?? [])]
@@ -116,8 +114,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
   /**
    * 写回菜单状态；分组列表原样保留
    *
-   * 三份记录都可能提到现已不存在的对象（记录比列表活得久），因此这里不做修剪：
-   * 唯一知道「哪些对象还在」的是渲染菜单的那一侧，宿主只管落盘
+   * 三份记录都可能提到现已不存在的对象（记录比列表活得久），因此这里不做修剪：唯一知道「哪些对象还在」的是渲染菜单的那一侧，宿主只管落盘
    */
   async function savePicker(picker: PickerSnapshot): Promise<WorkspaceGroupsSnapshot> {
     await tree.set({ virtualWorkspaces: tree.get().virtualWorkspaces, picker })
@@ -193,8 +190,8 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
     },
 
     async deleteVirtualWorkspace(groupId) {
-      // 只解散分组：组内工作区回到未分组，工作区及其会话都不受影响。分组在菜单
-      // 三份记录里的条目一并摘掉，否则聚焦在一个已解散的分组上时列表会整片空掉
+      // 只解散分组：组内工作区回到未分组，工作区及其会话都不受影响
+      // 分组在菜单三份记录里的条目一并摘掉，否则聚焦在一个已解散的分组上时列表会整片空掉
       return dropEntry(
         rootVirtualKey(groupId),
         treeGroups().filter((group) => group.id !== groupId),
@@ -216,8 +213,8 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
     },
 
     async forgetWorkspace(workspaceId) {
-      // 工作区已被删除，它留下的归属记录再也不会被渲染；元数据里挂着不存在的
-      // id 只会让两边长期偏离。没有该工作区的记录时不写盘
+      // 工作区已被删除，它留下的归属记录再也不会被渲染；元数据里挂着不存在的 id 只会让两边长期偏离
+      // 没有该工作区的记录时不写盘
       const groups = treeGroups()
       const pruned = groups.map((group) => ({
         ...group,

@@ -4,8 +4,8 @@
  * 它是「工作区一级」的容器，与会话分组（`GroupSection`）是两个层级的不同概念：
  * 这里装的是工作区，且只出现在列表最外层，不会落在某个工作区内部
  *
- * 行结构与会话分组头刻意同形（同一 `.wg-group-head` 基类、同样的行尾操作位与
- * 可收放槽位），只在两处不同：缩进按根节点取 8px 而不是 24px，且没有 `+` ——
+ * 行结构与会话分组头刻意同形（同一 `.wg-group-head` 基类、同样的行尾操作位与可收放槽位）
+ * 只在两处不同：缩进按根节点取 8px 而不是 24px，且没有 `+`
  * 分组里要放的是工作区，而新建工作区的入口在区域 header（`workspace.add`）
  */
 import { useState } from 'react'
@@ -59,8 +59,7 @@ export function VirtualWorkspaceSection({
   /**
    * 菜单选中项的分派
    *
-   * 行内 `...` 菜单与右键菜单共用它：两个入口的条目集合相同，同一个 id 因此
-   * 必须落到同一件事上
+   * 行内 `...` 菜单与右键菜单共用它：两个入口的条目集合相同，同一个 id 必须落到同一件事上
    */
   const select = (id: string): void => {
     setMenuOpen(false)
@@ -92,9 +91,8 @@ export function VirtualWorkspaceSection({
         onContextMenu={contextMenu.onContextMenu}
       >
         {contextMenu.menu}
-        {/* 文件夹槽与箭头槽常驻同一个 16px 列，与工作区行同一套：静止时显示文件夹、
-            悬停换成箭头，因此切换不会让标题位移。这里的文件夹走虚线：工作区分组
-            形状上像一个工作区，但本身不是一个真实工作区 */}
+        {/* 文件夹槽与箭头槽常驻同一个 16px 列，与工作区行同一套：静止时显示文件夹、悬停换成箭头，因此切换不会让标题位移
+            这里的文件夹走虚线：工作区分组形状上像一个工作区，但本身不是一个真实工作区 */}
         <span className="wg-slot wg-folder">
           <IconVirtualFolder16 />
         </span>
@@ -102,13 +100,12 @@ export function VirtualWorkspaceSection({
           <IconTriangleRightFill14 className={`wg-arrow${collapsed ? '' : ' wg-arrow-open'}`} />
         </span>
         <span className="wg-virtual-workspace-label">{section.label}</span>
-        {/* 工作区数自己成格贴在行右，与会话分组的会话数、session 行的时间同格同形；
+        {/* 工作区数自己成格贴在行右，与会话分组的会话数、session 行的时间同格同形
             空分组不显示 */}
         {section.workspaceIds.length <= 0 ? null : (
           <span className="wg-group-count">{section.workspaceIds.length}</span>
         )}
-        {/* 操作位收进 session 行同一套可收放槽位：静止时不占宽，上面的工作区数
-            因此贴到行右；悬停/菜单展开/键盘聚焦时槽位展开，工作区数隐去 */}
+        {/* 操作位收进 session 行同一套可收放槽位：静止时不占宽，上面的工作区数因此贴到行右；悬停/菜单展开/键盘聚焦时槽位展开，工作区数隐去 */}
         <span className="wg-row-action-slot">
           <RowActions
             menuOpen={menuOpen}

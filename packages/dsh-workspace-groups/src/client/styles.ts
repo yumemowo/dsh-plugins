@@ -1,22 +1,21 @@
 /**
  * 本包浏览器半边的样式
  *
- * 取值对齐官方侧边栏组件（`dsh-client-ui-sidebar` 与 `dsh-client-ui-workspace`
- * 0.1.5-rc.2）的实际规则：工作区/分组行 34px、会话行 32px、圆角 8px、行内
- * 水平内边距 8px、图标列 16px、悬停用 `--dsw-alias-interactive-bg-hover`
- * 文字色走 `--dsw-alias-label-primary/secondary/tertiary`
+ * 取值对齐官方侧边栏组件（`dsh-client-ui-sidebar` 与 `dsh-client-ui-workspace` 0.1.5-rc.2）
+ * 工作区/分组行 34px、会话行 32px、圆角 8px、行内水平内边距 8px、图标列 16px
+ * 悬停底色用 `--dsw-alias-interactive-bg-hover`
+ * 文字色走 `--dsw-alias-label-primary` / `secondary` / `tertiary`
  *
- * 水平留白分左右两半，来源不同：左侧来自 shell（`--dsh-sidebar-inline-padding`
- * 与 regionArea 的 -4/+4），右侧来自官方 WorkspaceBrowser 根节点自带的那块
- * `--dsh-session-list-edge-inset`。官方那份定义随被接替的组件一起消失，因此
- * 本包的 `.wg-root` 自己重新定义这三个量（见该规则处的注释）
+ * 水平留白分左右两半，来源不同
+ * 左侧来自 shell，即 `--dsh-sidebar-inline-padding` 与 regionArea 的 -4/+4
+ * 右侧来自官方 WorkspaceBrowser 根节点自带的那块 `--dsh-session-list-edge-inset`
+ * 官方那份定义随被接替的组件一起消失，因此本包的 `.wg-root` 自己重新定义这三个量（见该规则处的注释）
  *
- * 文字层级照官方照搬：容器行（`projectRow`）与其中的标题一律
- * `label-primary` 14px/20px，且都**不加字重**——官方工作区标题与会话标题
- * 同色同字号，只靠行高（34px vs 32px）区分层级。字号与行高成对写在叶子上
- * 根节点不设 line-height（官方 `.empty` 等就这样吃浏览器默认值）
+ * 文字层级照官方照搬：容器行（`projectRow`）与其中的标题一律 `label-primary` 14px/20px，且都不加字重
+ * 官方工作区标题与会话标题同色同字号，只靠行高（34px vs 32px）区分层级
+ * 字号与行高成对写在叶子上，根节点不设 line-height（官方 `.empty` 等就这样吃浏览器默认值）
  *
- * 通过带 `data-plugin` / `data-plugin-css` 标记的 `<style>` 标签注入：
+ * 通过带 `data-plugin` / `data-plugin-css` 标记的 `<style>` 标签注入
  * 客户端模块系统按这两个属性认领样式标签并做 HMR 记账
  */
 import { COLLAPSE_VARS, DEFAULT_COLLAPSE_MOTION as MOTION } from './utils/collapseMotion.ts'
@@ -27,12 +26,10 @@ const STYLE_TAG_ID = '@your-scope/dsh-workspace-groups/src/client/region.css'
 /**
  * 样式表内容
  *
- * 导出供测试直接读取**求值后**的文本：节奏参数以插值进入 CSS，再按源文本切割只会
- * 拿到 ${...} 字面量
+ * 导出供测试直接读取求值后的文本：节奏参数以插值进入 CSS，再按源文本切割只会拿到 ${...} 字面量
  */
 export const CSS = `
-/* 区域根：官方 WorkspaceBrowser 的根节点自己带整块右留白，本区域必须有同一份
-   否则 header 的入口按钮与列表行都会贴到侧栏右缘
+/* 区域根：官方 WorkspaceBrowser 的根节点自己带整块右留白，本区域必须有同一份，否则 header 的入口按钮与列表行都会贴到侧栏右缘
  *
  * 官方那份留白不走 shell 的 12px——shell 的 regionArea 用 margin-right:-12px
  * 把它抵掉了，再由 WorkspaceBrowser 的根节点重新加回来。因此这里由 .wg-root
@@ -67,7 +64,7 @@ export const CSS = `
 }
 
 /* 区域 section header：几何照官方 WorkspaceBrowser 的 .sectionHeader
-   （36px 高、圆角 12px、左内边距 4px、控件间距 4px、下间距 4px）
+   规格为 36px 高、圆角 12px、左内边距 4px、控件间距 4px、下间距 4px
 
    margin-right 同样照官方取 -4px：官方那条负值是相对「自带整块右留白」的
    根节点写的，本包 .wg-root 有同一份留白（见上），因此两者相抵后
@@ -89,8 +86,8 @@ export const CSS = `
   overflow: hidden;
 }
 
-/* 标题块：上下两行合成一个按钮，最多占 45%（官方 .sectionLabel 同此约束）。宽度
-   上限挂在这一层而不是行上——两行要共用同一条右缘，各自算百分比会让较窄的那行先
+/* 标题块：上下两行合成一个按钮，最多占 45%（官方 .sectionLabel 同此约束）
+   宽度上限挂在这一层而不是行上——两行要共用同一条右缘，各自算百分比会让较窄的那行先
    截断而较宽的那行顶出去 */
 .wg-header-title {
   box-sizing: border-box;
@@ -157,8 +154,8 @@ export const CSS = `
 .wg-header-caret { flex: none; transition: transform .15s var(--ds-ease-in-out, ease-in-out); }
 .wg-header-caret-open { transform: rotate(180deg); }
 
-/* 下行：当前聚焦的工作区或工作区分组。它与上行是两个层级的信息（层级名 / 层级里
-   的取值），因此比上行**小一档字号、亮一档色阶**：两行同色同字号时读起来像同一个
+/* 下行：当前聚焦的工作区或工作区分组。它与上行是两个层级的信息（层级名 / 层级里的取值）
+   因此比上行小一档字号、亮一档色阶：两行同色同字号时读起来像同一个
    标题被折成了两行，而不是「分类 + 取值」。没有聚焦时显示「全部工作区」
 
    色阶写在这一行上（上行那份写在自己的行盒上）：两行各自声明自己的颜色，比对时
@@ -175,7 +172,7 @@ export const CSS = `
 }
 
 /* 带两行标题的 header 不能沿用基线那条 36px 定高（它是为官方单行标题写的）
-   否则第二行连同 overflow:hidden 一起被裁掉——界面上只是「聚焦的那一行不见了」
+   沿用它会连同 overflow:hidden 一起把第二行裁掉——界面上只是「聚焦的那一行不见了」
    不会有任何报错。高度按内容放开
 
    左内边距同时撤到 0：标题块是一个按钮，命中余量由它自己的 padding 给，否则会与
@@ -330,8 +327,8 @@ export const CSS = `
 }
 .wg-search-clear:hover { background: var(--dsw-alias-interactive-bg-hover); }
 
-/* 搜索结果行：官方 .searchResultRow 的几何。它比常规会话行高——两行内容
-   （标题 + 路径），因此 min-height 而不是固定高度 */
+/* 搜索结果行：官方 .searchResultRow 的几何。它比常规会话行高——两行内容（标题 + 路径）
+   因此用 min-height 而不是固定高度 */
 .wg-search-results > * + * { margin-top: 2px; }
 .wg-search-result {
   box-sizing: border-box;
@@ -383,9 +380,8 @@ export const CSS = `
   margin-left: 20px;
 }
 
-/* 路径：两段着色在内部紧邻。自身是 gap 为 0 的 flex 行——外面的 6px 属于
-   「路径 / 摘录」之间，不能渗进这两段；同时两段仍要参与伸缩与截断
-   因此不能退回行内布局（行内元素上 max-width 与省略号都不生效）
+/* 路径：两段着色在内部紧邻。自身是 gap 为 0 的 flex 行——外面的 6px 属于「路径 / 摘录」之间，不能渗进这两段
+   同时两段仍要参与伸缩与截断，不能退回行内布局（行内元素上 max-width 与省略号都不生效）
 
    宽度上限挂在这一层而不是段上：官方给工作区名 40%，本包那格后面还要接分组
    整条路径放宽到 60%。写成段级百分比会按本条路径的宽度算，越窄越缩，长名字
@@ -436,8 +432,8 @@ export const CSS = `
   line-height: 18px;
 }
 
-/* header 里的图标按钮：官方 .iconButton 的几何（28px 正圆、label-secondary
-   悬停出底色）。与行内 16px 按钮分开，因为尺寸与命中区都不是一套 */
+/* header 里的图标按钮：官方 .iconButton 的几何（28px 正圆、label-secondary，悬停出底色）
+   与行内 16px 按钮分开，因为尺寸与命中区都不是一套 */
 .wg-header-action {
   cursor: pointer;
   width: 28px;
@@ -562,8 +558,8 @@ export const CSS = `
 /* 折叠体：轨道高度走 0fr ↔ 1fr，高度因此完全由内容决定，与子元素数量和
    各自高度都无关，样式里不需要任何写死的尺寸
  *
- * 时长与缓动走自定义属性，由 CollapsibleBody 按 props 下发。回退值直接取共享常量
- * 因此两边不可能漂移（常量见 utils/collapseMotion.ts）
+ * 时长与缓动走自定义属性，由 CollapsibleBody 按 props 下发
+ * 回退值直接取共享常量（见 utils/collapseMotion.ts），因此两边不可能漂移
  *
  * clip 那一层负责裁剪：展开过程中轨道比内容矮，内容被自上而下「撑」出来
    min-height 必须归零，否则轨道会被内容的自动最小尺寸顶开，0fr 收不到底 */
@@ -590,12 +586,10 @@ export const CSS = `
 
 /* 折叠体里的元素逐个淡入
  *
- * 不透明是元素的自然状态：展开态没有任何规则写 opacity。透明只挂在「所在折叠体还没
- * 展开」这一条结构条件上，因此过渡没跑、被降频或主线程被长任务占住时，元素只会「晚
- * 一点淡入」，不会留在透明上
+ * 不透明是元素的自然状态：展开态没有任何规则写 opacity
+ * 透明只挂在「所在折叠体还没展开」这一条结构条件上，因此过渡没跑、被降频或主线程被长任务占住时，元素只会「晚一点淡入」，不会留在透明上
  *
- * 嵌套由选择器自己兜住：外层收着时，收着的折叠体这条选择器作为祖先命中它裁剪区里的
- * 所有元素，含内层折叠体的，因此不需要往元素上挂显隐类
+ * 嵌套由选择器自己兜住：外层收着时，收着的折叠体这条选择器会作为祖先命中它裁剪区里的所有元素，含内层折叠体的，因此无需往元素上挂显隐类
  *
  * 延迟是绝对值（撑开那段等待 + 该元素的先后），由组件量出来逐个下发；样式只消费
  * 收起那条更具体且把延迟归零，所有元素因此一起淡出 */
@@ -611,16 +605,16 @@ export const CSS = `
 
 /* 工作区分组：根节点上的容器行 + 折叠体
  *
- * 行本身复用会话分组那一套（同一 .wg-group-head 基类、同一行尾操作位与可收放
- * 槽位），因此工作区数、悬停让位、操作位显隐都由既有规则承担；这里只覆盖两处：
+ * 行本身复用会话分组那一套（同一 .wg-group-head 基类、同一行尾操作位与可收放槽位）
+ * 因此工作区数、悬停让位、操作位显隐都由既有规则承担；这里只覆盖两处：
  * 它在根节点上，缩进取 8px（分组头是 24px，因为它落在工作区内部） */
 .wg-group-head.wg-virtual-workspace-head { padding: 0 8px; }
 .wg-virtual-workspace { position: relative; display: flex; flex-direction: column; }
 .wg-virtual-workspace-body { display: flex; flex-direction: column; position: relative; }
-/* 组内工作区比根节点再深一层：每层让出一个 16px 图标列，与「工作区 → 分组 →
-   组内会话」那三级同一套步进，因此工作区分组是这条链上的第 0 层 */
-/* 工作区行挂了悬停卡片时被官方 HoverCard 的根节点包了一层（那是个 display:block
-   的 span），行就不再是 .wg-workspace 的直接子项——与下面会话行那条同理，两档都写 */
+/* 组内工作区比根节点再深一层：每层让出一个 16px 图标列
+   与「工作区 → 分组 → 组内会话」那三级同一套步进，因此工作区分组是这条链上的第 0 层 */
+/* 工作区行挂了悬停卡片时被官方 HoverCard 的根节点包了一层（那是个 display:block 的 span）
+   行就不再是 .wg-workspace 的直接子项——与下面会话行那条同理，两档都写 */
 .wg-virtual-workspace-body > .wg-workspace > .wg-workspace-head,
 .wg-virtual-workspace-body > .wg-workspace > * > .wg-workspace-head { padding-left: 24px; }
 .wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
@@ -649,9 +643,8 @@ export const CSS = `
    东西」，浮在分组头左侧会读成根节点的内容 */
 .wg-virtual-workspace-body > .wg-empty { padding-left: 24px; }
 
-/* 折叠体自己承担「上一行与它之间」的那 2px：这段间距要连同内容一起收掉
-   否则收起后行下会留一条 2px 空档。间距取内层容器的上内边距——它落在
-   clip 的裁剪区内，轨道合拢时随之被裁掉 */
+/* 折叠体自己承担「上一行与它之间」的那 2px：这段间距要连同内容一起收掉，否则收起后行下会留一条 2px 空档
+   间距取内层容器的上内边距——它落在 clip 的裁剪区内，轨道合拢时随之被裁掉 */
 .wg-collapse-clip > .wg-workspace-body,
 .wg-collapse-clip > .wg-virtual-workspace-body,
 .wg-collapse-clip > .wg-sessions { padding-top: 2px; }
@@ -691,8 +684,8 @@ export const CSS = `
    比在 JSX 里逐行下发内联 style 更好读，也不给行组件添 props
    —— 分组头 24px、分组内会话 40px、工作区直接子会话 24px
 
-   会话行多出「> *」那一档：挂了悬停卡片的行被官方 HoverCard 的根节点包了一层
-   （那是个 display:block 的 span），行就不再是 .wg-sessions 的直接子项。两条都写
+   会话行多出「> *」那一档：挂了悬停卡片的行被官方 HoverCard 的根节点包了一层（那是个 display:block 的 span）
+   行就不再是 .wg-sessions 的直接子项。两条都写
    有没有卡片缩进都一致 */
 .wg-workspace-head { padding: 0 8px; }
 .wg-group-head { padding: 0 8px 0 24px; }
@@ -818,8 +811,8 @@ export const CSS = `
 }
 
 /* 行尾相对时间：官方 .time 的几何与色阶（12px/20px、label-tertiary）
-   悬停、菜单展开、键盘聚焦时让位给操作位——官方是同一处 CSS 互换
-   （time → ellipsis），本包把「键盘聚焦」也列为一条显隐路径 */
+   悬停、菜单展开、键盘聚焦时让位给操作位——官方是同一处 CSS 互换（time → ellipsis）
+   本包把「键盘聚焦」也列为一条显隐路径 */
 .wg-row-time {
   flex: none;
   color: var(--dsw-alias-label-tertiary);
@@ -902,9 +895,8 @@ export const CSS = `
   gap: 12px;
 }
 
-/* 显示路径只有三条：所在行悬停、菜单展开期间（否则锚点按钮会在菜单还开着时
-   消失）、以及键盘聚焦。工作区行与分组行各有自己的行类，因此悬停选择器
-   要分别列出 */
+/* 显示路径只有三条：所在行悬停、菜单展开期间（否则锚点按钮会在菜单还开着时消失）、以及键盘聚焦
+   工作区行与分组行各有自己的行类，因此悬停选择器要分别列出 */
 .wg-row:hover .wg-row-action,
 .wg-workspace-head:hover .wg-row-action,
 .wg-group-head:hover .wg-row-action,
@@ -940,15 +932,14 @@ export const CSS = `
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 箭头与官方项图标同一档色阶（tertiary），不抢文案的视觉权重；不参与伸缩
-   因此长文案省略的是文字而不是把箭头压扁 */
+/* 箭头与官方项图标同一档色阶（tertiary），不抢文案的视觉权重；不参与伸缩，因此长文案省略的是文字而不是把箭头压扁 */
 .wg-menu-arrow {
   flex: none;
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* 工作区下拉菜单：本包自绘的面板（官方 Menu 原语没有可折叠分区头、也没有挂在
-   条目行尾的第二个按钮）。外观逐条取官方菜单面板那一份规则的值
+/* 工作区下拉菜单：本包自绘的面板（官方 Menu 原语没有可折叠分区头、也没有挂在条目行尾的第二个按钮）
+   外观逐条取官方菜单面板那一份规则的值
 
    底色、描边与投影都必须用官方这一套 token：面板是不透明的浮层，底下就是会话
    列表，用错 token 会让它透出后面的内容——引一个未定义的自定义属性会让整条声明
@@ -1027,7 +1018,7 @@ export const CSS = `
 
 .wg-picker-section-body { display: flex; flex-direction: column; }
 
-/* 一行条目：与工作区行**同形**——行本身是可点的 div（.wg-row 那一套）
+/* 一行条目：与工作区行同形——行本身是可点的 div（.wg-row 那一套）
    三枚 16px 操作按钮嵌在行内的操作位里（.wg-row-actions / .wg-row-action）
    行的可点区与按钮的可点区因此是包含关系，而不是并排的两个热区
 
@@ -1069,9 +1060,9 @@ export const CSS = `
 
 .wg-picker-check { flex: none; color: var(--dsw-alias-label-secondary); }
 
-/* 操作位里的三枚按钮沿用工作区行那一套显隐（.wg-row-action 默认透明、悬停/菜单
-   展开/键盘聚焦时浮现），因此这里只覆盖一处：置顶按下时常驻可见。样式认按钮上的
-   aria-pressed，与 IconButton 声明的是同一个事实，两者不会各说一套 */
+/* 操作位里的三枚按钮沿用工作区行那一套显隐（.wg-row-action 默认透明、悬停/菜单展开/键盘聚焦时浮现）
+   因此这里只覆盖一处：置顶按下时常驻可见
+   样式认按钮上的 aria-pressed，与 IconButton 声明的是同一个事实，两者不会各说一套 */
 .wg-picker-row .wg-row-action[aria-pressed='true'] {
   opacity: 1;
   pointer-events: auto;
@@ -1130,7 +1121,7 @@ export const CSS = `
   accent-color: var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary));
 }
 
-/* 对话框内的错误提示（如工作区重名）：只上错误色，几何走官方 Modal */
+/* 对话框内的错误提示，例如工作区重名：只上错误色，几何走官方 Modal */
 .wg-dialog-error {
   color: var(--dsw-alias-state-error-primary);
   margin-top: 8px;
@@ -1142,7 +1133,7 @@ export const CSS = `
    HoverCard 原语，这里只排它内部这几行
 
    三档文字色与官方 ui-workspace 的 hover 卡片同值：卡片底色在两种主题下都是原语
-   写死的深色（--dsw-hovercard-bg 为 #2C2C2E），因此**不能**用随主题翻转的
+   写死的深色（--dsw-hovercard-bg 为 #2C2C2E），因此不能用随主题翻转的
    --dsw-alias-label-*——浅色主题下那些是近黑色，落在深色卡片上会看不见 */
 .wg-hover-content {
   display: flex;
@@ -1229,12 +1220,12 @@ body[data-wg-flip] [data-wg-hover-card] {
   /* 两处箭头直接落位：翻转动画在 reduced-motion 下没有意义 */
   .wg-header-caret,
   .wg-picker-caret { transition: none; }
-  /* 折叠体直接落位，不做撑开/收回动作；visibility 的延时也要一并去掉
-     否则收起后仍会多挡一个容器时长才交出焦点 */
+  /* 折叠体直接落位，不做撑开/收回动作
+     visibility 的延时也要一并去掉，否则收起后仍会多挡一个容器时长才交出焦点 */
   .wg-collapse { transition: none; }
   .wg-collapse-clip { transition: visibility 0s linear; }
   /* 子元素随容器一起落位。逐个淡入的延迟由组件逐个下发，这里把过渡整条撤掉
-     否则 reduced-motion 下行仍是逐个出现。撤掉后元素落回自然的不透明 */
+     不撤的话 reduced-motion 下行仍是逐个出现；撤掉后元素落回自然的不透明 */
   .wg-collapse-clip [data-wg-stagger] {
     transition: none;
     transition-delay: 0s;

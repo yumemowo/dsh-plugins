@@ -1,11 +1,11 @@
 /**
  * 官方 `workspace` 命名空间的复用面
  *
- * 会话的「重命名 / 分叉 / 归档」与行尾相对时间都取官方 `ui-workspace` 的
- * 既有实现：文案绑它的 `workspace` 语言包（`TranslateNS<'workspace'>` 还含
- * `common` 回退键，因此 `close` / `cancel` 这类通用词同样可解析），动作调它的
- * `ctx.uiWorkspace` 服务与 `ctx.sessions` 绑定。这样官方改文案或行为后本包
- * 自动跟随，不需要逐条重新对齐
+ * 会话的「重命名 / 分叉 / 归档」与行尾相对时间都取官方 `ui-workspace` 的既有实现
+ * 文案绑它的 `workspace` 语言包（`TranslateNS<'workspace'>` 还含 `common` 回退键）
+ * 因此 `close` / `cancel` 这类通用词同样可解析
+ * 动作调它的 `ctx.uiWorkspace` 服务与 `ctx.sessions` 绑定
+ * 这样官方改文案或行为后本包自动跟随，不需要逐条重新对齐
  */
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { relativeTime } from './runtime.ts'
@@ -16,9 +16,8 @@ export type WorkspaceTranslate = TranslateNS<'workspace'>
 /**
  * 官方 `sidebar` 命名空间的翻译函数
  *
- * 外壳的全局控件文案在这里（如新建会话按钮）。本包的行右键菜单要复用官方
- * 那个按钮的动词短语，因此需要多绑一个命名空间——两个命名空间的键都只被
- * 投影一次，语言切换后仍跟着走
+ * 外壳的全局控件文案在这里（如新建会话按钮）
+ * 本包的行右键菜单要复用官方那个按钮的动词短语，因此需要多绑一个命名空间——两个命名空间的键都只被投影一次，语言切换后仍跟着走
  */
 export type SidebarTranslate = TranslateNS<'sidebar'>
 
@@ -69,10 +68,9 @@ export interface OfficialSearchLabels {
 /**
  * 把官方语言包绑成 header 与添加工作区流程的文案表
  *
- * 入口文案官方分两个键：header 按钮用 `workspace.add`（「添加工作区」），
- * 工作区选择菜单里的那一项才是 `menu.addWorkspace`（「添加工作区…」）。
+ * 入口文案官方分两个键：header 按钮用 `workspace.add`（「添加工作区」）
+ * 工作区选择菜单里的那一项才是 `menu.addWorkspace`（「添加工作区…」）
  * 本包只有 header 入口这一种形态，因此取前者
- * @param t - 官方 `workspace` 命名空间的翻译函数
  * @returns 语义化字段的文案表
  */
 export function officialAddLabels(t: WorkspaceTranslate): OfficialAddLabels {
@@ -87,10 +85,8 @@ export function officialAddLabels(t: WorkspaceTranslate): OfficialAddLabels {
 /**
  * 把官方语言包绑成搜索入口、输入框与结果列表的文案表
  *
- * 入口的 tooltip 与无障碍标签官方分两个键：tooltip 用通用的「搜索」
- *（`search`，落在 `common` 命名空间、由查找链兜住），无障碍标签才点明对象
- *（`search.sessions.aria`）。本包照官方的分工逐键取用
- * @param t - 官方 `workspace` 命名空间的翻译函数
+ * 入口的 tooltip 与无障碍标签官方分两个键：tooltip 用通用的「搜索」（`search`，落在 `common` 命名空间、由查找链兜住）
+ * 无障碍标签才点明对象（`search.sessions.aria`）。本包照官方的分工逐键取用
  * @returns 语义化字段的文案表
  */
 export function officialSearchLabels(t: WorkspaceTranslate): OfficialSearchLabels {
@@ -110,8 +106,8 @@ export interface OfficialHoverLabels {
   /**
    * 卡片的复制提示，取官方 `common` 命名空间的通用词
    *
-   * 卡片整体可点即复制，文案同时充当它的无障碍标签（官方
-   * `HoverCard` 的 `copyLabel`），因此要用通用词而不是点明对象的说法
+   * 卡片整体可点即复制，文案同时充当它的无障碍标签（官方 `HoverCard` 的 `copyLabel`）
+   * 因此要用通用词而不是点明对象的说法
    */
   copy: string
   /** 复制成功后的反馈文案，由原语在卡片内原地替换显示 */
@@ -132,7 +128,6 @@ export interface OfficialHoverLabels {
  *
  * 对话框的「取消 / 关闭」不在这里：它们走官方 `common` 命名空间，由拿到
  * `t` 座位的对话框组件直接解析
- * @param t - 官方 `workspace` 命名空间的翻译函数
  * @returns 语义化字段的文案表
  */
 export function officialSessionLabels(t: WorkspaceTranslate): OfficialSessionLabels {
@@ -149,9 +144,8 @@ export function officialSessionLabels(t: WorkspaceTranslate): OfficialSessionLab
  * 把官方语言包绑成悬停卡片的文案与格式
  *
  * 与官方 `ui-workspace` 的 `WorkspaceHoverContent` / `SessionHoverContent` 逐键取用
- * 同一批键（`hover.created` / `hover.copied` / `date.ymd` / `time.ago`），因此官方
- * 改措辞或改日期形态时本包自动跟随
- * @param t - 官方 `workspace` 命名空间的翻译函数
+ * 即 `hover.created` / `hover.copied` / `date.ymd` / `time.ago` 这一批键
+ * 因此官方改措辞或改日期形态时本包自动跟随
  * @returns 卡片文案与两个格式化函数
  */
 export function officialHoverLabels(t: WorkspaceTranslate): OfficialHoverLabels {
@@ -171,8 +165,6 @@ function pad2(value: number): string {
 
 /**
  * 绝对创建时刻
- * @param createdAt - 创建时刻（epoch ms）
- * @param t - 官方 `workspace` 命名空间的翻译函数
  * @returns `创建于 2026年9月14日 03:31` 形态的文案
  */
 function createdLabel(createdAt: number, t: WorkspaceTranslate): string {
@@ -184,11 +176,8 @@ function createdLabel(createdAt: number, t: WorkspaceTranslate): string {
 /**
  * 悬停卡片形态的相对时间
  *
- * 与行尾那份的区别只有一层：距离套上官方 `time.ago` 的模板（`{t}前`），而 `刚刚`
- * 那一档保持原样——官方的注释写明了理由，「now ago」不成话
- * @param updatedAt - 会话最近更新时间（epoch ms）
- * @param now - 当前时刻（epoch ms）
- * @param t - 官方 `workspace` 命名空间的翻译函数
+ * 与行尾那份的区别只有一层：距离套上官方 `time.ago` 的模板（`{t}前`），而 `刚刚` 那一档保持原样
+ * 官方的注释写明了理由，「now ago」不成话
  * @returns 可直接显示的相对时间文案
  */
 function hoverTimeLabel(updatedAt: number, now: number, t: WorkspaceTranslate): string {
@@ -199,11 +188,8 @@ function hoverTimeLabel(updatedAt: number, now: number, t: WorkspaceTranslate): 
 /**
  * 官方风格的紧凑相对时间（中文「刚刚 / 5分钟 / 2天」，英文 now / 5min）
  *
- * 与官方 `ui-workspace` 的 `timeLabel` 同一条规则：分桶交给 primitives 的
- * `relativeTime`，文案交给官方语言包的 `time.*` 键
- * @param updatedAt - 会话最近更新时间（epoch ms）
- * @param now - 当前时刻（epoch ms）
- * @param t - 官方 `workspace` 命名空间的翻译函数
+ * 与官方 `ui-workspace` 的 `timeLabel` 同一条规则：分桶交给 primitives 的 `relativeTime`
+ * 文案交给官方语言包的 `time.*` 键
  * @returns 可直接显示的相对时间文案
  */
 export function timeLabel(updatedAt: number, now: number, t: WorkspaceTranslate): string {

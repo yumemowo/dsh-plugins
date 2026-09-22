@@ -1,8 +1,9 @@
 /**
  * 目录路径的显示缩写
  *
- * 与官方 `ui-workspace` 的 `abbreviateHomePath` 同一条规则：POSIX 的 home 及其
- * 后代缩成 `~` / `~/…`，其余路径原样。Windows 风格路径没有 `~` 约定，整条跳过
+ * 与官方 `ui-workspace` 的 `abbreviateHomePath` 同一条规则
+ * POSIX 的 home 及其后代缩成 `~` / `~/…`，其余路径原样
+ * Windows 风格路径没有 `~` 约定，整条跳过
  */
 
 /** 盘符或 UNC 前缀；这类路径不走 `~` 缩写 */
@@ -14,7 +15,6 @@ function isWindowsStylePath(value: string): boolean {
  * 把宿主的 home 目录缩写成 `~`
  *
  * 卡片里显示缩写路径，复制出去的仍是完整路径——缩写只影响这一处排版
- * @param path - 绝对路径或已经是显示形态的短路径
  * @param home - 宿主的 home；缺省表示不知道，此时原样返回
  * @returns home 自身为 `~`，其后代为 `~/…`，其余为 `path`
  */

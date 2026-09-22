@@ -1,12 +1,11 @@
 /**
  * 行级右键菜单
  *
- * 条目与分派函数都直接取自该行的行内 `...` 菜单，差别只在入口与落点：右键
- * 打开、面板落在指针处。因此同一个动作在两个入口下走的是同一段代码，不会
- * 各自漂移
+ * 条目与分派函数都直接取自该行的行内 `...` 菜单，差别只在入口与落点：右键打开、面板落在指针处
+ * 因此同一个动作在两个入口下走的是同一段代码，不会各自漂移
  *
- * 定位借用官方 Menu 原语的 `getAnchorRect`（官方 WorkspacePickFlow 用的同一个
- * 入口），面板本身仍是官方原语，本包不另造浮层
+ * 定位借用官方 Menu 原语的 `getAnchorRect`（官方 WorkspacePickFlow 用的同一个入口）
+ * 面板本身仍是官方原语，本包不另造浮层
  */
 import { useCallback, useState } from 'react'
 import type { ReactElement } from 'react'
@@ -16,8 +15,8 @@ import type { MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
 /**
  * 右键事件里本钩子要用的部分
  *
- * 声明成结构类型而不是取 React 的 `MouseEvent`：调用方把处理函数直接挂到行上
- * 时由 React 传入真实事件（真实事件满足这个形状），测试也能传替身事件
+ * 声明成结构类型而不是取 React 的 `MouseEvent`：调用方把处理函数直接挂到行上时由 React 传入真实事件（真实事件满足这个形状）
+ * 测试也能传替身事件
  */
 export interface RowContextMenuEvent {
   clientX: number
@@ -39,10 +38,8 @@ interface AnchorRect {
 /**
  * 右键落点
  *
- * 指针坐标就是菜单该出现的位置。键盘（菜单键）触发的 contextmenu 没有指针
- * 坐标，浏览器给的是 (0,0)：那时退回量行自身，菜单落在行旁而不是被丢到窗口
- * 左上角
- * @param event - 行的右键事件
+ * 指针坐标就是菜单该出现的位置。键盘（菜单键）触发的 contextmenu 没有指针坐标，浏览器给的是 (0,0)
+ * 那时退回量行自身，菜单落在行旁而不是被丢到窗口左上角
  * @returns 面板定位矩形
  */
 function rectAt(event: RowContextMenuEvent): AnchorRect {
@@ -71,16 +68,14 @@ export interface RowContextMenu {
   /**
    * 右键面板是否开着
    *
-   * 面板是第二处会浮在行上的东西（行内 `...` 菜单是另一处），悬停卡片据此在
-   * 两种面板开着时都让位，否则同一个位置会叠上两层浮层
+   * 面板是第二处会浮在行上的东西（行内 `...` 菜单是另一处），悬停卡片据此在两种面板开着时都让位，否则同一个位置会叠上两层浮层
    */
   open: boolean
 }
 
 export function useRowContextMenu({ items, onSelect }: RowContextMenuOptions): RowContextMenu {
-  // 落点即开合状态：非空就是开着。菜单开着时再右键会换一个新的矩形对象，
-  // 定位回调随之换引用，原语重新量一次，面板跟到新落点——把落点单独放进
-  // ref 的话这次重渲染会被 React 判定为状态未变而丢掉
+  // 落点即开合状态：非空就是开着。菜单开着时再右键会换一个新的矩形对象，定位回调随之换引用，原语重新量一次，面板跟到新落点
+  // 把落点单独放进 ref 的话这次重渲染会被 React 判定为状态未变而丢掉
   const [anchor, setAnchor] = useState<AnchorRect | null>(null)
   const getAnchorRect = useCallback(() => anchor, [anchor])
 
@@ -108,17 +103,16 @@ export function useRowContextMenu({ items, onSelect }: RowContextMenuOptions): R
           onSelect(id)
         }}
         items={items}
-        // 落点是指针而不是某个锚点元素：原语因此要求 anchor 为空、定位交给
-        // getAnchorRect。portal 之后行的裁剪容器不再裁到面板
+        // 落点是指针而不是某个锚点元素：原语因此要求 anchor 为空、定位交给 getAnchorRect
+        // portal 之后行的裁剪容器不再裁到面板
         anchor={null}
         getAnchorRect={getAnchorRect}
         portal
-        // 与锚在按钮旁的 `...` 菜单不同，这里不随指针离开关闭：指针只在菜单
-        // 打开那一刻停在落点，之后移向条目正是正常操作
+        // 与锚在按钮旁的 `...` 菜单不同，这里不随指针离开关闭：指针只在菜单打开那一刻停在落点，之后移向条目正是正常操作
         //
-        // 类名只为一件事：原语根节点默认是 position: relative 的行内盒，留在行里
-        // 会让行的 flex 排布多出一个子项（分组行还会多算一份 gap）。该类的规则把
-        // 它整盒去掉，面板本身是 portal 出去的，不受影响
+        // 类名只为一件事：原语根节点默认是 position: relative 的行内盒
+        // 留在行里会让行的 flex 排布多出一个子项（分组行还会多算一份 gap）
+        // 该类的规则把它整盒去掉，面板本身是 portal 出去的，不受影响
         className="wg-context-menu"
       />
     ),

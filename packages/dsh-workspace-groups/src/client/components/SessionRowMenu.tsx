@@ -1,17 +1,14 @@
 /**
  * 带会话操作菜单的会话行
  *
- * 菜单内容分两段：官方三项（重命名 / 分叉 / 归档，直接转调官方服务）与一条
- * 分隔线之后的归组项。归组项只在有分组上下文的行上出现——「未分组」桶里的
- * 会话不属于任何工作区，没有分组可落，因此那些行只保留官方三项。宿主未提供
- * 官方服务时官方三项整体隐藏，同样不留点不动的入口
+ * 菜单内容分两段：官方三项（重命名 / 分叉 / 归档，直接转调官方服务）与一条分隔线之后的归组项
+ * 归组项只在有分组上下文的行上出现——「未分组」桶里的会话不属于任何工作区，没有分组可落，因此那些行只保留官方三项
+ * 宿主未提供官方服务时官方三项整体隐藏，同样不留点不动的入口
  *
- * 新建中（空白）会话行没有会话可操作，与官方一样整条行都不挂菜单：那条行
- * 只是「准备开始一个新会话」的占位，对它重命名或归档都无从谈起
+ * 新建中（空白）会话行没有会话可操作，与官方一样整条行都不挂菜单；那条行只是「准备开始一个新会话」的占位，对它重命名或归档都无从谈起
  *
- * 菜单开合状态收敛在本组件内：行组件在 map 回调里生成，把 useState 留在
- * 行内会让每行无条件多挂一组 hook 状态，独立组件则按需挂载。重命名对话框
- * 也留在这里——只有真正打开过的行才付出这份状态
+ * 菜单开合状态收敛在本组件内：行组件在 map 回调里生成，把 useState 留在行内会让每行无条件多挂一组 hook 状态，独立组件则按需挂载
+ * 重命名对话框也留在这里——只有真正打开过的行才付出这份状态
  */
 import { memo, useState } from 'react'
 import type { ReactElement } from 'react'
@@ -31,8 +28,7 @@ import type { GroupSection, SessionRow } from '../data/types.ts'
 /**
  * 一个会话行的归组上下文；缺省表示该行没有分组可归
  *
- * 只装数据与稳定引用的动作：行级 memo 按字段比对这个对象，把每次渲染新建的闭包放进来
- * 会让比对落空
+ * 只装数据与稳定引用的动作：行级 memo 按字段比对这个对象，把每次渲染新建的闭包放进来会让比对落空
  */
 export interface SessionGroupingContext {
   /** 该会话所在的工作区；归组动作要用它定位 */
@@ -48,8 +44,7 @@ export interface SessionGroupingContext {
   /**
    * 归组选中项：`ungroup` 或 `group:<id>`
    *
-   * 接收工作区与会话 id 而不是提前绑定：这个动作由区域组件缓存，因此对所有行是
-   * 同一个引用，行自己在组件内把 id 绑上去
+   * 接收工作区与会话 id 而不是提前绑定：这个动作由区域组件缓存，因此对所有行是同一个引用，行自己在组件内把 id 绑上去
    */
   onSelectGroup: (workspaceId: string, sessionId: string, id: string) => void
 }
@@ -76,8 +71,7 @@ export interface SessionRowMenuProps {
   /**
    * 打开会话
    *
-   * 传动作本身而不是绑好 id 的闭包：绑好的闭包每次渲染都是新引用，行级 memo
-   * 因此永远判定为变过
+   * 传动作本身而不是绑好 id 的闭包：绑好的闭包每次渲染都是新引用，行级 memo 因此永远判定为变过
    */
   onOpenSession: (sessionId: string) => void
   /** 行尾操作按钮的无障碍标签，取会话标题 */
@@ -91,8 +85,7 @@ export interface SessionRowMenuProps {
 /**
  * 比较两次归组上下文是否表示同一件事
  *
- * 分组段每次渲染都是新数组，按引用比会让每一行都判定为变过；菜单只消费分组的
- * id 与名字，因此判定这些字段就够
+ * 分组段每次渲染都是新数组，按引用比会让每一行都判定为变过；菜单只消费分组的 id 与名字，因此判定这些字段就够
  */
 function sameGrouping(
   a: SessionGroupingContext | undefined,
@@ -161,8 +154,8 @@ function SessionRowMenuView({
   /**
    * 菜单选中项的分派
    *
-   * 行内 `...` 菜单与右键菜单共用它：右键是行尾操作位的捷径，同一个 id
-   * 必须落到同一件事上。会话行没有行内新建入口，因此两份条目的集合相同
+   * 行内 `...` 菜单与右键菜单共用它：右键是行尾操作位的捷径，同一个 id 必须落到同一件事上
+   * 会话行没有行内新建入口，因此两份条目的集合相同
    */
   const select = (id: string): void => {
     setMenuOpen(false)
@@ -208,9 +201,8 @@ function SessionRowMenuView({
             open={menuOpen}
             onClose={() => setMenuOpen(false)}
             onSelect={select}
-            // portal 进 document.body：本区域的列表容器 overflow 裁剪会把
-            // 就近渲染的菜单裁掉。二级面板的方向由区域挂在 body 上的翻转标记
-            // 控制（见 useFlipMarker），这里不感知宿主差异
+            // portal 进 document.body：本区域的列表容器 overflow 裁剪会把就近渲染的菜单裁掉
+            // 二级面板的方向由区域挂在 body 上的翻转标记控制（见 useFlipMarker），这里不感知宿主差异
             portal
             closeOnPointerLeave
             anchor={
@@ -256,7 +248,6 @@ function SessionRowMenuView({
 /**
  * 裹上 memo 的会话行
  *
- * 流式期间每次活动都会重渲染整片区域，未变的行若跟着重算，长列表就会在每次活动
- * 时付出与行数成正比的代价，主线程因此被整段占住
+ * 流式期间每次活动都会重渲染整片区域，未变的行若跟着重算，长列表就会在每次活动时付出与行数成正比的代价，主线程因此被整段占住
  */
 export const SessionRowMenu = memo(SessionRowMenuView, sameRowMenuProps)

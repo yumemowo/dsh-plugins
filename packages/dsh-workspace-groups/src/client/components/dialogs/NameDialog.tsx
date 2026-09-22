@@ -2,9 +2,8 @@
  * 单行输入对话框：建组、改名与工作区重命名共用
  *
  * 输入法组合期间的 Enter 属于候选词确认，不能当提交用
- * 
- * 「取消」与「关闭」是通用词，直接取插槽注入的 `t` 座位
- * 本包命名空间没有这两个键，查找链会回退到官方 `common` 命名空间
+ *
+ * 「取消」与「关闭」是通用词，直接取插槽注入的 `t` 座位；本包命名空间没有这两个键，查找链会回退到官方 `common` 命名空间
  */
 import { useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
@@ -24,10 +23,8 @@ export interface NameDialogProps {
   /**
    * 可选的勾选项，排在输入框下方
    *
-   * 用原生 `checkbox` 而不是官方原语
-   * primitives 只有 `Switch`，没有 checkbox
-   * 而官方在自己的 `RiskConfirmation` 里也是直接用一个原生 checkbox + label
-   * 这里沿用同一种形态
+   * 用原生 `checkbox` 而不是官方原语：primitives 只有 `Switch`，没有 checkbox
+   * 官方在自己的 `RiskConfirmation` 里也是直接用一个原生 checkbox + label，这里沿用同一种形态
    */
   check?: { label: string; checked: boolean; onChange: (checked: boolean) => void } | undefined
   /** 本包命名空间的翻译座位（解析通用词） */

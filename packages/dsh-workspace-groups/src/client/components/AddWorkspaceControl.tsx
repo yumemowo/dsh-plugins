@@ -2,12 +2,11 @@
  * 「添加工作区」入口与它的 picking 流程
  *
  * 外观照官方 WorkspaceBrowser：section header 右侧一个 28px 圆形图标按钮
- * （`IconProjectAddOutline16`，tooltip 与无障碍标签都是官方的 `workspace.add`），
+ * 图标取 `IconProjectAddOutline16`，tooltip 与无障碍标签都是官方的 `workspace.add`
  * 窄栏下放大成 36px 并取 `label-primary`
  *
- * 行为也照官方：点击直接打开 directoryFlow 洞（侧边栏里官方用的是
- * `addOnly: true`，不先弹工作区列表菜单），占用者完成交互后把路径交回来，
- * 这里用官方工作区控制器采纳，成功后在该工作区开一个新会话并打开
+ * 行为也照官方：点击直接打开 directoryFlow 洞（侧边栏里官方用的是 `addOnly: true`，不先弹工作区列表菜单）
+ * 占用者完成交互后把路径交回来，这里用官方工作区控制器采纳，成功后在该工作区开一个新会话并打开
  */
 import { useState } from 'react'
 import type { ReactElement } from 'react'
@@ -55,12 +54,11 @@ export function AddWorkspaceControl({
   }
 
   // 占用者在渲染期解析：注册项可能在两次渲染之间换过占用者
-  // 解析不到时不渲染交互，但入口按钮与错误框仍在——区域那边订阅了占用
-  // 情况，下一次渲染就会把入口一起收掉
+  // 解析不到时不渲染交互，但入口按钮与错误框仍在——区域那边订阅了占用情况，下一次渲染就会把入口一起收掉
   const resolved = occupant()
-  // 占用者的 inject 面随 props 交给它：native 那份读 `pick`，browse 那份读
-  // `listDirectory` / `createDirectory` / 自己的 `t`；这与渲染器给插槽注册项
-  // 传播 inject 的做法一致，占用者因此不需要知道自己被谁渲染
+  // 占用者的 inject 面随 props 交给它：native 那份读 `pick`
+  // browse 那份读 `listDirectory` / `createDirectory` / 自己的 `t`
+  // 这与渲染器给插槽注册项传播 inject 的做法一致，占用者因此不需要知道自己被谁渲染
   const occupantProps = resolved?.inject() ?? {}
   const Flow = resolved?.component
 

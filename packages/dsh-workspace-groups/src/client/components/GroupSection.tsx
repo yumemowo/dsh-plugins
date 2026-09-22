@@ -1,12 +1,10 @@
 /**
  * 一个分组：可折叠的分组头（箭头、名称、会话数、`...` 菜单与 `+`）加组内会话行
  *
- * 分组头的行尾操作与工作区行同形：`...` 打开管理菜单（重命名 / 删除分组），
- * `+` 在该分组新建会话。分组没有折叠用的文件夹槽，也不像工作区行那样悬停时
- * 换图标，因此图标列只有箭头一个
+ * 分组头的行尾操作与工作区行同形：`...` 打开管理菜单（重命名 / 删除分组），`+` 在该分组新建会话
+ * 分组没有折叠用的文件夹槽，也不像工作区行那样悬停时换图标，因此图标列只有箭头一个
  *
- * 「未分组」在工作区内部不是分组——未归组的会话由区域组件直接平铺，
- * 不经过这里
+ * 「未分组」在工作区内部不是分组——未归组的会话由区域组件直接平铺，不经过这里
  */
 import { useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
@@ -102,8 +100,7 @@ export function GroupSection({
         {section.sessions.length <= 0 ? null : (
           <span className="wg-group-count">{section.sessions.length}</span>
         )}
-        {/* 操作位收进 session 行同一套可收放槽位：静止时不占宽，上面的会话数
-            因此贴到行右；悬停/菜单展开/键盘聚焦时槽位展开，会话数隐去 */}
+        {/* 操作位收进 session 行同一套可收放槽位：静止时不占宽，上面的会话数因此贴到行右；悬停/菜单展开/键盘聚焦时槽位展开，会话数隐去 */}
         <span className="wg-row-action-slot">
           <RowActions
             menuOpen={menuOpen}

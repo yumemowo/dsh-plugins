@@ -1,16 +1,13 @@
 /**
  * 搜索：header 里的入口与输入框，以及结果列表
  *
- * 几何与动效照官方 `ui-workspace` 的搜索：收起时是一个 28px 正圆图标按钮，展开
- * 后该槽位拉满宽度、按钮与图标一起缩小，标题与右侧两个入口同时淡出移开；清除
- * 按钮只在展开时出现
+ * 几何与动效照官方 `ui-workspace` 的搜索：收起时是一个 28px 正圆图标按钮，展开后该槽位拉满宽度、按钮与图标一起缩小
+ * 标题与右侧两个入口同时淡出移开，清除按钮只在展开时出现
  *
- * 与官方一致的还有两处与外壳联动的行为：窄栏点搜索会先展开侧栏、等列滑动跑完
- * 再聚焦（`focus()` 会强制一次同步布局，立刻聚焦会把整段滑动卡住）；点击别处
- * 只收回焦点，查询词非空时保持展开
+ * 与官方一致的还有两处与外壳联动的行为：窄栏点搜索会先展开侧栏、等列滑动跑完再聚焦（`focus()` 会强制一次同步布局，立刻聚焦会把整段滑动卡住）
+ * 点击别处只收回焦点，查询词非空时保持展开
  *
- * 本包只做官方的**本地标题匹配**那一段，不接 Host 内容检索，因此结果行没有
- * 摘录，也没有加载与失败两态
+ * 本包只做官方的本地标题匹配那一段，不接 Host 内容检索，因此结果行没有摘录，也没有加载与失败两态
  */
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement, RefObject } from 'react'
@@ -23,8 +20,7 @@ import type { OfficialSearchLabels } from '../official.ts'
 /**
  * 侧栏列滑动的时长（官方 `--ds-transition-duration-slow`）
  *
- * 窄栏点搜索后要等它跑完再聚焦：`focus()` 强制同步布局，抢在滑动中间会把
- * 整段动画卡住
+ * 窄栏点搜索后要等它跑完再聚焦：`focus()` 强制同步布局，抢在滑动中间会把整段动画卡住
  */
 const EXPAND_SLIDE_MS = 300
 
@@ -52,10 +48,7 @@ export interface SearchState {
 /**
  * 搜索的状态与副作用
  *
- * 状态留在区域组件这一层而不是 header 内部：窄栏入口要触发宽栏输入框的聚焦，
- * 这一跨形态的联动需要一个共同宿主
- * @param wide - 当前是否是宽栏
- * @param expandSidebar - 窄栏展开侧栏的请求
+ * 状态留在区域组件这一层而不是 header 内部：窄栏入口要触发宽栏输入框的聚焦，这一跨形态的联动需要一个共同宿主
  * @returns 搜索状态面
  */
 export function useSearch(wide: boolean, expandSidebar: () => void): SearchState {
@@ -216,8 +209,7 @@ export interface SearchResultsProps {
 /**
  * 一条结果的路径构成
  *
- * 分成两段是为了给出色阶对比：工作区名用更强的色阶，分组名用更弱的那一档，
- * 一眼能看出哪一段是容器、哪一段是组
+ * 分成两段是为了给出色阶对比：工作区名用更强的色阶，分组名用更弱的那一档，一眼能看出哪一段是容器、哪一段是组
  */
 export interface ResultPath {
   /** 工作区名；用更强的一档色阶 */
@@ -231,10 +223,7 @@ export interface ResultPath {
 /**
  * 拆出一条结果的路径
  *
- * 有工作区时是 `工作区/分组`，未归组只留工作区，没有工作区归属则退回官方的
- * 「未分组」
- * @param match - 一条命中
- * @param ungrouped - 没有工作区归属时的回退名
+ * 有工作区时是 `工作区/分组`，未归组只留工作区，没有工作区归属则退回官方的「未分组」
  * @returns 路径各段
  */
 export function resultPath(match: SearchMatch, ungrouped: string): ResultPath {
@@ -246,9 +235,8 @@ export function resultPath(match: SearchMatch, ungrouped: string): ResultPath {
 /**
  * 搜索结果体
  *
- * 结构与官方同一套：外层是列表的滚动容器，里面一个 `role="tree"` 的结果区，
- * 之后依次是空态与被截断的提示。官方在结果下方还要渲染搜索中与不可用两态，
- * 本包不接内容检索，那两态不存在
+ * 结构与官方同一套：外层是列表的滚动容器，里面一个 `role="tree"` 的结果区，之后依次是空态与被截断的提示
+ * 官方在结果下方还要渲染搜索中与不可用两态，本包不接内容检索，那两态不存在
  */
 export function SearchResults({
   result,
@@ -260,8 +248,7 @@ export function SearchResults({
   onOpen,
 }: SearchResultsProps): ReactElement {
   return (
-    // wg-panel 让整块结果面板淡入，与常规列表来回切换时各有一段淡入
-    //（官方三种内容体共用的 .treeBody 也是这么挂的）
+    // wg-panel 让整块结果面板淡入，与常规列表来回切换时各有一段淡入（官方三种内容体共用的 .treeBody 也是这么挂的）
     <div className="wg-list wg-panel">
       <div className="wg-search-results" role="tree" aria-label={labels.results}>
         {result.matches.map((match) => {

@@ -1,17 +1,15 @@
 /**
  * 界面文案的契约与投影
  *
- * 字典本体在 `locales.ts`（只含本包自有文案），本模块把三个命名空间的翻译
- * 函数投影成组件消费的语义化文案表，让组件只认字段名，不认键名：
+ * 字典本体在 `locales.ts`（只含本包自有文案），本模块把三个命名空间的翻译函数投影成组件消费的语义化文案表
+ * 让组件只认字段名，不认键名：
  *
- * - 官方 `workspace` 已有的文案（区域标题、工作区改名/删除、会话行标签
- *   状态点、空态）直接用官方键，不复制官方译文——官方改措辞时本包自动跟随
- *   两处同屏也不会出现两套说法；
- * - 官方 `sidebar` 已有的文案（行右键菜单的「新建会话」）同样直接取官方键；
+ * - 官方 `workspace` 已有的文案（区域标题、工作区改名/删除、会话行标签状态点、空态）直接用官方键
+ *   不复制官方译文——官方改措辞时本包自动跟随，两处同屏也不会出现两套说法
+ * - 官方 `sidebar` 已有的文案（行右键菜单的「新建会话」）同样直接取官方键
  * - 官方没有对应词的自有文案（建组、分组管理、实验特性说明）取本包命名空间
  *
- * 通用词（`ok` / `cancel` / `close`）三个命名空间都能解析：查找链在命名空间
- * 未命中后回退到官方 `common`
+ * 通用词（`ok` / `cancel` / `close`）三个命名空间都能解析：查找链在命名空间未命中后回退到官方 `common`
  */
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
@@ -57,9 +55,8 @@ export interface RegionLabels {
   /**
    * 容器行右键菜单里的「新建会话」项
    *
-   * 取官方 sidebar 新建按钮的动词短语 `session.new.label`，与行内 `+` 的
-   * 无障碍标签（`actions.newSession.aria`，带对象名）分工不同：菜单项是
-   * 一次性动作，读作动词短语，和「新建分组 / 重命名 / 删除工作区」一致
+   * 取官方 sidebar 新建按钮的动词短语 `session.new.label`
+   * 与行内 `+` 的无障碍标签（`actions.newSession.aria`，带对象名）分工不同：菜单项是一次性动作，读作动词短语，和「新建分组 / 重命名 / 删除工作区」一致
    */
   newSessionItem: string
   /** 新建中（空白）会话行的固定名，取官方 `session.new` */
@@ -69,9 +66,8 @@ export interface RegionLabels {
   /**
    * 工作区行菜单里的「重命名」项
    *
-   * 官方工作区菜单用的就是通用动词 `rename`（`ui-workspace` 里
-   * `label: t("rename")`），并不是 `rename.workspace.title`——后者只作
-   * 对话框标题。这里照官方保持同一分工
+   * 官方工作区菜单用的就是通用动词 `rename`（`ui-workspace` 里 `label: t("rename")`）
+   * 并不是 `rename.workspace.title`——后者只作对话框标题。这里照官方保持同一分工
    */
   rename: string
   /** 重命名工作区对话框的标题 */
@@ -102,8 +98,8 @@ export interface RegionLabels {
    * 二级菜单里那一项的文案，带省略号
    *
    * 与 {@link newVirtualWorkspace} 分开：菜单项带省略号表示「点下去还要再填一次」
-   * 而 header 入口与命名框标题是不带省略号的完整说法（官方 `menu.addWorkspace`
-   * 与 `workspace.add` 就是这个分工）
+   * 而 header 入口与命名框标题是不带省略号的完整说法
+   * 官方 `menu.addWorkspace` 与 `workspace.add` 就是这个分工
    */
   newVirtualWorkspaceMenu: string
   /** 工作区已归组时，「移动到…」下方那一项「移出工作区分组」的文案 */
@@ -166,8 +162,8 @@ export interface PickerLabels {
   /**
    * 菜单里「置顶」分区的标题
    *
-   * 「全部」那一栏没有标题：它是没有标题时默认的那一栏，上面两栏的标题正是因为
-   * 要与它区分才需要
+   * 「全部」那一栏没有标题：它是没有标题时默认的那一栏
+   * 上面两栏的标题正是要与它区分才需要
    */
   pinned: string
   /** 未置顶条目的置顶按钮标签；名称由调用方传入 */
@@ -194,10 +190,10 @@ export interface PickerLabels {
 
 /**
  * 把三个命名空间的翻译函数投影成组件需要的文案表
- * @param t - 本包命名空间的翻译函数（自有文案，并回退 `common` 通用词）
+ *
+ * `t` 是本包命名空间的翻译函数，自有文案并回退 `common` 通用词
  * @param tw - 官方 `workspace` 命名空间的翻译函数（官方已有文案）
  * @param ts - 官方 `sidebar` 命名空间的翻译函数（外壳控件的官方文案）
- * @returns 语义化字段的文案表
  */
 export function regionLabels(
   t: TranslateNS<typeof NS>,

@@ -2,12 +2,12 @@
  * 工作区分组插件的宿主半边
  *
  * 职责：
- *  1. 通过 `ctx.storageDomain` 打开分组域，落在 `$DSH_HOME/storages/workspace_groups.json`；
- *  2. 把实现注册为 `ctx.workspaceGroups` 服务；
+ *  1. 通过 `ctx.storageDomain` 打开分组域
+ *     落在 `$DSH_HOME/storages/workspace_groups.json`
+ *  2. 把实现注册为 `ctx.workspaceGroups` 服务
  *  3. 挂上 `typertRemote` 绑定，使 `./typert` 清单能把它经网关暴露给浏览器
  *
- * 浏览器半边另有出口（`exports["./client"]`），由 Web 客户端加载
- * 注册进侧边栏的 `sidebar.workspaces` 区域
+ * 浏览器半边另有出口（`exports["./client"]`），由 Web 客户端加载，注册进侧边栏的 `sidebar.workspaces` 区域
  *
  * @module @your-scope/dsh-workspace-groups
  */
@@ -26,11 +26,9 @@ export type { WorkspaceGroupsService } from './service.ts'
 
 /**
  * 插件入口
- * @param ctx - 插件自身的 context，作用域限于本行
  */
 export function apply(ctx: Context): void {
-  // 域打开是异步的，而 apply 是同步的：先提供一个转发到打开结果的外观对象
-  // 这样服务在 Cordis 眼里立即可用，调用方无需感知打开时序
+  // 域打开是异步的，而 apply 是同步的：先提供一个转发到打开结果的外观对象，这样服务在 Cordis 眼里立即可用，调用方无需感知打开时序
   const service = createWorkspaceGroupsService(ctx)
 
   const facade: WorkspaceGroupsService = {

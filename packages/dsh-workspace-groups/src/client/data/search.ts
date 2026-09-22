@@ -1,12 +1,12 @@
 /**
  * 搜索：只按标题匹配的本地结果
  *
- * 官方 `ui-workspace` 的搜索是「本地标题匹配 + Host 内容检索」两段合并，本包
- * 只做前一段：匹配对象是会话标题与工作区标题，与官方本地那一段同一口径，
+ * 官方 `ui-workspace` 的搜索是「本地标题匹配 + Host 内容检索」两段合并，本包只做前一段
+ * 匹配对象是会话标题与工作区标题，与官方本地那一段同一口径
  * 不接 `session.search`，因此没有摘录，也没有加载与失败两态
  *
- * 排序与条数上限照官方：按最近更新倒序、id 作稳定次序，并按 `session.search`
- * 的响应上限截断——被截断时由调用方给出「缩小搜索范围」的提示
+ * 排序与条数上限照官方：按最近更新倒序、id 作稳定次序，并按 `session.search` 的响应上限截断
+ * 被截断时由调用方给出「缩小搜索范围」的提示
  */
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -20,10 +20,7 @@ export const SEARCH_QUERY_MAX_CODE_UNITS = 500
 /**
  * 把一个输入值收进线上的查询契约
  *
- * 去掉 NUL 并按码元数截断；截断点上若正落在一个代理对中间就少取一个码元，
- * 否则半个字符会让后端拿到一个孤立代理
- * @param value - 输入框的原始值
- * @returns 可直接作为查询与受控值的字符串
+ * 去掉 NUL 并按码元数截断；截断点上若正落在一个代理对中间就少取一个码元，否则半个字符会让后端拿到一个孤立代理
  */
 export function sanitizeSearchQuery(value: string): string {
   const withoutNul = value.replaceAll('\0', '')
@@ -38,8 +35,8 @@ export function sanitizeSearchQuery(value: string): string {
 /**
  * 一条命中的会话及其归属
  *
- * 归属带上 id 与显示名两份：显示名给结果行拼路径，id 供「打开结果」把这条
- * 会话所在的折叠层展开——按名字反查既不可靠（工作区可重名）也会多一次查找
+ * 归属带上 id 与显示名两份：显示名给结果行拼路径，id 供「打开结果」把这条会话所在的折叠层展开
+ * 按名字反查既不可靠（工作区可重名）也会多一次查找
  */
 export interface SearchMatch {
   row: SessionRow
@@ -65,10 +62,8 @@ function byRecency(a: SearchMatch, b: SearchMatch): number {
 
 /**
  * 会话标题或所属工作区标题包含查询词即命中
- * @param row - 待判定的会话行
  * @param workspaceTitle - 该会话所属工作区的显示名；无所属工作区时缺省
  * @param query - 已转小写的查询词
- * @returns 是否命中
  */
 function matchesQuery(
   row: SessionRow,
@@ -82,9 +77,7 @@ function matchesQuery(
 /**
  * 取一个工作区里「会话 → 所属分组」的索引
  *
- * 元数据里一个会话可能被两个分组同时记录，与渲染布局取同一取舍：以先出现的
- * 分组为准
- * @param groups - 该工作区的分组定义
+ * 元数据里一个会话可能被两个分组同时记录，与渲染布局取同一取舍：以先出现的分组为准
  * @returns 会话 id 到所属分组的映射
  */
 function groupsOf(groups: readonly Group[]): Map<string, { id: string; name: string }> {
@@ -100,13 +93,8 @@ function groupsOf(groups: readonly Group[]): Map<string, { id: string; name: str
 /**
  * 在会话列表里按标题搜索
  *
- * 候选与渲染列表同源：归档、子代理来源与空闲的空白会话都不进结果，可见性规则
- * 因此只有一处（`data/sessions.ts`）。无所属工作区的会话按官方的回退名渲染，
- * 但它本身没有工作区标题可匹配
- * @param sessions - 会话列表快照
- * @param workspaces - 工作区视图，按宿主顺序
- * @param groups - 每个工作区的分组快照，键为 workspaceId
- * @param archivedSessionIds - 注册表全局的归档会话集合
+ * 候选与渲染列表同源：归档、子代理来源与空闲的空白会话都不进结果，可见性规则因此只有一处（`data/sessions.ts`）
+ * 无所属工作区的会话按官方的回退名渲染，但它本身没有工作区标题可匹配
  * @param query - 调用方输入；首尾空白忽略
  * @param limit - 结果条数上限
  * @returns 命中的结果页；查询为空时没有结果

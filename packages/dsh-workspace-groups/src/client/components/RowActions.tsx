@@ -1,11 +1,10 @@
 /**
  * 容器行行尾的操作位：`...` 管理菜单加可选的 `+` 新建会话
  *
- * 工作区行与分组行共用同一份布局与显隐语义（`.wg-row-actions` 的 12px
- * 间距、`.wg-row-action` 的悬停显隐），差异只在菜单条目与两个无障碍文案，
- * 因此收在这里而不是各写一遍
+ * 工作区行与分组行共用同一份布局与显隐语义（`.wg-row-actions` 的 12px 间距、`.wg-row-action` 的悬停显隐）
+ * 差异只在菜单条目与两个无障碍文案，因此收在这里而不是各写一遍
  *
- * 菜单开合状态由持有行的组件持有：行组件要给行加上 `wg-row-menu-open`，
+ * 菜单开合状态由持有行的组件持有：行组件要给行加上 `wg-row-menu-open`
  * 该标记同时负责「菜单开着时锚点按钮不消失」（见 `styles.ts`）
  */
 import type { ReactElement } from 'react'
@@ -44,9 +43,8 @@ export function RowActions({
           open={menuOpen}
           onClose={() => onMenuOpen(false)}
           onSelect={onMenuSelect}
-          // portal 进 document.body：本区域的列表容器 overflow 裁剪会把
-          // 就近渲染的菜单裁掉。二级面板的方向由宿主挂的 body 标记控制
-          //（见 index.ts），这里不感知宿主差异
+          // portal 进 document.body：本区域的列表容器 overflow 裁剪会把就近渲染的菜单裁掉
+          // 二级面板的方向由宿主挂的 body 标记控制（见 index.ts），这里不感知宿主差异
           portal
           closeOnPointerLeave
           anchor={
