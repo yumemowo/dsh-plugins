@@ -1,10 +1,7 @@
 # @your-scope/dsh-hello
 
 本 monorepo 的参考 dsh 插件：提供一个 `hello` 服务（`ctx.hello`）与一个面向模型的
-`hello_greet` 工具。
-
-新增插件时可复制本包作为起点；目录布局、命名与各项约定见
-[仓库根 README](../../README.md)。
+`hello_greet` 工具。新增插件时可复制本包作为起点。
 
 ## 命名
 
