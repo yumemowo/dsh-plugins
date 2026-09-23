@@ -4,13 +4,13 @@
  * 该包没有独立安装形态（客户端把它编进基线静态模块表，运行期由模块系统解析）
  * 本文件必须是全局脚本形态（无顶层 import/export），declare module 才是环境声明而不是模块扩充
  *
- * 只声明本包实际用到的导出；props 只列本包会传的字段
+ * 只声明本包实际用到的导出，props 只列本包会传的字段
  */
 
 declare module '@deepseek-ai/dsh-client-ui-primitives' {
   import type { ReactNode } from 'react'
 
-  /** 一级菜单里的普通项；`submenu` 存在时悬停展开二级菜单 */
+  /** 一级菜单里的普通项，`submenu` 存在时悬停展开二级菜单 */
   export interface MenuActionItem {
     id: string
     label: ReactNode
@@ -40,7 +40,7 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     items: readonly MenuItem[]
     onSelect?: (id: string) => void
     onClose?: () => void
-    /** 渲染进 document.body；关闭时菜单相对锚点就近渲染 */
+    /** 渲染进 document.body，关闭时菜单相对锚点就近渲染 */
     portal?: boolean
     /** end：列表右缘对齐锚点右缘（贴近窗口右缘时向左展开） */
     align?: 'start' | 'end'
@@ -48,7 +48,7 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     /**
      * 面板的定位矩形，只在 `portal` 下生效
      *
-     * 给了就按它定位，而不是去量锚点元素：右键菜单因此能落在指针处
+     * 给了就按它定位，而不是去量锚点元素，右键菜单因此能落在指针处
      * 原语只读四条边，返回 null 表示本次没有可用的矩形，面板保持隐藏
      */
     getAnchorRect?: (() => {
@@ -61,7 +61,7 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     className?: string
   }) => ReactNode
 
-  /** 通用按钮；variant 决定填充、悬停与边框 */
+  /** 通用按钮，variant 决定填充、悬停与边框 */
   export const Button: (props: {
     variant?: 'primary' | 'ghost' | 'outline' | 'toolbar'
     size?: 'md' | 'sm'
@@ -74,7 +74,7 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     type?: 'button' | 'submit' | 'reset'
   }) => ReactNode
 
-  /** 悬停提示；`disabled` 为真时不显示 */
+  /** 悬停提示，`disabled` 为真时不显示 */
   export const Tooltip: (props: {
     label: ReactNode
     side?: 'top' | 'bottom' | 'left' | 'right'
@@ -84,7 +84,7 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   }) => ReactNode
 
   /**
-   * 悬停详情卡片；指针在锚点上停留一段时间后在它右侧浮出内容
+   * 悬停详情卡片，指针在锚点上停留一段时间后在它右侧浮出内容
    *
    * 给了 `copyText` 时卡片整体可点即复制，并额外给出一个读屏状态位
    * `copyLabel` 是它的无障碍标签，`copiedLabel` 是复制成功后就地替换显示的反馈
@@ -93,7 +93,7 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const HoverCard: (props: {
     anchor: ReactNode
     content: ReactNode
-    /** 指针停留多久才浮出；原语默认 500ms */
+    /** 指针停留多久才浮出，原语默认 500ms */
     openDelayMs?: number
     /** 为真时不显示，用于菜单展开等不该再叠一层浮层的时刻 */
     disabled?: boolean
@@ -102,7 +102,23 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     copiedLabel?: string
   }) => ReactNode
 
-  /** 居中对话框；页脚按钮由调用方组装 */
+  /**
+   * 开关原语，胶囊轨道 + 圆形滑块，整条控件是一个 `role="switch"` 的按钮
+   *
+   * 外观只由 `aria-checked` 决定，因此视觉状态与读屏状态不可能不一致
+   * `label` 是它的无障碍名，由调用方给（控件只在视觉上挨着旁边的文字，二者没有 DOM 关联）
+   * `onChange` 收到的是点击后想要的状态，不是「切换了一次」这个事件
+   */
+  export const Switch: (props: {
+    checked: boolean
+    onChange: (next: boolean) => void
+    label: string
+    disabled?: boolean
+    title?: string
+    className?: string
+  }) => ReactNode
+
+  /** 居中对话框，页脚按钮由调用方组装 */
   export const Modal: (props: {
     open: boolean
     onClose: () => void
@@ -116,7 +132,7 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     contentClassName?: string
   }) => ReactNode
 
-  /** 单行文本输入；带边框与聚焦态 */
+  /** 单行文本输入，带边框与聚焦态 */
   export const Input: (props: {
     value: string
     onChange?: (event: { currentTarget: { value: string } }) => void
@@ -134,7 +150,7 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     icon?: ReactNode
   }) => ReactNode
 
-  /** 16px 图标原语；颜色继承自父级 */
+  /** 16px 图标原语，颜色继承自父级 */
   export type IconComponent = (props: {
     size?: number
     className?: string
@@ -167,9 +183,9 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const IconTriangleRightFill14: IconComponent
   /** composer slash 菜单给「可深入」候选用的行尾箭头，用来表达此处有二级菜单 */
   export const IconChevronRightOutline14: IconComponent
-  /** 下拉箭头；本包用它做菜单里可折叠分区的开合指示与 header 的菜单入口 */
+  /** 下拉箭头，本包用它做菜单里可折叠分区的开合指示与 header 的菜单入口 */
   export const IconChevronDownOutline14: IconComponent
-  /** 勾选标记；本包用它标出菜单里当前聚焦的那一条 */
+  /** 勾选标记，本包用它标出菜单里当前聚焦的那一条 */
   export const IconCheckOutline14: IconComponent
   export const IconEllipsisOutline16: IconComponent
   export const IconPlusOutline16: IconComponent
@@ -188,6 +204,6 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const IconPersonalizationOutline16: IconComponent
   /** 官方会话菜单「分叉」项用的图标 */
   export const IconBranchOutline16: IconComponent
-  /** 官方会话菜单「归档」项用的图标；官方传 size=16 */
+  /** 官方会话菜单「归档」项用的图标，官方传 size=16 */
   export const IconArchiveOutline20: IconComponent
 }

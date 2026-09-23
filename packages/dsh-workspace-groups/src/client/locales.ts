@@ -47,6 +47,21 @@ export const zh = {
   'picker.rename': '重命名“{name}”',
   'picker.remove': '删除“{name}”',
   'picker.followFocus': '切换到新工作区',
+  'nested.setting': '子工作区嵌套',
+  'nested.disable': '关闭嵌套',
+  'nested.disableTitle': '关闭子工作区嵌套？',
+  'nested.disableDesc':
+    '下列工作区正放在某个分组里，关闭后它们会解除嵌套、回到根节点平铺：',
+  'nested.disabledNote': '子工作区嵌套已关闭，分组内的工作区已解除嵌套。',
+  'nested.reEnableHint': '重新启用只恢复由目录路径推导出的层级，放入分组的记录不会回来。',
+  'nested.moveToGroup': '移动到分组…',
+  'nested.ungroupChild': '移出分组',
+  'nested.inGroup': '父工作区：{parent}',
+  'nested.groupEmpty': '这个分组里还没有会话或子工作区',
+  'nested.mergeConfirm': '放进分组',
+  'nested.mergeSkip': '先不放进分组',
+  'nested.addTitle': '把新工作区放进分组？',
+  'nested.addDesc': '新工作区“{name}”落在“{parent}”之下，而“{parent}”已在分组“{group}”里。是否一并放进去？',
 }
 
 /** 英文字典，键集与 {@link zh} 完全一致 */
@@ -83,6 +98,23 @@ export const en = {
   'picker.rename': 'Rename {name}',
   'picker.remove': 'Delete {name}',
   'picker.followFocus': 'Switch to the new workspace',
+  'nested.setting': 'Sub-workspace nesting',
+  'nested.disable': 'Turn nesting off',
+  'nested.disableTitle': 'Turn off sub-workspace nesting?',
+  'nested.disableDesc':
+    'These workspaces are inside a group right now. Turning nesting off releases them and flattens them back to the root list:',
+  'nested.disabledNote': 'Sub-workspace nesting is off; grouped workspaces were released.',
+  'nested.reEnableHint':
+    'Turning it back on only restores the hierarchy derived from directory paths, not the placements into groups.',
+  'nested.moveToGroup': 'Move to group…',
+  'nested.ungroupChild': 'Remove from group',
+  'nested.inGroup': 'Parent workspace: {parent}',
+  'nested.groupEmpty': 'No session or sub-workspace in this group yet',
+  'nested.mergeConfirm': 'Put it in the group',
+  'nested.mergeSkip': 'Leave it out for now',
+  'nested.addTitle': 'Put the new workspace into a group?',
+  'nested.addDesc':
+    'The new workspace “{name}” sits under “{parent}”, which is already in the group “{group}”. Move it in as well?',
 } as const
 
 /** 本命名空间的键域，同时是 {@link zh} 的键集 */

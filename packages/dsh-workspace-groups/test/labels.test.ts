@@ -13,7 +13,7 @@ import {
 /**
  * 文案分两个来源，这里同时固化这条边界：
  *
- * - 官方 `workspace` 已有的文案只从官方命名空间取，本包字典里不复制一份；
+ * - 官方 `workspace` 已有的文案只从官方命名空间取，本包字典里不复制一份
  * - 只有官方没有对应词的自有文案才在本包字典里
  */
 describe('locales', () => {
@@ -49,6 +49,20 @@ describe('locales', () => {
       'menu.newVirtualWorkspace',
       'moveToGroup',
       'moveToVirtualWorkspace',
+      'nested.addDesc',
+      'nested.addTitle',
+      'nested.disable',
+      'nested.disableDesc',
+      'nested.disableTitle',
+      'nested.disabledNote',
+      'nested.groupEmpty',
+      'nested.inGroup',
+      'nested.mergeConfirm',
+      'nested.mergeSkip',
+      'nested.moveToGroup',
+      'nested.reEnableHint',
+      'nested.setting',
+      'nested.ungroupChild',
       'newGroup',
       'newVirtualWorkspace',
       'picker.all',
@@ -88,7 +102,7 @@ describe('regionLabels', () => {
   })
 
   it('reads the new-session row name from the official session.new key', () => {
-    // 空白（新建中）会话行的固定名是官方词，本包字典里不存副本；
+    // 空白（新建中）会话行的固定名是官方词，本包字典里不存副本
     // 会话正式启用后的名字由标题服务投影，不走这一格
     expect(labels.newSession).toBe('新会话')
   })
@@ -139,7 +153,7 @@ describe('regionLabels', () => {
     expect(labels.add.add).toBe('添加工作区')
     expect(labels.add.folderErrorTitle).toBe('无法打开文件夹')
     expect(labels.add.folderErrorRetry).toBe('重新选择')
-    // 视图选项仍是未实现的入口，也要有可读的无障碍标签，占位按钮才不会是无名按钮
+    // 视图选项入口的文案来自官方键，本包字典里不存副本
     expect(labels.add.viewOptions).toBe('视图选项')
   })
 
@@ -183,6 +197,16 @@ describe('regionLabels', () => {
     expect(labels.virtualWorkspaceActions('g1')).toBe('工作区分组“g1”的操作')
   })
 
+  it('keeps the nesting copy under its own keys', () => {
+    // 面板里那一条是开关，文案给的是设置名，不随状态变化
+    // 若跟着状态写「启用」/「关闭」，读屏会读出「关闭子工作区嵌套，开关，已打开」这种自相矛盾
+    expect(labels.nested.setting).toBe('子工作区嵌套')
+    // 关闭确认框的确认按钮是一次性动作，读作动词短语
+    expect(labels.nested.disable).toBe('关闭嵌套')
+    // 两者分工不同，不是同一句话换了个位置
+    expect(labels.nested.setting).not.toBe(labels.nested.disable)
+  })
+
   it('shares one move-to wording across the two grouping levels', () => {
     // 两个层级的归组一级项都是「点下去还要选一个目标」的二级菜单父项，措辞分工一致
     // 因此共用同一句；层级由所在菜单本身区分，文案不必再加限定词
@@ -224,13 +248,13 @@ describe('regionLabels', () => {
   })
 
   it('drops the all-section title since that column has no heading', () => {
-    // 「全部」那一栏是**没有标题时默认的那一栏**
-    // 上面两栏的标题正是因为要与它区分才需要；它自己再写一个标题就是同义反复
+    // 「全部」那一栏是没有标题时默认的那一栏
+    // 上面两栏的标题正是因为要与它区分才需要，它自己再写一个标题就是同义反复
     expect('allSection' in labels.picker).toBe(false)
   })
 
   it('names the focused entry in the second-line entry label', () => {
-    // 第二行可见的文字只是一个名字；读屏要靠这个标签读出「点它是做什么用的」
+    // 第二行可见的文字只是一个名字，读屏要靠这个标签读出「点它是做什么用的」
     expect(labels.picker.change('前端仓库')).toBe('切换工作区：前端仓库')
     expect(labels.picker.change('全部工作区')).toBe('切换工作区：全部工作区')
   })
@@ -244,7 +268,7 @@ describe('regionLabels', () => {
 
 
   it('resolves official copy through the official namespace, not our dictionary', () => {
-    // 本包自己的翻译函数里没有官方那些键（类型上也不允许传），运行期只能拿到原始键名；
+    // 本包自己的翻译函数里没有官方那些键（类型上也不允许传），运行期只能拿到原始键名
     // 因此这类文案必须由官方命名空间提供
     const ours = regionTranslate() as unknown as (key: string) => string
     const official = workspaceTranslate() as unknown as (key: string) => string

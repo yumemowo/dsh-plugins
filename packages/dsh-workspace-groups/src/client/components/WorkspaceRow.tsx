@@ -19,14 +19,16 @@ import {
   IconTriangleRightFill14,
 } from '../runtime.ts'
 import {
+  PARENT_GROUP_ITEM,
   ROW_MENU,
   VIRTUAL_WORKSPACE_ITEM,
   VIRTUAL_WORKSPACE_PREFIX,
   WORKSPACE_MENU,
   buildRowContextMenuItems,
   buildWorkspaceMenuItems,
+  parseParentGroupId,
 } from '../menus.tsx'
-import type { VirtualWorkspaceMenuInput } from '../menus.tsx'
+import type { ParentGroupMenuInput, VirtualWorkspaceMenuInput } from '../menus.tsx'
 import { RowActions } from './RowActions.tsx'
 import { WorkspaceHoverContent } from './HoverCards.tsx'
 import { useRowContextMenu } from './RowContextMenu.tsx'
@@ -73,10 +75,10 @@ export interface WorkspaceRowProps {
   /**
    * 工作区分组选中项：`create-virtual-workspace` / `ungroup-workspace` / `vw:<id>`
    *
-   * 与其它回调平级；缺省表示该行不提供工作区分组入口（未分组桶的工作区行）
+   * 与其它回调平级，缺省表示该行不提供工作区分组入口（未分组桶的工作区行）
    */
   onSelectVirtualWorkspace?: ((id: string) => void) | undefined
-  /** 悬停卡片正文；缺省表示该行不挂卡片（未分组桶） */
+  /** 悬停卡片正文，缺省表示该行不挂卡片（未分组桶） */
   hover?: WorkspaceHoverData | undefined
   /** 悬停卡片可复制的内容，取完整目录路径；缺省表示卡片只读 */
   hoverCopy?: string | undefined
@@ -88,6 +90,14 @@ export interface WorkspaceRowProps {
    * 与 `labels` 分开传：文案对所有行相同，归属却逐行不同
    */
   virtualWorkspace?: VirtualWorkspaceMenuInput | undefined
+  /**
+   * 该行「移动到分组…」一级项及其子菜单的选项集
+   *
+   * 与 `virtualWorkspace` 平级但进的是另一层容器，这个是父工作区体内的会话分组
+   */
+  parentGroup?: ParentGroupMenuInput | undefined
+  /** 「移动到分组」子菜单的选中分派，条目 id 形如 `pg:<父 id>:<分组 id>` 或 `ungroup-child-workspace` */
+  onSelectParentGroup?: ((id: string) => void) | undefined
   labels: WorkspaceRowLabels
 }
 
@@ -101,6 +111,8 @@ export function WorkspaceRow({
   onRename,
   onDelete,
   onSelectVirtualWorkspace,
+  parentGroup,
+  onSelectParentGroup,
   hover,
   hoverCopy,
   hoverLabels,
@@ -128,6 +140,8 @@ export function WorkspaceRow({
       id.startsWith(VIRTUAL_WORKSPACE_PREFIX)
     ) {
       onSelectVirtualWorkspace?.(id)
+    } else if (id === PARENT_GROUP_ITEM.ungroup || parseParentGroupId(id) !== undefined) {
+      onSelectParentGroup?.(id)
     }
   }
 
@@ -138,6 +152,7 @@ export function WorkspaceRow({
         deleteLabel: labels.delete,
         // 没有移入入口的行（未分组桶）不出现这一项，否则是个点不动的死入口
         virtualWorkspaceGrouping: onSelectVirtualWorkspace === undefined ? undefined : virtualWorkspace,
+        parentGrouping: onSelectParentGroup === undefined ? undefined : parentGroup,
       })
     : undefined
 

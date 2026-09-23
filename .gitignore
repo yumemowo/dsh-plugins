@@ -16,3 +16,5 @@ wg-probe-store/
 # 日志与编辑器杂项
 *.log
 .DS_Store
+
+.review/

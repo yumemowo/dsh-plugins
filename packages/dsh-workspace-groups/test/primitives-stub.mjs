@@ -19,6 +19,25 @@ export const Input = nullComponent
 /** 状态点替身：把状态原样暴露成可断言的文本 */
 export const StateDot = ({ state }) => `StateDot:${state}`
 
+/**
+ * 开关替身：照真原语渲染同一个可断言的控件
+ *
+ * 真原语是一个 `role="switch"` 的按钮，`aria-checked` 同时决定外观与读屏状态
+ * 这里照抄那一层，jsdom 用例才能断言「开关是否打开」而不是去猜某个内部结构
+ * （真原语的滑块 span 没有语义，替身不渲染它）
+ */
+export const Switch = ({ checked, onChange, label, disabled = false, title, className }) =>
+  createElement('button', {
+    type: 'button',
+    role: 'switch',
+    'aria-checked': String(checked),
+    'aria-label': label,
+    title,
+    disabled,
+    className,
+    onClick: () => onChange(!checked),
+  })
+
 /** 图标替身：返回元素名，测试据此断言渲染了哪个官方图标 */
 const icon = (name) => () => name
 
@@ -79,6 +98,7 @@ export default {
   Modal,
   Input,
   StateDot,
+  Switch,
   Tooltip,
   HoverCard,
   relativeTime,

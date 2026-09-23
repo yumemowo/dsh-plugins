@@ -31,10 +31,19 @@ import type { AddWorkspaceActions } from '../actions.ts'
 import type { OfficialSearchLabels } from '../official.ts'
 import type { RegionTranslate } from '../locales.ts'
 
+/** 「视图选项」入口与它打开的面板 */
+export interface ViewOptionsProps {
+  /** 按钮的无障碍标签与面板的无障碍标签 */
+  label: string
+  open: boolean
+  triggerRef: RefObject<HTMLButtonElement>
+  onToggle: () => void
+}
+
 export interface RegionHeaderProps {
-  /** 区域标题；官方在工作区视图下取 section.workspaces */
+  /** 区域标题，官方在工作区视图下取 section.workspaces */
   title: string
-  /** 第二行：当前聚焦的工作区或工作区分组；没有聚焦时是「全部工作区」 */
+  /** 第二行：当前聚焦的工作区或工作区分组，没有聚焦时是「全部工作区」 */
   focusedLabel: string
   /** 两行标题是否被搜索顶掉 */
   titleHidden: boolean
@@ -49,17 +58,17 @@ export interface RegionHeaderProps {
     open: boolean
     triggerRef: RefObject<HTMLButtonElement>
     onToggle: () => void
-    /** 整块标题按钮的无障碍标签；取当前聚焦对象的名称 */
+    /** 整块标题按钮的无障碍标签，取当前聚焦对象的名称 */
     changeLabel: (name: string) => string
   }
-  /** 「添加工作区」的官方服务面；缺省时该入口不渲染 */
+  /** 「添加工作区」的官方服务面，缺省时该入口不渲染 */
   addWorkspace?: AddWorkspaceActions | undefined
-  /** 搜索的状态面与文案；缺省时搜索入口不渲染 */
+  /** 搜索的状态面与文案，缺省时搜索入口不渲染 */
   search?: { state: SearchState; labels: OfficialSearchLabels } | undefined
-  /** 视图选项占位按钮的无障碍标签 */
-  viewOptionsLabel: string
+  /** 视图选项入口与它打开的面板 */
+  viewOptions: ViewOptionsProps
   /**
-   * 「新建工作区分组」的入口文案；缺省时该入口不渲染
+   * 「新建工作区分组」的入口文案，缺省时该入口不渲染
    *
    * 与「添加工作区」分开传：后者要有官方 directoryFlow 洞的占用者才出现
    * 而建组只依赖本包的存储，两者在场条件不同
@@ -76,7 +85,7 @@ export function RegionHeader({
   picker,
   addWorkspace,
   search,
-  viewOptionsLabel,
+  viewOptions,
   newVirtualWorkspace,
   t,
 }: RegionHeaderProps): ReactElement {
@@ -108,12 +117,14 @@ export function RegionHeader({
       </button>
       {search === undefined ? null : <SearchEntry search={search.state} labels={search.labels} />}
       <div className={`wg-header-actions${expanded ? ' wg-header-actions-hidden' : ''}`}>
-        {/* 尚未实现：位置与字形对齐官方，但明说不可用 */}
+        {/* 官方的位置与字形保留，但这里是一个真的入口，点开的是本包的视图选项面板 */}
         <button
           type="button"
+          ref={viewOptions.triggerRef}
           className="wg-header-action"
-          aria-label={viewOptionsLabel}
-          disabled
+          aria-label={viewOptions.label}
+          aria-expanded={viewOptions.open}
+          onClick={viewOptions.onToggle}
         >
           <IconPersonalizationOutline16 />
         </button>
@@ -161,7 +172,7 @@ export function RegionRailHeader({
   const creates = addWorkspace !== undefined || newVirtualWorkspace !== undefined
   return (
     <>
-      {/* header 行只在有建造型入口时出现；它为空时不留一行空高度 */}
+      {/* header 行只在有建造型入口时出现，它为空时不留一行空高度 */}
       {!creates ? null : (
         <div className="wg-header wg-header-rail">
           {newVirtualWorkspace === undefined ? null : (

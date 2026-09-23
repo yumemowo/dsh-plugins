@@ -26,7 +26,7 @@ import type {
 export interface SessionStatusLabels {
   /** 本会话正在运行 */
   running: string
-  /** 有 n 个运行中的子代理；中英文的复数形态一致 */
+  /** 有 n 个运行中的子代理，中英文的复数形态一致 */
   subagentsRunning: (n: number) => string
   /** 等待用户审批工具调用 */
   waitingApproval: string
@@ -50,7 +50,7 @@ export interface RegionLabels {
   title: string
   /** 菜单里的「新建分组」项，也是新建分组对话框的标题 */
   newGroup: string
-  /** 新建会话按钮的无障碍标签；工作区名由调用方传入 */
+  /** 新建会话按钮的无障碍标签，工作区名由调用方传入 */
   newSessionIn: (name: string) => string
   /**
    * 容器行右键菜单里的「新建会话」项
@@ -61,7 +61,7 @@ export interface RegionLabels {
   newSessionItem: string
   /** 新建中（空白）会话行的固定名，取官方 `session.new` */
   newSession: string
-  /** 工作区「更多操作」按钮的无障碍标签；工作区名由调用方传入 */
+  /** 工作区「更多操作」按钮的无障碍标签，工作区名由调用方传入 */
   workspaceActions: (name: string) => string
   /**
    * 工作区行菜单里的「重命名」项
@@ -74,11 +74,11 @@ export interface RegionLabels {
   renameWorkspace: string
   /** 「删除工作区」菜单项、对话框标题与确认按钮 */
   deleteWorkspace: string
-  /** 删除工作区的说明文案；工作区名由调用方传入 */
+  /** 删除工作区的说明文案，工作区名由调用方传入 */
   confirmDeleteWorkspace: (name: string) => string
   /** 工作区名输入框的占位与无障碍标签 */
   workspaceNamePrompt: string
-  /** 与既有工作区重名时的提示；名称由调用方传入 */
+  /** 与既有工作区重名时的提示，名称由调用方传入 */
   workspaceConflict: (name: string) => string
   /** 无工作区归属的会话区段标题 */
   ungrouped: string
@@ -88,9 +88,9 @@ export interface RegionLabels {
   deleteGroup: string
   /** 分组名对话框的标题（重命名时用） */
   renameGroup: string
-  /** 分组行「更多操作」按钮的无障碍标签；分组名由调用方传入 */
+  /** 分组行「更多操作」按钮的无障碍标签，分组名由调用方传入 */
   groupActions: (name: string) => string
-  /** 工作区行菜单里的「移动到…」一级项文案；二级子菜单列工作区分组 */
+  /** 工作区行菜单里的「移动到…」一级项文案，二级子菜单列工作区分组 */
   moveToVirtualWorkspace: string
   /** 该一级项的子菜单里「新建工作区分组」一项 */
   newVirtualWorkspace: string
@@ -104,25 +104,25 @@ export interface RegionLabels {
   newVirtualWorkspaceMenu: string
   /** 工作区已归组时，「移动到…」下方那一项「移出工作区分组」的文案 */
   ungroupWorkspace: string
-  /** 工作区分组行「更多操作」按钮的无障碍标签；分组名由调用方传入 */
+  /** 工作区分组行「更多操作」按钮的无障碍标签，分组名由调用方传入 */
   virtualWorkspaceActions: (name: string) => string
   /** 重命名工作区分组对话框的标题 */
   renameVirtualWorkspace: string
   /** 「删除工作区分组」菜单项、对话框标题与确认按钮 */
   deleteVirtualWorkspace: string
-  /** 删除工作区分组的说明文案；分组名由调用方传入 */
+  /** 删除工作区分组的说明文案，分组名由调用方传入 */
   confirmDeleteVirtualWorkspace: (name: string) => string
   /** 工作区分组名输入框的占位与无障碍标签 */
   virtualWorkspaceNamePrompt: string
   /** 空的工作区分组里的占位文案 */
   virtualWorkspaceEmpty: string
-  /** 在分组内新建会话的无障碍标签；分组名由调用方传入 */
+  /** 在分组内新建会话的无障碍标签，分组名由调用方传入 */
   newSessionInGroup: (name: string) => string
-  /** 删除分组的说明文案；分组名由调用方传入 */
+  /** 删除分组的说明文案，分组名由调用方传入 */
   confirmDeleteGroup: (name: string) => string
-  /** 会话行尾操作位的无障碍标签；会话标题由调用方传入 */
+  /** 会话行尾操作位的无障碍标签，会话标题由调用方传入 */
   sessionActions: (name: string) => string
-  /** 会话行菜单里的「移动到…」一级项文案；二级子菜单列同工作区的其他分组 */
+  /** 会话行菜单里的「移动到…」一级项文案，二级子菜单列同工作区的其他分组 */
   moveToGroup: string
   /** 「取消分组」一级菜单项文案 */
   ungroup: string
@@ -138,10 +138,46 @@ export interface RegionLabels {
   compareTabDescription: string
   /** 工作区内没有任何会话时的占位文案 */
   empty: string
-  /** 列表底部的一行说明：本区域暂未提供的能力 */
+  /** 会话那一段的小标题，只在与会话分组/子工作区混在一起时才露面 */
+  sessions: string
+  /** 列表底部的一行说明，本区域暂未提供的能力 */
   unimplemented: string
   /** 下拉菜单与 header 两行标题的文案 */
   picker: PickerLabels
+  /** 子工作区嵌套的开关、提示与归组入口文案 */
+  nested: NestedLabels
+}
+
+/** 子工作区嵌套相关的文案 */
+export interface NestedLabels {
+  /** 视图选项面板里那个开关的设置名 */
+  setting: string
+  /** 关闭确认框的确认按钮 */
+  disable: string
+  /** 关闭时的二次确认框标题 */
+  disableTitle: string
+  /** 关闭时的二次确认框说明，下面跟着会被解除嵌套的工作区名单 */
+  disableDesc: string
+  /** 关闭后列表顶部那条提示 */
+  disabledNote: string
+  /** 提示里那句「重新启用会恢复」，与上一条同一行 */
+  reEnableHint: string
+  /** 工作区行菜单里进父工作区分组那一项的「移动到分组…」 */
+  moveToGroup: string
+  /** 已放进分组时，它下面那一项 */
+  ungroupChild: string
+  /** 分组行上标出「这是某个父工作区的分组」，父工作区名由调用方传入 */
+  inGroup: (parent: string) => string
+  /** 既没有会话也没有子工作区的分组里的占位文案 */
+  groupEmpty: string
+  /** 新增工作区确认框的「放进分组」 */
+  mergeConfirm: string
+  /** 同上那个框的「先不放进分组」，新工作区仍按路径渲染在父下面 */
+  mergeSkip: string
+  /** 新增工作区时的放入确认框标题 */
+  addTitle: string
+  /** 该确认框的说明，新工作区、父与分组名由调用方传入 */
+  addDesc: (name: string, parent: string, group: string) => string
 }
 
 /** 工作区下拉菜单的文案 */
@@ -149,7 +185,7 @@ export interface PickerLabels {
   /** 菜单面板的无障碍标签 */
   entry: string
   /**
-   * 两行标题那个按钮的无障碍标签；名称由调用方传入
+   * 两行标题那个按钮的无障碍标签，名称由调用方传入
    *
    * 它可见的文字是「工作区」+ 当前聚焦的对象，读屏要读出「点它是做什么用的」：
    * 只报一个工作区名字的话，这行听上去是一段说明文字而不是一个入口
@@ -166,14 +202,14 @@ export interface PickerLabels {
    * 上面两栏的标题正是要与它区分才需要
    */
   pinned: string
-  /** 未置顶条目的置顶按钮标签；名称由调用方传入 */
+  /** 未置顶条目的置顶按钮标签，名称由调用方传入 */
   pin: (name: string) => string
-  /** 已置顶条目的取消置顶按钮标签；名称由调用方传入 */
+  /** 已置顶条目的取消置顶按钮标签，名称由调用方传入 */
   unpin: (name: string) => string
-  /** 条目行尾的重命名按钮标签；名称由调用方传入 */
+  /** 条目行尾的重命名按钮标签，名称由调用方传入 */
   rename: (name: string) => string
   /**
-   * 条目行尾的删除按钮标签；名称由调用方传入
+   * 条目行尾的删除按钮标签，名称由调用方传入
    *
    * 不叫 `delete`：那个名字留给菜单外层已有的「删除工作区 / 删除工作区分组」
    * 这里指的是菜单里这一行的对象
@@ -251,6 +287,8 @@ export function regionLabels(
     add: officialAddLabels(tw),
     search: officialSearchLabels(tw),
     empty: tw('empty.none'),
+    // 官方在工作区列表上就是用这个键给会话那一段当标题的，本包不另造一份
+    sessions: tw('section.sessions'),
     unimplemented: t('unimplemented'),
     picker: {
       // 官方没有「换一个工作区看」这件事的文案，入口与三个分区标题都取本包命名空间
@@ -264,6 +302,23 @@ export function regionLabels(
       rename: (name: string) => t('picker.rename', { name }),
       remove: (name: string) => t('picker.remove', { name }),
       followFocus: t('picker.followFocus'),
+    },
+    nested: {
+      setting: t('nested.setting'),
+      disable: t('nested.disable'),
+      disableTitle: t('nested.disableTitle'),
+      disableDesc: t('nested.disableDesc'),
+      disabledNote: t('nested.disabledNote'),
+      reEnableHint: t('nested.reEnableHint'),
+      moveToGroup: t('nested.moveToGroup'),
+      ungroupChild: t('nested.ungroupChild'),
+      inGroup: (parent: string) => t('nested.inGroup', { parent }),
+      groupEmpty: t('nested.groupEmpty'),
+      mergeConfirm: t('nested.mergeConfirm'),
+      mergeSkip: t('nested.mergeSkip'),
+      addTitle: t('nested.addTitle'),
+      addDesc: (name: string, parent: string, group: string) =>
+        t('nested.addDesc', { name, parent, group }),
     },
   }
 }

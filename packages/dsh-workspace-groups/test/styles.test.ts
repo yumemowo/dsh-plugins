@@ -4,7 +4,7 @@ import { CSS } from '../src/client/styles.ts'
 /**
  * 取样式表文本
  *
- * 直接读**求值后**的导出：节奏参数以插值进入 CSS
+ * 直接读求值后的导出，节奏参数以插值进入 CSS
  * 按源文本切割只会拿到 ${...} 字面量。同理不按反引号定界解析：
  * 那会与被测对象互相污染
  */
@@ -40,6 +40,39 @@ describe('client stylesheet', () => {
     // 因此每一层都必须有一条规则，否则「分组头 → 首个会话行」这类跨层相邻会漏掉间距
     for (const container of ['wg-workspace', 'wg-workspace-body', 'wg-group', 'wg-sessions']) {
       expect(hasGapRule(`.${container} > * + *`), `missing 2px gap rule for .${container}`).toBe(true)
+    }
+  })
+
+  it('sets the session run title a step smaller and in the caption colour', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim().replace(/\s+/g, ' ')),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    const title = bodyOf('.wg-sessions-title')
+    // 比行文字（14px）小一档，与行尾时间同一档灰
+    expect(title).toMatch(/font-size:\s*12px/)
+    expect(title).toMatch(/color:\s*var\(--dsw-alias-label-caption/)
+    // 与上一段之间的间距，它是 .wg-sessions 的首个子项
+    // 因此「X > * + *」那组 2px 行距碰不到它，这个 margin 是两段之间唯一的距离
+    expect(title).toMatch(/margin-top:\s*12px/)
+
+    // 标题与它下面的会话行同档缩进，否则标出那一段起点反而会错位
+    const indentOf = (selector: string): string | undefined =>
+      rules
+        .filter((rule) => rule.selectors.includes(selector))
+        .map((rule) => /padding-left:\s*([^;]+)/.exec(rule.body)?.[1]?.trim())
+        .find((value) => value !== undefined)
+
+    const groups = [
+      '.wg-workspace-body > .wg-sessions > .wg-sessions-title',
+      '.wg-group > .wg-collapse > .wg-collapse-clip > .wg-group-body > .wg-sessions > .wg-sessions-title',
+    ]
+    for (const selector of groups) {
+      expect(indentOf(selector)).toMatch(/calc\(\d+px \+ 16px \* var\(--wg-depth/)
     }
   })
 
@@ -80,18 +113,25 @@ describe('client stylesheet', () => {
         .map((m) => new RegExp(`${property}:\\s*([^;]+)`).exec(m[2] ?? '')?.[1]?.trim())
         .find((value) => value !== undefined)
 
-    // 工作区行保持官方几何；分组层与组内会话各再让出一层，层级因此可读
-    // padding 简写按「上 右 下 左」读，左边即该层的缩进量
+    // 每一层让出一个 16px 图标列，基准是官方工作区行的 8px
+    // 子工作区可以嵌任意层，深度由行组件下发 --wg-depth，因此每档都写成「基准 + 16px × 深度」
+    // padding 简写按「上 右 下 左」读，左内边距即该层的缩进量
     // 分组的会话行多了折叠体两层包装，选择器要跟着写穿
-    expect(declared('.wg-workspace-head', 'padding')).toBe('0 8px')
-    expect(declared('.wg-group-head', 'padding')).toBe('0 8px 0 24px')
-    expect(declared('.wg-workspace-body > .wg-sessions > .wg-row', 'padding-left')).toBe('24px')
+    expect(declared('.wg-workspace-head', 'padding-left')).toBe(
+      'calc(8px + 16px * var(--wg-depth, 0))',
+    )
+    expect(declared('.wg-group-head', 'padding-left')).toBe(
+      'calc(24px + 16px * var(--wg-depth, 0))',
+    )
+    expect(declared('.wg-workspace-body > .wg-sessions > .wg-row', 'padding-left')).toBe(
+      'calc(24px + 16px * var(--wg-depth, 0))',
+    )
     expect(
       declared(
-        '.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions > .wg-row',
+        '.wg-group > .wg-collapse > .wg-collapse-clip > .wg-group-body > .wg-sessions > .wg-row',
         'padding-left',
       ),
-    ).toBe('40px')
+    ).toBe('calc(40px + 16px * var(--wg-depth, 0))')
   })
 
   it('draws one guide line per nested level at the parent icon column', () => {
@@ -104,11 +144,17 @@ describe('client stylesheet', () => {
     const hasRule = (selector: string, pattern: RegExp): boolean =>
       rules.some((rule) => rule.selectors.includes(selector) && pattern.test(rule.body))
 
-    const groupSessions = '.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions'
+    // 组内多了一层 .wg-group-body（子工作区与会话都在它里面）
+    // 它只出现在分组体内，因此引导线规则直接挂在它身上，不必再把整条结构链写穿
+    const groupBody = '.wg-group-body'
 
-    // 引导线落在父级图标列的中心：工作区是 8 + 16/2，分组是 24 + 16/2
-    expect(hasRule('.wg-workspace-body::before', /left:\s*16px/)).toBe(true)
-    expect(hasRule(`${groupSessions}::before`, /left:\s*32px/)).toBe(true)
+    // 引导线落在父级图标列的中心，工作区是 8 + 16/2，分组是 24 + 16/2，两者都随深度平移
+    expect(hasRule('.wg-workspace-body::before', /left:\s*calc\(16px \+ 16px \* var\(--wg-depth/)).toBe(
+      true,
+    )
+    expect(
+      hasRule(`${groupBody}::before`, /left:\s*calc\(32px \+ 16px \* var\(--wg-depth/),
+    ).toBe(true)
     // 线要跟着主题走，不能写死颜色
     expect(hasRule('.wg-workspace-body::before', /background:\s*var\(--dsw-alias-border-l1\)/)).toBe(
       true,
@@ -171,7 +217,7 @@ describe('client stylesheet', () => {
         .map((m) => new RegExp(`${property}:\\s*([^;]+)`).exec(m[2] ?? '')?.[1]?.trim())
         .find((value) => value !== undefined)
 
-    // 官方 WorkspaceBrowser 的根节点自己带整块右留白；
+    // 官方 WorkspaceBrowser 的根节点自己带整块右留白
     // 官方那份定义随被接替的组件一起没了，本包必须自己重新定义这三个量
     // header 与列表才能落回原位
     expect(declared('.wg-root', '--dsh-session-list-edge-inset')).toBe(
@@ -181,7 +227,7 @@ describe('client stylesheet', () => {
     expect(declared('.wg-root', '--dsh-session-list-scrollbar-offset')).toBe('2px')
     expect(declared('.wg-root', 'padding-right')).toBe('var(--dsh-session-list-edge-inset)')
 
-    // 对照 tab 只补左侧：右侧一律由 .wg-root 给，否则两层各加 12px
+    // 对照 tab 只补左侧，右侧一律由 .wg-root 给，否则两层各加 12px
     expect(declared('.wg-tab', 'padding')).toBe('6px 0 0 12px')
   })
 
@@ -193,7 +239,7 @@ describe('client stylesheet', () => {
         .map((m) => new RegExp(`${property}:\\s*([^;]+)`).exec(m[2] ?? '')?.[1]?.trim())
         .find((value) => value !== undefined)
 
-    // 官方 header 的 -4px 是相对「自带右留白」的根节点写的；本包根节点有同一份留白
+    // 官方 header 的 -4px 是相对「自带右留白」的根节点写的，本包根节点有同一份留白
     // 因此这一条照抄即可，相抵后按钮右缘离栏缘 8px，不贴边
     expect(declared('.wg-header', 'margin-right')).toBe('-4px')
     expect(declared('.wg-header', 'height')).toBe('36px')
@@ -201,7 +247,7 @@ describe('client stylesheet', () => {
   })
 
   it('lets the list cancel the root inset and re-derive its own right edge', () => {
-    // 官方 .listArea 用 -edge-inset 让列表靠到栏缘，再由 .list 推回到 edge-inset；
+    // 官方 .listArea 用 -edge-inset 让列表靠到栏缘，再由 .list 推回到 edge-inset
     // 本包没有 .listArea，因此这两个值要折进 .wg-list 自己的 margin / padding
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
@@ -211,7 +257,7 @@ describe('client stylesheet', () => {
     const list = rules.find((rule) => rule.selectors.includes('.wg-list'))
     expect(list).toBeDefined()
 
-    // 折进 -edge-inset：否则列表会被 .wg-root 的右留白再推一次，行右缘偏左
+    // 折进 -edge-inset，否则列表会被 .wg-root 的右留白再推一次，行右缘偏左
     expect(list?.body).toMatch(
       /margin-right:\s*calc\(\s*var\(--dsh-session-list-scrollbar-offset\)\s*-\s*var\(--dsh-session-list-edge-inset\)\s*\)/,
     )
@@ -222,7 +268,7 @@ describe('client stylesheet', () => {
   })
 
   it('gives the header entry the official icon-button geometry', () => {
-    // 官方 header 图标按钮是 28px 正圆（.iconButton），与行内 16px 按钮不是一套；
+    // 官方 header 图标按钮是 28px 正圆（.iconButton），与行内 16px 按钮不是一套
     // 这些几何按官方外观取，不能被行内那套带跑
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
@@ -237,12 +283,12 @@ describe('client stylesheet', () => {
     // 正圆必须配对 round，否则会被主题的全局超级椭圆磨成方圆角
     expect(base?.body).toMatch(/corner-shape:\s*round/)
 
-    // 未实现的入口渲染成 disabled 占位，且不能沿用悬停高亮——否则看起来仍可点
+    // 这一组里的入口都是可用的，每个都有自己的悬停高亮，没有 disabled 占位
     const hover = rules.find((rule) =>
       rule.selectors.some((s) => s.includes('.wg-header-action:hover')),
     )
-    expect(hover?.selectors.join()).toContain(':not(:disabled)')
-    expect(rules.some((rule) => rule.selectors.includes('.wg-header-action:disabled'))).toBe(true)
+    expect(hover).toBeDefined()
+    expect(rules.some((rule) => rule.selectors.includes('.wg-header-action:disabled'))).toBe(false)
   })
 
   it('sizes the header entry group for every entry it can show', () => {
@@ -299,7 +345,7 @@ describe('client stylesheet', () => {
   })
 
   it('enlarges the header entry in the narrow rail like official does', () => {
-    // 官方 rail 下这个入口是 36px、label-primary；宽栏 28px、label-secondary
+    // 官方 rail 下这个入口是 36px、label-primary，宽栏 28px、label-secondary
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
       selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
@@ -423,7 +469,7 @@ describe('client stylesheet', () => {
     ).toMatch(/opacity:\s*0/)
 
     const revealed = bodyOf('.wg-collapse-clip [data-wg-stagger]')
-    // 延迟逐元素不同（撑开那段等待 + 该元素的先后），由折叠体量几何后逐个下发；
+    // 延迟逐元素不同（撑开那段等待 + 该元素的先后），由折叠体量几何后逐个下发
     // 样式只消费一个变量，因此没有任何逐元素写死的值或序号
     expect(revealed).toMatch(/transition-delay:\s*var\(--wg-collapse-delay/)
   })
@@ -469,15 +515,12 @@ describe('client stylesheet', () => {
 
     // 工作区分组行本身落在根节点上：缩进与工作区行同为 8px，不是会话分组那档 24px
     expect(hasRule('.wg-group-head.wg-virtual-workspace-head', /padding:\s*0 8px/)).toBe(true)
-    // 组内工作区再让出一格，层级因此读得出来
-    expect(
-      hasRule(
-        '.wg-virtual-workspace-body > .wg-workspace > .wg-workspace-head',
-        /padding-left:\s*24px/,
-      ),
-    ).toBe(true)
-    // 引导线落在父级图标列中心：根 8 + 16/2 = 16
-    expect(hasRule('.wg-virtual-workspace-body::before', /left:\s*16px/)).toBe(true)
+    // 缩进层级不用 CSS 变量在容器间累加，把变量定义成「它自己 + 1」是循环引用
+    // 浏览器会把整条声明当作无效值丢掉，偏移因此恒为 0、缩进静默失效
+    // 层级改由 JS 算好（nesting.levelOf）经 --wg-depth 下发，样式表只做一次重命名
+    expect(css).not.toContain('--wg-depth-offset')
+    // 每档缩进都直接读这一个变量；它由组件下发，样式表不再二次加工
+    expect(hasRule('.wg-workspace-head', /padding-left:\s*calc\(8px \+ 16px \* var\(--wg-depth, 0\)\)/)).toBe(true)
   })
 
   it('fades the whole panel in like the official tree body', () => {
@@ -515,7 +558,7 @@ describe('client stylesheet', () => {
     const reduced =
       /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
 
-    // 展开、输入框淡入、标题与入口组的让位都要一起落位；漏掉哪一条
+    // 展开、输入框淡入、标题与入口组的让位都要一起落位，漏掉哪一条
     // 那一项就会在 reduced-motion 下继续动
     for (const selector of [
       '.wg-search',
@@ -578,7 +621,7 @@ describe('client stylesheet', () => {
     // 第二行整体缩进一个状态位槽（16 + 4），与标题左缘对齐
     expect(bodyOf('.wg-search-result-meta')).toMatch(/margin-left:\s*20px/)
 
-    // 那一行的 6px gap 是官方给「工作区名 / 摘录」两格用的；本包没有摘录
+    // 那一行的 6px gap 是官方给「工作区名 / 摘录」两格用的，本包没有摘录
     // 路径必须整体成项，否则 gap 会落进「工作区 / 分组」之间，把一条连续路径读成两截
     expect(bodyOf('.wg-search-result-meta')).toMatch(/gap:\s*6px/)
     const path = bodyOf('.wg-search-result-path')
@@ -627,10 +670,10 @@ describe('client stylesheet', () => {
 
     const wrapped = '.wg-workspace-body > .wg-sessions > * > .wg-row'
     const groupedWrapped =
-      '.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions > * > .wg-row'
+      '.wg-group > .wg-collapse > .wg-collapse-clip > .wg-group-body > .wg-sessions > * > .wg-row'
 
-    expect(indentOf(wrapped)).toBe('24px')
-    expect(indentOf(groupedWrapped)).toBe('40px')
+    expect(indentOf(wrapped)).toBe('calc(24px + 16px * var(--wg-depth, 0))')
+    expect(indentOf(groupedWrapped)).toBe('calc(40px + 16px * var(--wg-depth, 0))')
   })
 
   it('paints the hover card text for a dark card rather than a theme-tinted one', () => {
@@ -682,7 +725,7 @@ describe('client stylesheet', () => {
     expect(bodyOf("body[data-wg-flip] [role='menu'] [role='menu']")).toMatch(/right:\s*calc\(100% \+ 10px\)/)
     expect(bodyOf("body[data-wg-flip] [role='menu'] [role='menu']::before")).toMatch(/right:\s*-10px/)
 
-    // 悬停卡片：位置是原语算出来的内联 left，只有 !important 压得过；
+    // 悬停卡片，位置是原语算出来的内联 left，只有 !important 压得过
     // 落点取 body 上那个由宿主量得的变量
     const card = bodyOf('body[data-wg-flip] [data-wg-hover-card]')
     expect(card).toMatch(/left:\s*auto\s*!important/)
@@ -706,7 +749,7 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    // 基线那条 36px 定高是官方为**单行**标题写的；两行各 20px 行高放不下
+    // 基线那条 36px 定高是官方为单行标题写的，两行各 20px 行高放不下
     // 而 header 带 overflow:hidden——沿用定高只会把第二行连同裁剪一起吞掉
     // 界面上就是「聚焦的那一行不见了」，不会有任何报错
     expect(bodyOf('.wg-header-titled')).toMatch(/height:\s*auto/)
@@ -753,7 +796,7 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    /** 取某条规则里某个声明的数值；没有该声明时为 NaN */
+    /** 取某条规则里某个声明的数值，没有该声明时为 NaN */
     const px = (selector: string, property: string): number => {
       const found = new RegExp(`${property}:\\s*(\\d+)px`).exec(bodyOf(selector))
       return found === null ? Number.NaN : Number(found[1])
@@ -876,6 +919,34 @@ describe('client stylesheet', () => {
     // 圆角与内边距取官方 .list / .submenu 面板的同一组值
     expect(body).toMatch(/border-radius:\s*20px/)
     expect(body).toMatch(/min-width:\s*218px/)
+  })
+
+  it('paints the view options panel with the official menu surface tokens', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 与工作区选择器面板同一条理由，面板是不透明浮层，底下就是会话列表
+    // token 名写错时 background 整条失效、面板变透明，而界面上不会有任何报错
+    const panel = bodyOf('.wg-view-menu')
+    expect(panel).toMatch(/background:\s*var\(--dsw-specific-menu/)
+    expect(panel).toMatch(/box-shadow:\s*var\(--dsw-elevation-prominent\)/)
+    expect(panel).toMatch(/--dsw-elevation-stroke-color:\s*var\(--dsw-alias-border-l1\)/)
+    // 落点由组件量出来写成内联的 left/top，层级与官方菜单面板同档
+    expect(panel).toMatch(/position:\s*fixed/)
+    expect(panel).toMatch(/z-index:\s*1100/)
+
+    // 条目行不可点，只有开关本身可交互，行若也承诺可点就是两个控件抢一次点击
+    const option = bodyOf('.wg-view-option')
+    expect(option).toMatch(/display:\s*flex/)
+    expect(option).not.toMatch(/cursor:\s*pointer/)
+    // 开关排在行尾，不被设置名挤动
+    expect(bodyOf('.wg-view-option-switch')).toMatch(/flex:\s*none/)
+    expect(bodyOf('.wg-view-option-label')).toMatch(/flex:\s*1/)
   })
 
   it('pushes the submenu arrow to the right edge of the item', () => {

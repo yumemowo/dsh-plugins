@@ -20,8 +20,8 @@ import { snapshot } from './snapshot-stub.ts'
  * 区域组件的渲染冒烟
  *
  * node 环境没有 react-dom，这里用一个最小 dispatcher 直接调用函数组件
- * 验证渲染期不抛错、关键结构（工作区菜单、隐式「未分组」区段
- * 行尾菜单数量）符合预期。类型检查看不到 hook 调用次序与结构分支这类问题
+ * 验证渲染期不抛错，以及关键结构符合预期，工作区菜单、隐式「未分组」区段
+ * 行尾菜单数量。类型检查看不到 hook 调用次序与结构分支这类问题
  *
  * 测试替身把 Menu 渲染成 null，因此按 props 形状识别菜单元素而不下钻
  */
@@ -44,11 +44,11 @@ const dispatcher = {
  * 会真正跑 effect 与保留状态的 dispatcher
  *
  * 基础的 {@link dispatcher} 把 `useState` 的 setter 与 `useEffect` 都做成空操作
- * 够用于「渲染一次看结构」的断言；
+ * 够用于「渲染一次看结构」的断言
  * 需要界面先经过一次异步加载（例如分组元数据要先 `loadGroups` 落地才会出现分组行）时就用这一份
  *
- * 状态按**组件类型**分桶、游标在每次调用组件前归零，与 React 的「hook 按调用顺序
- * 游标按组件实例归零」一致：否则父组件与子组件会共用同一批槽位
+ * 状态按组件类型分桶、游标在每次调用组件前归零，与 React 的「hook 按调用顺序
+ * 游标按组件实例归零」一致，否则父组件与子组件会共用同一批槽位
  * 状态在第二次渲染时串位。同一类型的多个实例因此共用一份状态——
  * 本测试里的行组件都停在初始态（菜单未开、无改名草稿），这个简化不影响断言
  */
@@ -93,7 +93,7 @@ function renderingDispatcher(): {
     useContext: (context: { _currentValue?: unknown }) => context._currentValue,
   }
 
-  /** 切到一个组件的状态桶；返回恢复父组件桶的函数 */
+  /** 切到一个组件的状态桶，返回恢复父组件桶的函数 */
   const enter = (type: unknown): (() => void) => {
     const outer = bucket
     const outerCursor = cursor
@@ -127,7 +127,7 @@ function renderingDispatcher(): {
   }
 }
 
-/** 渲染整棵树；Menu 元素被收集起来而不下钻（stub 返回 null） */
+/** 渲染整棵树，Menu 元素被收集起来而不下钻（stub 返回 null） */
 function render(
   node: unknown,
   out: {
@@ -152,7 +152,7 @@ function render(
     metas?: unknown[]
     /** 悬停卡片元素，按文档序；正文从它的 `content` prop 上读 */
     cards?: unknown[]
-    /** 官方 Modal 元素（如命名框）；标题从它的 props 上读 */
+    /** 官方 Modal 元素（如命名框），标题从它的 props 上读 */
     modals?: unknown[]
   },
   active: unknown = dispatcher,
@@ -181,7 +181,7 @@ function render(
           ? memoized.type
           : el.type
     if (typeof type === 'function') {
-      // 官方 Modal 的替身也渲染成 null，但它的 props 上是调用方真正给的标题与页脚；
+      // 官方 Modal 的替身也渲染成 null，但它的 props 上是调用方真正给的标题与页脚
       // 按形状（open + title + onClose）认出来，命名框的标题因此可断言
       if (
         el.props['open'] !== undefined &&
@@ -211,7 +211,7 @@ function render(
       }
       const prev = internals.ReactCurrentDispatcher.current
       internals.ReactCurrentDispatcher.current = active
-      // enter 按**内层**函数分桶：memo 对象的身份在内层组件每次渲染时都是同一个
+      // enter 按内层函数分桶，memo 对象的身份在内层组件每次渲染时都是同一个
       // 用 type 或内层函数都不影响本测试的状态分桶，但保持一致更直白
       const leave = enter?.(type)
       let rendered: unknown
@@ -231,7 +231,7 @@ function render(
     if (el.props['className'] === 'wg-slot') out.slots?.push(el)
     if (el.props['className'] === 'wg-group-count') out.counts?.push(el)
     if (el.props['className'] === 'wg-search-result-meta') out.metas?.push(el)
-    // 会话行与分组头都带淡入标记；这里只收会话行（带 data-wg-stagger 的 wg-row）
+    // 会话行与分组头都带淡入标记，这里只收会话行（带 data-wg-stagger 的 wg-row）
     if (
       typeof el.props['className'] === 'string' &&
       (el.props['className'] as string).startsWith('wg-row') &&
@@ -298,7 +298,7 @@ function actionAnchors(out: { menus: unknown[] }): { props?: Record<string, unkn
  * 命名框的标题
  *
  * 官方 `Modal` 的测试替身渲染成 null，但 `NameDialog` 返回的仍是 `Modal` 元素
- * 标题留在它的 props 上；未打开时返回 undefined
+ * 标题留在它的 props 上，未打开时返回 undefined
  */
 function dialogTitle(out: { modals?: unknown[] }): string | undefined {
   // 「添加工作区」的错误框一直挂着一个 open=false 的 Modal
@@ -313,7 +313,7 @@ function dialogTitle(out: { modals?: unknown[] }): string | undefined {
 /**
  * 打开的命名框里的输入框元素
  *
- * 官方 `Input` 的替身渲染成 null，因此没有宿主 `input` 节点可查；
+ * 官方 `Input` 的替身渲染成 null，因此没有宿主 `input` 节点可查
  * `NameDialog` 返回的 `Modal` 元素把 `Input` 留在自己的 `children` 上，从那里读
  */
 function dialogInput(out: { modals?: unknown[] }): { props: Record<string, unknown> } | undefined {
@@ -410,7 +410,7 @@ function fireContextMenu(
   return { prevented, stopped }
 }
 
-/** 从一张菜单元素上读条目 id；菜单不存在时给空表 */
+/** 从一张菜单元素上读条目 id，菜单不存在时给空表 */
 function menuIdsOf(menu: unknown): string[] {
   if (menu === null || menu === undefined) return []
   return ((menu as { props: { items: { id: string }[] } }).props.items).map((item) => item.id)
@@ -425,13 +425,13 @@ function contextMenuAnchorRect(out: { contextMenus?: unknown[] }): unknown {
 }
 
 /**
- * 一个会话行的元素；供右键测试直接渲染一行
+ * 一个会话行的元素，供右键测试直接渲染一行
  *
  * 直接渲染单行而不是整片区域：测试替身按组件类型给状态分桶
  * 同一类型的多个实例共用一份状态，整片列表里所有会话行会一起"被右键"
- * @param options.official - 是否给官方三项操作；false 时该行完全没有菜单
- * @param options.grouping - 归组上下文；缺省表示该行没有分组可归
- * @param options.groupSections - 可移入的分组；只给 `grouping` 为真时有意义
+ * @param options.official - 是否给官方三项操作，false 时该行完全没有菜单
+ * @param options.grouping - 归组上下文，缺省表示该行没有分组可归
+ * @param options.groupSections - 可移入的分组，只给 `grouping` 为真时有意义
  */
 function sessionRowNode(options: {
   official?: boolean
@@ -479,7 +479,7 @@ function sessionRowNode(options: {
   })
 }
 
-/** 一个分组行的元素；供右键测试直接渲染一行 */
+/** 一个分组行的元素，供右键测试直接渲染一行 */
 function groupRowNode(onCreateSession?: () => void): unknown {
   return React.createElement(GroupSection, {
     section: { id: 'g1', label: '前端', sessions: [] },
@@ -495,6 +495,8 @@ function groupRowNode(onCreateSession?: () => void): unknown {
       newSessionItem: '新建会话',
       newSession: (name: string) => `在“${name}”中新建会话`,
     },
+    renderChildWorkspace: () => null,
+    sessionsLabel: '会话',
     children: null,
   })
 }
@@ -557,6 +559,8 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, collapse
         newSessionItem: '新建会话',
         newSession: (name: string) => `在“${name}”中新建会话`,
       },
+      renderChildWorkspace: () => null,
+      sessionsLabel: '会话',
       children: null,
     }),
     out,
@@ -579,7 +583,7 @@ function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
     title: 'W1',
     collapsed,
     folderActive: false,
-    layout: { groups: [], loose },
+    layout: { groups: [], loose, children: [] },
     isGroupCollapsed: () => false,
     labels: {
       actions: (name: string) => `工作区“${name}”的操作`,
@@ -597,7 +601,10 @@ function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
       ungroupLabel: '移出工作区分组',
     },
     onSelectVirtualWorkspace: () => {},
+    onSelectParentGroup: () => {},
+    depth: 0,
     emptyLabel: '还没有会话',
+    sessionsLabel: '会话',
     groupActionLabels: {
       actions: (name: string) => `分组“${name}”的操作`,
       rename: '重命名',
@@ -615,6 +622,7 @@ function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
     onDeleteGroup: () => {},
     onCreateSessionInGroup: () => {},
     renderSession: (row) => React.createElement('span', { key: row.id, className: 'wg-row' }, row.title),
+    renderChildWorkspace: () => null,
   }
   const out = {
     menus: [] as unknown[],
@@ -641,29 +649,31 @@ function props(
   options: {
     pending?: Map<unknown, unknown>
     official?: boolean
-    /** 缺省给官方「添加工作区」服务面；false 用于验证降级路径 */
+    /** 缺省给官方「添加工作区」服务面，false 用于验证降级路径 */
     add?: boolean
-    /** directoryFlow 洞是否被占用；缺省为已占用 */
+    /** directoryFlow 洞是否被占用，缺省为已占用 */
     flowOccupied?: boolean
-    /** 造一条当前选中的空白（新建中）会话；缺省不加 */
+    /** 造一条当前选中的空白（新建中）会话，缺省不加 */
     blankCurrent?: boolean
-    /** startSession 的返回值；undefined 模拟导航被取代 */
+    /** startSession 的返回值，undefined 模拟导航被取代 */
     startReturns?: string | undefined
     /** 记录 moveSession 的三元调用 */
     moves?: [string, string, string][]
-    /** 搜索结果的条数上限；缺省取官方契约值 20 */
+    /** 搜索结果的条数上限，缺省取官方契约值 20 */
     searchResultLimit?: number
-    /** 分组元数据；缺省给一个空组 */
+    /** 分组元数据，缺省给一个空组 */
     groups?: Record<string, { id: string; name: string; sessionIds: string[] }[]>
-    /** 根节点上的工作区分组；缺省为空 */
+    /** 根节点上的工作区分组，缺省为空 */
     workspaceGroups?: { id: string; name: string; workspaceIds: string[] }[]
     /** 记录 moveWorkspace 的二元调用 */
     workspaceMoves?: [string, string][]
+    /** 「移动到分组」实际写下的归属，`[...要写的 id, 父工作区 id, 分组 id]` */
+    nestingWrites?: (string | string[])[]
     /** 记录 createVirtualWorkspace 的一元调用 */
     onCreateVirtualWorkspace?: (name: string) => void
-    /** 宿主 home；用于断言工作区卡片里的路径缩写 */
+    /** 宿主 home，用于断言工作区卡片里的路径缩写 */
     home?: string | undefined
-    /** 会话 a 的最近更新时间；用于断言卡片里的相对时间与行尾那份不同 */
+    /** 会话 a 的最近更新时间，用于断言卡片里的相对时间与行尾那份不同 */
     updatedAt?: number
   } = {},
 ): WorkspaceGroupsProps {
@@ -672,7 +682,7 @@ function props(
    *
    * 逐行各调一次 `Date.now()` 会让两行的 `updatedAt` 有约 0.2% 的概率落在相邻的两个毫秒里（实测 20 万次里跨了 364 次）
    * 搜索结果按 `updatedAt` 倒序，那两行又都命中同一个查询词
-   * 于是**哪一行排在前面随运行而变**——
+   * 于是哪一行排在前面随运行而变——
    * 断言路径分段的那条用例会偶发地拿到没有分组的那一行。固定基准后排序完全确定
    */
   const now = options.updatedAt ?? Date.now() - 300_000
@@ -693,7 +703,7 @@ function props(
       updatedAt: now - 1000,
     },
   }
-  // 空白会话的宿主后备标题是目录名；渲染行必须用语言包的固定名顶掉它
+  // 空白会话的宿主后备标题是目录名，渲染行必须用语言包的固定名顶掉它
   if (options.blankCurrent === true) {
     byId['blank'] = {
       id: 'blank',
@@ -737,7 +747,7 @@ function props(
     // startReturns 显式给了就用它（undefined 表示导航被取代），否则给一个 id
     startSession: async () =>
       'startReturns' in options ? options.startReturns : 'fresh',
-    // 分组元数据：缺省给一个空组；需要断言归组路径的用例用 groups / workspaceGroups 覆盖
+    // 分组元数据：缺省给一个空组，需要断言归组路径的用例用 groups / workspaceGroups 覆盖
     loadGroups: async () =>
       snapshot({
         byWorkspace: options.groups ?? { w1: [{ id: 'g1', name: '前端', sessionIds: [] }] },
@@ -762,6 +772,19 @@ function props(
       options.workspaceMoves?.push([workspaceId, groupId])
       return snapshot()
     },
+    nestWorkspaces: async (workspaceIds: readonly string[], parent: string, group: string) => {
+      options.nestingWrites?.push([...workspaceIds, parent, group])
+      // 与宿主一致，回变更后的整份快照。归属要能被下一次渲染读到
+      return snapshot({
+        byWorkspace: options.groups ?? { w1: [{ id: 'g1', name: '前端', sessionIds: [] }] },
+        workspaceGroups: options.workspaceGroups ?? [],
+        nesting: Object.fromEntries(
+          workspaceIds.map((id) => [id, { workspaceId: parent, groupId: group }]),
+        ),
+      })
+    },
+    unnestWorkspaces: async () => snapshot(),
+    setNested: async () => snapshot(),
     forgetWorkspace: async () => snapshot(),
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
@@ -805,11 +828,14 @@ describe('WorkspaceGroupsRegion render', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     expect(() => render(React.createElement(WorkspaceGroupsRegion, props(true)), out)).not.toThrow()
 
-    // 每个工作区行一个菜单；未分组区段的会话行没有菜单
+    // 每个工作区行一个菜单，未分组区段的会话行没有菜单
+    // 归类块与删除之间由分隔线断开，见 buildWorkspaceMenuItems
     expect(menuItems(out)).toContainEqual([
       'new-group',
       'rename',
+      'separator-virtual-workspace',
       'move-virtual-workspace',
+      'separator-delete',
       'delete',
     ])
   })
@@ -835,7 +861,7 @@ describe('WorkspaceGroupsRegion render', () => {
     return out
   }
 
-  /** 一类行元素；`className` 按前缀匹配（菜单展开的那条会多挂一个标记类） */
+  /** 一类行元素，`className` 按前缀匹配（菜单展开的那条会多挂一个标记类） */
   function hostRows(out: { hosts?: unknown[] }, className: string): unknown[] {
     return (out.hosts ?? []).filter((row) =>
       String((row as { props: Record<string, unknown> }).props['className']).startsWith(className),
@@ -871,7 +897,7 @@ describe('WorkspaceGroupsRegion render', () => {
     const out = await renderRoot([{ id: 'wg1', name: '前端', workspaceIds: ['w1'] }])
 
     const counts = (out.counts ?? []) as { props: { children?: unknown } }[]
-    // 分组行上的工作区数取真实数量：w1 在快照里存在，因此计 1
+    // 分组行上的工作区数取真实数量，w1 在快照里存在，因此计 1
     expect(counts.map((c) => c.props.children)).toContain(1)
   })
 
@@ -968,7 +994,9 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(menuItems(out)).toContainEqual([
       'new-group',
       'rename',
+      'separator-virtual-workspace',
       'move-virtual-workspace',
+      'separator-delete',
       'delete',
     ])
     expect(menuItems(out)).toContainEqual(['rename', 'fork', 'archive', 'separator', 'group'])
@@ -978,14 +1006,15 @@ describe('WorkspaceGroupsRegion render', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
-    // 官方工作区菜单项就是 label: t("rename")；rename.workspace.title 只作对话框标题
+    // 官方工作区菜单项就是 label: t("rename")，rename.workspace.title 只作对话框标题
     // 这里断言菜单里显示的是通用动词，而不是「重命名工作区」
     const workspaceMenu = out.menus.find(
       (m) =>
         menuItems({ menus: [m] })[0]?.join() ===
-        'new-group,rename,move-virtual-workspace,delete',
+        'new-group,rename,separator-virtual-workspace,move-virtual-workspace,separator-delete,delete',
     )
     expect(workspaceMenu).toBeDefined()
+    // 分隔线没有文案，menuLabels 会把它滤掉；这里只断言可见项的顺序
     expect(menuLabels({ menus: [workspaceMenu] })).toEqual([
       '新建分组',
       '重命名',
@@ -1004,7 +1033,7 @@ describe('WorkspaceGroupsRegion render', () => {
         (
           m as { props: { items: { id?: string }[] } }
         ).props.items.map((item) => item.id).join() ===
-        'new-group,rename,move-virtual-workspace,delete',
+        'new-group,rename,separator-virtual-workspace,move-virtual-workspace,separator-delete,delete',
     )
     const workspaceItems = (
       workspaceMenu as { props: { items: { id?: string; label?: unknown }[] } }
@@ -1028,8 +1057,8 @@ describe('WorkspaceGroupsRegion render', () => {
   })
 
   it('keeps the arrow off a submenu parent whose submenu is empty', () => {
-    // 会话已在唯一分组里时候选为空，原语不把该项当子菜单父项（不展开
-    // 不给 aria-haspopup），此时箭头会在指一个展不开的菜单
+    // 会话已在唯一分组里时候选为空，原语不把该项当子菜单父项，既不展开
+    // 也不给 aria-haspopup，此时箭头会在指一个展不开的菜单
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(sessionRowNode({ grouping: true }), out)
 
@@ -1070,7 +1099,9 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(menuItems(withBlank)).toContainEqual([
       'new-group',
       'rename',
+      'separator-virtual-workspace',
       'move-virtual-workspace',
+      'separator-delete',
       'delete',
     ])
     expect(menuItems(withBlank)).toContainEqual(['rename', 'fork', 'archive', 'separator', 'group'])
@@ -1099,7 +1130,7 @@ describe('WorkspaceGroupsRegion render', () => {
   })
 
   it('omits the group session count for an empty group', () => {
-    // 空分组的 0 是噪声；行尾留给操作按钮
+    // 空分组的 0 是噪声，行尾留给操作按钮
     const out = renderGroupRow(() => {}, 0)
 
     expect((out.counts ?? []).length).toBe(0)
@@ -1158,7 +1189,7 @@ describe('WorkspaceGroupsRegion render', () => {
     render(React.createElement(WorkspaceGroupsRegion, props(true)), region)
     const group = renderGroupRow(() => {})
 
-    // 行操作（`...` 锚点与 `+`）只留 aria-label，不挂原生 title 提示；
+    // 行操作（`...` 锚点与 `+`）只留 aria-label，不挂原生 title 提示
     // 文案仍要照常投影出来，不能连无障碍标签一起丢
     expect(actionLabels(region).length).toBeGreaterThan(0)
     expect(actionTitles(region).filter((t) => t !== undefined)).toEqual([])
@@ -1170,7 +1201,7 @@ describe('WorkspaceGroupsRegion render', () => {
     const pending = new Map([['orphan', { kind: 'approval' }]])
     render(React.createElement(WorkspaceGroupsRegion, props(true, { pending })), out)
 
-    // 状态点是纯视觉元素，语义靠槽位的 aria-label 承担；
+    // 状态点是纯视觉元素，语义靠槽位的 aria-label 承担
     // 原生 title 会多出一个同级提示，因此不挂
     const status = (out.slots as { props: Record<string, unknown> }[]).filter(
       (slot) => slot.props['role'] === 'img',
@@ -1324,7 +1355,7 @@ describe('WorkspaceGroupsRegion render', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
-    // 会话行的「...」用官方 actions.session.aria，取会话标题；
+    // 会话行的「...」用官方 actions.session.aria，取会话标题
     // 工作区行用 actions.workspace.aria，取工作区标题
     expect(actionLabels(out)).toContain('会话“A”的操作')
     expect(actionLabels(out)).toContain('工作区“W1”的操作')
@@ -1369,17 +1400,16 @@ describe('WorkspaceGroupsRegion render', () => {
     const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
-    // 标题取官方 section.workspaces；「添加工作区」入口的无障碍标签取 workspace.add
+    // 标题取官方 section.workspaces，「添加工作区」入口的无障碍标签取 workspace.add
     expect(out.text).toContain('工作区')
     expect(rowButtons(out).map((b) => b.label)).toContain('添加工作区')
   })
 
-  it('counts down the header entries to the one still unimplemented', () => {
+  it('offers both header icon entries as usable controls', () => {
     const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
-    // 搜索已实现，是可用的入口；只剩视图选项仍是 disabled 占位——位置与字形对齐官方
-    // 但明说不可用，而不是渲染成点下去没反应的死按钮
+    // 两个入口都可用，视图选项点开的是本包自绘的面板（里面是嵌套开关）
     const search = (out.buttons ?? []).find(
       (b) => (b as { props: Record<string, unknown> }).props['aria-label'] === '搜索会话',
     )
@@ -1387,7 +1417,9 @@ describe('WorkspaceGroupsRegion render', () => {
       (b) => (b as { props: Record<string, unknown> }).props['aria-label'] === '视图选项',
     )
     expect((search as { props: Record<string, unknown> }).props['disabled']).toBeUndefined()
-    expect((viewOptions as { props: Record<string, unknown> }).props['disabled']).toBe(true)
+    expect((viewOptions as { props: Record<string, unknown> }).props['disabled']).toBeUndefined()
+    // 开合态由它自己声明，不再是占位
+    expect((viewOptions as { props: Record<string, unknown> }).props['aria-expanded']).toBe(false)
   })
 
   it('puts the new-virtual-workspace entry in the header', () => {
@@ -1496,7 +1528,7 @@ describe('WorkspaceGroupsRegion render', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    // 新分组由宿主建在末尾，确认后把发起这次新建的工作区移进**那个**新分组：
+    // 新分组由宿主建在末尾，确认后把发起这次新建的工作区移进那个新分组：
     // 这就是「建组 + 移入」压成一步，与 header 入口建空分组的分工差别所在
     expect(moves).toEqual([['w1', 'wgn']])
   })
@@ -1586,13 +1618,13 @@ describe('hover cards', () => {
     const out = renderRegion()
     const card = out.cards.find((c) => anchorClass(c).startsWith('wg-workspace-head'))
 
-    // 创建时刻按**本地**时区渲染（官方卡片用的就是 getHours/getMinutes）
+    // 创建时刻按本地时区渲染（官方卡片用的就是 getHours/getMinutes）
     // 因此这里拿同一个 Date 现算一遍期望值，而不是写死一个只在某个时区成立的钟点
     const created = new Date('2026-01-01T00:00:00.000Z')
     const pad = (v: number) => String(v).padStart(2, '0')
     const clock = `${pad(created.getHours())}:${pad(created.getMinutes())}`
 
-    // 目录路径与创建时刻都按官方那两行给出；工作区名是宿主给的标题
+    // 目录路径与创建时刻都按官方那两行给出，工作区名是宿主给的标题
     expect(cardText(card)).toEqual(['W1', '/tmp/w1', `创建于 2026年1月1日 ${clock}`])
   })
 
@@ -1775,7 +1807,7 @@ describe('hover cards', () => {
     const before = { menus: [] as unknown[], text: [] as string[], cards: [] as unknown[] }
     harness.render(node, before)
 
-    // 菜单锚点是 Menu 原语的 anchor 按钮；点一下即展开
+    // 菜单锚点是 Menu 原语的 anchor 按钮，点一下即展开
     const anchor = (
       before.menus[0] as { props: { anchor: { props: { onClick: (e: unknown) => void } } } }
     ).props.anchor
@@ -1898,7 +1930,9 @@ describe('search', () => {
     expect(menuItems(out)).toContainEqual([
       'new-group',
       'rename',
+      'separator-virtual-workspace',
       'move-virtual-workspace',
+      'separator-delete',
       'delete',
     ])
   })
@@ -2054,7 +2088,7 @@ describe('search', () => {
     }
     render(React.createElement(WorkspaceGroupsRegion, props(false)), out)
 
-    // 官方 rail 下同样放这个入口；它在窄栏里只是请求展开侧栏
+    // 官方 rail 下同样放这个入口，它在窄栏里只是请求展开侧栏
     expect(rowButtons(out).map((b) => b.label)).toContain('搜索会话')
     // 窄栏不渲染输入框：那个框在宽栏的 header 里
     expect(out.inputs).toEqual([])
@@ -2068,7 +2102,7 @@ describe('search', () => {
  * 工作区行与分组行还多一项「新建会话」——它在行内对应 `+` 按钮
  */
 describe('row context menu', () => {
-  /** 一次渲染的收集结果；`hosts` 与 `contextMenus` 由 walk 单独分桶 */
+  /** 一次渲染的收集结果，`hosts` 与 `contextMenus` 由 walk 单独分桶 */
   interface Collected {
     menus: unknown[]
     text: string[]
@@ -2089,14 +2123,14 @@ describe('row context menu', () => {
     }
   }
 
-  /** 一类行元素；`className` 按前缀匹配（菜单展开的那条会多挂一个标记类） */
+  /** 一类行元素，`className` 按前缀匹配（菜单展开的那条会多挂一个标记类） */
   function rowsOf(out: Collected, className: string): unknown[] {
     return out.hosts.filter((row) =>
       String((row as { props: Record<string, unknown> }).props['className']).startsWith(className),
     )
   }
 
-  /** 一行的某个 prop；用于按标题之类的内容挑出具体某一行 */
+  /** 一行的某个 prop，用于按标题之类的内容挑出具体某一行 */
   function propOf(row: unknown, name: string): unknown {
     return (row as { props: Record<string, unknown> }).props[name]
   }
@@ -2115,7 +2149,7 @@ describe('row context menu', () => {
     return undefined
   }
 
-  /** 当下开着的那张右键菜单；未打开或没有菜单时为 undefined */
+  /** 当下开着的那张右键菜单，未打开或没有菜单时为 undefined */
   function openMenu(out: Collected): unknown {
     return out.contextMenus.find(
       (menu) => (menu as { props: { open: boolean } }).props.open === true,
@@ -2125,12 +2159,12 @@ describe('row context menu', () => {
   /**
    * 渲染 → 在指定行上右键 → 再渲染一次
    *
-   * 菜单开合是行的状态，两次渲染之间才会体现出来；
+   * 菜单开合是行的状态，两次渲染之间才会体现出来
    * `renderingDispatcher` 把状态按组件类型留桶
    * 因此同一条行在第二次渲染里读回自己刚写下的落点
    * @param node - 待渲染的元素
    * @param className - 要在哪一类行上右键（按类名前缀找第一条）
-   * @param at - 指针坐标；缺省模拟键盘触发的右键（浏览器给 (0,0)）
+   * @param at - 指针坐标，缺省模拟键盘触发的右键（浏览器给 (0,0)）
    */
   function rightClick(
     node: unknown,
@@ -2171,7 +2205,7 @@ describe('row context menu', () => {
       clientY: 240,
     })
 
-    // 不 preventDefault 就没有自绘面板可言（浏览器会弹出自己的菜单）；
+    // 不 preventDefault 就没有自绘面板可言（浏览器会弹出自己的菜单）
     // 不 stopPropagation 则外层若也认右键会同时开两个
     expect(flags.prevented).toBe(true)
     expect(flags.stopped).toBe(true)
@@ -2206,14 +2240,16 @@ describe('row context menu', () => {
       'new-session',
       'new-group',
       'rename',
+      'separator-virtual-workspace',
       'move-virtual-workspace',
+      'separator-delete',
       'delete',
     ])
   })
 
   it('gives the session row the same items as its own menu', () => {
     // 没有归组上下文的会话行（「未分组」桶里的那种）只留官方三项
-    // 且没有行内新建入口可补：右键菜单与它的 `...` 菜单条目集合因此完全相同
+    // 且没有行内新建入口可补，右键菜单与它的 `...` 菜单条目集合因此完全相同
     const { after } = rightClick(sessionRowNode(), 'wg-row')
 
     expect(menuIdsOf(openMenu(after))).toEqual(['rename', 'fork', 'archive'])

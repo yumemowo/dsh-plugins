@@ -123,6 +123,6 @@ export function sameSessionStatus(a, b): boolean {
 | 子代理运行数变化时行对象必须重建 | `rebuilds a row when the subagent count changes under it` |
 | 重建的分组段按内容判定为相等 | `sameGroupSections` 一组 |
 | 状态位按内容判定 | `sameSessionStatus` 一组 |
-| 层级缩进的每条选择器都真的命中渲染出的 DOM | `matches the nested indentation selectors against the rendered tree` |
+| 层级缩进读的是行组件下发的 `--wg-depth`（子工作区可任意层，不能再按固定层数写死选择器） | `indents each hierarchy level by one icon-column step` |
 
-最后一条与缓存无关，但同属「只表现为界面不对、不会报错」的一类：层级缩进是一组按真实 DOM 结构写的选择器，写错时界面只是没有缩进。`virtualWorkspaceDom.test.tsx` 因此用真 `react-dom` 渲染一遍，把样式表里所有带 `wg-virtual-workspace-body` 的规则逐条拿去 `querySelectorAll`，任一规则一个选择器都不命中就失败。
+最后一条与缓存无关，但同属「只表现为界面不对、不会报错」的一类：缩进由行组件下发的 `--wg-depth` 驱动，选择器写错或变量没传到时界面只是没有缩进。`virtualWorkspaceDom.test.tsx` 因此用真 `react-dom` 渲染一遍，把样式表里所有带 `wg-virtual-workspace-body` 的规则逐条拿去 `querySelectorAll`，任一规则一个选择器都不命中就失败；`nestingDom.test.tsx` 再把递归嵌出来的每一层深度逐一断言。

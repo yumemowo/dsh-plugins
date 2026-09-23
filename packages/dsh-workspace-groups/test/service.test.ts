@@ -14,7 +14,7 @@ import type { Group } from '../src/spec.ts'
 function createFakeContext(initialGlobal?: unknown): {
   ctx: Context
   records: Map<string, { groups: Group[] }>
-  /** 落盘的那份 global（未解析的原始形状）；读取时按真实 schema 解析 */
+  /** 落盘的那份 global（未解析的原始形状），读取时按真实 schema 解析 */
   readStored: () => unknown
 } {
   const records = new Map<string, { groups: Group[] }>()
@@ -28,11 +28,11 @@ function createFakeContext(initialGlobal?: unknown): {
     delete: async (key: string) => records.delete(key),
   }
 
-  // 根节点那份（工作区分组 + 菜单三份记录）走域的 global 槽位；这里同样只实现
+  // 根节点那份（工作区分组 + 菜单三份记录）走域的 global 槽位，这里同样只实现
   // 服务用到的那部分
   //
-  // 写入要**过一遍真实的 schema**：真域只在持久读边界上校验（`global.set` 的契约
-  // 写明「不在这里复查」），因此写进去一份形状不对的 global 只会在下一次 open 时
+  // 写入要过一遍真实的 schema，真域只在持久读边界上校验，`global.set` 的契约
+  // 写明「不在这里复查」，因此写进去一份形状不对的 global 只会在下一次 open 时
   // 才炸。替身若只做赋值，这一类错误在本文件里永远看不见
   // 未给初值时按「旧宿主写的那份」起步：没有 picker 那一格，正是真实文件里的形状
   let stored: unknown = initialGlobal ?? { virtualWorkspaces: [] }
@@ -63,8 +63,10 @@ describe('workspace groups service', () => {
 
     expect(await service.list()).toEqual({
       byWorkspace: {},
+      nesting: {},
       workspaceGroups: [],
       picker: { focused: '', recent: [], pinned: [] },
+      nested: true,
     })
   })
 
@@ -189,7 +191,7 @@ describe('workspace groups service', () => {
 /**
  * 根节点上的工作区分组
  *
- * 与会话分组是两个层级的概念，走域的 global 槽位而不是表；
+ * 与会话分组是两个层级的概念，走域的 global 槽位而不是表
  * 这一段固化它的几条结构约束：一个工作区至多属于一个分组、删除只解散分组
  * 工作区删除后归属记录被清掉
  */
@@ -327,7 +329,7 @@ describe('root-level workspace groups', () => {
 /**
  * 菜单的聚焦 / 最近使用 / 置顶
  *
- * 三份记录与工作区分组同处 global 槽位；这一段固化它们与既有变更操作的配合：
+ * 三份记录与工作区分组同处 global 槽位，这一段固化它们与既有变更操作的配合：
  * 聚焦要落盘并保持最近一次在最前，删除对象时三处一起清掉
  */
 describe('picker state', () => {
@@ -428,8 +430,130 @@ describe('picker state', () => {
     })
   })
 
+  it('records a child workspace in its own record when it joins a parent group', async () => {
+    // 归属记在子工作区自己那份记录上，一个子工作区因此天然只能有一个归属，也不跨工作区移动
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const group = (await service.createGroup('w1', '前端')).byWorkspace['w1']?.[0]
+
+    const snapshot = await service.nestWorkspaces(['w2'], 'w1', group?.id ?? '')
+
+    expect(snapshot.nesting['w2']).toEqual({ workspaceId: 'w1', groupId: group?.id })
+    // 父分组里不追加成员，归属只有这一份
+    expect(snapshot.byWorkspace['w1']?.[0]?.sessionIds).toEqual([])
+  })
+
+  it('moves a child to its new group instead of keeping two records', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const first = (await service.createGroup('w1', '前端')).byWorkspace['w1']?.[0]
+    const second = (await service.createGroup('w1', '后端')).byWorkspace['w1']?.[1]
+    await service.nestWorkspaces(['w2'], 'w1', first?.id ?? '')
+
+    const snapshot = await service.nestWorkspaces(['w2'], 'w1', second?.id ?? '')
+
+    expect(snapshot.nesting['w2']?.groupId).toBe(second?.id)
+  })
+
+  it('rejects a nest into a group that does not exist', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+
+    await expect(service.nestWorkspaces(['w2'], 'w1', 'gone')).rejects.toThrow(
+      /unknown group "gone"/,
+    )
+  })
+
+  it('releases the nesting when the child is ungrouped', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const group = (await service.createGroup('w1', '前端')).byWorkspace['w1']?.[0]
+    await service.nestWorkspaces(['w2'], 'w1', group?.id ?? '')
+
+    const snapshot = await service.unnestWorkspaces(['w2'])
+
+    expect(snapshot.nesting['w2']).toBeUndefined()
+  })
+
+  it('releases the children when their group is deleted', async () => {
+    // 分组没了，指向它的归属就是一条悬空引用；留着只会让元数据与界面长期偏离
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const group = (await service.createGroup('w1', '前端')).byWorkspace['w1']?.[0]
+    await service.nestWorkspaces(['w2', 'w3'], 'w1', group?.id ?? '')
+
+    const snapshot = await service.deleteGroup('w1', group?.id ?? '')
+
+    expect(snapshot.nesting).toEqual({})
+  })
+
+  it('releases the children when their parent workspace is forgotten', async () => {
+    // 父没了，子工作区再也不会被渲染在它下面；归属留着就是死数据
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const group = (await service.createGroup('w1', '前端')).byWorkspace['w1']?.[0]
+    await service.nestWorkspaces(['w2'], 'w1', group?.id ?? '')
+
+    const snapshot = await service.forgetWorkspace('w1')
+
+    expect(snapshot.nesting['w2']).toBeUndefined()
+  })
+
+  it('drops the nesting record together with the last group of a child', async () => {
+    // 一份记录同时装会话分组与嵌套归属，两者都空时才删整条，不留一条空壳
+    const { ctx, records } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const group = (await service.createGroup('w1', '前端')).byWorkspace['w1']?.[0]
+    await service.nestWorkspaces(['w2'], 'w1', group?.id ?? '')
+
+    await service.unnestWorkspaces(['w2'])
+
+    expect(records.has('w2')).toBe(false)
+  })
+
+  it('clears every recorded nesting when nesting is turned off', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const group = (await service.createGroup('w1', '前端')).byWorkspace['w1']?.[0]
+    await service.nestWorkspaces(['w2', 'w3'], 'w1', group?.id ?? '')
+
+    const snapshot = await service.setNested(false)
+
+    expect(snapshot.nested).toBe(false)
+    // 关掉时归属整格为空，渲染侧因此只要读这一格，不必再自行判断开关
+    expect(snapshot.nesting).toEqual({})
+  })
+
+  it('does not bring a cleared placement back when nesting is turned on again', async () => {
+    // 关闭时归属已被清空；重新打开只恢复由 cwd 路径推导出的层级，不恢复那一次放入分组
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const group = (await service.createGroup('w1', '前端')).byWorkspace['w1']?.[0]
+    await service.nestWorkspaces(['w2'], 'w1', group?.id ?? '')
+    await service.setNested(false)
+
+    const snapshot = await service.setNested(true)
+
+    expect(snapshot.nested).toBe(true)
+    expect(snapshot.nesting).toEqual({})
+  })
+
+  it('reads nesting as off from a global that says so', async () => {
+    const { ctx } = createFakeContext({ virtualWorkspaces: [], nested: false })
+    const service = await createWorkspaceGroupsService(ctx)
+
+    expect((await service.list()).nested).toBe(false)
+  })
+
+  it('defaults nesting to on for a global written before the switch existed', async () => {
+    const { ctx } = createFakeContext({ virtualWorkspaces: [] })
+    const service = await createWorkspaceGroupsService(ctx)
+
+    expect((await service.list()).nested).toBe(true)
+  })
+
   it('reads back a global record written without the picker fields', async () => {
-    // 旧宿主写的 global 没有这一格（真实文件里就是这个形状）；
+    // 旧宿主写的 global 没有这一格（真实文件里就是这个形状）
     // schema 的默认值要把它补成空状态，否则读一条旧文件就会整片区域打挂
     const { ctx } = createFakeContext({ virtualWorkspaces: [] })
     const service = await createWorkspaceGroupsService(ctx)
@@ -448,7 +572,7 @@ describe('picker state', () => {
     await service.moveWorkspace('w1', groupId)
 
     const stored = readStored() as { virtualWorkspaces: unknown[]; picker: unknown }
-    expect(Object.keys(stored).sort()).toEqual(['picker', 'virtualWorkspaces'])
+    expect(Object.keys(stored).sort()).toEqual(['nested', 'picker', 'virtualWorkspaces'])
     expect(stored.virtualWorkspaces).toHaveLength(1)
     expect(workspaceTreeSchema.safeParse(stored).success).toBe(true)
   })

@@ -4,7 +4,7 @@ import { normalizePickerState } from '../pickerState.ts'
 /**
  * 客户端侧的 Remote 贡献声明
  *
- * 宿主把 `./typert` 清单注册进 typert 注册表；浏览器这一侧则必须显式
+ * 宿主把 `./typert` 清单注册进 typert 注册表，浏览器这一侧则必须显式
  * `ctx.remote.$mount(...)` 自己需要的命名空间，网关才会响应调用
  * 这里的 codec 同样必须是 zod v4 的 strict 实例
  */
@@ -13,6 +13,11 @@ const groupSchema = z.object({
   id: z.string(),
   name: z.string(),
   sessionIds: z.array(z.string()),
+})
+
+const nestingSchema = z.object({
+  workspaceId: z.string(),
+  groupId: z.string(),
 })
 
 const virtualWorkspaceSchema = z.object({
@@ -29,8 +34,10 @@ const pickerSchema = z.object({
 
 const snapshotSchema = z.object({
   byWorkspace: z.record(z.string(), z.array(groupSchema)),
+  nesting: z.record(z.string(), nestingSchema),
   workspaceGroups: z.array(virtualWorkspaceSchema),
   picker: pickerSchema,
+  nested: z.boolean(),
 })
 
 const codec = (typeSymbol: string, schema: z.ZodType) => ({
@@ -46,6 +53,8 @@ export const SERVICE = 'workspaceGroups'
 
 const snapshot = codec('WorkspaceGroupsSnapshot', snapshotSchema)
 const str = (name: string) => codec(name, z.string())
+const bool = (name: string) => codec(name, z.boolean())
+const strList = (name: string) => codec(name, z.array(z.string()))
 
 /** 构造一条 direct 调用描述，避免逐条重复 id/service/namespace */
 function descriptor(
@@ -102,6 +111,13 @@ export const REMOTE_CONTRIBUTION = {
       { name: 'workspaceId', codec: str('WorkspaceId') },
       { name: 'groupId', codec: codec('NullableGroupId', z.string().nullable()) },
     ]),
+    descriptor('nestWorkspaces', [
+      { name: 'workspaceIds', codec: strList('WorkspaceIds') },
+      { name: 'parentWorkspaceId', codec: str('WorkspaceId') },
+      { name: 'groupId', codec: str('GroupId') },
+    ]),
+    descriptor('unnestWorkspaces', [{ name: 'workspaceIds', codec: strList('WorkspaceIds') }]),
+    descriptor('setNested', [{ name: 'enabled', codec: bool('NestedEnabled') }]),
     descriptor('forgetWorkspace', [{ name: 'workspaceId', codec: str('WorkspaceId') }]),
     descriptor('focusEntry', [{ name: 'key', codec: str('RootEntryKey') }]),
     descriptor('togglePinned', [{ name: 'key', codec: str('RootEntryKey') }]),
@@ -115,7 +131,15 @@ export interface Group {
   sessionIds: string[]
 }
 
-/** 一个工作区分组：把若干工作区打包在一起的根节点 */
+/** 一个工作区被放进某个分组的归属，形状与宿主 `spec.ts` 一致 */
+export interface WorkspaceNesting {
+  /** 父工作区 id */
+  workspaceId: string
+  /** 父工作区体内那个分组的 id */
+  groupId: string
+}
+
+/** 一个工作区分组，把若干工作区打包在一起的根节点 */
 export interface VirtualWorkspace {
   id: string
   name: string
@@ -131,8 +155,12 @@ export interface PickerSnapshot {
 
 export interface WorkspaceGroupsSnapshot {
   byWorkspace: Record<string, Group[]>
+  /** 子工作区 → 它被放进的那个分组，开关关着时是空表 */
+  nesting: Record<string, WorkspaceNesting>
   workspaceGroups: VirtualWorkspace[]
   picker: PickerSnapshot
+  /** 是否按子工作区渲染，缺省当开启 */
+  nested: boolean
 }
 
 /**
@@ -143,14 +171,17 @@ export interface WorkspaceGroupsSnapshot {
  * 直接迭代那个字段会抛 `groups is not iterable`，把整片区域（对照模式下还包括承载它的右侧栏）打挂
  * 缺什么补什么，界面退化成「没有工作区分组、没有菜单状态」而不是崩掉
  * @param value - 远端回的快照，字段可能不全
- * @returns 三个字段都在的快照
+ * @returns 五个字段都在的快照
  */
 export function normalizeSnapshot(value: unknown): WorkspaceGroupsSnapshot {
   const raw = (value ?? {}) as Partial<WorkspaceGroupsSnapshot>
   return {
     byWorkspace: raw.byWorkspace ?? {},
+    nesting: raw.nesting ?? {},
     workspaceGroups: Array.isArray(raw.workspaceGroups) ? raw.workspaceGroups : [],
     picker: normalizePickerState(raw.picker),
+    // 旧宿主没有这一格，按默认开启补齐，与宿主 `spec.ts` 的默认值一致
+    nested: raw.nested !== false,
   }
 }
 

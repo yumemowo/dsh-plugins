@@ -25,7 +25,7 @@ import { snapshot } from './snapshot-stub.ts'
  * 断言两件只有真实渲染才暴露的事：卡片确实浮出来了
  * 以及多出来的那层包装没有破坏行的结构（行的定位、层级缩进与淡入标记都还在）
  *
- * 本包其余测试仍跑 node 环境；原语替身见 vitest.config.ts 的 alias
+ * 本包其余测试仍跑 node 环境，原语替身见 vitest.config.ts 的 alias
  */
 
 /** 造一份注入面完整的数据，含一条归组会话与一条无所属会话 */
@@ -69,6 +69,9 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),
     moveWorkspace: async () => snapshot(),
+    nestWorkspaces: async () => snapshot(),
+    unnestWorkspaces: async () => snapshot(),
+    setNested: async () => snapshot(),
     forgetWorkspace: async () => snapshot(),
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
@@ -115,7 +118,7 @@ async function mount(overrides: Partial<WorkspaceGroupsProps> = {}): Promise<HTM
  * 挂载区域并交出根
  *
  * 翻转标记落在 `document.body` 上，测试之间必须靠卸载把标记收回去
- * 否则前一条用例留下的标记会污染下一条；
+ * 否则前一条用例留下的标记会污染下一条
  * 上面那个只返回容器的 {@link mount} 做不到这一点
  */
 async function mountRoot(
@@ -141,7 +144,7 @@ async function mountRoot(
  * `documentElement.clientWidth` 也是 0，翻转判定因此永远不触发
  * 这里给出真实浏览器里会出现的两种几何
  *
- * 区域节点必须从**本次挂载的容器**里取：同文件其他用例挂载后不收尾
+ * 区域节点必须从本次挂载的容器里取，同文件其他用例挂载后不收尾
  * 按文档查 `.wg-root` 会拿到先前那次留下的旧节点，而 resize 监听挂在本次这个节点上
  * @param container - 本次挂载的容器
  * @param viewportWidth - 布局视口宽度
@@ -218,7 +221,7 @@ describe('hover cards in a real DOM', () => {
   it('renders neither card nor wrapper when the official copy is missing', async () => {
     const container = await mount({ official: undefined })
 
-    // 官方文案拿不到时不挂浮层：行因此退回直接子项，结构没有任何包装层
+    // 官方文案拿不到时不挂浮层，行因此退回直接子项，结构没有任何包装层
     expect(container.querySelectorAll('.wg-row').length).toBeGreaterThan(0)
     const sessions = container.querySelector('.wg-sessions') as HTMLElement
     for (const row of Array.from(sessions.children)) {
@@ -335,7 +338,7 @@ describe('flip marker for a region against the right edge', () => {
 
   it('tags the card box so the stylesheet can tell our cards from the official ones', async () => {
     // 卡片盒由官方原语渲染、且 portal 到 document.body
-    // 官方左侧栏的卡片就在同一个父节点上；样式只能靠本包给卡片打的标记区分
+    // 官方左侧栏的卡片就在同一个父节点上，样式只能靠本包给卡片打的标记区分
     // 因此正文必须把它打上去
     const container = document.createElement('div')
     document.body.appendChild(container)

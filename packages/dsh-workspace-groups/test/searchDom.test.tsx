@@ -64,6 +64,9 @@ function props(wide = true): WorkspaceGroupsProps {
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),
     moveWorkspace: async () => snapshot(),
+    nestWorkspaces: async () => snapshot(),
+    unnestWorkspaces: async () => snapshot(),
+    setNested: async () => snapshot(),
     forgetWorkspace: async () => snapshot(),
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
@@ -178,7 +181,7 @@ describe('search in a real DOM', () => {
   it('gives both panels the fade-in class so each switch replays it', async () => {
     const { container } = await mount()
 
-    // 常规列表与搜索结果各是一个面板；两者都带 wg-panel
+    // 常规列表与搜索结果各是一个面板，两者都带 wg-panel
     // 切换内容体时 React 换掉整个节点
     // 动画因此重放（官方三种内容体共用 .treeBody 同理）
     const treePanel = container.querySelector('.wg-list')
@@ -203,8 +206,8 @@ describe('search in a real DOM', () => {
     // 第二行那个容器带 6px gap（官方给「工作区名 / 摘录」用的）
     // 路径两段若直接做它的子项，那 6px 会插进「工作区」与「分组」之间
     // 把一条连续的路径读成两截。因此这里断言两段的从属结构：它们同属一个中间层
-    // 外层 gap 够不到两者之间（那条 gap 的取值本身由 styles.test.ts 从 CSS
-    // 文本上钉住）
+    // 外层 gap 够不到两者之间，那条 gap 的取值本身由 styles.test.ts 从 CSS
+    // 文本上钉住
     const meta = container.querySelector('.wg-search-result-meta') as HTMLElement
     const path = container.querySelector('.wg-search-result-path') as HTMLElement
     const workspace = container.querySelector('.wg-search-result-workspace') as HTMLElement

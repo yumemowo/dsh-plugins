@@ -45,7 +45,21 @@ const nameCodec = {
   schema: z.string(),
 }
 
-/** 可空分组 id：null 表示「移出到未分组」 */
+/** 一批工作区 id，一次把整棵子树写进同一个分组 */
+const workspaceIdsCodec = {
+  mode: 'strict',
+  typeSymbol: '@your-scope/dsh-workspace-groups#WorkspaceIds',
+  schema: z.array(z.string()),
+}
+
+/** 嵌套渲染开关 */
+const nestedEnabledCodec = {
+  mode: 'strict',
+  typeSymbol: '@your-scope/dsh-workspace-groups#NestedEnabled',
+  schema: z.boolean(),
+}
+
+/** 可空分组 id，null 表示「移出到未分组」 */
 const nullableGroupIdCodec = {
   mode: 'strict',
   typeSymbol: '@your-scope/dsh-workspace-groups#NullableGroupId',
@@ -123,6 +137,15 @@ export const TYPERT = {
       { name: 'workspaceId', wire: 'workspaceId', codec: workspaceIdCodec },
       { name: 'groupId', wire: 'groupId', codec: nullableGroupIdCodec },
     ]),
+    direct('nestWorkspaces', [
+      { name: 'workspaceIds', wire: 'workspaceIds', codec: workspaceIdsCodec },
+      { name: 'parentWorkspaceId', wire: 'parentWorkspaceId', codec: workspaceIdCodec },
+      { name: 'groupId', wire: 'groupId', codec: groupIdCodec },
+    ]),
+    direct('unnestWorkspaces', [
+      { name: 'workspaceIds', wire: 'workspaceIds', codec: workspaceIdsCodec },
+    ]),
+    direct('setNested', [{ name: 'enabled', wire: 'enabled', codec: nestedEnabledCodec }]),
     direct('forgetWorkspace', [
       { name: 'workspaceId', wire: 'workspaceId', codec: workspaceIdCodec },
     ]),
@@ -187,6 +210,23 @@ export const TYPERT = {
           },
           {
             kind: 'method',
+            name: 'nestWorkspaces',
+            signature:
+              'nestWorkspaces(workspaceIds: readonly string[], parentWorkspaceId: string, groupId: string): Promise<WorkspaceGroupsSnapshot>',
+          },
+          {
+            kind: 'method',
+            name: 'unnestWorkspaces',
+            signature:
+              'unnestWorkspaces(workspaceIds: readonly string[]): Promise<WorkspaceGroupsSnapshot>',
+          },
+          {
+            kind: 'method',
+            name: 'setNested',
+            signature: 'setNested(enabled: boolean): Promise<WorkspaceGroupsSnapshot>',
+          },
+          {
+            kind: 'method',
             name: 'forgetWorkspace',
             signature: 'forgetWorkspace(workspaceId: string): Promise<WorkspaceGroupsSnapshot>',
           },
@@ -204,6 +244,11 @@ export const TYPERT = {
         types: [
           { name: 'Group', declaration: 'export interface Group { id: string; name: string; sessionIds: string[] }' },
           {
+            name: 'WorkspaceNesting',
+            declaration:
+              'export interface WorkspaceNesting { workspaceId: string; groupId: string }',
+          },
+          {
             name: 'VirtualWorkspace',
             declaration:
               'export interface VirtualWorkspace { id: string; name: string; workspaceIds: string[] }',
@@ -216,7 +261,7 @@ export const TYPERT = {
           {
             name: 'WorkspaceGroupsSnapshot',
             declaration:
-              'export interface WorkspaceGroupsSnapshot { byWorkspace: Record<string, Group[]>; workspaceGroups: VirtualWorkspace[]; picker: PickerSnapshot }',
+              'export interface WorkspaceGroupsSnapshot { byWorkspace: Record<string, Group[]>; nesting: Record<string, WorkspaceNesting>; workspaceGroups: VirtualWorkspace[]; picker: PickerSnapshot; nested: boolean }',
           },
         ],
       },

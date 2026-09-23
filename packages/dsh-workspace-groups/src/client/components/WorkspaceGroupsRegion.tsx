@@ -1,7 +1,7 @@
 /**
  * 侧边栏的工作区浏览区域
  *
- * 这是 `sidebar.workspaces` 的接替者：该插槽是 single 类型，本包以 `priority: -1` 注册从而成为渲染者
+ * 这是 `sidebar.workspaces` 的接替者，该插槽是 single 类型，本包以 `priority: -1` 注册从而成为渲染者
  * 官方 ui-workspace 的同名注册仍留在注册表中但不再渲染
  *
  * 本模块只负责状态与编排：折叠态、四个对话框的草稿，以及把快照切成每个工作区的布局
@@ -14,7 +14,7 @@
  * 那是工作区一级的容器，与本包在工作区内刻意不造「未分组分组」的取舍无关
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -32,10 +32,16 @@ import {
   groupIdOfSession,
   virtualWorkspaceIdOf,
 } from '../data/layout.ts'
+import {
+  descendantsOf,
+  deriveNesting,
+  nearestAncestorForPath,
+} from '../data/nest.ts'
 import { groupSessionsByWorkspace, straySessions } from '../data/sessions.ts'
 import { focusedLayout, pickerSections, resolveFocus, rootPickerEntries } from '../data/picker.ts'
 import type { PickerEntry } from '../data/picker.ts'
 import { WorkspacePickerMenu } from './WorkspacePickerMenu.tsx'
+import { ViewOptionsMenu } from './ViewOptionsMenu.tsx'
 import { EMPTY_PICKER_STATE } from '../../pickerState.ts'
 import { rootVirtualKey } from '../../rootEntry.ts'
 import { searchSessions } from '../data/search.ts'
@@ -61,15 +67,42 @@ import { WorkspaceRow } from './WorkspaceRow.tsx'
 import type { WorkspaceRowLabels } from './WorkspaceRow.tsx'
 import { WorkspaceSection } from './WorkspaceSection.tsx'
 import { VirtualWorkspaceSection } from './VirtualWorkspaceSection.tsx'
-import { VIRTUAL_WORKSPACE_ITEM, VIRTUAL_WORKSPACE_PREFIX } from '../menus.tsx'
-import type { VirtualWorkspaceMenuInput } from '../menus.tsx'
+import {
+  PARENT_GROUP_ITEM,
+  VIRTUAL_WORKSPACE_ITEM,
+  VIRTUAL_WORKSPACE_PREFIX,
+  parseParentGroupId,
+} from '../menus.tsx'
+import type { ParentGroupMenuInput, VirtualWorkspaceMenuInput } from '../menus.tsx'
 import { DeleteDialog } from './dialogs/DeleteDialog.tsx'
+import { ListDialog } from './dialogs/ListDialog.tsx'
 import { NameDialog } from './dialogs/NameDialog.tsx'
 
-/** 未分组桶在工作区状态表里占用的键；它没有真实的 workspaceId */
+/** 未分组桶在工作区状态表里占用的键，它没有真实的 workspaceId */
 const UNGROUPED_KEY = ''
 
-/** 组件消费的 props：全局数据 hook + 注入的动作 + 两个文案座位 + shell 的宽窄状态 */
+/**
+ * 一次待确认的「把新增的子工作区放进父所在的分组」
+ *
+ * 只有新增工作区这一条路径用它，新工作区落在某个工作区之下，而那个父恰好只在一个分组里时
+ * 问一句要不要顺手放进去。父有多个分组时不问——该选哪个不是这里能替用户定的
+ */
+interface MergeDraft {
+  /** 目标分组所属的父工作区 */
+  parentId: string
+  /** 目标分组 */
+  groupId: string
+  /** 父工作区名，用于文案 */
+  parentLabel: string
+  /** 分组名，用于文案 */
+  groupLabel: string
+  /** 新增工作区的名字，用于文案 */
+  childLabel: string
+  /** 要放进该分组的工作区 */
+  workspaceIds: string[]
+}
+
+/** 组件消费的 props，全局数据 hook + 注入的动作 + 两个文案座位 + shell 的宽窄状态 */
 export type WorkspaceGroupsProps = RegionDataHooks &
   RegionActions & {
     /** shell 折叠状态：宽栏渲染完整内容，窄栏只渲染展开入口 */
@@ -101,6 +134,9 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     renameVirtualWorkspace,
     deleteVirtualWorkspace,
     moveWorkspace,
+    nestWorkspaces,
+    unnestWorkspaces,
+    setNested,
     forgetWorkspace,
     focusEntry,
     togglePinned,
@@ -120,23 +156,37 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const labels = useMemo(() => regionLabels(t, tWorkspace, tSidebar), [t, tWorkspace, tSidebar])
 
   const workspaces = useWorkspaces((state) => state.items) as readonly WorkspaceView[]
-  // 归档集是注册表全局的：归档会话仍留在工作区的 sessionIds 里，必须显式过滤，否则已归档的会话会继续出现在列表里
+  // 归档集是注册表全局的，归档会话仍留在工作区的 sessionIds 里，必须显式过滤，否则已归档的会话会继续出现在列表里
   const archivedSessionIds = useWorkspaces(
     (state) => state.archivedSessionIds,
   ) as readonly string[]
   const sessions = useSessions((state) => state) as SessionListState
-  // 待交互快照与会话列表是两个独立事实源：等待审批/回答时会话可能并不在 running，因此必须单独读，不能从会话摘要里推
+  // 待交互快照与会话列表是两个独立事实源，等待审批/回答时会话可能并不在 running，因此必须单独读，不能从会话摘要里推
   const pendingInteractions = useSessionPendingInteraction(
     (state) => state,
   ) as SessionPendingInteractionSnapshot
   const [snapshot, setSnapshot] = useState<WorkspaceGroupsSnapshot>({
     byWorkspace: {},
+    nesting: {},
     workspaceGroups: [],
     picker: EMPTY_PICKER_STATE,
+    nested: true,
   })
   /** 下拉菜单的开合；菜单面板与触发器分处两个组件，状态因此留在这一层 */
   const [pickerOpen, setPickerOpen] = useState(false)
   const pickerTrigger = useRef<HTMLButtonElement>(null)
+  /** 视图选项面板的开合与触发器，与下拉菜单同一套分工 */
+  const [viewOptionsOpen, setViewOptionsOpen] = useState(false)
+  const viewOptionsTrigger = useRef<HTMLButtonElement>(null)
+  /** 关闭嵌套的二次确认框，打开时列出会被解除嵌套的工作区 */
+  const [nestedConfirmOpen, setNestedConfirmOpen] = useState(false)
+  /**
+   * 待确认的「把子工作区一并放进分组」
+   *
+   * 两种来源共用同一个框，把已经归组的工作区移进分组，以及新增工作区后问它要不要跟随父
+   * 两者问的其实是同一件事——要不要把一棵子树的归属一起改写
+   */
+  const [mergeDraft, setMergeDraft] = useState<MergeDraft | null>(null)
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Record<string, boolean>>({})
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   // 工作区分组与工作区的折叠态各记一份，键的构成也各自独立，因此两层开合互不影响
@@ -162,7 +212,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     groupId: string
     label: string
   } | null>(null)
-  /** 从搜索结果打开、等待滚进可视区的那一行；滚动完成后由行自己回报清除 */
+  /** 从搜索结果打开、等待滚进可视区的那一行，滚动完成后由行自己回报清除 */
   const [revealSessionId, setRevealSessionId] = useState<string | undefined>(undefined)
 
   /**
@@ -180,63 +230,6 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   // 行尾相对时间的基准时刻。官方在渲染时直接取 Date.now()（没有任何 ticker）
   // 这里取同一做法：时间文案的精度是分钟级，跟着别的重渲染刷新足够
   const now = Date.now()
-
-  // 官方动作与文案的解析时机放在渲染期：渲染器会缓存注册项的 inject 结果
-  // 在 inject 里读服务会冻结在首次渲染那一刻
-  // 而官方 ui-workspace 的加载顺序不受本包约束
-  const official = resolveOfficial?.()
-  // 「添加工作区」同样延迟到渲染期解析：它要读官方 directoryFlow 洞的占用者
-  // 而目录选择器插件的加载顺序不受本包约束。订阅占用情况让入口跟着占用者出现
-  const flowOccupied = useDirectoryFlow((occupied) => occupied) as boolean
-  const addWorkspace = flowOccupied ? resolveAddWorkspace?.() : undefined
-
-  /**
-   * 一个会话行的全部状态，供行首那个点与悬停卡片共同消费
-   *
-   * 待交互种类从快照里按会话 id 取
-   * 在这里算是为了让状态位与时间文案作为内容稳定的 prop 参与行级 memo 的比对
-   * 被 memo 挡下的行不会重算，按渲染当刻取时间会停住
-   *
-   * 卡片要连空闲也列一条，行首则不画点——那一层取舍由 `data/status.ts` 的 `rowStatusDot` 承担
-   * 两个消费方因此不会各推导一套
-   * @returns 按优先级排列的状态
-   */
-  const statusesOf = (row: SessionRow): SessionStatus[] =>
-    sessionStatuses(row, pendingInteractions.get(row.id as SessionId)?.kind, labels.status)
-
-  /**
-   * 一个会话行行尾要显示的相对时间
-   *
-   * 官方对空白（新建中）会话行不显示时间，这里沿用同一取舍
-   * @returns 相对时间文案；不显示时为 undefined
-   */
-  const timeOf = (row: SessionRow): string | undefined =>
-    row.blank || official === undefined ? undefined : official.relativeTime(row.updatedAt, now)
-
-  /**
-   * 一个会话行悬停卡片里的相对时间
-   *
-   * 与行尾那份的区别只有一层：距离要套官方的「…前」模板（见 `officialHoverLabels`）
-   * 官方同样分两个函数——行上那份是 `timeLabel`，卡片那份是 `hoverTimeLabel`
-   * @returns 相对时间文案；空白行不显示时为 undefined
-   */
-  const hoverTimeOf = (row: SessionRow): string | undefined =>
-    row.blank || official === undefined
-      ? undefined
-      : labels.hover.timeAgo(row.updatedAt, now)
-
-  /** 悬停卡片只在官方文案在场时挂：缺了它卡片只是个空壳 */
-  const hoverLabels = official === undefined ? undefined : labels.hover
-
-  // 宿主 home 用于把工作区目录缩写成 `~`。走全局标准 hook 而不是 inject：
-  // 渲染器会缓存注册项的 inject 结果整个注册周期
-  // 在 inject 里读会冻结在首次渲染那一刻
-  const home = useHostInfo((info: HostInfo) => info.home) as string | undefined
-
-  /** 被打开的那一行滚进可视区后清掉标记，避免它在后续重新挂载时再滚一次 */
-  const acknowledgeReveal = useCallback((sessionId: string) => {
-    setRevealSessionId((current) => (current === sessionId ? undefined : current))
-  }, [])
 
   /**
    * 根节点上的工作区布局
@@ -259,19 +252,102 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     for (const workspace of workspaces) index.set(String(workspace.workspaceId), workspace)
     return index
   }, [workspaces])
+
+  /** 取一个工作区的 cwd；缺省表示它没有可用路径，那个工作区因此不会被嵌套 */
+  const pathOfWorkspace = (workspaceId: string): string | undefined =>
+    workspaceById.get(workspaceId)?.path
+
+  /**
+   * workspaceId → 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里
+   *
+   * 虚拟工作区归属由根节点布局交出，那一层已经把「哪些工作区在哪个虚拟分组里」算过一遍
+   */
+  const virtualOfWorkspace = useMemo(() => {
+    const index = new Map<string, string>()
+    for (const section of snapshot.workspaceGroups) {
+      for (const workspaceId of section.workspaceIds) index.set(workspaceId, section.id)
+    }
+    return (workspaceId: string): string => index.get(workspaceId) ?? ''
+  }, [snapshot.workspaceGroups])
+
+  /**
+   * 子工作区嵌套的推导
+   *
+   * 路径关系不落盘，每次都从 cwd 现推；落盘的归属只决定「渲染在哪个分组里」，是否成父子恒由路径决定
+   * 开关关着时推导结果里每个工作区都是自己那个容器的顶层，界面因此与没有这个特性时完全一致
+   */
+  const nesting = useMemo(
+    () =>
+      deriveNesting({
+        enabled: snapshot.nested,
+        workspaceIds,
+        pathOf: pathOfWorkspace,
+        virtualOf: virtualOfWorkspace,
+        bindingOf: (workspaceId) => snapshot.nesting[workspaceId],
+        groupIdsOf: (workspaceId) =>
+          new Set((snapshot.byWorkspace[workspaceId] ?? []).map((group) => group.id)),
+      }),
+    // pathOf 随 workspaceById 变
+    [snapshot, workspaceIds, workspaceById, virtualOfWorkspace],
+  )
+
+  /**
+   * 根节点布局
+   *
+   * 开启嵌套时每一段只列该容器里的顶层工作区，被嵌套的那些在父工作区体内渲染
+   * 关掉时每个工作区都散回自己那个虚拟分组（或根节点），与没有这个特性时逐行一致
+   */
   const rootLayout = useMemo(
-    () => buildRootLayout(workspaceIds, snapshot.workspaceGroups),
-    [workspaceIds, snapshot.workspaceGroups],
+    () => buildRootLayout(workspaceIds, snapshot.workspaceGroups, nesting),
+    [workspaceIds, snapshot.workspaceGroups, nesting],
+  )
+
+  /**
+   * 新增工作区采纳成功后，按层级关系判断要不要问一句「放进父所在的分组」
+   *
+   * 新工作区此刻还没进列表，因此这里按路径找它最短的直接父工作区，而不是按 id
+   * 父不存在、或父自己没在任何一个分组里时不问，默认的嵌套渲染已经把它放在父下面了，放进分组不是必需的
+   *
+   * 这是一条从「添加工作区」那个组件回传的事实，所以走回调而不是读渲染期的状态
+   */
+  const onWorkspaceAdopted = useCallback(
+    (workspaceId: string, path: string): void => {
+      if (!snapshot.nested) return
+      const parentId = nearestAncestorForPath(
+        workspaceIds,
+        pathOfWorkspace,
+        virtualOfWorkspace,
+        path,
+        virtualOfWorkspace(workspaceId),
+      )
+      if (parentId === undefined) return
+      const parent = workspaceById.get(parentId)
+      const directGroups = snapshot.byWorkspace[parentId] ?? []
+      // 只在父恰好有一个分组时替用户选定它，有多个时该选哪个不是这里能替用户定的
+      if (directGroups.length !== 1) return
+      const group = directGroups[0]
+      if (group === undefined) return
+      setMergeDraft({
+        parentId,
+        groupId: group.id,
+        parentLabel: parent?.title ?? parentId,
+        groupLabel: group.name,
+        childLabel: workspaceById.get(workspaceId)?.title ?? workspaceId,
+        workspaceIds: [workspaceId],
+      })
+    },
+    [snapshot.nested, snapshot.byWorkspace, workspaceIds, workspaceById],
   )
 
   /**
    * 下拉菜单里的条目与三个分区
    *
-   * 在根节点布局之后算：菜单只列根节点单元格里的条目，因此两者必须取自同一次切分，否则「全部」分区的顺序会和列表漂移
+   * 与列表取自同一次切分，因此「全部」分区的顺序与刚才那一屏逐行对应
+   * 开启嵌套时子工作区也列出并按层级缩进，它们可能已被置顶，不列出来那些记录就成了指向不存在条目的死条目
    */
   const pickerEntries = useMemo(
-    () => rootPickerEntries(rootLayout, workspaceById),
-    [rootLayout, workspaceById],
+    () => rootPickerEntries(rootLayout, workspaceById, snapshot.nested ? nesting : undefined),
+    [rootLayout, workspaceById, nesting, snapshot.nested],
   )
   const picker = useMemo(
     () => pickerSections(pickerEntries, snapshot.picker),
@@ -280,10 +356,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   /**
    * 当前聚焦的条目
    *
-   * 解析不到（聚焦的条目已经被删掉或解散）时当作没有聚焦：记录比列表活得久，直接按那个键过滤会让列表整片空掉，而第二行还写着一个已经不存在的名字
+   * 解析不到（聚焦的条目已经被删掉或解散）时当作没有聚焦，记录比列表活得久，直接按那个键过滤会让列表整片空掉，而第二行还写着一个已经不存在的名字
    */
   const resolvedFocus = resolveFocus(pickerEntries, snapshot.picker.focused)
-  /** 第二行显示的文案；没有聚焦时是「全部工作区」 */
+  /** 第二行显示的文案，没有聚焦时是「全部工作区」 */
   const currentFocus = resolvedFocus?.label ?? labels.picker.all
   /**
    * 聚焦生效后的根节点布局
@@ -294,8 +370,65 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     () => focusedLayout(rootLayout, pickerEntries, snapshot.picker.focused),
     [rootLayout, pickerEntries, snapshot.picker.focused],
   )
-  /** 真的聚焦在某一片内容上时，「未分组」区段整段隐藏：聚焦就是「只看这一个」 */
+  /** 真的聚焦在某一片内容上时，「未分组」区段整段隐藏，聚焦就是「只看这一个」 */
   const focused = resolvedFocus !== undefined
+
+  // 官方动作与文案的解析时机放在渲染期，渲染器会缓存注册项的 inject 结果
+  // 在 inject 里读服务会冻结在首次渲染那一刻
+  // 而官方 ui-workspace 的加载顺序不受本包约束
+  const official = resolveOfficial?.()
+  // 「添加工作区」同样延迟到渲染期解析：它要读官方 directoryFlow 洞的占用者
+  // 而目录选择器插件的加载顺序不受本包约束。订阅占用情况让入口跟着占用者出现
+  const flowOccupied = useDirectoryFlow((occupied) => occupied) as boolean
+  const addWorkspace = flowOccupied ? resolveAddWorkspace?.(onWorkspaceAdopted) : undefined
+
+  /**
+   * 一个会话行的全部状态，供行首那个点与悬停卡片共同消费
+   *
+   * 待交互种类从快照里按会话 id 取
+   * 在这里算是为了让状态位与时间文案作为内容稳定的 prop 参与行级 memo 的比对
+   * 被 memo 挡下的行不会重算，按渲染当刻取时间会停住
+   *
+   * 卡片要连空闲也列一条，行首则不画点——那一层取舍由 `data/status.ts` 的 `rowStatusDot` 承担
+   * 两个消费方因此不会各推导一套
+   * @returns 按优先级排列的状态
+   */
+  const statusesOf = (row: SessionRow): SessionStatus[] =>
+    sessionStatuses(row, pendingInteractions.get(row.id as SessionId)?.kind, labels.status)
+
+  /**
+   * 一个会话行行尾要显示的相对时间
+   *
+   * 官方对空白（新建中）会话行不显示时间，这里沿用同一取舍
+   * @returns 相对时间文案，不显示时为 undefined
+   */
+  const timeOf = (row: SessionRow): string | undefined =>
+    row.blank || official === undefined ? undefined : official.relativeTime(row.updatedAt, now)
+
+  /**
+   * 一个会话行悬停卡片里的相对时间
+   *
+   * 与行尾那份的区别只有一层：距离要套官方的「…前」模板（见 `officialHoverLabels`）
+   * 官方同样分两个函数——行上那份是 `timeLabel`，卡片那份是 `hoverTimeLabel`
+   * @returns 相对时间文案，空白行不显示时为 undefined
+   */
+  const hoverTimeOf = (row: SessionRow): string | undefined =>
+    row.blank || official === undefined
+      ? undefined
+      : labels.hover.timeAgo(row.updatedAt, now)
+
+  /** 悬停卡片只在官方文案在场时挂：缺了它卡片只是个空壳 */
+  const hoverLabels = official === undefined ? undefined : labels.hover
+
+  // 宿主 home 用于把工作区目录缩写成 `~`。走全局标准 hook 而不是 inject：
+  // 渲染器会缓存注册项的 inject 结果整个注册周期
+  // 在 inject 里读会冻结在首次渲染那一刻
+  const home = useHostInfo((info: HostInfo) => info.home) as string | undefined
+
+  /** 被打开的那一行滚进可视区后清掉标记，避免它在后续重新挂载时再滚一次 */
+  const acknowledgeReveal = useCallback((sessionId: string) => {
+    setRevealSessionId((current) => (current === sessionId ? undefined : current))
+  }, [])
 
   // 本次搜索的结果页。计算是纯的且输入都来自快照，因此跟着这些输入走 memo：
   // 流式期间每次活动都会重渲染整片区域，不缓存就要在每次活动重扫一遍全部会话
@@ -344,9 +477,17 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
           prev[rootGroupId] === true ? { ...prev, [rootGroupId]: false } : prev,
         )
       }
-      setCollapsedWorkspaces((prev) =>
-        prev[workspaceId] === true ? { ...prev, [workspaceId]: false } : prev,
-      )
+      // 工作区自己可能是嵌在父工作区体内的子工作区，从根节点那一层起逐层展开它所有的祖先
+      // 只展开它自己会让那一行落在收起的父折叠体里，用户看不到它
+      const lineage = [workspaceId, ...nesting.ancestorsOf(workspaceId)]
+      setCollapsedWorkspaces((prev) => {
+        let next = prev
+        for (const id of lineage) {
+          if (next[id] !== true) continue
+          next = { ...next, [id]: false }
+        }
+        return next
+      })
       if (match.group !== undefined) {
         const key = `${workspaceId}:${match.group.id}`
         setCollapsedGroups((prev) => (prev[key] === true ? { ...prev, [key]: false } : prev))
@@ -367,7 +508,13 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
         // 元数据不可用时退化为「全部分组消失」，会话仍按未归组平铺
         // 工作区仍平铺在根节点上，界面可用
         if (!cancelled) {
-          setSnapshot({ byWorkspace: {}, workspaceGroups: [], picker: EMPTY_PICKER_STATE })
+          setSnapshot({
+            byWorkspace: {},
+            nesting: {},
+            workspaceGroups: [],
+            picker: EMPTY_PICKER_STATE,
+            nested: true,
+          })
         }
       })
     return () => {
@@ -416,7 +563,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     setCollapsedVirtualWorkspaces((prev) => ({ ...prev, [key]: prev[key] !== true }))
   }, [])
 
-  /** 提交建组或改名；空名与取消都不写 */
+  /** 提交建组或改名，空名与取消都不写 */
   const commitNameDraft = (): void => {
     if (nameDraft === null) return
     const name = nameDraft.value.trim()
@@ -436,7 +583,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   }
 
   /**
-   * 提交工作区分组的建组或改名；空名与取消都不写
+   * 提交工作区分组的建组或改名，空名与取消都不写
    *
    * 新建时把草稿里指定的工作区一并放进去：入口就在那个工作区行上
    * 点完立刻看到它进了新分组，比「建完再把工作区拖进去」少一步，也不会出现「建完分组却不知道它在哪」的空档
@@ -478,7 +625,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     apply(deleteVirtualWorkspace(virtualWorkspaceDelete.groupId))
   }
 
-  /** 工作区当前的名字；用于判断改名是否真的改变了内容 */
+  /** 工作区当前的名字，用于判断改名是否真的改变了内容 */
   const renamedFrom = (draft: WorkspaceNameDraft): string => {
     const workspace = workspaces.find((item) => String(item.workspaceId) === draft.workspaceId)
     return workspace === undefined ? '' : workspace.title
@@ -503,7 +650,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    * 反过来的话，清理成功而删工作区失败会把分组提前丢掉
    * 两处清理由既有的 `deleteGroup` / `forgetWorkspace` 承担，不新增宿主接口
    *
-   * 每一步都回整份快照，取最后一步的那份即可：删工作区本身不动分组元数据，因此最终状态就是最后一次清理的结果（没有分组可清时退回删工作区前的本地值）
+   * 每一步都回整份快照，取最后一步的那份即可，删工作区本身不动分组元数据，因此最终状态就是最后一次清理的结果（没有分组可清时退回删工作区前的本地值）
    */
   const commitWorkspaceDelete = (): void => {
     if (workspaceDelete === null) return
@@ -528,7 +675,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    * 建好之后无条件把会话摆到本次创建指定的位置：`groupId` 为空串表示工作区行的 `+`，会话归入未归组区
    * 这一步不能只在指定了分组时做——官方会复用该工作区已有的空白会话，那条会话可能正留在某个分组里
    * 复用时不把它摘出来就会停在原分组
-   * @param groupId - 新会话要归入的分组；空串表示归入未归组区
+   * @param groupId - 新会话要归入的分组，空串表示归入未归组区
    */
   const createSessionIn = (workspaceId: string, groupId: string): void => {
     setCollapsedWorkspaces((prev) => ({ ...prev, [workspaceId]: false }))
@@ -603,7 +750,101 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   )
 
   /**
-   * 菜单选中一个条目：聚焦它
+   * 取一个工作区名下「已经放进某个分组」的后代
+   *
+   * 未放进任何分组的后代由路径推导自动跟随父的位置，因此不需要改写归属
+   * 已经放进某个分组的要跟着父一起换组，否则它们会在分组边界上脱离父的层级
+   */
+  const groupedDescendantsOf = (workspaceId: string): string[] =>
+    descendantsOf(workspaceIds, pathOfWorkspace, virtualOfWorkspace, workspaceId).filter(
+      (candidate) => nesting.bindingOf(candidate) !== undefined,
+    )
+
+  /**
+   * 计算一个工作区当前的缩进层级
+   *
+   * 取的是 nesting 推导交出的 `levelOf`，而不是数 cwd 祖先，被放进会话分组的那个
+   * 要多让一格（中间夹着分组头），两者在那种情况下相差 1
+   * @returns 从 0 起的层级
+   */
+  const depthOf = (workspaceId: string): number => nesting.levelOf(workspaceId)
+
+  /**
+   * 把一个工作区（连同它名下的子工作区）放进某个祖先工作区的会话分组
+   *
+   * 「父」由选中那个分组决定，不是自动取最近祖先，放进谁的分组谁就是父
+   *
+   * 归属记在子工作区自己的记录上，因此这里交出的是要写归属的那批 id：
+   * 工作区自己不写（它是被放进分组的那一个），它名下的子工作区要一并跟随，否则层级会在分组边界上断开
+   *
+   * 分两次写，先把它放进分组，再把跟随的子工作区放进去
+   * 第二次失败时会留下「父已进组、子还在外面」的状态——那是可恢复的，下次再移一次即可，不必为此加补偿事务
+   */
+  const selectParentGroup = useCallback(
+    (workspaceId: string, id: string): void => {
+      if (id === PARENT_GROUP_ITEM.ungroup) {
+        apply(unnestWorkspaces([workspaceId]))
+        return
+      }
+      const target = parseParentGroupId(id)
+      if (target === undefined) return
+      // 整棵子树跟着走，保持层级关系，父进哪个分组，它名下已经放进别处分组的子工作区一并换过去
+      // 未放进任何分组的那些由路径推导自动跟随，不必写
+      // 两步分开写，因此父已进组、子还留在原组是一段可恢复的中间态——下次移一次即可
+      const followers = groupedDescendantsOf(workspaceId)
+      // 每一步都要走 `apply`，它把宿主回的整份快照写进本地状态
+      // 直接 `void nestWorkspaces(...)` 会把那次写入的结果丢掉，界面因此停在旧快照上——
+      // 归属其实已经落盘，看起来却像「移入没有生效」
+      apply(
+        nestWorkspaces([workspaceId], target.parentId, target.groupId).then((next) =>
+          followers.length === 0
+            ? next
+            : nestWorkspaces(followers, target.parentId, target.groupId),
+        ),
+      )
+    },
+    [apply, nestWorkspaces],
+  )
+
+  /**
+   * 视图选项里的嵌套开关
+   *
+   * 开启直接写；关闭要先过二次确认，并把会被解除嵌套的工作区逐个列出来
+   * 这一层是「用户点了一下」与「真的写盘」之间的分派，真正的写入在 {@link commitNestedOff}
+   *
+   * 确认框只列放进某个分组的那些，未放进分组的子工作区本来就只是按路径推导出来的展示层级
+   * 开关一关它们自然回落到根节点，开关一开又回来，不需要也不该被写进确认范围
+   */
+  const requestNestedToggle = (): void => {
+    if (!snapshot.nested) {
+      apply(setNested(true))
+      return
+    }
+    setNestedConfirmOpen(true)
+  }
+
+  /** 关闭嵌套，宿主会把全部落盘的归属一并清空，因此这里只需把开关写下去 */
+  const commitNestedOff = (): void => {
+    setNestedConfirmOpen(false)
+    apply(setNested(false))
+  }
+
+  /**
+   * 提交一次「放进父所在的分组」
+   *
+   * 选「放进去」时写这次归属，选「不放进去」时什么都不做——新工作区仍按路径推导渲染在父下面
+   * @param merge - 为真表示把新工作区放进那个分组
+   */
+  const commitMerge = (merge: boolean): void => {
+    if (mergeDraft === null) return
+    const draft = mergeDraft
+    setMergeDraft(null)
+    if (!merge) return
+    apply(nestWorkspaces(draft.workspaceIds, draft.parentId, draft.groupId))
+  }
+
+  /**
+   * 菜单选中一个条目，聚焦它
    *
    * 聚焦要落盘（它是最近使用的记录源），因此走 `apply` 收宿主回的整份快照
    * 菜单随即收起——它的作用就是把用户送到那一片内容上，留着只会挡住刚聚焦的列表
@@ -692,7 +933,55 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     ungroupLabel: labels.ungroupWorkspace,
   })
 
-  // 窄栏：官方在这里也只留搜索与「添加工作区」两个入口（外加 shell 的展开入口）
+  /**
+   * 某个工作区行上那份「移动到分组…」菜单的选项集
+   *
+   * 候选是它 cwd 路径上的任意一个现存祖先，放进谁的分组谁就是父——因此不是一个自动选定的最近祖先
+   * 只有真的有分组可进时这一项才出现；父工作区名下没有分组时它整项渲染成禁用，不留一个点不动的热区
+   *
+   * 祖先按从近到远列出，与列表里的层级顺序一致
+   */
+  const parentGroupMenuOf = (workspaceId: string): ParentGroupMenuInput | undefined => {
+    const current = nesting.bindingOf(workspaceId)
+    const candidates = nesting.ancestorsOf(workspaceId).map((parentId) => {
+      const parent = workspaceById.get(parentId)
+      return {
+        parentId,
+        parentLabel: parent?.title ?? parentId,
+        groups: (snapshot.byWorkspace[parentId] ?? []).map((group) => ({
+          id: group.id,
+          label: group.name,
+        })),
+      }
+    })
+    const movable = candidates.some((ancestor) => ancestor.groups.length > 0)
+    // 既没有可移入的目标、也不在任何一个分组里时整项不渲染，留着就是一个点不动的死入口
+    // 这与「虚拟工作区分组」那一项不同——那一项的子菜单里总有一个「新建」可点
+    if (!movable && current === undefined) return undefined
+    return {
+      candidates,
+      currentGroupId: current?.groupId ?? '',
+      moveToLabel: labels.nested.moveToGroup,
+      ungroupLabel: labels.nested.ungroupChild,
+    }
+  }
+
+  /**
+   * 当前被放进某个分组的子工作区，按列表里的顺序
+   *
+   * 关掉嵌套时它就是会被解除嵌套的那批，因此确认框的名单与提示都从这一份来
+   */
+  const groupedChildIds = useMemo(
+    () => nesting === undefined ? [] : workspaceIds.filter((id) => nesting.bindingOf(id) !== undefined),
+    [nesting, workspaceIds],
+  )
+  /** 上面那批的显示名；工作区已被删掉时退回 id，名单因此不会出现空行 */
+  const groupedChildLabels = useMemo(
+    () => groupedChildIds.map((id) => workspaceById.get(id)?.title ?? id),
+    [groupedChildIds, workspaceById],
+  )
+
+  // 窄栏，官方在这里也只留搜索与「添加工作区」两个入口（外加 shell 的展开入口）
   if (!wide) {
     return (
       <>
@@ -711,17 +1000,20 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   }
 
   const rowsByWorkspace = groupSessionsByWorkspace(sessions, workspaces, archivedSessionIds)
-  // 不属于任何工作区的会话；只有存在时才渲染末尾的「未分组」区段
+  // 不属于任何工作区的会话，只有存在时才渲染末尾的「未分组」区段
   // 聚焦时整段不出现（`focusedLayout` 只交出被聚焦的那一片），因此这里也不必为它留位
   const stray = straySessions(sessions, workspaces, archivedSessionIds)
   const ungroupedCollapsed = collapsedWorkspaces[UNGROUPED_KEY] === true
   const searching = search.normalized !== ''
 
   /**
-   * 渲染一个工作区区块
+   * 渲染一个工作区区块，以及它体内按 cwd 路径挂着的子工作区
+   *
+   * 递归由这里一层承担，子工作区仍是一个完整的工作区块，只是从父工作区的折叠体里长出来
+   * 它自己属于哪个容器、往下又有哪些子工作区都问 {@link nesting}，深度因此不必沿递归手工累加
    *
    * 行级 memo 的前提是 props 身份稳定，因此这里传下去的都是原语或内容稳定值
-   * @param workspaceId - 目标工作区 id；不在快照里时返回 null
+   * @param workspaceId - 目标工作区 id，不在快照里时返回 null
    * @returns 该工作区的区块元素
    */
   const renderWorkspace = (workspaceId: string): ReactElement | null => {
@@ -731,8 +1023,14 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     const layout = buildLayout(
       rowsByWorkspace.get(workspaceId) ?? [],
       snapshot.byWorkspace[workspaceId] ?? [],
+      // 组内子工作区，放进这个分组、且父是当前工作区的那些。它们自己可能还有后代，渲染时逐层向下取
+      (groupId) => nesting.groupedChildIdsOf(workspaceId, groupId),
+      nesting.looseChildIdsOf(workspaceId),
     )
     const collapsed = collapsedWorkspaces[workspaceId] === true
+
+    /** 这个工作区体内的一个子工作区，它自己也是一个完整的工作区块 */
+    const renderChild = (childId: string): ReactNode => renderWorkspace(childId)
 
     /**
      * 渲染一个会话行
@@ -803,12 +1101,16 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
           containsSession(rowsByWorkspace.get(workspaceId) ?? [], currentSessionId)
         }
         layout={layout}
+        depth={depthOf(workspaceId)}
         isGroupCollapsed={(groupId) =>
           collapsedGroups[`${workspaceId}:${groupId}`] === true
         }
         labels={workspaceRowLabels}
         virtualWorkspace={virtualWorkspaceMenuOf(workspaceId)}
+        parentGroup={parentGroupMenuOf(workspaceId)}
+        onSelectParentGroup={(id) => selectParentGroup(workspaceId, id)}
         emptyLabel={labels.empty}
+        sessionsLabel={labels.sessions}
         hover={{
           label: workspace.title,
           path: abbreviateHomePath(workspace.path, home),
@@ -830,6 +1132,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
         onDeleteWorkspace={() => setWorkspaceDelete({ workspaceId, label: workspace.title })}
         // 「移动工作区分组」入口：把该工作区放进某个根节点分组，或先建一个再放
         onSelectVirtualWorkspace={(id) => selectVirtualWorkspace(workspaceId, id)}
+        renderChildWorkspace={renderChild}
         onToggleGroup={(groupId) => toggleGroup(`${workspaceId}:${groupId}`)}
         onRenameGroup={(section) =>
           setNameDraft({ workspaceId, groupId: section.id, value: section.label })
@@ -866,12 +1169,28 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
         }}
         addWorkspace={addWorkspace}
         search={{ state: search, labels: labels.search }}
-        viewOptionsLabel={labels.add.viewOptions}
+        viewOptions={{
+          label: labels.add.viewOptions,
+          open: viewOptionsOpen,
+          triggerRef: viewOptionsTrigger,
+          onToggle: () => setViewOptionsOpen((open) => !open),
+        }}
         newVirtualWorkspace={{
           label: labels.newVirtualWorkspace,
           onCreate: startVirtualWorkspaceCreate,
         }}
         t={t}
+      />
+      <ViewOptionsMenu
+        open={viewOptionsOpen && !searching}
+        triggerRef={viewOptionsTrigger}
+        label={labels.add.viewOptions}
+        nesting={{
+          enabled: snapshot.nested,
+          label: labels.nested.setting,
+          onToggle: requestNestedToggle,
+        }}
+        onClose={() => setViewOptionsOpen(false)}
       />
       {/* 搜索展开时标题整块让位（指针事件也关掉），面板若还开着就悬在一片与它无关的
           结果列表上：收起来，与让位一致 */}
@@ -923,7 +1242,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
                 setVirtualWorkspaceDelete({ groupId: section.id, label: section.label })
               }
             >
-              {section.workspaceIds.map(renderWorkspace)}
+              {section.roots.map(renderWorkspace)}
             </VirtualWorkspaceSection>
           ))}
           {listLayout.loose.map(renderWorkspace)}
@@ -988,6 +1307,13 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
                 </div>
               </CollapsibleBody>
             </section>
+          )}
+          {/* 嵌套关着时明确说一句，界面看起来与没有这个特性时完全一样，用户需要知道自己关掉了什么
+              后一句说明「重新启用能恢复什么」，否则「关掉」读起来像一次不可逆的破坏 */}
+          {snapshot.nested ? null : (
+            <div className="wg-note wg-note-nested" role="status">
+              {`${labels.nested.disabledNote} ${labels.nested.reEnableHint}`}
+            </div>
           )}
           <div className="wg-note">{labels.unimplemented}</div>
         </div>
@@ -1083,6 +1409,34 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
           t={t}
           onConfirm={commitWorkspaceDelete}
           onClose={() => setWorkspaceDelete(null)}
+        />
+      )}
+      {nestedConfirmOpen ? (
+        <ListDialog
+          title={labels.nested.disableTitle}
+          description={labels.nested.disableDesc}
+          items={groupedChildLabels}
+          confirmLabel={labels.nested.disable}
+          danger
+          t={t}
+          onConfirm={commitNestedOff}
+          onClose={() => setNestedConfirmOpen(false)}
+        />
+      ) : null}
+      {mergeDraft === null ? null : (
+        <ListDialog
+          title={labels.nested.addTitle}
+          description={labels.nested.addDesc(
+            mergeDraft.childLabel,
+            mergeDraft.parentLabel,
+            mergeDraft.groupLabel,
+          )}
+          items={mergeDraft.workspaceIds.map((id) => workspaceById.get(id)?.title ?? id)}
+          confirmLabel={labels.nested.mergeConfirm}
+          alt={{ label: labels.nested.mergeSkip, onSelect: () => commitMerge(false) }}
+          t={t}
+          onConfirm={() => commitMerge(true)}
+          onClose={() => commitMerge(false)}
         />
       )}
     </div>

@@ -13,8 +13,8 @@ import { snapshot } from './snapshot-stub.ts'
 /**
  * 工作区分组的真实 DOM 结构
  *
- * `render.test.ts` 用自制 dispatcher 直接调用函数组件，只能看到元素树；
- * 层级缩进却是一组按**真实 DOM 结构**写的选择器（`.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > ...`）
+ * `render.test.ts` 用自制 dispatcher 直接调用函数组件，只能看到元素树
+ * 层级缩进却是一组按真实 DOM 结构写的选择器（`.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > ...`）
  * 选择器写错时界面只是「没有缩进」，不会有任何报错
  * 这里用真 `react-dom` 渲染一遍并断言那些选择器确实命中，守住这条静默失效的边界
  *
@@ -82,6 +82,9 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),
     moveWorkspace: async () => snapshot(),
+    nestWorkspaces: async () => snapshot(),
+    unnestWorkspaces: async () => snapshot(),
+    setNested: async () => snapshot(),
     forgetWorkspace: async () => snapshot(),
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
@@ -188,13 +191,53 @@ describe('workspace group DOM structure', () => {
       expect(matched, `no selector matched for rule { ${body} }`).not.toEqual([])
     }
 
-    // 核心缩进与引导线规则单独点名，确认它们确实在样式表里
+    // 这一层的缩进不再按固定层数写死选择器，子工作区可以是任意层
+    // 整棵子树抬高多少，由各容器累加出来的 --wg-depth-offset 承担
     const all = rules.flatMap((rule) => rule.selectors)
-    expect(all).toContain('.wg-virtual-workspace-body > .wg-workspace > .wg-workspace-head')
-    expect(all).toContain(
-      '.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip > .wg-workspace-body > .wg-group > .wg-group-head',
-    )
-    expect(all).toContain('.wg-virtual-workspace-body::before')
+    expect(all).toContain('.wg-virtual-workspace-body')
+    // 组内工作区行不再单独写一条缩进规则，它读的是抬高后的 --wg-depth
+    expect(all).not.toContain('.wg-virtual-workspace-body > .wg-workspace > .wg-workspace-head')
+
+    await act(async () => root.unmount())
+  })
+
+  it('matches every indentation rule against the rendered tree', async () => {
+    // 层级缩进是一组按真实 DOM 结构写穿的选择器，容器里多一层包装就会让它们整组失配
+    // 缩进与引导线静默消失、没有任何报错。这条测试把那批规则逐条拿去真实 DOM 里查
+    const { container, root } = await mount()
+
+    const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .map((match) => ({
+        selectors: (match[1] ?? '')
+          .split(',')
+          .map((selector) => selector.trim().replace(/\s+/g, ' '))
+          .filter((selector) => selector !== ''),
+        body: (match[2] ?? '').trim(),
+      }))
+      // 只看那些按结构链写出来、且真的决定缩进位置的规则：
+      // 值里带 `--wg-depth` 换算的 padding-left / left，或按层级写穿的长选择器
+      .filter(
+        (rule) =>
+          /--wg-depth/.test(rule.body) &&
+          (/padding-left:/.test(rule.body) || /left:\s*calc\(/.test(rule.body)),
+      )
+
+    // 这批规则确实读到了，否则下面的断言会在空列表上假通过
+    expect(rules.length).toBeGreaterThan(0)
+
+    for (const rule of rules) {
+      // 伪元素本身没有可查询的节点，但宿主元素有，剥掉 ::before 后照样能验证引导线挂在谁身上
+      const queryable = rule.selectors.map((selector) => selector.split('::')[0] ?? selector)
+      const matched = queryable.filter((selector) => {
+        try {
+          return container.querySelectorAll(selector).length > 0
+        } catch {
+          return false
+        }
+      })
+      expect(matched, `no selector matched for rule { ${rule.body} }`).not.toEqual([])
+    }
 
     await act(async () => root.unmount())
   })

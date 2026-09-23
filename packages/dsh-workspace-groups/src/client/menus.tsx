@@ -45,9 +45,9 @@ function submenuParentLabel(label: string, entries: readonly MenuActionItem[]): 
 export interface GroupMenuInput {
   /** 按工作区视图顺序排列的全部分组（未过滤） */
   sections: readonly GroupSection[]
-  /** 目标会话当前所属分组 id；空串表示未归组 */
+  /** 目标会话当前所属分组 id，空串表示未归组 */
   currentGroupId: string
-  /** 「移动到…」一级项文案；省略号表示点下去还要选一个目标 */
+  /** 「移动到…」一级项文案，省略号表示点下去还要选一个目标 */
   groupLabel: string
   /** 「取消分组」文案 */
   ungroupLabel: string
@@ -56,7 +56,7 @@ export interface GroupMenuInput {
 /**
  * 会话菜单的构造输入：两段都可缺省
  *
- * `grouping` 缺省表示该行没有分组可归（「未分组」桶）；`official` 缺省表示宿主未提供官方会话操作
+ * `grouping` 缺省表示该行没有分组可归（「未分组」桶），`official` 缺省表示宿主未提供官方会话操作
  * 两段都缺时菜单为空——调用方此时应当直接渲染 `SessionRowView` 而不挂菜单
  */
 export interface SessionMenuInput {
@@ -69,7 +69,7 @@ export interface SessionMenuInput {
  *
  * 二级子菜单保持传入（即工作区视图）的分组顺序，并剔除当前会话所在的分组——把自己移动到自己是无意义的操作
  * 没有任何可选项时该项禁用
- * @returns 可放进 Menu items 的分组项；分组不存在时也返回占位项以稳定菜单维度
+ * @returns 可放进 Menu items 的分组项，分组不存在时也返回占位项以稳定菜单维度
  */
 export function buildGroupMenuItem(input: GroupMenuInput): MenuActionItem {
   const candidates = input.sections
@@ -120,13 +120,13 @@ export function buildSessionMenuItems(input: SessionMenuInput): readonly MenuIte
   return items
 }
 
-/** 会话分组菜单条目 id；与 `GroupSection` 的分派一一对应 */
+/** 会话分组菜单条目 id，与 `GroupSection` 的分派一一对应 */
 export const GROUP_MENU = {
   rename: 'rename',
   delete: 'delete',
 } as const
 
-/** 工作区分组菜单条目 id；与 `VirtualWorkspaceSection` 的分派一一对应 */
+/** 工作区分组菜单条目 id，与 `VirtualWorkspaceSection` 的分派一一对应 */
 export const VIRTUAL_WORKSPACE_MENU = {
   rename: 'rename',
   delete: 'delete',
@@ -183,29 +183,96 @@ export interface WorkspaceMenuInput {
   renameLabel: string
   /** 「删除工作区」项文案 */
   deleteLabel: string
-  /** 根节点上的工作区分组选项集；缺省表示该行不提供移入工作区分组的入口 */
+  /** 根节点上的工作区分组选项集，缺省表示该行不提供移入工作区分组的入口 */
   virtualWorkspaceGrouping?: VirtualWorkspaceMenuInput | undefined
+  /**
+   * 父工作区体内的会话分组选项集，缺省表示该行不提供移入父分组的入口
+   *
+   * 与 `virtualWorkspaceGrouping` 分开，两者进的是不同层级的容器，只在一处有可选项时另一项不出现
+   */
+  parentGrouping?: ParentGroupMenuInput | undefined
 }
 
-/** 工作区菜单条目 id；与 `WorkspaceRow` 的分派一一对应 */
+/** 工作区菜单条目 id，与 `WorkspaceRow` 的分派一一对应 */
 export const WORKSPACE_MENU = {
   newGroup: 'new-group',
   rename: 'rename',
   delete: 'delete',
 } as const
 
+/** 工作区菜单里的分隔线 id，分块方案见 `buildWorkspaceMenuItems` */
+export const WORKSPACE_MENU_SEPARATOR = {
+  parentGroup: 'separator-parent-group',
+  virtualWorkspace: 'separator-virtual-workspace',
+  delete: 'separator-delete',
+} as const
+
+/**
+ * 工作区行菜单里进父工作区分组那一项的选项集
+ *
+ * 与虚拟工作区分组那一项是两个层级的概念，因此各占一个一级项：
+ * 这一项进的是父工作区体内的某个会话分组，那一项进的是根节点的虚拟工作区分组
+ * @see WorkspaceMenuInput.virtualWorkspaceGrouping
+ */
+export interface ParentGroupMenuInput {
+  /**
+   * 可选的「祖先工作区 + 它的分组」
+   *
+   * 父可以是任意一个祖先（cwd 路径上更上层的现存工作区），放进谁的分组谁就是父
+   * 只有一个祖先时分组名本身就是唯一的坐标，有多个时视图侧会把祖先名并进去
+   */
+  candidates: readonly {
+    /** 父工作区 id */
+    parentId: string
+    /** 父工作区名，用于在多个祖先之间区分 */
+    parentLabel: string
+    /** 该父工作区体内的会话分组 */
+    groups: readonly { id: string; label: string }[]
+  }[]
+  /** 该工作区当前所在的分组 id，没有时为空串 */
+  currentGroupId: string
+  /** 「移动到分组…」一级项文案 */
+  moveToLabel: string
+  /** 「移出分组」一级项文案，未嵌套时该项不出现 */
+  ungroupLabel: string
+}
+
+/**
+ * 工作区行菜单里的「移动到分组…」一级项
+ *
+ * 与虚拟工作区分组那一项同一取舍，一级项本身不禁用，子菜单为空时也只是没有可移入的目标
+ * 不带图标，`IconVirtualWorkspace16` 是虚拟工作区分组的字形，这一项进的是父工作区体内的会话分组，另一个层级
+ * @returns 可放进 Menu items 的一级项
+ */
+export function buildParentGroupMenuItem(input: ParentGroupMenuInput): MenuActionItem {
+  const submenu: MenuActionItem[] = input.candidates.flatMap((ancestor) =>
+    ancestor.groups.map((group) => ({
+      id: `${PARENT_GROUP_PREFIX}${ancestor.parentId}:${group.id}`,
+      label:
+        input.candidates.length === 1
+          ? group.label
+          : `${ancestor.parentLabel} / ${group.label}`,
+    })),
+  )
+  return {
+    id: PARENT_GROUP_ITEM.move,
+    label: submenuParentLabel(input.moveToLabel, submenu),
+    disabled: submenu.length === 0,
+    submenu,
+  }
+}
+
 /**
  * 工作区行菜单里「移动到…」这一项的选项集
  *
  * 一级项收集建组与全部可移入的分组，二级子菜单因此是「新建 + 移入」两段合一
- * 这条动作在界面上的语义就是「把这个工作区放进某个工作区分组，或先建一个再放」，拆成两个一级项反而要让用户先在脑子里过一遍有没有分组
  * 「移出工作区分组」不在这条子菜单里——它不是「移动」，而是解散当前归属，因此由本菜单作为一级项平级渲染
  * 见 `buildWorkspaceMenuItems`
  */
 export interface VirtualWorkspaceMenuInput {
   /** 根节点上的全部分组，按创建顺序 */
   sections: readonly VirtualWorkspaceSection[]
-  /** 该工作区当前所属的工作区分组 id；空串表示未归组 */
+  /** 该工作区当前所属的工作区分组 id，空串表示未归组 */
   currentGroupId: string
   /**
    * 「新建工作区分组」项文案
@@ -216,14 +283,37 @@ export interface VirtualWorkspaceMenuInput {
   newLabel: string
   /** 「移动到…」一级项文案 */
   moveToLabel: string
-  /** 「移出工作区分组」一级项文案；未归组时该项不出现 */
+  /** 「移出工作区分组」一级项文案，未归组时该项不出现 */
   ungroupLabel: string
 }
 
 /** 工作区行「移动到…」子菜单的条目 id 前缀与固定项 */
 export const VIRTUAL_WORKSPACE_PREFIX = 'vw:'
 
-/** 工作区分组相关菜单项的 id：`create` 在「移动到…」子菜单里，`ungroup` 是一级项 */
+/** 父工作区体内某个分组的条目 id 前缀，后面跟 `<父工作区 id>:<分组 id>` */
+export const PARENT_GROUP_PREFIX = 'pg:'
+
+/** 工作区行进父工作区分组相关条目 id */
+export const PARENT_GROUP_ITEM = {
+  /** 一级项，打开「移动到分组…」子菜单 */
+  move: 'move-to-parent-group',
+  /** 一级项，把当前工作区移出它所在的分组 */
+  ungroup: 'ungroup-child-workspace',
+} as const
+
+/**
+ * 解析一个父分组的条目 id
+ * @returns 父工作区 id 与分组 id，形状不对时为 undefined
+ */
+export function parseParentGroupId(id: string): { parentId: string; groupId: string } | undefined {
+  if (!id.startsWith(PARENT_GROUP_PREFIX)) return undefined
+  const rest = id.slice(PARENT_GROUP_PREFIX.length)
+  const at = rest.indexOf(':')
+  if (at <= 0) return undefined
+  return { parentId: rest.slice(0, at), groupId: rest.slice(at + 1) }
+}
+
+/** 工作区分组相关菜单项的 id，`create` 在「移动到…」子菜单里，`ungroup` 是一级项 */
 export const VIRTUAL_WORKSPACE_ITEM = {
   /** 新建一个工作区分组并把当前工作区放进去 */
   create: 'create-virtual-workspace',
@@ -260,7 +350,7 @@ export function buildVirtualWorkspaceMenuItem(input: VirtualWorkspaceMenuInput):
 /**
  * 构造工作区行菜单里的「移出工作区分组」一级项
  *
- * 只在工作区已归组时调用。不带图标：它是一个移出动作，不是可移入的目标，与上面那些带图标的行项目因此有意区分
+ * 只在工作区已归组时调用。不带图标，它是一个移出动作，不是可移入的目标，与上面那些带图标的行项目因此有意区分
  * @returns Menu item
  */
 function ungroupWorkspaceItem(label: string): MenuActionItem {
@@ -292,9 +382,12 @@ function newSessionItem(label: string): MenuActionItem {
 /**
  * 构造工作区「更多操作」菜单的条目
  *
- * 顺序是「新建分组 → 重命名 → 移动到… → 移出工作区分组 → 删除」
- * 前两项是建造与自身属性，归类操作（移动到 / 移出）夹在中间：它们在概念上是一对（进入某分组 / 离开当前分组），因此相邻
- * 「移出」仅在工作区已归组时出现，未归组时那一格空着，不占位也不禁用
+ * 顺序是「新建分组 → 重命名 → 移动到分组 → 移出分组 → 移动到… → 移出工作区分组 → 删除」
+ * 前两项是建造与自身属性，两组归类操作夹在中间，删除收尾
+ *
+ * 每个块之间画一条分隔线，两组归类操作进的是两个层级的容器（父工作区体内的会话分组 / 根节点的虚拟工作区分组）
+ * 它们的一级项文案又只差一个词，不分开读起来像同一个动作的两条路径
+ * 「移出」与它上面那条「移动到」平级、紧跟在下方，仅在已归组时出现；合成一条子菜单会把「离开」藏进「进入」的入口里
  * 删除项带 `danger` 标记，与官方删除工作区一样由菜单原语渲染危险语义
  * @returns Menu items 列表
  */
@@ -303,13 +396,26 @@ export function buildWorkspaceMenuItems(input: WorkspaceMenuInput): readonly Men
     { id: WORKSPACE_MENU.newGroup, label: input.newGroupLabel, icon: <IconPlusOutline16 /> },
     { id: WORKSPACE_MENU.rename, label: input.renameLabel, icon: <IconEditOutline16 /> },
   ]
+  /** 菜单里是否有归类操作块，没有时删除项前面不该留一条分隔线 */
+  let grouping = false
+  if (input.parentGrouping !== undefined) {
+    grouping = true
+    items.push({ type: 'separator', id: WORKSPACE_MENU_SEPARATOR.parentGroup })
+    items.push(buildParentGroupMenuItem(input.parentGrouping))
+    if (input.parentGrouping.currentGroupId !== '') {
+      items.push({ id: PARENT_GROUP_ITEM.ungroup, label: input.parentGrouping.ungroupLabel })
+    }
+  }
   if (input.virtualWorkspaceGrouping !== undefined) {
+    grouping = true
+    items.push({ type: 'separator', id: WORKSPACE_MENU_SEPARATOR.virtualWorkspace })
     items.push(buildVirtualWorkspaceMenuItem(input.virtualWorkspaceGrouping))
-    // 「移出」与「移动到…」平级、紧跟在它下方：两者是一对归类操作，合成一条子菜单会把「离开」藏进「进入」的入口里
-    // 仅已归组时出现
     if (input.virtualWorkspaceGrouping.currentGroupId !== '') {
       items.push(ungroupWorkspaceItem(input.virtualWorkspaceGrouping.ungroupLabel))
     }
+  }
+  if (grouping) {
+    items.push({ type: 'separator', id: WORKSPACE_MENU_SEPARATOR.delete })
   }
   items.push({
     id: WORKSPACE_MENU.delete,
@@ -327,7 +433,7 @@ export function buildWorkspaceMenuItems(input: WorkspaceMenuInput): readonly Men
  * 「新建会话」在行内是 `+` 按钮，菜单里没有对应项，右键时补在最前——它是该行最高频的建造动作，正因如此才占着行内位置
  *
  * 只在真的有新建入口时补：未分组桶的工作区行没有可建会话的工作区归属，那时补一项就是点不动的死按钮
- * @param newSessionLabel - 「新建会话」项文案；缺省表示该行不提供新建
+ * @param newSessionLabel - 「新建会话」项文案，缺省表示该行不提供新建
  * @returns 右键菜单的条目列表
  */
 export function buildRowContextMenuItems(

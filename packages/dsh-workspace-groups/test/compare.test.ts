@@ -21,6 +21,9 @@ function actions(): RegionActions {
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),
     moveWorkspace: async () => snapshot(),
+    nestWorkspaces: async () => snapshot(),
+    unnestWorkspaces: async () => snapshot(),
+    setNested: async () => snapshot(),
     forgetWorkspace: async () => snapshot(),
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
@@ -131,7 +134,7 @@ describe('registerCompareTab', () => {
   it('opens the registered tab in the right sidebar', () => {
     const { sidebar } = register()
 
-    // 右侧栏是 DSH 原生列；落到 bottom 会变成 better-sidebar 自己的底部面板
+    // 右侧栏是 DSH 原生列，落到 bottom 会变成 better-sidebar 自己的底部面板
     expect(sidebar.opened).toEqual([{ type: COMPARE_TAB_ID, target: 'right' }])
   })
 
@@ -153,7 +156,7 @@ describe('registerCompareTab', () => {
     const { sidebar } = register()
 
     const tab = sidebar.registered[0]
-    // 标题与区域标题同键；说明是本包自己的对照 tab 专属键
+    // 标题与区域标题同键，说明是本包自己的对照 tab 专属键
     expect((tab?.title as () => string)()).toBe('工作区')
     expect((tab?.description as () => string)()).toBe('分组区域的对照视图（左侧为官方工作区列表）')
   })

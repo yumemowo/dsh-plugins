@@ -28,7 +28,7 @@ export interface WorkspaceState {
  * 可以直接借用官方的整段 picking 交互，而不是自己再实现一遍
  */
 export interface DirectoryFlowOccupant {
-  /** 占用者组件；除 owner 会话外还接收下面那份 inject 面 */
+  /** 占用者组件，除 owner 会话外还接收下面那份 inject 面 */
   component: ComponentType<DirectoryFlowOwner>
   /**
    * 占用者自己的 inject 面
@@ -55,7 +55,7 @@ export type DirectoryFlowResolver = () => DirectoryFlowOccupant | undefined
  * 与官方 `DirectoryFlowOwnerProps` 同形，占用者按这套 props 渲染
  */
 export interface DirectoryFlowOwner {
-  /** 为真表示请求了一次 picking 交互；翻回 false 即撤回请求 */
+  /** 为真表示请求了一次 picking 交互，翻回 false 即撤回请求 */
   open: boolean
   /** 为真表示 owner 正在采纳选中的路径，占用者据此禁用提交入口 */
   busy: boolean
@@ -69,7 +69,7 @@ export interface DirectoryFlowOwner {
 
 /** 侧边栏 shell 注入的全局数据 hook */
 export interface RegionDataHooks {
-  /** 全局工作区快照选择器；归档集合与工作区行来自同一份快照 */
+  /** 全局工作区快照选择器，归档集合与工作区行来自同一份快照 */
   useWorkspaces: (selector: (state: WorkspaceState) => unknown) => unknown
   /** 全局会话列表选择器 */
   useSessions: (selector: (state: SessionListState) => unknown) => unknown
@@ -108,23 +108,23 @@ export interface RegionActions {
    *
    * 返回会话 id 而不是空，是因为调用方要在建好之后把它摆到本次创建指定的位置（分组内或未分组）
    * 归组走既有的 `moveSession`，不另造「在分组内建会话」的宿主接口
-   * 返回 undefined 表示这次导航已被更晚的一次取代：会话虽已建好但不打开，调用方因此也不摆位置
+   * 返回 undefined 表示这次导航已被更晚的一次取代，会话虽已建好但不打开，调用方因此也不摆位置
    * @param workspaceId - 新会话所属工作区
-   * @returns 新建或复用的会话 id；被取代时为 undefined
+   * @returns 新建或复用的会话 id，被取代时为 undefined
    */
   startSession: (workspaceId: string) => Promise<string | undefined>
   /** 读取分组快照 */
   loadGroups: () => Promise<WorkspaceGroupsSnapshot>
-  /** 远程数据面就绪后回调一次；返回反注册函数 */
+  /** 远程数据面就绪后回调一次，返回反注册函数 */
   onReady: (listener: () => void) => () => void
-  /** 在工作区下新建会话分组；返回替换用的完整快照 */
+  /** 在工作区下新建会话分组，返回替换用的完整快照 */
   createGroup: (workspaceId: string, name: string) => Promise<WorkspaceGroupsSnapshot>
-  /** 重命名会话分组；返回替换用的完整快照 */
+  /** 重命名会话分组，返回替换用的完整快照 */
   renameGroup: (workspaceId: string, groupId: string, name: string) => Promise<WorkspaceGroupsSnapshot>
   /** 删除会话分组，组内会话回到未归组；返回替换用的完整快照 */
   deleteGroup: (workspaceId: string, groupId: string) => Promise<WorkspaceGroupsSnapshot>
   /**
-   * 把会话移入分组；空串表示移出分组
+   * 把会话移入分组，空串表示移出分组
    *
    * 返回替换用的完整快照，而不是让调用方再拉一次：宿主每个变更方法本来就回整份快照（见宿主 `service.ts`）
    * 直接采用它既少一次往返，也让「摆位置」与「本地状态反映新位置」之间没有空档
@@ -134,14 +134,33 @@ export interface RegionActions {
     sessionId: string,
     groupId: GroupChoice,
   ) => Promise<WorkspaceGroupsSnapshot>
-  /** 在根节点新建工作区分组；返回替换用的完整快照 */
+  /** 在根节点新建工作区分组，返回替换用的完整快照 */
   createVirtualWorkspace: (name: string) => Promise<WorkspaceGroupsSnapshot>
-  /** 重命名工作区分组；返回替换用的完整快照 */
+  /** 重命名工作区分组，返回替换用的完整快照 */
   renameVirtualWorkspace: (groupId: string, name: string) => Promise<WorkspaceGroupsSnapshot>
   /** 删除工作区分组，组内工作区回到未归组；返回替换用的完整快照 */
   deleteVirtualWorkspace: (groupId: string) => Promise<WorkspaceGroupsSnapshot>
-  /** 把工作区移入分组；空串表示移出分组 */
+  /** 把工作区移入分组，空串表示移出分组 */
   moveWorkspace: (workspaceId: string, groupId: GroupChoice) => Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把若干工作区放进某个工作区的会话分组，作为该分组下的子工作区
+   *
+   * 收一批 id，把工作区移进分组时，它名下的子工作区要一并跟随，否则层级会在分组边界上断开
+   * 这批 id 由客户端按 cwd 路径算出——宿主只看得到 id，看不到路径
+   */
+  nestWorkspaces: (
+    workspaceIds: readonly string[],
+    parentWorkspaceId: string,
+    groupId: string,
+  ) => Promise<WorkspaceGroupsSnapshot>
+  /** 解除这些工作区的嵌套归属，它们退回按 cwd 路径推导的位置 */
+  unnestWorkspaces: (workspaceIds: readonly string[]) => Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 开关按子工作区渲染
+   *
+   * 关闭时宿主把所有已落盘的归属一并清空，因此调用方拿到的那份快照里 `nesting` 已经空了
+   */
+  setNested: (enabled: boolean) => Promise<WorkspaceGroupsSnapshot>
   /**
    * 把一个工作区从所有工作区分组里摘除
    *
@@ -153,14 +172,14 @@ export interface RegionActions {
    *
    * 条目既可能是工作区也可能是工作区分组，因此参数是条目键而不是 id
    * 键自带类别前缀，不会被两套 id 的取值混淆
-   * @param key - 条目键；空串表示退回「全部」
+   * @param key - 条目键，空串表示退回「全部」
    */
   focusEntry: (key: string) => Promise<WorkspaceGroupsSnapshot>
-  /** 切换一个根节点条目的置顶；置顶与取消置顶是同一个方法 */
+  /** 切换一个根节点条目的置顶，置顶与取消置顶是同一个方法 */
   togglePinned: (key: string) => Promise<WorkspaceGroupsSnapshot>
   /** 重命名工作区 */
   renameWorkspace: (workspaceId: string, title: string) => Promise<void>
-  /** 删除工作区注册；文件夹与会话记录保留 */
+  /** 删除工作区注册，文件夹与会话记录保留 */
   deleteWorkspace: (workspaceId: string) => Promise<void>
   /**
    * 搜索结果的条数上限
@@ -187,7 +206,7 @@ export interface RegionActions {
   /**
    * 官方三项会话操作与相对时间的解析器
    *
-   * 是函数而不是值：渲染器会把注册项的 inject 结果缓存整个注册生命周期，因此在 inject 里读到的服务会冻结在首次渲染那一刻
+   * 是函数而不是值，渲染器会把注册项的 inject 结果缓存整个注册生命周期，因此在 inject 里读到的服务会冻结在首次渲染那一刻
    * 而官方 `ui-workspace` 的加载顺序并不受本包约束，延迟到渲染时解析才能拿到真正在场的服务
    *
    * 解析结果为空表示宿主没有加载官方 `ui-workspace`（本包用它供的 `useWorkspaces` 等全局 hook，正常情况下必然在场）
@@ -200,8 +219,13 @@ export interface RegionActions {
    * 与 `official` 同为延迟解析器
    * 解析结果为空表示本包没读到官方 directoryFlow 洞的占用者（宿主没装目录选择器，或官方注册不在场）
    * 此时入口按钮不渲染，不留点不动的死按钮
+   *
+   * 区域组件会给解析结果补一个 `onAdopted`，把「刚采纳了哪个工作区」这条事实接回来
+   * @param onAdopted - 采纳成功后的回调，缺省时区域不问「要不要放进父所在的分组」
    */
-  addWorkspace?: (() => AddWorkspaceActions | undefined) | undefined
+  addWorkspace?:
+    | ((onAdopted: AddWorkspaceActions['onAdopted']) => AddWorkspaceActions | undefined)
+    | undefined
 }
 
 /**
@@ -217,6 +241,15 @@ export interface AddWorkspaceActions {
   startSession: (workspaceId: string) => void
   /** directoryFlow 洞占用者的解析器 */
   occupant: DirectoryFlowResolver
+  /**
+   * 新工作区采纳成功后的回调
+   *
+   * 采纳发生在「添加工作区」那个组件里，而「它该不该嵌进某个分组」要看整片列表的层级关系
+   * 因此这条事实回传到区域组件，由它判断要不要问一次
+   * @param workspaceId - 刚采纳的工作区
+   * @param path - 它的 cwd
+   */
+  onAdopted?: ((workspaceId: string, path: string) => void) | undefined
   /** 入口与错误框的文案 */
   labels: OfficialAddLabels
 }
@@ -227,9 +260,9 @@ export interface AddWorkspaceActions {
  * 直接转调官方服务与控制器（`ctx.uiWorkspace` / `ctx.sessions`），不自行实现，官方改行为时本包自动跟随
  */
 export interface OfficialSessionActions {
-  /** 官方菜单「重命名」；宿主负责弹出输入与提交 */
+  /** 官方菜单「重命名」，宿主负责弹出输入与提交 */
   renameSession: (sessionId: string, title: string) => Promise<void>
-  /** 官方菜单「分叉会话」；官方会打开分叉出的子会话 */
+  /** 官方菜单「分叉会话」，官方会打开分叉出的子会话 */
   forkSession: (sessionId: string) => void
   /** 官方菜单「归档会话」 */
   archiveSession: (sessionId: string) => Promise<void>

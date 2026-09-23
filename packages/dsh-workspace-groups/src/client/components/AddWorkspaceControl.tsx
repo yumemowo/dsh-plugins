@@ -15,7 +15,7 @@ import type { RegionTranslate } from '../locales.ts'
 import type { AddWorkspaceActions } from '../actions.ts'
 
 export interface AddWorkspaceControlProps {
-  /** 官方服务面；缺省时整个入口不渲染 */
+  /** 官方服务面，缺省时整个入口不渲染 */
   actions: AddWorkspaceActions
   /** 窄栏（rail）形态：按钮放大、色阶提亮，与官方一致 */
   narrow: boolean
@@ -43,6 +43,9 @@ export function AddWorkspaceControl({
       .createWorkspace(path)
       .then((workspace) => {
         setFlowOpen(false)
+        // 先让区域判断要不要问一句「放进父所在的分组」，再开新会话：
+        // 对话框与新建会话的导航抢焦点时，先到的那一个才读得到用户的意图
+        actions.onAdopted?.(String(workspace.workspaceId), path)
         actions.startSession(String(workspace.workspaceId))
       })
       .catch((reason: unknown) => {

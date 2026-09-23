@@ -20,7 +20,7 @@
  */
 import { COLLAPSE_VARS, DEFAULT_COLLAPSE_MOTION as MOTION } from './utils/collapseMotion.ts'
 
-/** 样式表内容的唯一标识；重复挂载时用它去重 */
+/** 样式表内容的唯一标识，重复挂载时用它去重 */
 const STYLE_TAG_ID = '@your-scope/dsh-workspace-groups/src/client/region.css'
 
 /**
@@ -29,7 +29,7 @@ const STYLE_TAG_ID = '@your-scope/dsh-workspace-groups/src/client/region.css'
  * 导出供测试直接读取求值后的文本：节奏参数以插值进入 CSS，再按源文本切割只会拿到 ${...} 字面量
  */
 export const CSS = `
-/* 区域根：官方 WorkspaceBrowser 的根节点自己带整块右留白，本区域必须有同一份，否则 header 的入口按钮与列表行都会贴到侧栏右缘
+/* 区域根，官方 WorkspaceBrowser 的根节点自己带整块右留白，本区域必须有同一份，否则 header 的入口按钮与列表行都会贴到侧栏右缘
  *
  * 官方那份留白不走 shell 的 12px——shell 的 regionArea 用 margin-right:-12px
  * 把它抵掉了，再由 WorkspaceBrowser 的根节点重新加回来。因此这里由 .wg-root
@@ -175,7 +175,7 @@ export const CSS = `
    沿用它会连同 overflow:hidden 一起把第二行裁掉——界面上只是「聚焦的那一行不见了」
    不会有任何报错。高度按内容放开
 
-   左内边距同时撤到 0：标题块是一个按钮，命中余量由它自己的 padding 给，否则会与
+   左内边距同时撤到 0，标题块是一个按钮，命中余量由它自己的 padding 给，否则会与
    基线那条叠加成 8px */
 .wg-header-titled {
   height: auto;
@@ -215,8 +215,8 @@ export const CSS = `
    宽度走 max-width 而不是 flex-basis，因为整行是「标题 + 搜索 + 入口组」的
    定宽组合，搜索要吃掉前两者让出的那部分
 
-   把右侧这一组推向左的是这里自己的 margin-left: auto（官方 .searchSlot 就是
-   这么写的）。后面那组入口不能再写 auto——两个 auto 会平分剩余空间，搜索框
+   把右侧这一组推向左的是这里自己的 margin-left: auto，官方 .searchSlot 就是
+   这么写的。后面那组入口不能再写 auto——两个 auto 会平分剩余空间，搜索框
    会被推到中间，而不是紧挨着入口组 */
 .wg-search-slot {
   box-sizing: border-box;
@@ -366,7 +366,7 @@ export const CSS = `
 }
 
 /* 第二行整体缩进一个状态位槽宽（16 + 4），与标题左缘对齐 */
-/* 第二行整行：官方这里放的是「工作区名 +（内容搜索的）摘录」两格，因此带 6px
+/* 第二行整行，官方这里放的是「工作区名 +（内容搜索的）摘录」两格，因此带 6px
    gap。本包没有摘录，这一行只剩路径一项，gap 用不上
 
    gap 本身保留（与官方同构，日后真加摘录就位），但路径必须整体作为一个 flex
@@ -395,7 +395,7 @@ export const CSS = `
   gap: 0;
 }
 
-/* 工作区那一格：两级都可见时才与分组争宽度，因此给它更大的收缩权重
+/* 工作区那一格，两级都可见时才与分组争宽度，因此给它更大的收缩权重
    空间不够时先截它、把分组留住——分组是本包相对官方多出来的那一段信息 */
 .wg-search-result-workspace {
   min-width: 0;
@@ -422,7 +422,7 @@ export const CSS = `
   font-size: 12px;
   line-height: 17px;
 }
-/* 分隔符没有自己的样式：它在分组那一段里，继承同一个色阶，两段之间因此
+/* 分隔符没有自己的样式，它在分组那一段里，继承同一个色阶，两段之间因此
    只有「工作区 / 分组」这两档，不会多出第三个视觉层级 */
 
 .wg-search-status {
@@ -450,12 +450,7 @@ export const CSS = `
   align-items: center;
   justify-content: center;
 }
-.wg-header-action:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
-/* 尚未实现的入口渲染成 disabled 占位：明确表达不可用，而不是敲下去没反应 */
-.wg-header-action:disabled {
-  cursor: default;
-  color: var(--dsw-alias-label-dimmed, var(--dsw-alias-label-tertiary));
-}
+.wg-header-action:hover { background: var(--dsw-alias-interactive-bg-hover); }
 
 /* 窄栏：官方 rail 下 header 只留一个 36px 的入口，标题与搜索都不渲染 */
 /* 窄栏一行放不下两个 36px 入口（栏宽不足 72px），因此每个入口各占一行，与官方
@@ -515,7 +510,7 @@ export const CSS = `
 /* 列表：右侧折进官方 .listArea 与 .list 的两层偏移
  *
  * 官方把「留白」拆成两步：.listArea 用 -edge-inset 抵掉根节点的右留白，让列表
- * 靠到栏缘；再由 .list 自己的 scrollbar-offset 与 padding-right 把内容推回到离
+ * 靠到栏缘，再由 .list 自己的 scrollbar-offset 与 padding-right 把内容推回到离
  * 栏缘 edge-inset 处（scrollbar 沟槽 width + offset + padding-right）
  * 本包没有 .listArea 那一层，因此把它的 -edge-inset 折进这里的 margin-right
  *
@@ -555,7 +550,7 @@ export const CSS = `
 .wg-workspace { position: relative; display: flex; flex-direction: column; }
 .wg-workspace + .wg-workspace { margin-top: 4px; }
 
-/* 折叠体：轨道高度走 0fr ↔ 1fr，高度因此完全由内容决定，与子元素数量和
+/* 折叠体，轨道高度走 0fr ↔ 1fr，高度因此完全由内容决定，与子元素数量和
    各自高度都无关，样式里不需要任何写死的尺寸
  *
  * 时长与缓动走自定义属性，由 CollapsibleBody 按 props 下发
@@ -589,7 +584,7 @@ export const CSS = `
  * 不透明是元素的自然状态：展开态没有任何规则写 opacity
  * 透明只挂在「所在折叠体还没展开」这一条结构条件上，因此过渡没跑、被降频或主线程被长任务占住时，元素只会「晚一点淡入」，不会留在透明上
  *
- * 嵌套由选择器自己兜住：外层收着时，收着的折叠体这条选择器会作为祖先命中它裁剪区里的所有元素，含内层折叠体的，因此无需往元素上挂显隐类
+ * 嵌套由选择器自己兜住，外层收着时，收着的折叠体这条选择器会作为祖先命中它裁剪区里的所有元素，含内层折叠体的，因此无需往元素上挂显隐类
  *
  * 延迟是绝对值（撑开那段等待 + 该元素的先后），由组件量出来逐个下发；样式只消费
  * 收起那条更具体且把延迟归零，所有元素因此一起淡出 */
@@ -606,47 +601,26 @@ export const CSS = `
 /* 工作区分组：根节点上的容器行 + 折叠体
  *
  * 行本身复用会话分组那一套（同一 .wg-group-head 基类、同一行尾操作位与可收放槽位）
- * 因此工作区数、悬停让位、操作位显隐都由既有规则承担；这里只覆盖两处：
+ * 因此工作区数、悬停让位、操作位显隐都由既有规则承担，这里只覆盖两处：
  * 它在根节点上，缩进取 8px（分组头是 24px，因为它落在工作区内部） */
 .wg-group-head.wg-virtual-workspace-head { padding: 0 8px; }
 .wg-virtual-workspace { position: relative; display: flex; flex-direction: column; }
 .wg-virtual-workspace-body { display: flex; flex-direction: column; position: relative; }
-/* 组内工作区比根节点再深一层：每层让出一个 16px 图标列
-   与「工作区 → 分组 → 组内会话」那三级同一套步进，因此工作区分组是这条链上的第 0 层 */
-/* 工作区行挂了悬停卡片时被官方 HoverCard 的根节点包了一层（那是个 display:block 的 span）
-   行就不再是 .wg-workspace 的直接子项——与下面会话行那条同理，两档都写 */
-.wg-virtual-workspace-body > .wg-workspace > .wg-workspace-head,
-.wg-virtual-workspace-body > .wg-workspace > * > .wg-workspace-head { padding-left: 24px; }
-.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
-  .wg-workspace-body > .wg-sessions > .wg-row,
-.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
-  .wg-workspace-body > .wg-sessions > * > .wg-row { padding-left: 40px; }
-.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
-  .wg-workspace-body > .wg-group > .wg-group-head { padding-left: 40px; }
-.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
-  .wg-workspace-body > .wg-group > .wg-collapse > .wg-collapse-clip >
-  .wg-sessions > .wg-row,
-.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
-  .wg-workspace-body > .wg-group > .wg-collapse > .wg-collapse-clip >
-  .wg-sessions > * > .wg-row { padding-left: 56px; }
+/* 缩进层级由行组件在 JS 里算好，经 --wg-depth 下发；样式表只把它当数值用
+   层级不能在 CSS 里靠变量继承累加，把一个变量定义成它自己加一（自引用）是循环引用
+   浏览器会把整条声明当作无效值丢掉，于是偏移恒为 0、缩进静默失效
+   每个 .wg-workspace 都自己下发一次 --wg-depth，子工作区因此不会被父的深度顺着继承下来
+   行与引导线都读同一个值，两者不会错位 */
 
-/* 引导线落在父级图标列的中心，与上面几级同一条规则：工作区分组 8 + 16/2 = 16
-   组内工作区 24 + 16/2 = 32，组内工作区的会话分组 40 + 16/2 = 48 */
-.wg-virtual-workspace-body::before { left: 16px; }
-.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
-  .wg-workspace-body::before { left: 32px; }
-.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > .wg-collapse-clip >
-  .wg-workspace-body > .wg-group > .wg-collapse > .wg-collapse-clip >
-  .wg-sessions::before { left: 48px; }
-
-/* 组内空态与组内工作区行落在同一缩进起点：那句占位文案是「这个分组里还没有
+/* 组内空态与组内工作区行落在同一缩进起点，那句占位文案是「这个分组里还没有
    东西」，浮在分组头左侧会读成根节点的内容 */
 .wg-virtual-workspace-body > .wg-empty { padding-left: 24px; }
 
-/* 折叠体自己承担「上一行与它之间」的那 2px：这段间距要连同内容一起收掉，否则收起后行下会留一条 2px 空档
+/* 折叠体自己承担「上一行与它之间」的那 2px，这段间距要连同内容一起收掉，否则收起后行下会留一条 2px 空档
    间距取内层容器的上内边距——它落在 clip 的裁剪区内，轨道合拢时随之被裁掉 */
 .wg-collapse-clip > .wg-workspace-body,
 .wg-collapse-clip > .wg-virtual-workspace-body,
+.wg-collapse-clip > .wg-group-body,
 .wg-collapse-clip > .wg-sessions { padding-top: 2px; }
 
 /* 图标列：工作区的文件夹/箭头、分组的箭头、会话的状态位共用同一列宽 */
@@ -660,7 +634,7 @@ export const CSS = `
   display: inline-flex;
 }
 
-/* 容器行底色取官方 projectRow 的 label-primary；图标槽自己显式设 tertiary
+/* 容器行底色取官方 projectRow 的 label-primary，图标槽自己显式设 tertiary
    所以这里的颜色只影响直接继承的行内文字 */
 .wg-workspace-head,
 .wg-group-head {
@@ -679,31 +653,58 @@ export const CSS = `
 .wg-workspace-head:hover,
 .wg-group-head:hover { background: var(--dsw-alias-interactive-bg-hover); }
 
-/* 层级缩进：工作区行（第 0 层）保持官方的 8px，以下每层再让出 16px，因此
-   子级内容落在 8 + 16 × 深度上。深度只有三层且固定，直接按结构写死选择器
-   比在 JSX 里逐行下发内联 style 更好读，也不给行组件添 props
-   —— 分组头 24px、分组内会话 40px、工作区直接子会话 24px
+/* 层级缩进，每一层让出一个 16px 图标列，第 0 层取官方工作区行的 8px
+   深度由行组件下发 --wg-depth（子工作区可以任意层，因此不能再按固定层数写死选择器）
+   行内各段按「深度 + 自己那一档」定位：
+   - 工作区行：8 + 16d
+   - 分组头：24 + 16d（比工作区行多让出 16px，因为它是工作区体内的一层）
+   - 会话行：未归组 24 + 16d，组内 40 + 16d
 
    会话行多出「> *」那一档：挂了悬停卡片的行被官方 HoverCard 的根节点包了一层（那是个 display:block 的 span）
    行就不再是 .wg-sessions 的直接子项。两条都写
    有没有卡片缩进都一致 */
-.wg-workspace-head { padding: 0 8px; }
-.wg-group-head { padding: 0 8px 0 24px; }
+.wg-workspace-head { padding: 0 8px; padding-left: calc(8px + 16px * var(--wg-depth, 0)); }
+.wg-group-head {
+  padding: 0 8px;
+  padding-left: calc(24px + 16px * var(--wg-depth, 0));
+}
+/* 会话行与它上面那个小标题同档，标题正是用来标出这一段的起点，两者左缘必须对齐 */
 .wg-workspace-body > .wg-sessions > .wg-row,
-.wg-workspace-body > .wg-sessions > * > .wg-row { padding-left: 24px; }
-.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions > .wg-row,
-.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions > * > .wg-row {
-  padding-left: 40px;
+.wg-workspace-body > .wg-sessions > .wg-sessions-title,
+.wg-workspace-body > .wg-sessions > * > .wg-row {
+  padding-left: calc(24px + 16px * var(--wg-depth, 0));
+}
+.wg-group > .wg-collapse > .wg-collapse-clip > .wg-group-body > .wg-sessions > .wg-row,
+.wg-group > .wg-collapse > .wg-collapse-clip > .wg-group-body > .wg-sessions > .wg-sessions-title,
+.wg-group > .wg-collapse > .wg-collapse-clip > .wg-group-body > .wg-sessions > * > .wg-row {
+  padding-left: calc(40px + 16px * var(--wg-depth, 0));
 }
 
-/* 竖向引导线：落在父级图标列的中心（工作区 8 + 16/2 = 16，分组 24 + 16/2 = 32）
+/* 子工作区这一段本身不再让出缩进，它的每个成员都是一个完整的工作区块
+   各自按自己的 --wg-depth 定位，这一段只负责把它们排成一列并让出彼此之间的间距 */
+.wg-nest { display: flex; flex-direction: column; }
+.wg-nest > * + * { margin-top: 2px; }
+
+/* 会话那一段的小标题，只在这一段与子工作区/会话分组同处一个折叠体时渲染
+   两段的行文字左缘落在同一条竖线上（缩进公式相同），光靠 2px 的行距读不出分界
+   小标题比行文字小一档、取 caption 色阶，与行尾时间同一档灰
+   上外边距就是与上一段之间的那段距离，它只在这个标题存在时生效
+   因此「没有东西要区分」时不占位 */
+.wg-sessions-title {
+  color: var(--dsw-alias-label-caption, var(--dsw-alias-label-tertiary));
+  font-size: 12px;
+  line-height: 20px;
+  margin-top: 12px;
+}
+
+/* 竖向引导线，落在父级图标列的中心（工作区 8 + 16/2 = 16，分组 24 + 16/2 = 32）
    把「这组行属于上一行」画出来。行本身是 position: relative 的定位元素，按树序
    排在容器伪元素之后绘制，因此悬停/选中的行底色会盖住它，不会出现线穿过高亮
    底色的割裂感 */
 .wg-workspace-body,
-.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions { position: relative; }
+.wg-group-body { position: relative; }
 .wg-workspace-body::before,
-.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions::before {
+.wg-group-body::before {
   content: '';
   position: absolute;
   top: 4px;
@@ -712,8 +713,8 @@ export const CSS = `
   background: var(--dsw-alias-border-l1);
   pointer-events: none;
 }
-.wg-workspace-body::before { left: 16px; }
-.wg-group > .wg-collapse > .wg-collapse-clip > .wg-sessions::before { left: 32px; }
+.wg-workspace-body::before { left: calc(16px + 16px * var(--wg-depth, 0)); }
+.wg-group-body::before { left: calc(32px + 16px * var(--wg-depth, 0)); }
 
 /* 字号与行高成对写在叶子上（官方 .title 即如此），根节点不设 line-height */
 .wg-workspace-title,
@@ -768,12 +769,16 @@ export const CSS = `
    各层都建成 flex 列容器：flex 容器的子项边距不合并，间距值所见即所得 */
 .wg-workspace-body,
 .wg-group,
+.wg-group-body,
+.wg-nest,
 .wg-sessions { display: flex; flex-direction: column; }
 
 .wg-virtual-workspace > * + *,
 .wg-workspace > * + *,
 .wg-workspace-body > * + *,
 .wg-group > * + *,
+.wg-group-body > * + *,
+.wg-nest > * + *,
 .wg-sessions > * + * { margin-top: 2px; }
 
 /* 折叠体要抵消上一条规则给它写上的 margin-top：那段间距由 clip 内部的上内边距
@@ -820,7 +825,7 @@ export const CSS = `
   line-height: 20px;
 }
 
-/* 操作位容器：静止时宽度收成 0，行尾时间因此贴住行的右内边距；随之显隐
+/* 操作位容器，静止时宽度收成 0，行尾时间因此贴住行的右内边距；随之显隐
    展开成图标列宽。时间与操作按钮的右缘因此始终落在同一条竖线——官方靠
    .time/.rowActions 的 display 互换达到同一效果
    这里不整格 display:none，是为了保留本包的键盘可达性：格子收成 0 宽时
@@ -851,7 +856,7 @@ export const CSS = `
 
 /* 分组行的操作位也收进同一套可收放槽位，展开宽度取自然宽：里面是省略号与加号
    两个按钮（16 + 12 + 16），不是会话行的单个 16px。槽位收着时操作位不占宽
-   会话数因此与 time 一样贴在行右；展开后由它接替行尾 */
+   会话数因此与 time 一样贴在行右，展开后由它接替行尾 */
 .wg-group-head:hover .wg-row-action-slot,
 .wg-group-head.wg-row-menu-open .wg-row-action-slot,
 .wg-group-head:has(.wg-row-action:focus-visible) .wg-row-action-slot { width: auto; }
@@ -864,7 +869,7 @@ export const CSS = `
    不用 :focus / :focus-within / 选中态——鼠标点过之后焦点仍留在按钮或行上
    会让按钮一直可见；:focus-visible 只在键盘导航时命中，既去掉鼠标残留
    又保留清晰可见的键盘焦点
-   隐藏时一并禁用指针事件：否则会留下一个看不见却能点中的 16px 热区 */
+   隐藏时一并禁用指针事件，否则会留下一个看不见却能点中的 16px 热区 */
 .wg-row-action {
   flex: none;
   opacity: 0;
@@ -913,12 +918,12 @@ export const CSS = `
 .wg-context-menu.wg-context-menu { display: contents; }
 
 /* 带二级菜单的一级项：把文字与行尾箭头分成两端。官方 Menu 的项只有「前导图标
-   → 文案 → 尾部选中标记」三个槽，没有表达「悬停展开」的槽位（见 menus.tsx 的
-   submenuParentLabel），因此这里补一个自己的行盒：文案侧 flex:1 吃掉余量
+   → 文案 → 尾部选中标记」三个槽，没有表达「悬停展开」的槽位，见 menus.tsx 的
+   submenuParentLabel，因此这里补一个自己的行盒，文案侧 flex:1 吃掉余量
    箭头被推到项的最右缘
 
    这个行盒落在官方 .itemLabel 里。.itemLabel 是 flex 项（已被块化）且带
-   flex:1 / min-width:0 / 省略号：文字因此要在这里再包一层可收缩的槽
+   flex:1 / min-width:0 / 省略号，文字因此要在这里再包一层可收缩的槽
    长文案省略的是文字本身，而不是把箭头压扁或挤出项外 */
 .wg-menu-label {
   display: flex;
@@ -1002,7 +1007,7 @@ export const CSS = `
   text-align: left;
 }
 .wg-picker-section-head:hover { background: var(--dsw-alias-interactive-bg-hover); }
-/* 「全部」那一个是纯标签：它不接受点击，因此不给指针与悬停底色 */
+/* 「全部」那一个是纯标签，它不接受点击，因此不给指针与悬停底色 */
 .wg-picker-section-static { cursor: default; }
 .wg-picker-section-static:hover { background: 0 0; }
 
@@ -1030,6 +1035,9 @@ export const CSS = `
   height: auto;
   gap: 8px;
   padding: 5px 10px;
+  /* 子工作区按层级缩进，每层让出一个图标列，与列表里的步进同一个 16px
+     右内边距不跟着变，行尾那三枚按钮因此仍对齐在同一条竖线上 */
+  padding-left: calc(10px + 16px * var(--wg-picker-depth, 0));
   border-radius: 10px;
   font-size: 14px;
   line-height: 22px;
@@ -1076,7 +1084,7 @@ export const CSS = `
    菜单是浮层、没有「行尾时间」要给它腾地方，收放反而让每行标题的右缘不一样齐 */
 .wg-picker-row .wg-row-actions { height: 22px; gap: 8px; }
 
-/* 「全部工作区」那一项：它是一个动作（退出聚焦）而不是菜单条目，因此没有行尾的
+/* 「全部工作区」那一项，它是一个动作（退出聚焦）而不是菜单条目，因此没有行尾的
    操作位，也不需要被聚焦时那个选中标记。几何与条目行同一档，好让它读起来是同一
    组里的一行 */
 .wg-picker-reset {
@@ -1121,7 +1129,20 @@ export const CSS = `
   accent-color: var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary));
 }
 
-/* 对话框内的错误提示，例如工作区重名：只上错误色，几何走官方 Modal */
+/* 确认框里的名单，这次操作会影响到的工作区逐个列出
+   限高滚动，对话框因此不会被一个巨大的分组撑出屏幕。几何取说明文字同一档 */
+.wg-dialog-list {
+  margin: 8px 0 0;
+  padding: 0 0 0 18px;
+  max-height: 180px;
+  overflow-y: auto;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+.wg-dialog-list li { margin: 0; }
+
+/* 对话框内的错误提示，例如工作区重名，只上错误色，几何走官方 Modal */
 .wg-dialog-error {
   color: var(--dsw-alias-state-error-primary);
   margin-top: 8px;
@@ -1194,8 +1215,70 @@ body[data-wg-flip] [data-wg-hover-card] {
   padding: 16px 12px;
   font-size: 13px;
 }
+/* 空态占位要与它所在那一段的行对齐
+   左边距单独下发一次（与未归组会话那一档同值），否则它会停在上面那条 12px 上
+   比同一层的行更靠左——子工作区里尤其明显，父行缩进 1 层，子工作区的空态却跑回根节点那一列 */
+.wg-workspace-body > .wg-empty {
+  padding-left: calc(24px + 16px * var(--wg-depth, 0));
+}
 
-/* 危险操作的确认按钮：只换文字色，按钮几何仍由官方 Button 拥有
+/* 视图选项面板，header 里那个按钮打开的自绘浮层
+   与下拉菜单面板同一套外观（底色取 --dsw-specific-menu，描边与投影取官方菜单面板那一档）
+   面板是不透明浮层，底下就是会话列表，因此这几个 token 名写错时面板会变透明
+   而界面上不会有任何报错——test/styles.test.ts 直接断言这几个名字 */
+.wg-view-menu {
+  box-sizing: border-box;
+  position: fixed;
+  z-index: 1100;
+  min-width: 218px;
+  padding: 4px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-3));
+  /* 投影里那圈描边跟着面板自己的圆角走，因此在这里重设一次 */
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  border-radius: 20px;
+  box-shadow: var(--dsw-elevation-prominent);
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* 面板里的一个开关条目，图标 + 设置名 + 官方的 Switch 原语
+   整行不可点，只有开关本身可交互（行若也做成按钮，一条会读出两个控件）
+   因此这里没有 cursor/hover 高亮，那两样都在承诺「点这一行会有效果」 */
+.wg-view-option {
+  box-sizing: border-box;
+  min-height: 34px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* 开关排在行尾，不被设置名挤动 */
+.wg-view-option-switch { flex: none; }
+.wg-view-option-icon {
+  width: 16px;
+  height: 22px;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.wg-view-option-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 嵌套关着时那条说明，与底部那条实验性说明同形，但要在视觉上先被读到 */
+.wg-note-nested { color: var(--dsw-alias-label-secondary); padding-top: 12px; }
+
+/* 危险操作的确认按钮，只换文字色，按钮几何仍由官方 Button 拥有
    与官方删除按钮同一做法（错误色 token --dsw-alias-state-error-primary） */
 .wg-danger-action:not(:disabled) { color: var(--dsw-alias-state-error-primary); }
 
@@ -1225,7 +1308,7 @@ body[data-wg-flip] [data-wg-hover-card] {
   .wg-collapse { transition: none; }
   .wg-collapse-clip { transition: visibility 0s linear; }
   /* 子元素随容器一起落位。逐个淡入的延迟由组件逐个下发，这里把过渡整条撤掉
-     不撤的话 reduced-motion 下行仍是逐个出现；撤掉后元素落回自然的不透明 */
+     不撤的话 reduced-motion 下行仍是逐个出现，撤掉后元素落回自然的不透明 */
   .wg-collapse-clip [data-wg-stagger] {
     transition: none;
     transition-delay: 0s;
@@ -1234,7 +1317,7 @@ body[data-wg-flip] [data-wg-hover-card] {
 `
 
 /**
- * 注入样式表；已注入过则跳过
+ * 注入样式表，已注入过则跳过
  *
  * 客户端模块系统会给未标记的 style 标签打上当前插件的 `data-plugin`
  * 这里显式标记以配合它的认领与去重

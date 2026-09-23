@@ -46,8 +46,10 @@ export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'remote']
 /** 远程面缺失或依赖不全时的空快照：两个字段都空，界面退化成全部平铺 */
 const EMPTY_SNAPSHOT: WorkspaceGroupsSnapshot = {
   byWorkspace: {},
+  nesting: {},
   workspaceGroups: [],
   picker: EMPTY_PICKER_STATE,
+  nested: true,
 }
 
 /**
@@ -95,12 +97,12 @@ export function apply(ctx: Context): void {
     }
   }
 
-  /** 挂载本包自己的 remote 命名空间；成功后取回可调用的方法表 */
+  /** 挂载本包自己的 remote 命名空间，成功后取回可调用的方法表 */
   let groupsApi: Record<string, (...args: never[]) => Promise<never>> | undefined
   ctx.effect(
     () => {
       let disposed = false
-      /** `$mount` 的卸载函数；挂载完成前一直是 undefined */
+      /** `$mount` 的卸载函数，挂载完成前一直是 undefined */
       let unmount: (() => Promise<void>) | undefined
       void ctx.remote
         .$mount(REMOTE_CONTRIBUTION as never)
@@ -180,7 +182,7 @@ export function apply(ctx: Context): void {
    *
    * 官方 `ui-workspace` 不在场时返回 undefined：本包的区域本来就依赖它供的 `useWorkspaces` 全局 hook
    * 正常情况下它必然加载；真缺失时菜单里那三项与行尾时间整体不渲染，不留点不动的入口
-   * @returns 官方动作；官方服务或控制器缺失时为 undefined
+   * @returns 官方动作，官方服务或控制器缺失时为 undefined
    */
   const officialActions = (): OfficialSessionActions | undefined => {
     const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace | undefined
@@ -225,9 +227,12 @@ export function apply(ctx: Context): void {
    *
    * 与 `officialActions` 同为延迟到渲染期的解析器。解析结果为空表示本包没读到占用者（宿主没装目录选择器插件）
    * 此时入口按钮整体不渲染，不留点不动的死按钮
-   * @returns 添加工作区的动作；控制器或洞占用者缺失时为 undefined
+   * @param onAdopted - 采纳成功后的回调，区域组件用它判断新工作区该不该嵌进某个分组
+   * @returns 添加工作区的动作，控制器或洞占用者缺失时为 undefined
    */
-  const addWorkspaceActions = (): AddWorkspaceActions | undefined => {
+  const addWorkspaceActions = (
+    onAdopted: AddWorkspaceActions['onAdopted'],
+  ): AddWorkspaceActions | undefined => {
     if (workspaces === undefined) return undefined
     if (directoryFlowOccupant(ctx.slots) === undefined) return undefined
     const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace | undefined
@@ -237,6 +242,8 @@ export function apply(ctx: Context): void {
       startSession: (workspaceId) => uiWorkspace?.startSession(workspaceId as never),
       // 传解析器而不是当次读数：占用者可能在两次渲染之间换人
       occupant: () => directoryFlowOccupant(ctx.slots),
+      // 区域组件把「刚采纳了哪个工作区」接回去，据此判断要不要问一句放进父所在的分组
+      onAdopted,
       labels: officialAddLabels(tWorkspace),
     }
   }
@@ -280,6 +287,9 @@ export function apply(ctx: Context): void {
         deleteVirtualWorkspace: async () => EMPTY_SNAPSHOT,
         moveWorkspace: async () => EMPTY_SNAPSHOT,
         forgetWorkspace: async () => EMPTY_SNAPSHOT,
+        nestWorkspaces: async () => EMPTY_SNAPSHOT,
+        unnestWorkspaces: async () => EMPTY_SNAPSHOT,
+        setNested: async () => EMPTY_SNAPSHOT,
         focusEntry: async () => EMPTY_SNAPSHOT,
         togglePinned: async () => EMPTY_SNAPSHOT,
         renameWorkspace: async () => {},
@@ -327,6 +337,10 @@ export function apply(ctx: Context): void {
       deleteVirtualWorkspace: (groupId) => callSnapshot('deleteVirtualWorkspace', [groupId]),
       moveWorkspace: (workspaceId, groupId) =>
         callSnapshot('moveWorkspace', [workspaceId, groupId === '' ? null : groupId]),
+      nestWorkspaces: (workspaceIds, parentWorkspaceId, groupId) =>
+        callSnapshot('nestWorkspaces', [workspaceIds, parentWorkspaceId, groupId]),
+      unnestWorkspaces: (workspaceIds) => callSnapshot('unnestWorkspaces', [workspaceIds]),
+      setNested: (enabled) => callSnapshot('setNested', [enabled]),
       forgetWorkspace: (workspaceId) => callSnapshot('forgetWorkspace', [workspaceId]),
       focusEntry: (key) => callSnapshot('focusEntry', [key]),
       togglePinned: (key) => callSnapshot('togglePinned', [key]),

@@ -13,7 +13,7 @@ import type { Context } from '@deepseek-ai/cordis'
 /**
  * 对照 tab 的服务读取边界
  *
- * better-sidebar 交给 tab 的 context **不是本包的 fiber**
+ * better-sidebar 交给 tab 的 context 不是本包的 fiber
  * 没有 inject 本包声明的服务
  * cordis 的服务代理对未 inject 的属性直接抛错（`cannot get property "remote" without inject`）
  * 因此凡是 `ctx.xxx` 形态的读取都必须在本包自己的 context 上先解析好
@@ -38,6 +38,9 @@ function actions(): RegionActions {
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),
     moveWorkspace: async () => snapshot(),
+    nestWorkspaces: async () => snapshot(),
+    unnestWorkspaces: async () => snapshot(),
+    setNested: async () => snapshot(),
     forgetWorkspace: async () => snapshot(),
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
@@ -52,7 +55,7 @@ function actions(): RegionActions {
 /**
  * 按 cordis 的代理语义造一个 context
  *
- * `get` 照常返回服务（或 undefined），但**属性读取**对未 inject 的名字抛错——
+ * `get` 照常返回服务（或 undefined），但属性读取对未 inject 的名字抛错——
  * 这正是 `ctx.remote` 在 tab context 上炸掉的原因
  * @param services - 可被 `get` 到、也可被属性访问到（若声明为 injected）的服务
  * @param injected - 这个 context 的 inject 列表
@@ -85,7 +88,7 @@ function fakeContext(
 /**
  * 语言服务替身：bind 按命名空间给翻译函数，subscribe 记订阅者
  *
- * 快照必须是**稳定引用**：`useSyncExternalStore` 按 `Object.is` 比较
+ * 快照必须是稳定引用，`useSyncExternalStore` 按 `Object.is` 比较
  * 每次新建对象会被判定为「一直在变」而把组件转进无限重渲染
  */
 function fakeLocale(): LocaleRuntime {
@@ -109,7 +112,7 @@ function fakeLocale(): LocaleRuntime {
  * 注册一次对照 tab，返回描述符与那个会抛错的 tab context
  *
  * 注册 context 声明了 `remote`（本包 `inject` 列表里本来就有）
- * 因此它读得到宿主固定事实；tab context 什么都不声明
+ * 因此它读得到宿主固定事实，tab context 什么都不声明
  */
 function register() {
   const registered: {

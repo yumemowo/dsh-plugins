@@ -50,11 +50,11 @@ interface PanelRect {
 }
 
 export interface WorkspacePickerMenuProps {
-  /** 菜单是否打开；开合状态由持有触发器的 header 持有 */
+  /** 菜单是否打开，开合状态由持有触发器的 header 持有 */
   open: boolean
-  /** 触发器元素；面板贴它的下缘展开 */
+  /** 触发器元素，面板贴它的下缘展开 */
   triggerRef: RefObject<HTMLElement>
-  /** 当前聚焦的条目键；空串表示「全部」 */
+  /** 当前聚焦的条目键，空串表示「全部」 */
   focused: string
   /** 菜单的三个分区 */
   sections: PickerSections
@@ -64,9 +64,9 @@ export interface WorkspacePickerMenuProps {
   onSelect: (key: string) => void
   /** 切换一个条目的置顶 */
   onTogglePinned: (key: string) => void
-  /** 重命名一个条目；工作区分组与独立工作区各走自己的对话框 */
+  /** 重命名一个条目，工作区分组与独立工作区各走自己的对话框 */
   onRename: (entry: PickerEntry) => void
-  /** 删除一个条目；工作区分组与独立工作区各走自己的确认框 */
+  /** 删除一个条目，工作区分组与独立工作区各走自己的确认框 */
   onDelete: (entry: PickerEntry) => void
 }
 
@@ -77,10 +77,12 @@ export interface WorkspacePickerMenuProps {
  * 三枚 16px 操作按钮嵌在行内的操作位里（`.wg-row-actions`）
  * 行的可点区不能做成与按钮并排的两个热区——那样行的可点范围会比看起来窄
  *
- * 行本体必须是 div 而不是 `<button>`：按钮不能嵌按钮，键盘激活因此由 `handleRowKeyDown` 承担
+ * 行本体必须是 div 而不是 `<button>`，按钮不能嵌按钮，键盘激活因此由 `handleRowKeyDown` 承担
  * 与工作区行同一套（只认行自身拿到焦点的那一次按键，行内按钮的按键不冒泡上来）
  *
  * 三枚操作按钮各管一件事（重命名 / 删除 / 置顶），点击一律 `stopPropagation`，否则会连带聚焦到那个工作区
+ *
+ * 子工作区按 `entry.depth` 缩进，层级因此在菜单里也读得出来
  */
 function PickerRow({
   entry,
@@ -108,6 +110,8 @@ function PickerRow({
       role="button"
       tabIndex={0}
       aria-current={focused ? 'true' : undefined}
+      // 缩进层级由条目自带；样式按这个属性换算，与列表里的层级步进同一个 16px
+      style={{ '--wg-picker-depth': String(entry.depth) } as Record<string, string>}
       onClick={() => onSelect(entry.key)}
       onKeyDown={(event) => handleRowKeyDown(event, () => onSelect(entry.key))}
     >
@@ -261,7 +265,7 @@ export function WorkspacePickerMenu({
 
   useEffect(() => () => cancelClose(), [cancelClose])
 
-  // 点面板与触发器之外关闭；Escape 关闭并把焦点还给触发器
+  // 点面板与触发器之外关闭，Escape 关闭并把焦点还给触发器
   useEffect(() => {
     if (!open) return
     const onPointerDown = (event: PointerEvent): void => {
@@ -316,7 +320,7 @@ export function WorkspacePickerMenu({
       className="wg-picker-menu"
       role="group"
       aria-label={labels.entry}
-      // 首次渲染时还没量过，先藏起来：否则面板会先在窗口左上角露一帧再跳到落点
+      // 首次渲染时还没量过，先藏起来，否则面板会先在窗口左上角露一帧再跳到落点
       style={
         rect === null
           ? { visibility: 'hidden', left: 0, top: 0 }

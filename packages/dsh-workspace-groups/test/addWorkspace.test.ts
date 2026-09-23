@@ -13,8 +13,8 @@ import { regionTranslate, workspaceTranslate } from './locale-stub.ts'
 /**
  * 组件渲染冒烟
  *
- * node 环境没有 react-dom，这里用一个最小 dispatcher 直接调用函数组件。
- * 状态按 hook 序号跨次渲染保留，因此失败路径可以在 await 之后重新渲染一次，
+ * node 环境没有 react-dom，这里用一个最小 dispatcher 直接调用函数组件
+ * 状态按 hook 序号跨次渲染保留，因此失败路径可以在 await 之后重新渲染一次
  * 断言错误框真的开了
  */
 const internals = (React as unknown as {
@@ -26,7 +26,7 @@ const internals = (React as unknown as {
 /**
  * 造一个跨次渲染保留状态的 dispatcher
  *
- * 每次渲染把游标归零，`useState` 按序号读写同一份状态表；setter 只改状态表，
+ * 每次渲染把游标归零，`useState` 按序号读写同一份状态表；setter 只改状态表
  * 需要看新状态时由调用方自己再渲染一次
  */
 function statefulDispatcher(): { current: unknown; states: unknown[] } {
@@ -66,14 +66,14 @@ interface Rendered {
   host: Record<string, unknown>[]
   /** 形如 Modal 的元素（有 title 与 footer），stub 把它渲染成 null 之后就拿不到了 */
   modals: Record<string, unknown>[]
-  /** 传给占用者的 owner 会话；占用者被真正调用后才有值 */
+  /** 传给占用者的 owner 会话，占用者被真正调用后才有值 */
   owner: DirectoryFlowOwner | undefined
 }
 
 /**
  * 渲染一棵树
  *
- * 函数组件被直接调用（走 dispatcher）；Modal 形状的元素在调用前先收下来，
+ * 函数组件被直接调用（走 dispatcher），Modal 形状的元素在调用前先收下来
  * 因为测试替身把它渲染成 null，调用之后就再也读不到 title / footer
  */
 function renderTree(node: unknown, dispatcher: unknown, out: Rendered): void {
@@ -308,6 +308,28 @@ describe('AddWorkspaceControl', () => {
     // 与官方 onPick 一致：先 createWorkspace 采纳，再在新工作区开会话
     expect(created).toEqual(['/tmp/picked'])
     expect(started).toEqual(['w-/tmp/picked'])
+  })
+
+  it('reports the adopted workspace back to the region before starting a session', async () => {
+    // 区域据此判断新工作区该不该嵌进父所在的分组，这条回调不接上时那一步会静默地永不发生
+    const adopted: [string, string][] = []
+    const order: string[] = []
+    const { actions } = face({
+      onAdopted: (workspaceId, path) => {
+        order.push('adopted')
+        adopted.push([workspaceId, path])
+      },
+      startSession: () => order.push('session'),
+    })
+    const { out } = renderControl(actions)
+
+    out.owner?.onPicked('/tmp/picked')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(adopted).toEqual([['w-/tmp/picked', '/tmp/picked']])
+    // 先回传事实再开会话，对话框与新建会话的导航抢焦点时，先到的那一个才读得到用户意图
+    expect(order).toEqual(['adopted', 'session'])
   })
 
   it('surfaces an adoption failure through the official folder-error dialog', async () => {

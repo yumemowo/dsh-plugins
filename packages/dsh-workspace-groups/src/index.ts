@@ -21,7 +21,13 @@ export const name = 'workspace-groups'
 /** 分组存储依赖宿主已挂载的存储域设施 */
 export const inject = ['storageDomain']
 
-export type { Group, PickerSnapshot, VirtualWorkspace, WorkspaceGroupsSnapshot } from './spec.ts'
+export type {
+  Group,
+  PickerSnapshot,
+  VirtualWorkspace,
+  WorkspaceGroupsSnapshot,
+  WorkspaceNesting,
+} from './spec.ts'
 export type { WorkspaceGroupsService } from './service.ts'
 
 /**
@@ -45,6 +51,10 @@ export function apply(ctx: Context): void {
     deleteVirtualWorkspace: async (groupId) => (await service).deleteVirtualWorkspace(groupId),
     moveWorkspace: async (workspaceId, groupId) =>
       (await service).moveWorkspace(workspaceId, groupId),
+    nestWorkspaces: async (workspaceIds, parentWorkspaceId, groupId) =>
+      (await service).nestWorkspaces(workspaceIds, parentWorkspaceId, groupId),
+    unnestWorkspaces: async (workspaceIds) => (await service).unnestWorkspaces(workspaceIds),
+    setNested: async (enabled) => (await service).setNested(enabled),
     forgetWorkspace: async (workspaceId) => (await service).forgetWorkspace(workspaceId),
     focusEntry: async (key) => (await service).focusEntry(key),
     togglePinned: async (key) => (await service).togglePinned(key),
