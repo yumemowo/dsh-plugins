@@ -81,7 +81,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
  * 这里用真 `react-dom` 渲染一遍并断言结构
  */
 
-/** 造一份注入面完整的数据；`workspaces` 决定路径关系，`groups` / `nesting` 决定归属 */
+/** 造一份注入面完整的数据，`workspaces` 决定路径关系，`groups` / `nesting` 决定归属 */
 function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsProps {
   const created = new Date(2026, 0, 1, 0, 0).toISOString()
   const byId: Record<string, unknown> = {
@@ -244,7 +244,7 @@ describe('nested sub-workspaces in a real DOM', () => {
         }),
     })
 
-    // 三者都在同一个虚拟分组里，按分组记录的顺序渲染：repo 是这一段的顶层，pkg 嵌在它体内
+    // 三者都在同一个虚拟分组里，按分组记录的顺序渲染，repo 是这一段的顶层，pkg 嵌在它体内
     // 下发的层级就是最终层级（含虚拟分组那一格），不再由 CSS 另行累加
     expect(sections(container)).toEqual([
       { title: 'example-plugin', depth: '1' },
@@ -345,7 +345,7 @@ describe('nested sub-workspaces in a real DOM', () => {
       await Promise.resolve()
     })
 
-    // 归属真的写下：它自己没有分组，父工作区的分组是 gm
+    // 归属真的写下，它自己没有分组，父工作区的分组是 gm
     expect(writes).toEqual([['pkg', 'repo', 'gm']])
     // 宿主回的快照被写进本地状态，子工作区因此渲染在父体内那个分组里
     const group = Array.from(container.querySelectorAll('.wg-group')).find(
@@ -455,7 +455,7 @@ describe('nested sub-workspaces in a real DOM', () => {
   })
 
   it('renders a child inside the group it was placed into', async () => {
-    // W2 被放进 W1 的 g1 分组；W3 没放进去，但它跟着 W2 落在同一个分组里
+    // W2 被放进 W1 的 g1 分组，W3 没放进去，但它跟着 W2 落在同一个分组里
     const { container, root } = await mount({
       loadGroups: async () =>
         snapshot({
@@ -565,7 +565,7 @@ describe('nested sub-workspaces in a real DOM', () => {
 
     const options = document.body.querySelectorAll('.wg-view-option')
     expect(options).toHaveLength(1)
-    // 文案是设置名，不随开关状态变化；状态由控件自己的 aria-checked 表达
+    // 文案是设置名，不随开关状态变化，状态由控件自己的 aria-checked 表达
     expect(options[0]?.textContent).toContain('子工作区嵌套')
     const toggle = options[0]?.querySelector<HTMLButtonElement>('[role="switch"]')
     expect(toggle?.getAttribute('aria-checked')).toBe('true')
@@ -596,7 +596,7 @@ describe('nested sub-workspaces in a real DOM', () => {
       ;(document.body.querySelector('[role="switch"]') as HTMLElement | null)?.click()
     })
 
-    // 没有直接写盘：先弹出确认框，并列出会被解除嵌套的那个工作区
+    // 没有直接写盘，先弹出确认框，并列出会被解除嵌套的那个工作区
     expect(calls).toEqual([])
     const dialog = document.body.querySelector('[role="dialog"]')
     expect(dialog?.textContent).toContain('W2')
@@ -605,7 +605,7 @@ describe('nested sub-workspaces in a real DOM', () => {
   })
 
   it('asks before placing a newly added workspace into its parent group', async () => {
-    // 采纳成功后的回调由「添加工作区」那个组件回传；这里直接驱动它，验证按路径做出的判断
+    // 采纳成功后的回调由「添加工作区」那个组件回传，这里直接驱动它，验证按路径做出的判断
     const placed: { ids: readonly string[]; parent: string; group: string }[] = []
     let adopted: ((workspaceId: string, path: string) => void) | undefined
     const { root } = await mount({

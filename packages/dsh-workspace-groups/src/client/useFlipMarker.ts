@@ -15,13 +15,13 @@ import { FLIP_ATTRIBUTE, FLIP_RIGHT_VAR, flipPlacement } from './utils/flip.ts'
  *
  * 收节点的是回调而不是 `RefObject`：窄栏时区域根本不渲染这个根节点（只渲染展开入口），`ref.current` 会一直是 null
  * 而一次性的 effect 那时已经跑完，用户随后展开侧栏就再也没人量了。按节点变化重跑 effect 才跟得住窄栏与宽栏之间的切换
- * @returns 挂到区域根节点上的回调引用；引用恒定，不会引起重挂
+ * @returns 挂到区域根节点上的回调引用，引用恒定，不会引起重挂
  */
 export function useFlipMarker(): (node: HTMLElement | null) => void {
   const [region, setRegion] = useState<HTMLElement | null>(null)
 
   useLayoutEffect(() => {
-    // node 测试环境没有 DOM；这里提前退出，量测逻辑因此不必到处判空
+    // node 测试环境没有 DOM，这里提前退出，量测逻辑因此不必到处判空
     if (region === null) return
     if (typeof window === 'undefined' || typeof document === 'undefined') return
 
@@ -44,7 +44,7 @@ export function useFlipMarker(): (node: HTMLElement | null) => void {
 
     measure()
     window.addEventListener('resize', measure)
-    // jsdom 没有 ResizeObserver；它只影响拖动侧栏时的即时性，缺了不影响正确性
+    // jsdom 没有 ResizeObserver，它只影响拖动侧栏时的即时性，缺了不影响正确性
     const observer =
       typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
     observer?.observe(region)

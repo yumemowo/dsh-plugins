@@ -26,7 +26,7 @@ import type { GroupSection, VirtualWorkspaceSection } from './data/types.ts'
  * 只给 `aria-haspopup` / `aria-expanded` 这类无障碍信号，箭头因此塞进 `label` 里
  * 由 `.wg-menu-label` 两端对齐推到行尾
  *
- * 子菜单为空时不加：原语只在 `submenu` 非空时才把该项当子菜单父项（展开、键盘进入、`aria-haspopup` 都按这个判断）
+ * 子菜单为空时不加，原语只在 `submenu` 非空时才把该项当子菜单父项（展开、键盘进入、`aria-haspopup` 都按这个判断）
  * 加了箭头就是在指一个展不开的菜单
  * @param entries - 该项的二级子菜单
  * @returns 有子菜单时是两端对齐的行，否则原样返回文案
@@ -91,7 +91,7 @@ export function buildGroupMenuItem(input: GroupMenuInput): MenuActionItem {
  * 分隔线把「官方能力」与「本包扩展」分成两段，避免两类操作混成一个列表
  *
  * 官方三项的文案与图标都取自官方 `ui-workspace`（见 `official.ts`）
- * 宿主未提供官方服务时整体省略，只留分组项，不留点不动的死按钮；反之「未分组」桶里的会话没有分组上下文，只留官方三项
+ * 宿主未提供官方服务时整体省略，只留分组项，不留点不动的死按钮，反之「未分组」桶里的会话没有分组上下文，只留官方三项
  * 分隔线只在两段都存在时才画
  * @returns Menu items 列表
  */
@@ -277,7 +277,7 @@ export interface VirtualWorkspaceMenuInput {
   /**
    * 「新建工作区分组」项文案
    *
-   * 调用方给的是带省略号的那份：菜单项点下去还要再填一次名字
+   * 调用方给的是带省略号的那份，菜单项点下去还要再填一次名字
    * 省略号把这件事说出来（官方 `menu.addWorkspace` 同样带省略号，而 header 的 `workspace.add` 不带）
    */
   newLabel: string
@@ -324,7 +324,7 @@ export const VIRTUAL_WORKSPACE_ITEM = {
 /**
  * 构造工作区行菜单里的「移动到…」一级项
  *
- * 二级子菜单的顺序固定为「新建 → 各分组」：建造型操作排在最前（与工作区菜单里「新建分组」在前同一取舍）
+ * 二级子菜单的顺序固定为「新建 → 各分组」，建造型操作排在最前（与工作区菜单里「新建分组」在前同一取舍）
  * 一级项本身不禁用——即便一个分组都没有，它下面也有「新建」可点
  * @returns 可放进 Menu items 的一级项
  */
@@ -371,7 +371,7 @@ export const ROW_MENU = {
 /**
  * 构造行右键菜单里的「新建会话」项
  *
- * 图标取官方 sidebar 新建按钮的 `IconNewChatOutline16`：同一个动作在行内是官方的 `+`
+ * 图标取官方 sidebar 新建按钮的 `IconNewChatOutline16`，同一个动作在行内是官方的 `+`
  * 而本菜单里还有一个「新建分组」也带 `+`，两项都用 `+` 就只能靠文字区分
  * @returns Menu item
  */
@@ -387,7 +387,7 @@ function newSessionItem(label: string): MenuActionItem {
  *
  * 每个块之间画一条分隔线，两组归类操作进的是两个层级的容器（父工作区体内的会话分组 / 根节点的虚拟工作区分组）
  * 它们的一级项文案又只差一个词，不分开读起来像同一个动作的两条路径
- * 「移出」与它上面那条「移动到」平级、紧跟在下方，仅在已归组时出现；合成一条子菜单会把「离开」藏进「进入」的入口里
+ * 「移出」与它上面那条「移动到」平级、紧跟在下方，仅在已归组时出现，合成一条子菜单会把「离开」藏进「进入」的入口里
  * 删除项带 `danger` 标记，与官方删除工作区一样由菜单原语渲染危险语义
  * @returns Menu items 列表
  */
@@ -429,10 +429,10 @@ export function buildWorkspaceMenuItems(input: WorkspaceMenuInput): readonly Men
 /**
  * 把行内菜单条目补成右键菜单条目
  *
- * 右键是行内操作位的捷径，因此条目集合与分派都必须一致；差别只有一条：
+ * 右键是行内操作位的捷径，因此条目集合与分派都必须一致，差别只有一条：
  * 「新建会话」在行内是 `+` 按钮，菜单里没有对应项，右键时补在最前——它是该行最高频的建造动作，正因如此才占着行内位置
  *
- * 只在真的有新建入口时补：未分组桶的工作区行没有可建会话的工作区归属，那时补一项就是点不动的死按钮
+ * 只在真的有新建入口时补，未分组桶的工作区行没有可建会话的工作区归属，那时补一项就是点不动的死按钮
  * @param newSessionLabel - 「新建会话」项文案，缺省表示该行不提供新建
  * @returns 右键菜单的条目列表
  */

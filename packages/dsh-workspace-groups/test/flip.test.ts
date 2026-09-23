@@ -10,7 +10,7 @@ import {
  * 翻转判定的几何规则
  *
  * 官方卡片固定向右展开且宽度写死 244px（见 utils/flip.ts），区域右边放不下整张
- * 卡片时才翻到左侧；这里把阈值两侧、以及「两侧都放不下」的退化情形钉住
+ * 卡片时才翻到左侧，这里把阈值两侧、以及「两侧都放不下」的退化情形钉住
  */
 describe('flipPlacement', () => {
   /** 官方卡片宽度 + 与锚点的间隙：右边刚好放得下整张卡片的临界值 */
@@ -22,7 +22,7 @@ describe('flipPlacement', () => {
   })
 
   it('flips when the region sits too close to the right edge', () => {
-    // 差一个像素放不下就翻；落点是区域左缘再往左一个间隙
+    // 差一个像素放不下就翻，落点是区域左缘再往左一个间隙
     expect(flipPlacement({ left: 700, right: 1000 - NEEDED + 1 }, 1000)).toEqual({
       flipped: true,
       right: `${1000 - 700 + 8}px`,
@@ -44,15 +44,15 @@ describe('flipPlacement', () => {
   })
 
   it('expresses the landing point as a distance from the right edge', () => {
-    // 卡片右缘落在区域左缘左侧一个间隙处，因此距离 = 视口宽 - 区域左缘 + 间隙；
+    // 卡片右缘落在区域左缘左侧一个间隙处，因此距离 = 视口宽 - 区域左缘 + 间隙
     // 这个值直接给 fixed 卡片的 right 用，不掺 100vw（那会带上滚动条宽度）
     const placement = flipPlacement({ left: 500, right: 900 }, 900)
     expect(placement).toEqual({ flipped: true, right: '408px' })
   })
 
   it('names the marker hooks the stylesheet and the components share', () => {
-    // 样式表与组件各写一遍字面量的话，改名时漏掉一处会静默失效——卡片照样开在
-    // 屏幕外却没有报错，因此这里把三个名字固定下来
+    // 样式表与组件各写一遍字面量的话，改名时漏掉一处会静默失效
+    // 卡片照样开在屏幕外却没有报错，因此这里把三个名字固定下来
     expect(FLIP_ATTRIBUTE).toBe('data-wg-flip')
     expect(FLIP_RIGHT_VAR).toBe('--wg-flip-right')
     expect(CARD_ATTRIBUTE).toBe('data-wg-hover-card')

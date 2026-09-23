@@ -19,11 +19,11 @@ export const COLLAPSE_VARS = {
   easing: '--wg-collapse-easing',
   /** 单个元素淡入淡出的时长 */
   fade: '--wg-collapse-fade',
-  /** 逐元素不同的淡入延迟；由组件量出来单独下发，样式只消费 */
+  /** 逐元素不同的淡入延迟，由组件量出来单独下发，样式只消费 */
   delay: '--wg-collapse-delay',
 } as const
 
-/** 折叠动画的节奏参数；单位一律毫秒，缓动直接给 CSS 的 timing function */
+/** 折叠动画的节奏参数，单位一律毫秒，缓动直接给 CSS 的 timing function */
 export interface CollapseMotion {
   /** 容器撑开与收回的时长 */
   duration: number
@@ -36,7 +36,7 @@ export interface CollapseMotion {
   /** 淡入延迟的上限，防止元素很多时末尾等太久 */
   cap: number
   /**
-   * 淡入起点在撑开过程中的位置，取 0..1 的比例；默认 `1` 即等容器完全撑开
+   * 淡入起点在撑开过程中的位置，取 0..1 的比例，默认 `1` 即等容器完全撑开
    *
    * 只在会露面的元素多于一个时生效：只有一个元素时总是等完全撑开，那时提前淡入没有任何好处，只会把唯一那段缓动藏进裁剪区
    *

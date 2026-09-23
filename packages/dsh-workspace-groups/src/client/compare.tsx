@@ -26,8 +26,8 @@ export const COMPARE_TAB_ID = 'workspace-groups:compare'
 /**
  * better-sidebar 的 tab 描述符（结构声明，只取本包用到的字段）
  *
- * 真实描述符还有 `badge` / `settings` / `createTab` 等字段；这里只声明
- * 本包会传的那几个，多出来的字段由 better-sidebar 自行处理
+ * 真实描述符还有 `badge` / `settings` / `createTab` 等字段
+ * 这里只声明本包会传的那几个，多出来的字段由 better-sidebar 自行处理
  */
 interface CompareTabDescriptor {
   id: string
@@ -44,7 +44,7 @@ interface BetterSidebarLike {
   openTab(seed: { type: string; target?: 'right' | 'bottom' }): void
 }
 
-/** 可被订阅的快照源；`ctx.sessions.list` 与 `ctx.workspaces.list` 都满足 */
+/** 可被订阅的快照源，`ctx.sessions.list` 与 `ctx.workspaces.list` 都满足 */
 interface SnapshotSource<T> {
   getSnapshot(): T
   subscribe(listener: () => void): () => void
@@ -113,7 +113,7 @@ function CompareTabBody({
   // 待交互快照归 ui-session 所有，不挂在 sessions 控制器上
   // 对照模式没有 shell 的标准 hook 注入，因此这里自己把它的源包成同形的选择器
   const uiSession = ctx.get('uiSession') as UiSession | undefined
-  // directoryFlow 洞的占用源在插槽注册表上；右侧栏 tab 同样没有 shell 注入的 useDirectoryFlow，因此也自己包一层
+  // directoryFlow 洞的占用源在插槽注册表上，右侧栏 tab 同样没有 shell 注入的 useDirectoryFlow，因此也自己包一层
   const slots = ctx.get('slots') as Parameters<typeof directoryFlowSource>[0] | undefined
   // 文案座位在渲染期现取：插槽那条路径由 shell 注入，这里没有 shell，因此自己绑命名空间，并订阅语言快照让切换语言后重新渲染
   const useLocaleSource = useMemo(() => useSnapshotSelector(localeSource(locale)), [locale])

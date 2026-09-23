@@ -143,7 +143,7 @@ describe('search in a real DOM', () => {
 
     await expandSearch(container)
 
-    // 展开：标题向左让位、入口组向右让位，槽位与框体同时拉开
+    // 展开，标题向左让位、入口组向右让位，槽位与框体同时拉开
     // 让位发生在整个标题块上（两行一起收），因此查的是它而不是其中某一行
     expect(container.querySelector('.wg-header-title')?.className).toContain(
       'wg-header-title-hidden',
@@ -206,8 +206,7 @@ describe('search in a real DOM', () => {
     // 第二行那个容器带 6px gap（官方给「工作区名 / 摘录」用的）
     // 路径两段若直接做它的子项，那 6px 会插进「工作区」与「分组」之间
     // 把一条连续的路径读成两截。因此这里断言两段的从属结构：它们同属一个中间层
-    // 外层 gap 够不到两者之间，那条 gap 的取值本身由 styles.test.ts 从 CSS
-    // 文本上钉住
+    // 外层 gap 够不到两者之间，那条 gap 的取值本身由 styles.test.ts 从 CSS 文本上钉住
     const meta = container.querySelector('.wg-search-result-meta') as HTMLElement
     const path = container.querySelector('.wg-search-result-path') as HTMLElement
     const workspace = container.querySelector('.wg-search-result-workspace') as HTMLElement

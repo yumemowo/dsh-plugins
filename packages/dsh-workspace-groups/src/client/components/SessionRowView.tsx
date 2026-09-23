@@ -27,49 +27,49 @@ import type { SessionStatus } from '../data/status.ts'
 export interface SessionRowViewProps {
   /** 本行对应的会话 id */
   sessionId: string
-  /** 行上显示的标题；空白会话由调用方套语言包的固定名 */
+  /** 行上显示的标题，空白会话由调用方套语言包的固定名 */
   title: string
   selected: boolean
-  /** 该行要显示的状态位；空闲时为 undefined，槽位仍占位 */
+  /** 该行要显示的状态位，空闲时为 undefined，槽位仍占位 */
   status?: SessionStatus | undefined
-  /** 行尾相对时间文案；缺省表示不显示（新建中的空白行与「未分组」桶） */
+  /** 行尾相对时间文案，缺省表示不显示（新建中的空白行与「未分组」桶） */
   time?: string | undefined
   /**
-   * 悬停卡片里逐条列出的状态；缺省回退成只有 {@link status} 一条
+   * 悬停卡片里逐条列出的状态，缺省回退成只有 {@link status} 一条
    *
    * 与行首那个点分开传：行上空闲不画点，卡片里却要像官方一样把「空闲」也列出来
    */
   statuses?: readonly SessionStatus[] | undefined
-  /** 悬停卡片里的相对时间文案（`5分钟前`）；缺省时卡片里不显示这一行 */
+  /** 悬停卡片里的相对时间文案（`5分钟前`），缺省时卡片里不显示这一行 */
   hoverTime?: string | undefined
   /**
    * 悬停卡片是否可用
    *
-   * 缺省为可用；显式传 false 时不挂浮层——宿主没加载官方 ui-workspace 时
+   * 缺省为可用，显式传 false 时不挂浮层——宿主没加载官方 ui-workspace 时
    * 官方文案整体拿不到，浮出一个空壳不如不浮
    */
   hover?: boolean | undefined
   /**
    * 悬停卡片此刻是否要让位
    *
-   * 与 `menuOpen` 分开：后者的含义是「行上挂菜单展开标记」，既管行尾按钮的显隐也管
-   * 行底色；卡片让位还要算上右键菜单，而那个面板不改变行的外观
+   * 与 `menuOpen` 分开：后者的含义是「行上挂菜单展开标记」，既管行尾按钮的显隐也管行底色
+   * 卡片让位还要算上右键菜单，而那个面板不改变行的外观
    */
   hoverDisabled?: boolean | undefined
-  /** 悬停卡片可复制的内容，取会话标题；缺省表示卡片只读（新建中的空白行） */
+  /** 悬停卡片可复制的内容，取会话标题，缺省表示卡片只读（新建中的空白行） */
   hoverCopy?: string | undefined
   /** 悬停卡片的文案 */
   hoverLabels?: OfficialHoverLabels | undefined
   /** 菜单展开时行上挂标记：锚点按钮只靠 :hover 显示，菜单还开着时指针一旦
    * 移开按钮就会消失，标记让样式把它留住 */
   menuOpen?: boolean
-  /** 行尾操作位；缺省表示该行没有任何可用操作（如未分组桶里的会话） */
+  /** 行尾操作位，缺省表示该行没有任何可用操作（如未分组桶里的会话） */
   action?: ReactNode
   /**
-   * 行右键处理；缺省表示该行没有右键菜单，右键保持浏览器默认行为
+   * 行右键处理，缺省表示该行没有右键菜单，右键保持浏览器默认行为
    *
-   * 通过 props 下发而不是在行内自建：菜单条目与分派都属于「这一行有哪些
-   * 操作」，由持有菜单的组件决定；本组件只管把事件接上
+   * 通过 props 下发而不是在行内自建：菜单条目与分派都属于「这一行有哪些操作」，由持有菜单的组件决定
+   * 本组件只管把事件接上
    */
   onContextMenu?: ((event: RowContextMenuEvent) => void) | undefined
   /**
@@ -81,7 +81,7 @@ export interface SessionRowViewProps {
   /**
    * 请求把这一行滚进可视区
    *
-   * 只在从搜索结果打开会话时下发；缺省表示这一行没有待揭示的请求
+   * 只在从搜索结果打开会话时下发，缺省表示这一行没有待揭示的请求
    */
   onReveal?: (() => void) | undefined
 }
@@ -120,7 +120,7 @@ function SessionRowViewImpl({
       className={
         'wg-row' + (selected ? ' wg-row-selected' : '') + (menuOpen ? ' wg-row-menu-open' : '')
       }
-      // 参与所在折叠体的逐个淡入；序号由折叠体按文档序下发
+      // 参与所在折叠体的逐个淡入，序号由折叠体按文档序下发
       data-wg-stagger=""
       role="button"
       tabIndex={0}
@@ -158,8 +158,8 @@ function SessionRowViewImpl({
       }
       // 任一面板（行内 `...` 菜单或行右键菜单）开着时都让位，否则同一处会叠两层浮层
       disabled={hoverDisabled}
-      // 空白（新建中）会话的标题是语言包里的占位文案，不是会话内容，复制它没有
-      // 意义；调用方对这类行不传可复制内容
+      // 空白（新建中）会话的标题是语言包里的占位文案，不是会话内容
+      // 复制它没有意义，调用方对这类行不传可复制内容
       copyText={hoverCopy}
       copyLabel={hoverLabels.copy}
       copiedLabel={hoverLabels.copied}
@@ -170,8 +170,8 @@ function SessionRowViewImpl({
 /**
  * 行级 memo 的比较器
  *
- * 传进来的都是原语或内容稳定的值，因此逐格比即可；状态位与状态列表每次渲染都是新
- * 对象/新数组，按引用比会让每一行都判定为变过，因此那两格按内容比
+ * 传进来的都是原语或内容稳定的值，因此逐格比即可
+ * 状态位与状态列表每次渲染都是新对象/新数组，按引用比会让每一行都判定为变过，因此那两格按内容比
  */
 function sameRowViewProps(prev: SessionRowViewProps, next: SessionRowViewProps): boolean {
   const prevStatuses = prev.statuses ?? (prev.status === undefined ? [] : [prev.status])

@@ -5,9 +5,9 @@ import type { SidebarTranslate, WorkspaceTranslate } from '../src/client/officia
 /**
  * 测试用的语言包替身
  *
- * 本包自己的字典直接取 `locales.ts` 的真实 `zh`，因此键写错时测试会以
- * 「显示成原始键名」暴露，而不是静默通过；官方 `workspace` 字典在 node
- * 环境取不到（它只存在于客户端的 bundle 里），这里按官方键名手写一份
+ * 本包自己的字典直接取 `locales.ts` 的真实 `zh`
+ * 键写错时测试会把「显示成原始键名」暴露出来，而不是静默通过
+ * 官方 `workspace` 字典在 node 环境取不到（它只存在于客户端的 bundle 里），这里按官方键名手写一份
  */
 
 /** 官方 `workspace` 命名空间的键与中文文案（测试替身） */
@@ -81,7 +81,7 @@ export const OFFICIAL_SIDEBAR_ZH: Record<string, string> = {
   'session.new.label': '新建会话',
 }
 
-/** 用一个键表造翻译函数；未命中的键原样返回，便于断言暴露缺键 */
+/** 用一个键表造翻译函数，未命中的键原样返回，便于断言暴露缺键 */
 export function translateWith(dict: Record<string, string>): (key: string, params?: Record<string, unknown>) => string {
   return (key, params) => {
     const template = dict[key] ?? key

@@ -10,7 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 
 /** 宿主固定事实里本包用到的部分 */
 export interface HostInfo {
-  /** 宿主 home 目录；首帧就绪前为空 */
+  /** 宿主 home 目录，首帧就绪前为空 */
   home: string | undefined
 }
 
@@ -18,7 +18,7 @@ export interface HostInfo {
  * 宿主事实源
  *
  * 与官方 `hostInfo` 源同形：快照直接读 `ctx.remote.$host`
- * 它按 home 值缓存，值没变时引用稳定，因此 `useSyncExternalStore` 不会空转；连接重置时通知订阅读者
+ * 它按 home 值缓存，值没变时引用稳定，因此 `useSyncExternalStore` 不会空转，连接重置时通知订阅读者
  * @returns 与官方同形的可订阅源
  */
 export function hostInfoSource(ctx: Context): {

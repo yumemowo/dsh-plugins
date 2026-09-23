@@ -47,8 +47,8 @@ export const virtualWorkspaceSchema = z.object({
  * 菜单的聚焦 / 最近使用 / 置顶记录
  *
  * 三者都是根节点条目的键列表（见 `rootEntry.ts`），因此能指向工作区与工作区分组两类对象
- * 字段都带默认值：旧文件里没有这几格时按空读，不必升版本号
- * 与 `virtualWorkspaces` 同一取舍——升版本会让既有文件直接 version-mismatch
+ * 字段都带默认值，旧文件里没有这几格时按空读，不必升版本号
+ * 与 `virtualWorkspaces` 同一取舍，升版本会让既有文件直接 version-mismatch
  */
 export const pickerStateSchema = z.object({
   focused: z.string().default(''),
@@ -59,7 +59,7 @@ export const pickerStateSchema = z.object({
 /**
  * 根节点的单例状态，工作区分组列表、菜单的三份记录，以及嵌套渲染的开关
  *
- * 三者都是「根节点这一层」的单例状态，同处一个 global 槽位——分开几份记录只会多几次可能对不齐的写入
+ * 三者都是「根节点这一层」的单例状态，同处一个 global 槽位，分开几份记录只会多几次可能对不齐的写入
  */
 export const workspaceTreeSchema = z.object({
   virtualWorkspaces: z.array(virtualWorkspaceSchema),

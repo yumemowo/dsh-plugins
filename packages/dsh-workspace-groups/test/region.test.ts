@@ -301,8 +301,7 @@ describe('buildRowContextMenuItems', () => {
   it('keeps every row menu item so both entries share one dispatch', () => {
     const items = buildRowContextMenuItems(rowItems, '新建会话')
 
-    // 右键是 `...` 的捷径，除新增项外，条目对象必须是同一批，否则同一个动作
-    // 会在两个入口下各走一套
+    // 右键是 `...` 的捷径，除新增项外，条目对象必须是同一批，否则同一个动作会在两个入口下各走一套
     expect(items.slice(1)).toEqual(rowItems)
   })
 
@@ -643,8 +642,8 @@ describe('buildVirtualWorkspaceMenuItem', () => {
   })
 
   it('keeps ungroup out of the submenu, which is for moving into a group', () => {
-    // 「移出」不是「移动」：它由工作区菜单作为一级项渲染，见
-    // buildWorkspaceMenuItems 的「shows ungroup right below move-to」一例
+    // 「移出」不是「移动」，它由工作区菜单作为一级项渲染
+    // 见 buildWorkspaceMenuItems 的「shows ungroup right below move-to」一例
     expect(
       buildVirtualWorkspaceMenuItem(input('wg1')).submenu?.some(
         (entry) => entry.id === 'ungroup-workspace',
@@ -972,8 +971,8 @@ describe('groupSessionsByWorkspace', () => {
 /**
  * 投影结果的身份稳定性
  *
- * 流式期间每次活动只替换发生变化的那条摘要，其余对象保持同一引用。投影若每次都
- * 造新行对象，行级 memo 的逐格比对必然全部落空，长列表会在每次活动时逐行重算
+ * 流式期间每次活动只替换发生变化的那条摘要，其余对象保持同一引用
+ * 投影若每次都造新行对象，行级 memo 的逐格比对必然全部落空，长列表会在每次活动时逐行重算
  */
 describe('session row identity', () => {
   function listStateOf(
@@ -1241,9 +1240,9 @@ describe('virtualWorkspaceIdOf', () => {
 /**
  * 两端版本错位
  *
- * 浏览器半边随热重载换新，宿主半边要重启 `dsh` 才换，因此新客户端可能收到旧宿主
- * 回的、没有 `workspaceGroups` 这一格的快照。缺格直接遍历会抛 `groups is not
- * iterable`，把整片区域（对照模式下还包括承载它的右侧栏）打挂——这里固化降级行为
+ * 浏览器半边随热重载换新，宿主半边要重启 `dsh` 才换
+ * 因此新客户端可能收到旧宿主回的、没有 `workspaceGroups` 这一格的快照
+ * 缺格直接遍历会抛 `groups is not iterable`，把整片区域（对照模式下还包括承载它的右侧栏）打挂，这里固化降级行为
  */
 describe('normalizeSnapshot', () => {
   it('fills in the grouping field a pre-upgrade host omits', () => {

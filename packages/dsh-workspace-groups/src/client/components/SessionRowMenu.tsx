@@ -5,7 +5,7 @@
  * 归组项只在有分组上下文的行上出现——「未分组」桶里的会话不属于任何工作区，没有分组可落，因此那些行只保留官方三项
  * 宿主未提供官方服务时官方三项整体隐藏，同样不留点不动的入口
  *
- * 新建中（空白）会话行没有会话可操作，与官方一样整条行都不挂菜单；那条行只是「准备开始一个新会话」的占位，对它重命名或归档都无从谈起
+ * 新建中（空白）会话行没有会话可操作，与官方一样整条行都不挂菜单，那条行只是「准备开始一个新会话」的占位，对它重命名或归档都无从谈起
  *
  * 菜单开合状态收敛在本组件内：行组件在 map 回调里生成，把 useState 留在行内会让每行无条件多挂一组 hook 状态，独立组件则按需挂载
  * 重命名对话框也留在这里——只有真正打开过的行才付出这份状态
@@ -26,18 +26,18 @@ import type { SessionStatus } from '../data/status.ts'
 import type { GroupSection, SessionRow } from '../data/types.ts'
 
 /**
- * 一个会话行的归组上下文；缺省表示该行没有分组可归
+ * 一个会话行的归组上下文，缺省表示该行没有分组可归
  *
  * 只装数据与稳定引用的动作：行级 memo 按字段比对这个对象，把每次渲染新建的闭包放进来会让比对落空
  */
 export interface SessionGroupingContext {
-  /** 该会话所在的工作区；归组动作要用它定位 */
+  /** 该会话所在的工作区，归组动作要用它定位 */
   workspaceId: string
   /** 该会话所在工作区的全部分组 */
   sections: readonly GroupSection[]
-  /** 目标会话当前所属分组 id；空串表示未归组 */
+  /** 目标会话当前所属分组 id，空串表示未归组 */
   currentGroupId: string
-  /** 「移动到…」一级项文案；省略号表示点下去还要选一个目标 */
+  /** 「移动到…」一级项文案，省略号表示点下去还要选一个目标 */
   groupLabel: string
   /** 「取消分组」文案 */
   ungroupLabel: string
@@ -51,22 +51,22 @@ export interface SessionGroupingContext {
 
 export interface SessionRowMenuProps {
   row: SessionRow
-  /** 行上显示的标题；空白会话取语言包的固定名 */
+  /** 行上显示的标题，空白会话取语言包的固定名 */
   title: string
   selected: boolean
-  /** 该行要显示的状态位；空闲时为 undefined */
+  /** 该行要显示的状态位，空闲时为 undefined */
   status?: SessionStatus | undefined
-  /** 行尾相对时间文案；空白行不显示 */
+  /** 行尾相对时间文案，空白行不显示 */
   time?: string | undefined
-  /** 该行悬停卡片里逐条列出的状态；缺省回退成只有 `status` 一条 */
+  /** 该行悬停卡片里逐条列出的状态，缺省回退成只有 `status` 一条 */
   statuses?: readonly SessionStatus[] | undefined
-  /** 悬停卡片里的相对时间文案（`5分钟前`）；缺省时卡片里不显示这一行 */
+  /** 悬停卡片里的相对时间文案（`5分钟前`），缺省时卡片里不显示这一行 */
   hoverTime?: string | undefined
-  /** 悬停卡片的文案；缺省表示官方文案不在场，卡片整体不挂 */
+  /** 悬停卡片的文案，缺省表示官方文案不在场，卡片整体不挂 */
   hoverLabels?: OfficialHoverLabels | undefined
-  /** 归组上下文；缺省时菜单里没有归组项 */
+  /** 归组上下文，缺省时菜单里没有归组项 */
   grouping?: SessionGroupingContext | undefined
-  /** 官方三项会话操作；缺省时菜单里没有官方三项 */
+  /** 官方三项会话操作，缺省时菜单里没有官方三项 */
   official?: OfficialSessionActions | undefined
   /**
    * 打开会话
@@ -78,14 +78,14 @@ export interface SessionRowMenuProps {
   actionsLabel: (name: string) => string
   /** 本包命名空间的翻译座位，供重命名对话框解析通用词 */
   t: RegionTranslate
-  /** 请求把这一行滚进可视区；只在从搜索结果打开时下发 */
+  /** 请求把这一行滚进可视区，只在从搜索结果打开时下发 */
   onReveal?: (() => void) | undefined
 }
 
 /**
  * 比较两次归组上下文是否表示同一件事
  *
- * 分组段每次渲染都是新数组，按引用比会让每一行都判定为变过；菜单只消费分组的 id 与名字，因此判定这些字段就够
+ * 分组段每次渲染都是新数组，按引用比会让每一行都判定为变过，菜单只消费分组的 id 与名字，因此判定这些字段就够
  */
 function sameGrouping(
   a: SessionGroupingContext | undefined,
@@ -108,7 +108,7 @@ function sameGrouping(
 /**
  * 行级 memo 的比较器
  *
- * 传进来的都是原语或稳定引用，因此逐格比即可；状态位与归组上下文按内容比
+ * 传进来的都是原语或稳定引用，因此逐格比即可，状态位与归组上下文按内容比
  */
 function sameRowMenuProps(prev: SessionRowMenuProps, next: SessionRowMenuProps): boolean {
   const prevStatuses = prev.statuses ?? (prev.status === undefined ? [] : [prev.status])

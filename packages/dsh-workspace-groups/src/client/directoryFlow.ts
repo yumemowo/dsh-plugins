@@ -18,7 +18,7 @@ import type { DirectoryFlowOccupant } from './actions.ts'
  */
 export const DIRECTORY_FLOW_SLOT = 'sidebar.workspaces.directoryFlow'
 
-/** 占用者表里的一项；只取本模块用到的字段 */
+/** 占用者表里的一项，只取本模块用到的字段 */
 interface OccupantEntry {
   component: unknown
   inject?: ((...args: never[]) => Record<string, unknown>) | undefined
@@ -37,7 +37,7 @@ const injectCache = new WeakMap<object, Record<string, unknown>>()
  *
  * 取渲染者（`entriesOfSlot` 的第一项）而不是全部注册项：该洞是 single 类型，同优先级重复注册会抛错
  * 因此正常情况下只有一项，走渲染者视图能同时避开已崩溃退位的注册
- * @returns 占用者；洞未声明或无人占用时为 undefined
+ * @returns 占用者，洞未声明或无人占用时为 undefined
  */
 export function resolveOccupant(
   entries: readonly OccupantEntry[],
@@ -65,7 +65,7 @@ export function resolveOccupant(
  *
  * 是函数因此可以在渲染期调用：渲染器会把注册项的 inject 结果缓存整个注册生命周期
  * 目录选择器插件的加载顺序又不受本包约束，只有延迟到渲染时读才拿得到真正在场的占用者
- * @returns 占用者；无人占用时为 undefined
+ * @returns 占用者，无人占用时为 undefined
  */
 export function directoryFlowOccupant(slots: SlotRegistry): DirectoryFlowOccupant | undefined {
   return resolveOccupant(slots.entriesOfSlot(DIRECTORY_FLOW_SLOT) as readonly OccupantEntry[])

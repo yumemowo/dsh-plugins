@@ -16,7 +16,7 @@ export interface IconButtonProps {
   icon: ReactElement
   onClick: () => void
   /**
-   * 切换类按钮的按下态；普通按钮不必传
+   * 切换类按钮的按下态，普通按钮不必传
    *
    * 传了就在按钮上声明 `aria-pressed`。样式直接认这个属性把按钮常驻显示——按下态是这条记录当前的状态，不该只在悬停时才读得到
    * 两者同源，不会各说一套

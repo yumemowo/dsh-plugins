@@ -17,7 +17,7 @@ import type { NestingBinding, NestingInput } from '../src/client/data/nest.ts'
  * 界面上的层级、缩进与折叠都由它交出的事实驱动，因此它的取舍在这里逐条钉住
  */
 
-/** 造一份推导输入；只给关心的那几格，其余按空 */
+/** 造一份推导输入，只给关心的那几格，其余按空 */
 function input(overrides: Partial<NestingInput> & Pick<NestingInput, 'workspaceIds'>): NestingInput {
   return {
     enabled: true,
@@ -79,7 +79,7 @@ describe('deriveNesting', () => {
     expect(nesting.containerOf('w2')).toBe(ROOT_CONTAINER)
     expect(nesting.containerOf('w3')).toBe(ROOT_CONTAINER)
     expect(nesting.rootsOf(ROOT_CONTAINER)).toEqual(['w1', 'w4'])
-    // 段内层级与「整棵子树」都由这一份索引给出：父带出子，子再带出孙
+    // 段内层级与「整棵子树」都由这一份索引给出，父带出子，子再带出孙
     expect(nesting.childIdsOf('w1')).toEqual(['w2'])
     expect(nesting.childIdsOf('w2')).toEqual(['w3'])
     expect(nesting.ancestorsOf('w1')).toEqual([])
@@ -152,7 +152,7 @@ describe('deriveNesting', () => {
   })
 
   it('ignores a binding whose group no longer exists', () => {
-    // 分组被删除后归属成了一条悬空引用：退回按路径推导的位置，而不是整条丢掉这个工作区
+    // 分组被删除后归属成了一条悬空引用，退回按路径推导的位置，而不是整条丢掉这个工作区
     const nesting = deriveNesting(
       input({
         workspaceIds: ['w1', 'w2'],
@@ -267,8 +267,8 @@ describe('nearestAncestorForPath', () => {
   })
 
   it('finds the ancestor among workspaces of the same virtual workspace', () => {
-    // 目标也归属某个虚拟分组时，查询范围就是那个分组：同一个项目下的工作区收进去之后
-    // 它们之间的 cwd 层级仍要保留
+    // 目标也归属某个虚拟分组时，查询范围就是那个分组
+    // 同一个项目下的工作区收进去之后，它们之间的 cwd 层级仍要保留
     const parent = nearestAncestorForPath(
       ['w1', 'w2', 'w3'],
       pathsOf(tree),

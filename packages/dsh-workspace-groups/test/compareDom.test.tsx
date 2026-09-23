@@ -127,7 +127,7 @@ function register() {
       },
       openTab: () => {},
     },
-    // 本包的 `inject` 里有 remote，因此注册 context 读得到；tab context 读不到
+    // 本包的 `inject` 里有 remote，因此注册 context 读得到，tab context 读不到
     remote: { $host: { home: '/home/user', isLoopback: true } },
   }
 

@@ -28,7 +28,7 @@ const EXPAND_SLIDE_MS = 300
 export interface SearchState {
   /** 受控输入值，已收进查询契约 */
   query: string
-  /** 去掉首尾空白的查询词；为空表示不在搜索态 */
+  /** 去掉首尾空白的查询词，为空表示不在搜索态 */
   normalized: string
   /** 输入框是否展开 */
   expanded: boolean
@@ -39,9 +39,9 @@ export interface SearchState {
   expandFromRail: () => void
   /** 清除按钮：清空查询并收起 */
   clear: () => void
-  /** 供聚焦使用；由区域组件持有，与 wide 的联动写在下面的 effect 里 */
+  /** 供聚焦使用，由区域组件持有，与 wide 的联动写在下面的 effect 里 */
   inputRef: RefObject<HTMLInputElement>
-  /** 输入框所在的外层容器；用于判断点击是否落在搜索内部 */
+  /** 输入框所在的外层容器，用于判断点击是否落在搜索内部 */
   rootRef: RefObject<HTMLDivElement>
 }
 
@@ -74,7 +74,7 @@ export function useSearch(wide: boolean, expandSidebar: () => void): SearchState
     inputRef.current?.focus({ preventScroll: true })
   }, [wide, expanded, focusAfterSlide])
 
-  // 点击搜索之外：先收回焦点；查询为空时顺带把输入框收起，header 回到常规形态
+  // 点击搜索之外：先收回焦点，查询为空时顺带把输入框收起，header 回到常规形态
   useEffect(() => {
     if (!wide || !expanded || focusAfterSlide) return
     const onClick = (event: MouseEvent): void => {
@@ -193,7 +193,7 @@ export function SearchRailEntry({
 export interface SearchResultsProps {
   /** 本次命中的结果页 */
   result: SessionSearchResult
-  /** 结果条数上限；被截断时的提示要带上它 */
+  /** 结果条数上限，被截断时的提示要带上它 */
   limit: number
   /** 当前打开的会话 id，用于结果行的选中态 */
   currentSessionId?: string | undefined
@@ -212,9 +212,9 @@ export interface SearchResultsProps {
  * 分成两段是为了给出色阶对比：工作区名用更强的色阶，分组名用更弱的那一档，一眼能看出哪一段是容器、哪一段是组
  */
 export interface ResultPath {
-  /** 工作区名；用更强的一档色阶 */
+  /** 工作区名，用更强的一档色阶 */
   workspace?: string
-  /** 分组名；用更弱的一档色阶。未归组时缺省 */
+  /** 分组名，用更弱的一档色阶。未归组时缺省 */
   group?: string
   /** 没有工作区归属时的回退名（官方 `group.ungrouped`），单独成一档 */
   ungrouped?: string

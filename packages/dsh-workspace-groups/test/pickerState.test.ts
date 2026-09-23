@@ -22,7 +22,7 @@ const V1 = rootVirtualKey('vg1')
 
 describe('root entry keys', () => {
   it('carries the kind in the prefix so two id spaces cannot collide', () => {
-    // 工作区与工作区分组的 id 由不同生成器产出，但仍可能撞值；
+    // 工作区与工作区分组的 id 由不同生成器产出，但仍可能撞值
     // 只存 id 会让一条记录在两种含义之间摇摆
     expect(rootWorkspaceKey('x')).toBe('ws:x')
     expect(rootVirtualKey('x')).toBe('vw:x')

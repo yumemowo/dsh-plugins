@@ -11,7 +11,7 @@ export interface SessionRow {
    * 存储的显示标题
    *
    * 空白（新建中）会话为空串，与官方一样
-   * 那条占位行的名字由渲染期套官方语言包的固定名，而不是拿宿主给的后备标题顶上；首个回合落地后宿主提供摘要标题，这一格随之有值
+   * 那条占位行的名字由渲染期套官方语言包的固定名，而不是拿宿主给的后备标题顶上，首个回合落地后宿主提供摘要标题，这一格随之有值
    */
   title: string
   blank: boolean
@@ -39,7 +39,7 @@ export interface GroupSection {
 /**
  * 一个工作区的渲染布局
  *
- * `loose` 是不属于任何分组的会话：它们平铺在工作区下，没有分组头；只有用户真正创建过分组，才会出现分组结构
+ * `loose` 是不属于任何分组的会话：它们平铺在工作区下，没有分组头，只有用户真正创建过分组，才会出现分组结构
  * `children` 是没被放进任何分组、按 cwd 路径挂在这个工作区下的顶层子工作区
  */
 export interface WorkspaceLayout {
@@ -62,8 +62,9 @@ export interface WorkspaceLayout {
  * 它们由父工作区带出来
  *
  * 两者在开启嵌套时会不同，一个分组里的 `/repo` 与 `/repo/a` 都归属这个分组
- * 但只有 `/repo` 是这一层的顶层。把两者合成一格会让「它已在某个分组里」这件事
- * 在内嵌之后读不出来，菜单因此会给一个已经归组的工作区再列一次它所在的分组
+ * 但只有 `/repo` 是这一层的顶层
+ * 把两者合成一格会让「它已在某个分组里」这件事在内嵌之后读不出来
+ * 菜单因此会给一个已经归组的工作区再列一次它所在的分组
  */
 export interface VirtualWorkspaceSection {
   id: string
@@ -88,7 +89,7 @@ export interface RootLayout {
 /**
  * 一个待编辑的分组名，指名编辑对象与当前草稿
  *
- * 新建时 `groupId` 为空串，确认后走 `createGroup`；否则走 `renameGroup`
+ * 新建时 `groupId` 为空串，确认后走 `createGroup`，否则走 `renameGroup`
  */
 export interface GroupNameDraft {
   workspaceId: string

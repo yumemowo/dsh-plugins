@@ -19,7 +19,7 @@ import type {
 /**
  * 把工作区的会话按分组元数据切成「分组」与「未归组」两部分
  *
- * 分组里记录的会话若已不在列表中（被归档或删除），会被静默跳过；未归组的会话按传入顺序平铺
+ * 分组里记录的会话若已不在列表中（被归档或删除），会被静默跳过，未归组的会话按传入顺序平铺
  * 这样即使元数据与真实列表出现偏差，界面也不会丢行
  *
  * 每个分组还带上放进去的顶层子工作区，它们渲染在组内会话之前
@@ -40,7 +40,7 @@ export function buildLayout(
     const rows: SessionRow[] = []
     for (const id of group.sessionIds) {
       const row = byId.get(id)
-      // 元数据里存在的会话可能已经归档；列表是事实来源，跳过即可
+      // 元数据里存在的会话可能已经归档，列表是事实来源，跳过即可
       if (row === undefined || claimed.has(id)) continue
       claimed.add(id)
       rows.push(row)
@@ -121,7 +121,7 @@ export function buildRootLayout(
   const claimed = new Set<string>()
   const sections: VirtualWorkspaceSection[] = []
 
-  /** 一个容器里的顶层成员，按传入顺序；不开嵌套时原样返回 */
+  /** 一个容器里的顶层成员，按传入顺序，不开嵌套时原样返回 */
   const topsOf = (container: string, members: readonly string[]): string[] => {
     if (nesting === undefined) return [...members]
     const roots = new Set(nesting.rootsOf(container))
@@ -134,7 +134,7 @@ export function buildRootLayout(
   for (const group of groups ?? []) {
     const ids: string[] = []
     for (const id of group.workspaceIds) {
-      // 元数据里存在的工作区可能已被删除；列表是事实来源，跳过即可
+      // 元数据里存在的工作区可能已被删除，列表是事实来源，跳过即可
       if (!known.has(id) || claimed.has(id)) continue
       claimed.add(id)
       ids.push(id)

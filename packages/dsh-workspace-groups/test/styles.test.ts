@@ -205,7 +205,7 @@ describe('client stylesheet', () => {
     // 没有 DOM 子节点（面板 portal 到 body）。留在流里会成为一个空 flex 项
     // 行的 gap 照样算，标题与会话数会被推开
     expect(root?.body).toMatch(/display:\s*contents/)
-    // 类名写两遍抬一次优先级：原语自己的单类规则谁后注入谁赢，先后不由本包决定
+    // 类名写两遍抬一次优先级，原语自己的单类规则谁后注入谁赢，先后不由本包决定
     expect(root).toBeDefined()
   })
 
@@ -319,7 +319,7 @@ describe('client stylesheet', () => {
     const has = (selector: string, pattern: RegExp): boolean =>
       rules.some((rule) => rule.selectors.includes(selector) && pattern.test(rule.body))
 
-    // 分组头复用工作区行那一套两个槽：静止显示文件夹、悬停换成箭头。少了分组头这几条
+    // 分组头复用工作区行那一套两个槽，静止显示文件夹、悬停换成箭头。少了分组头这几条
     // 它的箭头会常驻（或文件夹不会让位），与工作区行不一致
     const head = '.wg-virtual-workspace-head'
     expect(has(`${head} .wg-chevron`, /display:\s*none/)).toBe(true)
@@ -336,7 +336,7 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    // 窄栏一行放不下两个 36px 入口，因此改成竖排；定高与裁剪都要撤掉
+    // 窄栏一行放不下两个 36px 入口，因此改成竖排，定高与裁剪都要撤掉
     // 否则第二个入口看不见（宽栏那条基线规则是给单行写的）
     const rail = bodyOf('.wg-header-rail')
     expect(rail).toMatch(/flex-direction:\s*column/)
@@ -379,7 +379,7 @@ describe('client stylesheet', () => {
     expect(count).toMatch(/font-size:\s*12px/)
     expect(count).toMatch(/line-height:\s*20px/)
 
-    // 分组头是 gap:6px，而 session 行是 gap:0；差的那份 gap 要还回去
+    // 分组头是 gap:6px，而 session 行是 gap:0，差的那份 gap 要还回去
     // 会话数才会落在与 time 同一条右缘线上
     expect(count).toMatch(/margin-right:\s*-6px/)
 
@@ -484,7 +484,7 @@ describe('client stylesheet', () => {
       rule.selectors.includes('.wg-collapse:not(.wg-collapse-open) > .wg-collapse-clip [data-wg-stagger]'),
     )?.body
 
-    // 收起时这条更具体，且把延迟归零：所有行同时淡出（步进的延迟只挂在展开态那条）
+    // 收起时这条更具体，且把延迟归零，所有行同时淡出（步进的延迟只挂在展开态那条）
     expect(closed).toBeDefined()
     expect(closed).toMatch(/transition-delay:\s*0ms/)
   })
@@ -513,13 +513,13 @@ describe('client stylesheet', () => {
     const hasRule = (selector: string, pattern: RegExp): boolean =>
       rules.some((rule) => rule.selectors.includes(selector) && pattern.test(rule.body))
 
-    // 工作区分组行本身落在根节点上：缩进与工作区行同为 8px，不是会话分组那档 24px
+    // 工作区分组行本身落在根节点上，缩进与工作区行同为 8px，不是会话分组那档 24px
     expect(hasRule('.wg-group-head.wg-virtual-workspace-head', /padding:\s*0 8px/)).toBe(true)
     // 缩进层级不用 CSS 变量在容器间累加，把变量定义成「它自己 + 1」是循环引用
     // 浏览器会把整条声明当作无效值丢掉，偏移因此恒为 0、缩进静默失效
     // 层级改由 JS 算好（nesting.levelOf）经 --wg-depth 下发，样式表只做一次重命名
     expect(css).not.toContain('--wg-depth-offset')
-    // 每档缩进都直接读这一个变量；它由组件下发，样式表不再二次加工
+    // 每档缩进都直接读这一个变量，它由组件下发，样式表不再二次加工
     expect(hasRule('.wg-workspace-head', /padding-left:\s*calc\(8px \+ 16px \* var\(--wg-depth, 0\)\)/)).toBe(true)
   })
 
@@ -654,8 +654,7 @@ describe('client stylesheet', () => {
 
   it('indents a session row whether or not a hover card wraps it', () => {
     // 挂了悬停卡片的会话行会被官方 HoverCard 的根节点包一层
-    // 行就不再是 .wg-sessions 的直接子项。两条选择器都要在
-    // 缩进才不会因为有没有卡片而不同
+    // 行就不再是 .wg-sessions 的直接子项，两条选择器都要写，缩进才不会因为有没有卡片而不同
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
       selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
@@ -712,7 +711,7 @@ describe('client stylesheet', () => {
 
   it('flips the official floating panels only under the body marker', () => {
     // 官方浮层固定向右展开，对照模式下区域贴窗口右缘会把它们顶到屏幕外
-    // 翻转必须收在 body 的标记之下：产品形态（左侧栏）要保留原语的向右展开
+    // 翻转必须收在 body 的标记之下，产品形态（左侧栏）要保留原语的向右展开
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
       selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
@@ -754,7 +753,7 @@ describe('client stylesheet', () => {
     // 界面上就是「聚焦的那一行不见了」，不会有任何报错
     expect(bodyOf('.wg-header-titled')).toMatch(/height:\s*auto/)
 
-    // 宽度上限挂在整个标题块上：两行共用同一条右缘。挂到行上会让较窄的那行先截断
+    // 宽度上限挂在整个标题块上，两行共用同一条右缘。挂到行上会让较窄的那行先截断
     // 而较宽的那行顶出 45% 的约束
     expect(bodyOf('.wg-header-title')).toMatch(/max-width:\s*45%/)
 
@@ -782,7 +781,7 @@ describe('client stylesheet', () => {
     // 悬停反馈挂在整块上，而不是其中某一行
     expect(bodyOf('.wg-header-title:hover')).toMatch(/--dsw-alias-interactive-bg-hover/)
 
-    // 箭头不再是独立按钮，它只是这块按钮的开合指示；开合之间翻转
+    // 箭头不再是独立按钮，它只是这块按钮的开合指示，开合之间翻转
     expect(bodyOf('.wg-header-heading')).toMatch(/gap:\s*2px/)
     expect(bodyOf('.wg-header-caret-open')).toMatch(/transform:\s*rotate\(180deg\)/)
   })
@@ -860,7 +859,7 @@ describe('client stylesheet', () => {
     // 操作位在菜单里常驻占位（不是列表行那种从 0 宽展开）
     expect(bodyOf('.wg-picker-row .wg-row-actions')).toMatch(/gap:\s*8px/)
 
-    // 旧的两个并排热区已经不存在：行按钮 + 兄弟按钮那套选择器不该留残骸
+    // 旧的两个并排热区已经不存在，行按钮 + 兄弟按钮那套选择器不该留残骸
     for (const gone of ['.wg-picker-item', '.wg-picker-action', '.wg-picker-row-focused']) {
       expect(bodyOf(gone), `${gone} is a leftover from the sibling-button layout`).toBe('')
     }
@@ -875,7 +874,7 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    // 整行做成 label：勾选框自己只有 16px，而那句话是要读的，点文字也该切换它
+    // 整行做成 label，勾选框自己只有 16px，而那句话是要读的，点文字也该切换它
     expect(bodyOf('.wg-dialog-check')).toMatch(/cursor:\s*pointer/)
     expect(bodyOf('.wg-dialog-check')).toMatch(/display:\s*flex/)
     expect(bodyOf('.wg-dialog-check input')).toMatch(/width:\s*16px/)
@@ -952,7 +951,7 @@ describe('client stylesheet', () => {
   it('pushes the submenu arrow to the right edge of the item', () => {
     // 官方 Menu 的项没有「悬停展开」槽位
     // 箭头由本包塞进 label（见 menus.tsx 的 submenuParentLabel）。文案必须吃掉余量
-    // 箭头不参与伸缩，箭头才会落在项的最右缘；反过来写会让箭头跟着文字长度浮动
+    // 箭头不参与伸缩，箭头才会落在项的最右缘，反过来写会让箭头跟着文字长度浮动
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
       selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
@@ -972,7 +971,7 @@ describe('client stylesheet', () => {
     // 箭头色阶与官方项图标同档，不抢文案权重
     expect(bodyOf('.wg-menu-arrow')).toContain('var(--dsw-alias-label-tertiary)')
 
-    // 箭头恒指向右：翻转态下二级面板改从左侧展开，箭头也不跟着镜像
+    // 箭头恒指向右，翻转态下二级面板改从左侧展开，箭头也不跟着镜像
     // 断言落在「没有任何一条含 .wg-menu-arrow 的规则声明 transform」上——
     // 只要有人给箭头加了翻转，这条就失败
     expect(

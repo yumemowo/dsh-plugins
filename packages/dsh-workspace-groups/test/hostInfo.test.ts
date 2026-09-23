@@ -4,7 +4,7 @@ import { hostInfoSource } from '../src/client/hostInfo.ts'
 /**
  * 宿主固定事实的读数
  *
- * 与官方 `ui-workspace` 的 `hostInfo` 源同形：快照直接读 `ctx.remote.$host`，
+ * 与官方 `ui-workspace` 的 `hostInfo` 源同形：快照直接读 `ctx.remote.$host`
  * 连接重置时通知订阅读者
  */
 function fakeContext(home: string | undefined) {
@@ -34,7 +34,7 @@ describe('hostInfoSource', () => {
   })
 
   it('reports an undefined home before the first ready frame', () => {
-    // 首个 ready 帧到达前 $host.home 是空的；卡片那时退回显示原始路径
+    // 首个 ready 帧到达前 $host.home 是空的，卡片那时退回显示原始路径
     const { ctx } = fakeContext(undefined)
 
     expect(hostInfoSource(ctx).getSnapshot().home).toBeUndefined()

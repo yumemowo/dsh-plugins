@@ -21,7 +21,7 @@ describe('collapse motion parameters', () => {
   })
 
   it('writes the default constant into the CSS fallbacks', () => {
-    // 回退值直接由常量插值而来，两者不可能漂移；这里确认插值确实落到了 CSS 里，
+    // 回退值直接由常量插值而来，两者不可能漂移，这里确认插值确实落到了 CSS 里
     // 而不是留下 `${...}` 字面量或手写数字
     const css = CSS
     expect(css).toContain(`var(${COLLAPSE_VARS.duration}, ${DEFAULT_COLLAPSE_MOTION.duration}ms)`)
@@ -58,7 +58,7 @@ describe('collapse motion parameters', () => {
     const css = CSS
 
     // 收起后交出焦点顺序的延时若与容器时长各写一份，改一处就会失配
-    //（内容可能在视觉上没合拢时就能被 Tab 聚焦）。两者必须同源
+    // 两者必须同源，内容可能在视觉上没合拢时就能被 Tab 聚焦
     expect(css).toMatch(
       new RegExp(`\\.wg-collapse-clip\\s*\\{[^}]*transition:\\s*visibility 0s linear var\\(${COLLAPSE_VARS.duration}`),
     )

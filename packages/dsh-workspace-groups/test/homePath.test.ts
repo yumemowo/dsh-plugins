@@ -4,7 +4,7 @@ import { abbreviateHomePath } from '../src/client/utils/pathUtils.ts'
 /**
  * 路径缩写的规则与官方 `ui-workspace` 的 `abbreviateHomePath` 逐条对齐
  *
- * 卡片里显示缩写路径，复制出去的仍是完整路径；本模块只负责那一处排版
+ * 卡片里显示缩写路径，复制出去的仍是完整路径，本模块只负责那一处排版
  */
 describe('abbreviateHomePath', () => {
   it('abbreviates the home directory itself as a bare tilde', () => {

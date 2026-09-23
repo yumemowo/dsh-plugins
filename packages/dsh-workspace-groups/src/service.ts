@@ -18,7 +18,7 @@ export interface WorkspaceGroupsService {
   createGroup(workspaceId: string, name: string): Promise<WorkspaceGroupsSnapshot>
   /** 重命名会话分组 */
   renameGroup(workspaceId: string, groupId: string, name: string): Promise<WorkspaceGroupsSnapshot>
-  /** 删除会话分组；组内会话回到未分组，放进它的子工作区解除嵌套，会话本身不受影响 */
+  /** 删除会话分组，组内会话回到未分组，放进它的子工作区解除嵌套，会话本身不受影响 */
   deleteGroup(workspaceId: string, groupId: string): Promise<WorkspaceGroupsSnapshot>
   /** 把会话移入分组，`groupId` 为 null 表示移出到未分组 */
   moveSession(workspaceId: string, sessionId: string, groupId: string | null): Promise<WorkspaceGroupsSnapshot>
@@ -26,7 +26,7 @@ export interface WorkspaceGroupsService {
   createVirtualWorkspace(name: string): Promise<WorkspaceGroupsSnapshot>
   /** 重命名工作区分组 */
   renameVirtualWorkspace(groupId: string, name: string): Promise<WorkspaceGroupsSnapshot>
-  /** 删除工作区分组；组内工作区回到未分组，工作区本身不受影响 */
+  /** 删除工作区分组，组内工作区回到未分组，工作区本身不受影响 */
   deleteVirtualWorkspace(groupId: string): Promise<WorkspaceGroupsSnapshot>
   /**
    * 把工作区移入分组，`groupId` 为 null 表示移出到未分组
@@ -77,12 +77,12 @@ export interface WorkspaceGroupsService {
   togglePinned(key: string): Promise<WorkspaceGroupsSnapshot>
 }
 
-/** 生成一个会话分组 id；同工作区内唯一即可，无需全局唯一 */
+/** 生成一个会话分组 id，同工作区内唯一即可，无需全局唯一 */
 function newGroupId(): string {
   return `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
 }
 
-/** 生成一个工作区分组 id；与会话分组的 id 前缀区分开，便于排查元数据 */
+/** 生成一个工作区分组 id，与会话分组的 id 前缀区分开，便于排查元数据 */
 function newVirtualWorkspaceId(): string {
   return `wg${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
 }
@@ -115,7 +115,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
       // 开关关着时归属整格为空，渲染侧因此只要读这一格，不必再自行判断开关
       nesting: global.nested ? nesting : {},
       workspaceGroups: global.virtualWorkspaces,
-      // 走一次归一而不是直接交出这一格：global 记录可能来自一个没有这几格的旧版本，缺格时下游（浏览器半边的菜单）会读到 undefined
+      // 走一次归一而不是直接交出这一格，global 记录可能来自一个没有这几格的旧版本，缺格时下游（浏览器半边的菜单）会读到 undefined
       picker: normalizePickerState(global.picker),
       // 同样补格，旧 global 里没有这一格，直接交给渲染侧会得到 undefined
       nested: global.nested !== false,
@@ -123,7 +123,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
   }
 
   /**
-   * 取某工作区的会话分组；不存在时视为空列表，不写盘
+   * 取某工作区的会话分组，不存在时视为空列表，不写盘
    *
    * 返回副本：域把存储的对象原样交出来（不做防御性拷贝），就地改它会直接改到域内存里的权威状态
    */
@@ -136,7 +136,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
     return table.get(workspaceId)?.nesting ?? null
   }
 
-  /** 取根节点上的工作区分组；返回副本，理由同上 */
+  /** 取根节点上的工作区分组，返回副本，理由同上 */
   function treeGroups(): VirtualWorkspace[] {
     return [...tree.get().virtualWorkspaces]
   }
@@ -144,7 +144,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
   /**
    * 写回某工作区的分组记录
    *
-   * 两份内容同写一份记录，因为主键都是这个工作区自己；两者都为空时删掉整条记录，不留死数据
+   * 两份内容同写一份记录，因为主键都是这个工作区自己，两者都为空时删掉整条记录，不留死数据
    */
   async function save(
     workspaceId: string,
@@ -223,7 +223,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
   /**
    * 清掉指向某个已消失分组的归属记录
    *
-   * 分组被删除后，放进它的子工作区再也不会被渲染在那；留着这条引用只会让元数据与界面长期偏离
+   * 分组被删除后，放进它的子工作区再也不会被渲染在那，留着这条引用只会让元数据与界面长期偏离
    * @param workspaceId - 持有该分组的工作区
    * @param groupId - 被删除的分组 id
    */
@@ -257,7 +257,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
     async deleteGroup(workspaceId, groupId) {
       // 只删除分组本身，组内会话回到未分组，放进它的子工作区解除嵌套，会话本身都还在
       const groups = groupsOf(workspaceId).filter((group) => group.id !== groupId)
-      // 归属记在子工作区自己那份记录上，因此要逐条扫过表；指向的这个分组已经没了，它们都成了悬空引用
+      // 归属记在子工作区自己那份记录上，因此要逐条扫过表，指向的这个分组已经没了，它们都成了悬空引用
       await releaseNestingIn(workspaceId, groupId)
       return save(workspaceId, groups)
     },
@@ -364,7 +364,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
     },
 
     async forgetWorkspace(workspaceId) {
-      // 工作区已被删除，它留下的记录再也不会被渲染；元数据里挂着不存在的 id 只会让两边长期偏离
+      // 工作区已被删除，它留下的记录再也不会被渲染，元数据里挂着不存在的 id 只会让两边长期偏离
       // 三处一起清：它在根节点分组里的成员资格、它自己的嵌套归属、以及指向它作为父的归属
       // 第三处不能省——父没了，那些子工作区再也不会被渲染在它下面，留着就是悬空引用
       const groups = treeGroups()

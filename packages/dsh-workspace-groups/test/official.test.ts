@@ -9,9 +9,8 @@ import {
 import { workspaceTranslate } from './locale-stub.ts'
 
 /**
- * 官方 `workspace` 语言包的替身在 `locale-stub.ts`：它按官方键名手写，
- * 官方改键名时这里不会静默通过——真实代码里那份是类型约束的
- * `TranslateNS<'workspace'>`
+ * 官方 `workspace` 语言包的替身在 `locale-stub.ts`：它按官方键名手写
+ * 官方改键名时这里不会静默通过，真实代码里那份是受 `TranslateNS<'workspace'>` 类型约束的
  */
 describe('officialSessionLabels', () => {
   it('reads every label from the official workspace dictionary', () => {
@@ -30,7 +29,7 @@ describe('officialSessionLabels', () => {
 describe('officialAddLabels', () => {
   it('reads the header entry and the flow error copy from the official dictionary', () => {
     expect(officialAddLabels(workspaceTranslate())).toEqual({
-      // header 入口用 workspace.add；menu.addWorkspace 是工作区列表菜单里的那一项
+      // header 入口用 workspace.add，menu.addWorkspace 是工作区列表菜单里的那一项
       add: '添加工作区',
       folderErrorTitle: '无法打开文件夹',
       folderErrorRetry: '重新选择',
@@ -59,8 +58,8 @@ describe('officialSearchLabels', () => {
   })
 
   it('takes the entry tooltip from the shared common word, not the object-named key', () => {
-    // 官方入口按钮的 tooltip 用通用词「搜索」（common 命名空间，由查找链兜住），
-    // 无障碍标签才点明对象；两者不是同一个键
+    // 官方入口按钮的 tooltip 用通用词「搜索」（common 命名空间，由查找链兜住）
+    // 无障碍标签才点明对象，两者不是同一个键
     expect(workspaceTranslate()('search')).toBe('搜索')
     expect(workspaceTranslate()('search.sessions.aria')).toBe('搜索会话')
   })
@@ -107,7 +106,7 @@ describe('officialHoverLabels', () => {
   const now = 1_700_000_000_000
 
   it('takes the copy affordance from the shared common vocabulary', () => {
-    // 卡片整体可点即复制，因此用通用词而不是点明对象的说法；它在 common 里
+    // 卡片整体可点即复制，因此用通用词而不是点明对象的说法，它在 common 里
     expect(labels.copy).toBe('复制')
     expect(labels.copied).toBe('已复制')
   })
@@ -123,7 +122,7 @@ describe('officialHoverLabels', () => {
   })
 
   it('formats the creation instant through the official date template', () => {
-    // 年月日走 date.ymd，时钟部分补零；不用 toLocaleString——那会跟着浏览器语言走
+    // 年月日走 date.ymd，时钟部分补零，不用 toLocaleString——那会跟着浏览器语言走
     const createdAt = new Date(2026, 8, 14, 3, 31).getTime()
     expect(labels.created(createdAt)).toBe('创建于 2026年9月14日 03:31')
   })

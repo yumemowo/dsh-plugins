@@ -27,7 +27,7 @@ export interface WorkspaceSectionProps {
   /**
    * 该工作区行上的「移动工作区分组」选项集
    *
-   * 与 `labels` 分开传：文案对所有行相同，归属却逐行不同
+   * 与 `labels` 分开传，文案对所有行相同，归属却逐行不同
    */
   virtualWorkspace: WorkspaceRowProps['virtualWorkspace']
   /** 该行「移动工作区分组」子菜单的选中分派 */
@@ -60,9 +60,9 @@ export interface WorkspaceSectionProps {
   hover?: WorkspaceHoverData | undefined
   /** 悬停卡片可复制的内容，取完整目录路径 */
   hoverCopy?: string | undefined
-  /** 悬停卡片的文案；缺省表示官方文案不在场，卡片整体不挂 */
+  /** 悬停卡片的文案，缺省表示官方文案不在场，卡片整体不挂 */
   hoverLabels?: OfficialHoverLabels | undefined
-  /** 该工作区块在层级里的深度，从 0 起；缩进由它换算 */
+  /** 该工作区块在层级里的深度，从 0 起，缩进由它换算 */
   depth: number
   onToggle: () => void
   onCreateSession: () => void

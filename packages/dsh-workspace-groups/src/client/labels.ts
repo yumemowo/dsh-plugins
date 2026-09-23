@@ -218,8 +218,8 @@ export interface PickerLabels {
   /**
    * 新建工作区分组对话框里的「切换到新工作区」勾选项
    *
-   * 只在当前不是「显示全部工作区」时才给：已经看着全部内容时，「切过去」没有
-   * 可切的目的地
+   * 只在当前不是「显示全部工作区」时才给
+   * 已经看着全部内容时，「切过去」没有可切的目的地
    */
   followFocus: string
 }
@@ -271,7 +271,7 @@ export function regionLabels(
     ungroup: t('ungroup'),
     status: {
       running: tw('status.running'),
-      // 官方对单复数各有一条文案；中文两份相同，这里按 n 选键保持同一契约
+      // 官方对单复数各有一条文案，中文两份相同，这里按 n 选键保持同一契约
       subagentsRunning: (n: number) =>
         n === 1
           ? tw('status.subagentsRunning.one', { n })

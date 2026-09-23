@@ -27,7 +27,7 @@ import { CARD_ATTRIBUTE } from '../utils/flip.ts'
  * 刻意不写清理：正文在复制反馈的 1 秒里会被原语换成「已复制」提示
  * 那次卸载若顺手摘掉标记，卡片正好在用户盯着的时候弹回屏幕外
  * 标记随卡片盒本身一起销毁——原语关闭浮层时把整个盒子从 body 上摘掉
- * @param node - 正文根节点；React 传 null 表示它已从树上摘下，此时什么也不做
+ * @param node - 正文根节点，React 传 null 表示它已从树上摘下，此时什么也不做
  */
 function tagCard(node: HTMLDivElement | null): void {
   node?.parentElement?.setAttribute(CARD_ATTRIBUTE, '')
@@ -64,11 +64,11 @@ export function WorkspaceHoverContent({
 
 /** 会话卡片的正文 */
 export interface SessionHoverContentProps {
-  /** 完整标题；空白会话是语言包的固定名 */
+  /** 完整标题，空白会话是语言包的固定名 */
   title: string
-  /** 相对时间文案；空白（新建中）会话没有可显示的时间，缺省即整行不渲染 */
+  /** 相对时间文案，空白（新建中）会话没有可显示的时间，缺省即整行不渲染 */
   time?: string | undefined
-  /** 该会话说要呈现的全部状态，逐条列出；空闲也有一条 */
+  /** 该会话说要呈现的全部状态，逐条列出，空闲也有一条 */
   statuses: readonly SessionStatus[]
 }
 

@@ -61,7 +61,7 @@ export interface OfficialSearchLabels {
   results: string
   /** 没有任何匹配时的空态 */
   noMatches: string
-  /** 结果被条数上限截断时的提示；上限由调用方传入 */
+  /** 结果被条数上限截断时的提示，上限由调用方传入 */
   truncated: (n: number) => string
 }
 
@@ -115,11 +115,11 @@ export interface OfficialHoverLabels {
   /**
    * 绝对创建时刻（`创建于 2026年9月14日 03:31`）
    *
-   * 年月日走官方 `date.ymd` 模板，时钟部分补零；不调 `toLocaleString`——那会跟着
+   * 年月日走官方 `date.ymd` 模板，时钟部分补零，不调 `toLocaleString`——那会跟着
    * 浏览器语言走，与界面语言不一致时同一张卡片里会出现两种语言
    */
   created: (createdAt: number) => string
-  /** 悬停卡片形态的相对时间（`5分钟前`）；`刚刚` 那一档不加后缀 */
+  /** 悬停卡片形态的相对时间（`5分钟前`），`刚刚` 那一档不加后缀 */
   timeAgo: (updatedAt: number, now: number) => string
 }
 
@@ -143,8 +143,8 @@ export function officialSessionLabels(t: WorkspaceTranslate): OfficialSessionLab
 /**
  * 把官方语言包绑成悬停卡片的文案与格式
  *
- * 与官方 `ui-workspace` 的 `WorkspaceHoverContent` / `SessionHoverContent` 逐键取用
- * 即 `hover.created` / `hover.copied` / `date.ymd` / `time.ago` 这一批键
+ * 逐键取用官方 `ui-workspace` 的 `WorkspaceHoverContent` / `SessionHoverContent`
+ * 也就是 `hover.created` / `hover.copied` / `date.ymd` / `time.ago` 这一批键
  * 因此官方改措辞或改日期形态时本包自动跟随
  * @returns 卡片文案与两个格式化函数
  */
@@ -158,7 +158,7 @@ export function officialHoverLabels(t: WorkspaceTranslate): OfficialHoverLabels 
   }
 }
 
-/** 补零到两位；时钟部分用 */
+/** 补零到两位，时钟部分用 */
 function pad2(value: number): string {
   return String(value).padStart(2, '0')
 }

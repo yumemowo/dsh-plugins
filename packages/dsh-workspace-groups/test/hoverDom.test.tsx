@@ -140,7 +140,7 @@ async function mountRoot(
 /**
  * 伪造区域的实测位置与窗口宽度
  *
- * jsdom 不做布局：`getBoundingClientRect` 一律返回全 0
+ * jsdom 不做布局，`getBoundingClientRect` 一律返回全 0
  * `documentElement.clientWidth` 也是 0，翻转判定因此永远不触发
  * 这里给出真实浏览器里会出现的两种几何
  *
@@ -230,7 +230,7 @@ describe('hover cards in a real DOM', () => {
   })
 
   it('lays out both card bodies with the classes the stylesheet targets', async () => {
-    // 卡片正文本身是 portal 到 body 的，挂载时看不到；这里直接渲染两个正文组件
+    // 卡片正文本身是 portal 到 body 的，挂载时看不到，这里直接渲染两个正文组件
     // 断言样式表依赖的那几个类真的落到了节点上、文本也照常渲染
     const container = document.createElement('div')
     document.body.appendChild(container)

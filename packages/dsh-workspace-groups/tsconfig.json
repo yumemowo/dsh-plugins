@@ -5,7 +5,7 @@
     "outDir": "lib",
     "jsx": "react-jsx",
     "types": ["node"],
-    // 本包含浏览器半边，需要 DOM 类型（document、HTMLSelectElement 等）。
+    // 本包含浏览器半边，需要 DOM 类型（document、HTMLSelectElement 等）
     "lib": ["es2023", "dom", "dom.iterable"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"]

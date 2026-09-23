@@ -1,7 +1,7 @@
 /**
  * `@deepseek-ai/dsh-client-ui-primitives` 的 node 测试替身
  *
- * node 环境不渲染组件：测试只断言菜单条目数据、图标引用与注册行为
+ * node 环境不渲染组件，测试只断言菜单条目数据、图标引用与注册行为
  * 因此这里的组件一律返回 null、图标返回一个可断言的标记元素
  *
  * 例外是 HoverCard：它那层包装会改变 DOM 结构，样式里有对应的选择器
@@ -24,7 +24,7 @@ export const StateDot = ({ state }) => `StateDot:${state}`
  *
  * 真原语是一个 `role="switch"` 的按钮，`aria-checked` 同时决定外观与读屏状态
  * 这里照抄那一层，jsdom 用例才能断言「开关是否打开」而不是去猜某个内部结构
- * （真原语的滑块 span 没有语义，替身不渲染它）
+ * 真原语的滑块 span 没有语义，替身不渲染它
  */
 export const Switch = ({ checked, onChange, label, disabled = false, title, className }) =>
   createElement('button', {
@@ -76,9 +76,8 @@ export const Tooltip = ({ children }) => children
  * 悬停卡片替身：只渲染锚点那一半，外面套一层行内盒
  *
  * 卡片正文是 portal 到 body 的浮层
- * node 环境既没有 body 也不该让它混进被断言的结构里；
- * 测试改为从卡片元素的 `content` prop 上直接读正文（见 render.test.ts 的 `cards`
- * 分桶）
+ * node 环境没有 body，也不该让它混进被断言的结构里
+ * 测试改为从卡片元素的 `content` prop 上直接读正文（见 render.test.ts 的 `cards` 分桶）
  *
  * 那一层盒与真原语一致（根节点是个 display:block 的 span）：
  * 它会让行不再是列表容器的直接子项，样式里的层级缩进选择器必须为此多写一档

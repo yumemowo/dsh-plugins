@@ -9,13 +9,13 @@
 import type { SessionStatusLabels } from '../labels.ts'
 import type { SessionRow } from './types.ts'
 
-/** 官方状态点原语认识的状态；空闲在行上不画点，卡片里按官方仍列一条 */
+/** 官方状态点原语认识的状态，空闲在行上不画点，卡片里按官方仍列一条 */
 export type StatusState = 'ongoing' | 'done' | 'warning'
 
 /** 一个会话行要显示的状态位 */
 export interface SessionStatus {
   state: StatusState
-  /** 无障碍文案；点本身是纯视觉元素，语义由它承担 */
+  /** 无障碍文案，点本身是纯视觉元素，语义由它承担 */
   label: string
 }
 
@@ -23,7 +23,7 @@ export interface SessionStatus {
  * 待交互种类到状态
  *
  * 只认官方登记的三种：其他插件发布的交互不在侧边栏表意，忽略即不画点
- * @returns 该种类的状态；不认识的种类返回 undefined
+ * @returns 该种类的状态，不认识的种类返回 undefined
  */
 function pendingStatus(kind: string, labels: SessionStatusLabels): SessionStatus | undefined {
   switch (kind) {
@@ -44,9 +44,9 @@ function pendingStatus(kind: string, labels: SessionStatusLabels): SessionStatus
  * 顺序与官方 `sessionStatuses` 一致：待交互在前，运行中的子代理作为它的补充跟在后面
  * 子代理会话本身不在侧边栏显示，但它们运行时要让祖先行亮起运行点，因此这里同时看本会话的 `running` 与子代理运行数
  *
- * 空闲也返回一条（官方 `status.idle`），因为悬停卡片要把它列出来；行首那个点是否画由 {@link sessionStatus} 决定
- * @param pendingKind - 该会话当前待交互的种类；没有待交互时为空
- * @returns 按优先级排列的状态；第一条是行首要显示的那一条
+ * 空闲也返回一条（官方 `status.idle`），因为悬停卡片要把它列出来，行首那个点是否画由 {@link sessionStatus} 决定
+ * @param pendingKind - 该会话当前待交互的种类，没有待交互时为空
+ * @returns 按优先级排列的状态，第一条是行首要显示的那一条
  */
 export function sessionStatuses(
   row: SessionRow,
@@ -72,10 +72,10 @@ export function sessionStatuses(
 /**
  * 推导行首那个状态点
  *
- * 空闲不画点（没有要提醒的事），槽位留空因此标题不位移；完成态仍是官方的绿色提醒点，照常画
+ * 空闲不画点（没有要提醒的事），槽位留空因此标题不位移，完成态仍是官方的绿色提醒点，照常画
  * 判据与官方 `SessionNodeItem` 的 `showStatus` 相同
  * @param statuses - 该行当前的全部状态，取自 {@link sessionStatuses}
- * @returns 要显示的状态位；空闲时返回 undefined
+ * @returns 要显示的状态位，空闲时返回 undefined
  */
 export function rowStatusDot(
   row: SessionRow,

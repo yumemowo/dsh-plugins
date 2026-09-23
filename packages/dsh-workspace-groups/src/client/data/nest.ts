@@ -15,7 +15,7 @@
  * 放进分组时不必逐个后代改写归属。段内再靠 {@link Nesting.childrenOf} 分出层级
  */
 
-/** 一个工作区被放进某个分组的归属；父与分组一起存，因为分组属于某个工作区 */
+/** 一个工作区被放进某个分组的归属，父与分组一起存，因为分组属于某个工作区 */
 export interface NestingBinding {
   /** 父工作区 id */
   workspaceId: string
@@ -60,12 +60,12 @@ export interface NestingInput {
 export interface Nesting {
   /** workspaceId → 它所属的容器键 */
   containerOf: (workspaceId: string) => string
-  /** 一个容器里的顶层工作区，按传入顺序；「顶层」指这一段的父不在同一段的那些 */
+  /** 一个容器里的顶层工作区，按传入顺序，「顶层」指这一段的父不在同一段的那些 */
   rootsOf: (container: string) => readonly string[]
   /**
    * 一个工作区的全部直接子工作区，按传入顺序
    *
-   * 子工作区跟着父走：父在哪一段，没有自己归属的子工作区就在同一段
+   * 子工作区跟着父走，父在哪一段，没有自己归属的子工作区就在同一段
    */
   childIdsOf: (workspaceId: string) => readonly string[]
   /**
@@ -102,7 +102,7 @@ export interface Nesting {
 /**
  * 把一条 cwd 归一到比较用的形态
  *
- * 分隔符统一成 `/`、去掉末尾多余的斜杠；根目录归一成空串，这样它与任何绝对路径都只差一个前导斜杠
+ * 分隔符统一成 `/`、去掉末尾多余的斜杠，根目录归一成空串，这样它与任何绝对路径都只差一个前导斜杠
  * Windows 风格的盘符原样保留，不做盘符大小写归一
  */
 function normalizePath(path: string): string {
@@ -141,7 +141,7 @@ function depthOf(path: string): number {
 /**
  * 从一批候选里取离目标最近的祖先
  *
- * 「最近」按路径段数最多者算；段数相同时取传入顺序靠前的，让结果稳定
+ * 「最近」按路径段数最多者算，段数相同时取传入顺序靠前的，让结果稳定
  * 中间层工作区不存在时跨过去挂到更远的祖先——层级因此不会因为少登记一个目录而整段断开
  * @returns 最近的祖先 id，没有祖先时为 undefined
  */
@@ -189,11 +189,10 @@ export function deriveNesting(input: NestingInput): Nesting {
   /**
    * 两个工作区能不能构成父子
    *
-   * 判据是「同处一个虚拟工作区分组，或两者都不在任何虚拟分组里」：把一组同一个项目下的工作区
-   * 收进一个虚拟分组之后，它们之间的 cwd 层级仍要保留，否则收进去就散成了平铺的一排
+   * 判据是「同处一个虚拟工作区分组，或两者都不在任何虚拟分组里」
+   * 把一组同一个项目下的工作区收进一个虚拟分组之后，它们之间的 cwd 层级仍要保留，否则收进去就散成了平铺的一排
    *
-   * 跨虚拟分组不成立：分属两个分组的工作区在列表上读作两片互不相干的内容
-   * 即使路径上确实是父子也不连起来
+   * 跨虚拟分组不成立，分属两个分组的工作区在列表上读作两片互不相干的内容，即使路径上确实是父子也不连起来
    */
   const inSameScope = (a: string, b: string): boolean => virtualOf(a) === virtualOf(b)
 
@@ -239,9 +238,9 @@ export function deriveNesting(input: NestingInput): Nesting {
    *
    * 被放进分组的落在父体内的那个分组里，其余落在父自己所在的那个容器里
    * 后一条是「整棵子树跟着父走」的实现：没有自己归属的后代与父同处一段，放进分组时整片一起过去
-   * 不需要为每个后代改写归属。根节点那一层再按虚拟工作区归属分，不在任何虚拟工作区里才落根容器
+   * 因此不需要为每个后代改写归属。根节点那一层再按虚拟工作区归属分，不在任何虚拟工作区里才落根容器
    *
-   * 归属已经校验过父是真实祖先，因此沿父链向上一定收敛；缓存只是不重复走同一条链
+   * 归属已经校验过父是真实祖先，因此沿父链向上一定收敛，缓存只是不重复走同一条链
    */
   const containerOf = (workspaceId: string): string => {
     const cached = containerCache.get(workspaceId)
@@ -309,7 +308,7 @@ export function deriveNesting(input: NestingInput): Nesting {
     if (parent === '' || containerOf(parent) !== containerOf(workspaceId)) return undefined
     return parent
   }
-  // 父子关系另按「原始父」建一份索引：放进分组的子工作区与父不在同一段，段内层级看不到它们
+  // 父子关系另按「原始父」建一份索引，放进分组的子工作区与父不在同一段，段内层级看不到它们
   // 但父工作区渲染时仍要在自己体内那一段把它们带出来
   for (const workspaceId of workspaceIds) {
     const parent = parentOf(workspaceId)

@@ -103,8 +103,8 @@ export interface RegionActions {
   /**
    * 在指定工作区开一个新会话
    *
-   * 走官方导航服务的 `openWorkspace`：它复用该工作区已有的空白会话，没有才新建
-   * 并把它选中打开，后发的新建请求会取代先发的
+   * 走官方导航服务的 `openWorkspace`，它复用该工作区已有的空白会话，没有才新建并把它选中打开
+   * 后发的新建请求会取代先发的
    *
    * 返回会话 id 而不是空，是因为调用方要在建好之后把它摆到本次创建指定的位置（分组内或未分组）
    * 归组走既有的 `moveSession`，不另造「在分组内建会话」的宿主接口
@@ -121,12 +121,12 @@ export interface RegionActions {
   createGroup: (workspaceId: string, name: string) => Promise<WorkspaceGroupsSnapshot>
   /** 重命名会话分组，返回替换用的完整快照 */
   renameGroup: (workspaceId: string, groupId: string, name: string) => Promise<WorkspaceGroupsSnapshot>
-  /** 删除会话分组，组内会话回到未归组；返回替换用的完整快照 */
+  /** 删除会话分组，组内会话回到未归组，返回替换用的完整快照 */
   deleteGroup: (workspaceId: string, groupId: string) => Promise<WorkspaceGroupsSnapshot>
   /**
    * 把会话移入分组，空串表示移出分组
    *
-   * 返回替换用的完整快照，而不是让调用方再拉一次：宿主每个变更方法本来就回整份快照（见宿主 `service.ts`）
+   * 返回替换用的完整快照，而不是让调用方再拉一次，宿主每个变更方法本来就回整份快照（见宿主 `service.ts`）
    * 直接采用它既少一次往返，也让「摆位置」与「本地状态反映新位置」之间没有空档
    */
   moveSession: (
@@ -138,7 +138,7 @@ export interface RegionActions {
   createVirtualWorkspace: (name: string) => Promise<WorkspaceGroupsSnapshot>
   /** 重命名工作区分组，返回替换用的完整快照 */
   renameVirtualWorkspace: (groupId: string, name: string) => Promise<WorkspaceGroupsSnapshot>
-  /** 删除工作区分组，组内工作区回到未归组；返回替换用的完整快照 */
+  /** 删除工作区分组，组内工作区回到未归组，返回替换用的完整快照 */
   deleteVirtualWorkspace: (groupId: string) => Promise<WorkspaceGroupsSnapshot>
   /** 把工作区移入分组，空串表示移出分组 */
   moveWorkspace: (workspaceId: string, groupId: GroupChoice) => Promise<WorkspaceGroupsSnapshot>
@@ -164,7 +164,7 @@ export interface RegionActions {
   /**
    * 把一个工作区从所有工作区分组里摘除
    *
-   * 删除工作区时调用：工作区没了，它留下的归属记录再也不会被渲染
+   * 删除工作区时调用，工作区没了，它留下的归属记录再也不会被渲染
    */
   forgetWorkspace: (workspaceId: string) => Promise<WorkspaceGroupsSnapshot>
   /**
@@ -184,7 +184,7 @@ export interface RegionActions {
   /**
    * 搜索结果的条数上限
    *
-   * 取官方会话控制器上的 `searchResultLimit`：它是 `session.search` 线上响应契约固定下来的同一个数
+   * 取官方会话控制器上的 `searchResultLimit`，它是 `session.search` 线上响应契约固定下来的同一个数
    * 本包的结果虽然全部来自本地，也照它截断，界面因此与官方一致
    */
   searchResultLimit: number

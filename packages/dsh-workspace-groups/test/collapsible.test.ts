@@ -10,15 +10,15 @@ import type { StaggerTiming } from '../src/client/components/CollapsibleBody.tsx
 /**
  * 逐个淡入的排期与延迟
  *
- * 这几个函数只依赖「查元素 + 写元素」这点能力，接口因此收窄成结构类型，
- * node 环境用替身即可验证——真正要看的是延迟排期、哪些元素被排除，以及
- * 「撑开那段等待也在延迟里」的换算，不需要一个完整的 DOM
+ * 这几个函数只依赖「查元素 + 写元素」这点能力，接口因此收窄成结构类型
+ * node 环境用替身即可验证——真正要看的是延迟排期、哪些元素被排除，以及「撑开那段等待也在延迟里」的换算
+ * 不需要一个完整的 DOM
  */
 
 /**
  * 按类名判断一个选择器是否命中
  *
- * 只实现本包用到的形式：`.cls` 与 `.cls:not(.other)`。替身**必须真的解释选择器**：
+ * 只实现本包用到的形式：`.cls` 与 `.cls:not(.other)`。替身必须真的解释选择器：
  * 漏掉点的 `wg-collapse` 是标签选择器，匹配不到 `<div class="wg-collapse">`，那种错
  * 只有真解释选择器才抓得到
  * @param classes - 节点拥有的类名
@@ -61,11 +61,11 @@ function openBody(parent: FakeNode | null): FakeNode {
 
 interface FakeUnit extends FakeNode {
   style: { setProperty(name: string, value: string): void }
-  /** 当前延迟值；没排过期时为 undefined */
+  /** 当前延迟值，没排过期时为 undefined */
   delay: string | undefined
 }
 
-/** 造一个元素替身；`parent` 是它的父节点，用来表达嵌套层级 */
+/** 造一个元素替身，`parent` 是它的父节点，用来表达嵌套层级 */
 function unit(parent: FakeNode | null = null): FakeUnit {
   const node: FakeUnit = {
     ...fakeNode([], parent),
@@ -220,7 +220,7 @@ describe('nested visibility', () => {
   })
 
   it('recognises a closed body by class rather than by tag name', () => {
-    // 选择器漏掉点会变成标签选择器，匹配不到 <div class="wg-collapse">，
+    // 选择器漏掉点会变成标签选择器，匹配不到 <div class="wg-collapse">
     // 「祖先仍收着」的判定因此整条失效
     const outer = fakeNode(['wg-collapse'], null)
     const inner = closedBody(outer)
@@ -234,7 +234,7 @@ describe('nested visibility', () => {
 
 describe('fail-open reveal', () => {
   /**
-   * 读组件源码；显隐是否 fail-open 是**结构性**的，只能从源码断言
+   * 读组件源码。显隐是否 fail-open 是结构性的，只能从源码断言
    * @returns 去掉了注释的源码
    */
   function componentSource(): string {
@@ -245,9 +245,9 @@ describe('fail-open reveal', () => {
   }
 
   it('never leaves an element hidden behind a callback that may not wake up', () => {
-    // 透明一旦写进基准规则，就得靠某个回调在正确时刻把类补回去。那次唤醒在主线程被
-    // 长任务占住时会被挤掉且补不回来——元素会一直白着，这正是卡死的现象。因此这里
-    // 不得有任何会过期的显隐状态，也不得靠定时器或过渡事件驱动显隐
+    // 透明一旦写进基准规则，就得靠某个回调在正确时刻把类补回去
+    // 那次唤醒在主线程被长任务占住时会被挤掉且补不回来——元素会一直白着，这正是卡死的现象
+    // 因此这里不得有任何会过期的显隐状态，也不得靠定时器或过渡事件驱动显隐
     const source = componentSource()
 
     expect(source).not.toMatch(/useState/)
@@ -257,13 +257,13 @@ describe('fail-open reveal', () => {
   })
 
   it('schedules delays in a layout effect so the first frame is already correct', () => {
-    // 延迟必须和展开态的样式变更落在同一次样式计算里；放到普通 effect 里元素会先以
-    // 没有延迟的状态亮一帧，逐个淡入的开头因此丢掉
+    // 延迟必须和展开态的样式变更落在同一次样式计算里
+    // 放到普通 effect 里元素会先以没有延迟的状态亮一帧，逐个淡入的开头因此丢掉
     expect(componentSource()).toMatch(/useLayoutEffect/)
   })
 
   it('derives the expand wait from the shared duration instead of a second copy', () => {
-    // 撑开那段等待若另写一个数字，改时长就会失配：容器先撑完而元素还没开始淡入，
+    // 撑开那段等待若另写一个数字，改时长就会失配：容器先撑完而元素还没开始淡入
     // 或元素在容器还收着时就把淡入用掉
     expect(componentSource()).toMatch(/duration \* resolveLead\(/)
   })

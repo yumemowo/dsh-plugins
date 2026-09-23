@@ -105,7 +105,7 @@ export function VirtualWorkspaceSection({
         {section.workspaceIds.length <= 0 ? null : (
           <span className="wg-group-count">{section.workspaceIds.length}</span>
         )}
-        {/* 操作位收进 session 行同一套可收放槽位：静止时不占宽，上面的工作区数因此贴到行右；悬停/菜单展开/键盘聚焦时槽位展开，工作区数隐去 */}
+        {/* 操作位收进 session 行同一套可收放槽位：静止时不占宽，上面的工作区数因此贴到行右，悬停/菜单展开/键盘聚焦时槽位展开，工作区数隐去 */}
         <span className="wg-row-action-slot">
           <RowActions
             menuOpen={menuOpen}

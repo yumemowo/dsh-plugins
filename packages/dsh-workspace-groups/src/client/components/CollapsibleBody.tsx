@@ -43,7 +43,7 @@ export interface StaggerTiming {
   cap: number
 }
 
-/** 带此标记的元素参与逐个淡入；标记由元素组件打在自己根节点上 */
+/** 带此标记的元素参与逐个淡入，标记由元素组件打在自己根节点上 */
 const STAGGER_UNIT = '[data-wg-stagger]'
 
 /** 折叠体根节点的类名 */
@@ -52,7 +52,7 @@ const BODY_CLASS = 'wg-collapse'
 /** 折叠体根节点的选择器 */
 const BODY_SELECTOR = `.${BODY_CLASS}`
 
-/** 仍收着的折叠体；落在它里面的元素本次展开不会露面 */
+/** 仍收着的折叠体，落在它里面的元素本次展开不会露面 */
 const CLOSED_BODY = `${BODY_SELECTOR}:not(.wg-collapse-open)`
 
 /**
@@ -72,7 +72,7 @@ export interface StaggerNode extends StaggerAncestor {
   style: { setProperty(name: string, value: string): void }
 }
 
-/** 能查元素的容器；真实节点天然满足 */
+/** 能查元素的容器，真实节点天然满足 */
 export interface StaggerRoot extends StaggerAncestor {
   querySelectorAll(selectors: string): ArrayLike<StaggerNode>
 }
@@ -140,12 +140,12 @@ export function planStaggerUnits(root: StaggerRoot, timing: StaggerTiming, waitM
 }
 
 export interface CollapsibleBodyProps {
-  /** 展开态；收起时轨道收成 0 高 */
+  /** 展开态，收起时轨道收成 0 高 */
   open: boolean
   /** 折叠体内容，通常是 `.wg-workspace-body` 或 `.wg-sessions` */
   children: ReactNode
   /**
-   * 折叠动画的节奏；缺省用 {@link DEFAULT_COLLAPSE_MOTION}
+   * 折叠动画的节奏，缺省用 {@link DEFAULT_COLLAPSE_MOTION}
    *
    * 只覆盖传入的字段，未传的取默认值
    */

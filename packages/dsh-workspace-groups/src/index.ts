@@ -34,7 +34,7 @@ export type { WorkspaceGroupsService } from './service.ts'
  * 插件入口
  */
 export function apply(ctx: Context): void {
-  // 域打开是异步的，而 apply 是同步的：先提供一个转发到打开结果的外观对象，这样服务在 Cordis 眼里立即可用，调用方无需感知打开时序
+  // 域打开是异步的，而 apply 是同步的，先提供一个转发到打开结果的外观对象，这样服务在 Cordis 眼里立即可用，调用方无需感知打开时序
   const service = createWorkspaceGroupsService(ctx)
 
   const facade: WorkspaceGroupsService = {

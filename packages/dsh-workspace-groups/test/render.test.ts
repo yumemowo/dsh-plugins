@@ -72,8 +72,8 @@ function renderingDispatcher(): {
       }
       return [
         owner[index],
-        // setter 绑定调用时的状态桶：effect 在渲染结束后才跑，那时游标已经在
-        // 别的组件上，按当前位置写会写错组件的槽位
+        // setter 绑定调用时的状态桶：effect 在渲染结束后才跑
+        // 那时游标已经在别的组件上，按当前位置写会写错组件的槽位
         // 函数式更新与 React 同义（取旧值算新值），否则 `setX(v => !v)` 会把那个
         // 函数本身存成状态
         (value: unknown) => {
@@ -134,7 +134,7 @@ function render(
     menus: unknown[]
     text: string[]
     buttons?: unknown[]
-    /** 文本框元素，按文档序；搜索的受控输入在这里 */
+    /** 文本框元素，按文档序，搜索的受控输入在这里 */
     inputs?: unknown[]
     containers?: unknown[]
     slots?: unknown[]
@@ -144,13 +144,13 @@ function render(
     collapses?: unknown[]
     /** 会话行元素，按文档序 */
     rows?: unknown[]
-    /** 行右键菜单元素，按文档序；与 `menus` 分开收，见下方识别条件 */
+    /** 行右键菜单元素，按文档序，与 `menus` 分开收，见下方识别条件 */
     contextMenus?: unknown[]
     /** 挂了右键处理的行元素，按文档序（工作区行头、分组行头、会话行） */
     hosts?: unknown[]
     /** 搜索结果第二行（路径）的元信息元素，按文档序 */
     metas?: unknown[]
-    /** 悬停卡片元素，按文档序；正文从它的 `content` prop 上读 */
+    /** 悬停卡片元素，按文档序，正文从它的 `content` prop 上读 */
     cards?: unknown[]
     /** 官方 Modal 元素（如命名框），标题从它的 props 上读 */
     modals?: unknown[]
@@ -355,7 +355,7 @@ function actionLabels(out: { menus: unknown[] }): string[] {
     .filter((label): label is string => typeof label === 'string')
 }
 
-/** 锚点按钮上的原生 `title` 提示；本包所有行操作只留无障碍标签，不该有 */
+/** 锚点按钮上的原生 `title` 提示，本包所有行操作只留无障碍标签，不该有 */
 function actionTitles(out: { menus: unknown[]; buttons?: unknown[] }): (string | undefined)[] {
   return [
     ...actionAnchors(out).map((anchor) => anchor.props?.['title'] as string | undefined),
@@ -363,7 +363,7 @@ function actionTitles(out: { menus: unknown[]; buttons?: unknown[] }): (string |
   ]
 }
 
-/** 状态点槽位上挂的原生 `title` 提示；状态语义由无障碍标签承担，槽位不该有 */
+/** 状态点槽位上挂的原生 `title` 提示，状态语义由无障碍标签承担，槽位不该有 */
 function slotTitles(out: { slots?: unknown[] }): (string | undefined)[] {
   return (out.slots ?? []).map(
     (slot) => (slot as { props: Record<string, unknown> }).props['title'] as string | undefined,
@@ -380,7 +380,7 @@ function menuItems(out: { menus: unknown[] }): string[][] {
 /**
  * 在一条行上触发一次右键
  *
- * 行是宿主元素，处理函数直接挂在它的 props 上；事件按真实 `contextmenu` 的形状造：
+ * 行是宿主元素，处理函数直接挂在它的 props 上，事件按真实 `contextmenu` 的形状造：
  * 带指针坐标，并记录 preventDefault / stopPropagation 是否被调用
  * 缺省坐标 (0,0) 模拟键盘（菜单键）触发的右键
  * @param row - 行元素（工作区行头、分组行头或会话行）
@@ -416,7 +416,7 @@ function menuIdsOf(menu: unknown): string[] {
   return ((menu as { props: { items: { id: string }[] } }).props.items).map((item) => item.id)
 }
 
-/** 从菜单元素上读定位矩形；菜单未打开时原语拿到 null，据此保持隐藏 */
+/** 从菜单元素上读定位矩形，菜单未打开时原语拿到 null，据此保持隐藏 */
 function contextMenuAnchorRect(out: { contextMenus?: unknown[] }): unknown {
   const menu = (out.contextMenus ?? [])[0] as
     | { props: { getAnchorRect?: () => unknown } }
@@ -427,7 +427,7 @@ function contextMenuAnchorRect(out: { contextMenus?: unknown[] }): unknown {
 /**
  * 一个会话行的元素，供右键测试直接渲染一行
  *
- * 直接渲染单行而不是整片区域：测试替身按组件类型给状态分桶
+ * 直接渲染单行而不是整片区域，测试替身按组件类型给状态分桶
  * 同一类型的多个实例共用一份状态，整片列表里所有会话行会一起"被右键"
  * @param options.official - 是否给官方三项操作，false 时该行完全没有菜单
  * @param options.grouping - 归组上下文，缺省表示该行没有分组可归
@@ -1014,7 +1014,7 @@ describe('WorkspaceGroupsRegion render', () => {
         'new-group,rename,separator-virtual-workspace,move-virtual-workspace,separator-delete,delete',
     )
     expect(workspaceMenu).toBeDefined()
-    // 分隔线没有文案，menuLabels 会把它滤掉；这里只断言可见项的顺序
+    // 分隔线没有文案，menuLabels 会把它滤掉，这里只断言可见项的顺序
     expect(menuLabels({ menus: [workspaceMenu] })).toEqual([
       '新建分组',
       '重命名',
@@ -1298,7 +1298,7 @@ describe('WorkspaceGroupsRegion render', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true, { official: false })), out)
 
-    // 官方缺失时会话行只剩归组菜单；stray 行两项都没有，因此完全不挂菜单
+    // 官方缺失时会话行只剩归组菜单，stray 行两项都没有，因此完全不挂菜单
     expect(menuItems(out)).toContainEqual(['group'])
     expect(menuItems(out)).toHaveLength(2)
   })
@@ -1573,7 +1573,7 @@ describe('WorkspaceGroupsRegion render', () => {
  * 卡片外框与浮出时机属官方 HoverCard 原语，这里只断言本包传下去的内容与开关
  */
 describe('hover cards', () => {
-  /** 卡片正文里的文本，按文档序；替身不渲染正文，只能从 props 上读 */
+  /** 卡片正文里的文本，按文档序，替身不渲染正文，只能从 props 上读 */
   function cardText(card: unknown): string[] {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render((card as { props: Record<string, unknown> }).props['content'], out)
@@ -1595,7 +1595,7 @@ describe('hover cards', () => {
   /**
    * 一张卡片是给哪种行挂的
    *
-   * 锚点就是那行本身，因此按行类名认；卡片按文档序发出，工作区行在会话行之前
+   * 锚点就是那行本身，因此按行类名认，卡片按文档序发出，工作区行在会话行之前
    */
   function anchorClass(card: unknown): string {
     const anchor = (card as { props: { anchor?: { props?: Record<string, unknown> } } }).props
@@ -1705,7 +1705,7 @@ describe('hover cards', () => {
     // 工作区行有两行（真实工作区 + 未分组桶），卡片却只有一张
     const workspaceCards = out.cards.filter((c) => anchorClass(c).startsWith('wg-workspace-head'))
     expect(workspaceCards).toHaveLength(1)
-    // 那唯一一张挂在真实工作区上：它的正文是 W1 的路径，不是未分组桶
+    // 那唯一一张挂在真实工作区上，它的正文是 W1 的路径，不是未分组桶
     expect(cardText(workspaceCards[0])).toContain('/tmp/w1')
   })
 
@@ -1726,7 +1726,7 @@ describe('hover cards', () => {
   })
 
   it('suppresses the card on a row while either of its panels is open', () => {
-    // 单行渲染：测试替身按组件类型给状态分桶，同一类型的多个实例共用一份状态
+    // 单行渲染，测试替身按组件类型给状态分桶，同一类型的多个实例共用一份状态
     // 整片列表里所有会话行会一起「被右键」，那样断言不出「只有这一行让位」
     const node = React.createElement(SessionRowMenu, {
       row: {
@@ -1854,12 +1854,12 @@ describe('search', () => {
     )
   }
 
-  /** 结果行第二行的路径文案，按文档序；由元信息元素内的各段拼回 */
+  /** 结果行第二行的路径文案，按文档序，由元信息元素内的各段拼回 */
   function resultPaths(out: { metas?: unknown[] }): string[] {
     return (out.metas ?? []).map((meta) => textOf(meta))
   }
 
-  /** 递归取一个元素子树里的文本；路径被拆成多段着色，只能这样拼回一行 */
+  /** 递归取一个元素子树里的文本，路径被拆成多段着色，只能这样拼回一行 */
   function textOf(node: unknown): string {
     if (node === null || node === undefined || typeof node === 'boolean') return ''
     if (typeof node === 'string' || typeof node === 'number') return String(node)
@@ -1900,13 +1900,13 @@ describe('search', () => {
     harness.render(React.createElement(WorkspaceGroupsRegion, args), first)
     await harness.flush()
 
-    // 输入一个只命中会话 A 的词：结果区取代常规列表，且只剩那一条
+    // 输入一个只命中会话 A 的词，结果区取代常规列表，且只剩那一条
     searchInput(first).change('A')
     const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
     harness.render(React.createElement(WorkspaceGroupsRegion, args), out)
 
     expect(resultRows(out).length).toBeGreaterThan(0)
-    // 常规列表整段让位：工作区行不再渲染，未分组区段同理
+    // 常规列表整段让位，工作区行不再渲染，未分组区段同理
     expect(menuItems(out)).toEqual([])
   })
 

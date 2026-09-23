@@ -10,10 +10,9 @@ import {
 /**
  * 自绘图标的几何
  *
- * 这个字形是照官方 primitives 的比例量出来再画的（网格边距、圆角
- * 壁厚都写在 `docs/custom-icons.md`），而不是「看着差不多」的近似值
- * 这里把它固定下来：后续若有人顺手改窄一格或换掉圆角，会在这里失败
- * 而不是等到界面上与官方图标并排时才发现不同族
+ * 这个字形是照官方 primitives 的比例量出来再画的，而不是「看着差不多」的近似值
+ * 网格边距、圆角、壁厚都写在 `docs/custom-icons.md`
+ * 这里把它固定下来：后续若有人顺手改窄一格或换掉圆角，会在这里失败，而不是等到界面上与官方图标并排时才发现不同族
  *
  * 断的是渲染出的 SVG 属性，不是源码文本：真正进 DOM 的就是这一份
  */
@@ -47,7 +46,7 @@ describe('IconVirtualWorkspace16', () => {
     const svg = markup()
 
     // 官方 IconFolderClose16 是填充字形（壁半宽 0.65），照抄它的 d 去描边会小一圈
-    // 这里锁的是它的**中线**取值：x 1.5~14.5、y 2.429~13.5863、圆角 1.6736
+    // 这里锁的是它的中线取值：x 1.5~14.5、y 2.429~13.5863、圆角 1.6736
     // 上一版用的 y 3.73~12.93 / 圆角 1.9~2.1 只有 14x11 的墨迹
     // 比官方文件夹（14x14）矮 3px，肉眼就是「小一圈」
     expect(svg).toContain('1.5 11.9127')
@@ -83,8 +82,8 @@ describe('IconVirtualWorkspace16', () => {
     const svg = markup()
 
     // 轮廓在页签右肩 (8.0231, 4.295) 收笔，右壁从 (14.5, 10.2) 起笔：
-    // 右上这一整段缺口就是加号所在的位置。闭合版的写法（身顶拉到右壁
-    // 右壁从 5.9686 开始）在这里必须不出现
+    // 右上这一整段缺口就是加号所在的位置
+    // 闭合版的写法（身顶拉到右壁、右壁从 5.9686 开始）在这里必须不出现
     expect(svg).toContain('L8.0231 4.295"')
     expect(svg).toMatch(/M14\.5 10\.2V11\.9127/)
     expect(svg).not.toContain('14.5 5.9686V11.9127')
@@ -136,9 +135,8 @@ describe('IconVirtualFolder16', () => {
   it('is dashed, which is the whole point of the silhouette', () => {
     const svg = markup()
 
-    // 虚线是 DSH 表达「尚未真实存在 / 占位」的既有语言（待办未开始的圆圈用 2.4/2.4
-    // composer 的工作区占位框用 4/4）。断口取 1.6/1.1：
-    // 再密会在 16px 下糊成一条灰毛边，再疏则轮廓出现断开感
+    // 虚线是 DSH 表达「尚未真实存在 / 占位」的既有语言，待办未开始的圆圈用 2.4/2.4，composer 的工作区占位框用 4/4
+    // 断口取 1.6/1.1：再密会在 16px 下糊成一条灰毛边，再疏则轮廓出现断开感
     expect(svg).toContain('stroke-dasharray="1.6 1.1"')
   })
 
@@ -153,7 +151,7 @@ describe('IconVirtualFolder16', () => {
     expect(svg).toContain('stroke="currentColor"')
     // 不填充：填空的文件夹在 16px 下与官方那几个实心图标会糊在一起
     expect(svg).toContain('fill="none"')
-    // 与官方 IconFolderClose16 同域：它的**中线** x 1.5~14.5、y 2.429~13.5863
+    // 与官方 IconFolderClose16 同域：它的中线 x 1.5~14.5、y 2.429~13.5863
     // 这条断言防的是「照抄填充字形的 d」——那样描出来只有 14x11，比官方矮 3px
     expect(svg).toContain('M3.1736 2.429')
     expect(svg).toMatch(/A1\.6736 1\.6736 0 0 1 14\.5 5\.9686/)
@@ -189,7 +187,7 @@ describe('IconVirtualFolder16', () => {
  * 以及三段的取值与 `docs/custom-icons.md` 记下的量测一致
  */
 describe('pin icons', () => {
-  /** 两个状态的静态标记；它们必须来自同一份几何 */
+  /** 两个状态的静态标记，它们必须来自同一份几何 */
   const outline = renderToStaticMarkup(IconPinOutline16({}))
   const filled = renderToStaticMarkup(IconPinFill16({}))
 

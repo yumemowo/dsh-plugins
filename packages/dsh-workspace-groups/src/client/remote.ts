@@ -4,8 +4,8 @@ import { normalizePickerState } from '../pickerState.ts'
 /**
  * 客户端侧的 Remote 贡献声明
  *
- * 宿主把 `./typert` 清单注册进 typert 注册表，浏览器这一侧则必须显式
- * `ctx.remote.$mount(...)` 自己需要的命名空间，网关才会响应调用
+ * 宿主把 `./typert` 清单注册进 typert 注册表
+ * 浏览器这一侧则必须显式 `ctx.remote.$mount(...)` 自己需要的命名空间，网关才会响应调用
  * 这里的 codec 同样必须是 zod v4 的 strict 实例
  */
 

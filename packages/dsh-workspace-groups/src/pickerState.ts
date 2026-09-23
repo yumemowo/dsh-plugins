@@ -6,7 +6,7 @@
  */
 /** 「聚焦 / 最近使用 / 置顶」三份记录 */
 export interface PickerState {
-  /** 当前聚焦的条目键；空串表示「全部」 */
+  /** 当前聚焦的条目键，空串表示「全部」 */
   focused: string
   /**
    * 聚焦过的条目键，最近一次在最前
@@ -14,7 +14,7 @@ export interface PickerState {
    * 存的是完整的使用历史，比菜单里展示的条数长：置顶区的排序按它取次序，只留展示用的那几条会让「最近使用顺序」在置顶项之间无从比较
    */
   recent: string[]
-  /** 被置顶的条目键；顺序不在这里维护，渲染时按 {@link PickerState.recent} 排 */
+  /** 被置顶的条目键，顺序不在这里维护，渲染时按 {@link PickerState.recent} 排 */
   pinned: string[]
 }
 

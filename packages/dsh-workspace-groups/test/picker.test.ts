@@ -148,7 +148,7 @@ describe('resolveFocus', () => {
   })
 
   it('treats a key whose target is gone as no focus', () => {
-    // 记录比列表活得久：聚焦的条目被删掉之后不能继续按那个键过滤
+    // 记录比列表活得久，聚焦的条目被删掉之后不能继续按那个键过滤
     // 否则列表整片空掉而第二行还写着一个不存在的名字
     expect(resolveFocus(entries, rootWorkspaceKey('gone'))).toBeUndefined()
     expect(resolveFocus(entries, rootVirtualKey('gone'))).toBeUndefined()
@@ -184,8 +184,7 @@ describe('focusedLayout', () => {
 
   it('falls back to the whole layout when a grouped workspace is focused', () => {
     // 虚拟分组名下的工作区不是菜单条目，所以聚焦它的记录解析不到
-    // 这种陈旧记录（成员被移进分组之前存下的，或本特性升级前存下的）必须退化成
-    // 「整片内容」，而不是把列表切成空的一片
+    // 这种陈旧记录（成员被移进分组之前存下的，或本特性升级前存下的）必须退化成「整片内容」，而不是把列表切成空的一片
     const paths: Record<string, string> = {
       w1: '/repo/a',
       w2: '/repo/a/b',
@@ -273,7 +272,7 @@ describe('focusedLayout', () => {
   })
 
   it('falls back to the whole layout when the focused key is unknown', () => {
-    // 记录被手改过：退回整片内容，而不是渲染一个空列表
+    // 记录被手改过，退回整片内容，而不是渲染一个空列表
     expect(focusedLayout(LAYOUT, entries, 'nonsense')).toEqual(LAYOUT)
   })
 

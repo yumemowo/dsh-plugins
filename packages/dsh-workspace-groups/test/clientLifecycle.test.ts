@@ -4,7 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 
 /**
  * 对照模式下 `apply` 把左侧 `sidebar.workspaces` 交还官方 ui-workspace，改去注册
- * 右侧栏 tab，因此不往插槽里注册区域组件。下面依赖插槽注册的用例据此跳过，
+ * 右侧栏 tab，因此不往插槽里注册区域组件。下面依赖插槽注册的用例据此跳过
  * 而不是在两种模式下都硬跑——它们在对照模式下没有可断言的对象
  */
 const REGION_REGISTRATIONS = COMPARE_MODE ? 0 : 1
@@ -56,7 +56,7 @@ function fakeContext(options: { mount?: () => Promise<() => Promise<void>> } = {
   }
   const ctx = {
     get: (name: string) => services[name],
-    // 对照模式下 apply 会调 registerCompareTab，它经 ctx.inject 等 betterSidebar；
+    // 对照模式下 apply 会调 registerCompareTab，它经 ctx.inject 等 betterSidebar
     // 这里给一个立即视为就绪的替身，缺了它会在注册前就 TypeError
     inject: (_deps: string[], callback: (injected: { get: (name: string) => unknown }) => unknown) => {
       const dispose = callback({ get: (name: string) => services[name] })
@@ -199,7 +199,7 @@ describe.skipIf(COMPARE_MODE)('client half session creation', () => {
     apply(harness.ctx)
     await settle()
 
-    // 注册项带着注入工厂；工厂产出的面里就是 startSession
+    // 注册项带着注入工厂，工厂产出的面里就是 startSession
     const entry = harness.registered[0] as {
       inject: () => { startSession: (id: string) => Promise<string | undefined> }
     }

@@ -15,13 +15,13 @@ import { IconButton } from './IconButton.tsx'
 export interface RowActionsProps {
   menuOpen: boolean
   onMenuOpen: (open: boolean) => void
-  /** 菜单选中项 id；由调用方分派 */
+  /** 菜单选中项 id，由调用方分派 */
   onMenuSelect: (id: string) => void
-  /** 管理菜单条目；缺省表示该行没有管理操作 */
+  /** 管理菜单条目，缺省表示该行没有管理操作 */
   menuItems?: readonly MenuItem[] | undefined
   /** `...` 按钮的无障碍标签 */
   actionsLabel: string
-  /** 新建会话入口；缺省表示该行不提供新建 */
+  /** 新建会话入口，缺省表示该行不提供新建 */
   create?: { label: string; onCreate: () => void } | undefined
 }
 

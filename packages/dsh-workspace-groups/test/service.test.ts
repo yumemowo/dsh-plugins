@@ -34,7 +34,7 @@ function createFakeContext(initialGlobal?: unknown): {
   // 写入要过一遍真实的 schema，真域只在持久读边界上校验，`global.set` 的契约
   // 写明「不在这里复查」，因此写进去一份形状不对的 global 只会在下一次 open 时
   // 才炸。替身若只做赋值，这一类错误在本文件里永远看不见
-  // 未给初值时按「旧宿主写的那份」起步：没有 picker 那一格，正是真实文件里的形状
+  // 未给初值时按「旧宿主写的那份」起步，没有 picker 那一格，正是真实文件里的形状
   let stored: unknown = initialGlobal ?? { virtualWorkspaces: [] }
   const global = {
     get: () => workspaceTreeSchema.parse(stored),
@@ -476,7 +476,7 @@ describe('picker state', () => {
   })
 
   it('releases the children when their group is deleted', async () => {
-    // 分组没了，指向它的归属就是一条悬空引用；留着只会让元数据与界面长期偏离
+    // 分组没了，指向它的归属就是一条悬空引用，留着只会让元数据与界面长期偏离
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     const group = (await service.createGroup('w1', '前端')).byWorkspace['w1']?.[0]
@@ -488,7 +488,7 @@ describe('picker state', () => {
   })
 
   it('releases the children when their parent workspace is forgotten', async () => {
-    // 父没了，子工作区再也不会被渲染在它下面；归属留着就是死数据
+    // 父没了，子工作区再也不会被渲染在它下面，归属留着就是死数据
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     const group = (await service.createGroup('w1', '前端')).byWorkspace['w1']?.[0]
@@ -525,7 +525,7 @@ describe('picker state', () => {
   })
 
   it('does not bring a cleared placement back when nesting is turned on again', async () => {
-    // 关闭时归属已被清空；重新打开只恢复由 cwd 路径推导出的层级，不恢复那一次放入分组
+    // 关闭时归属已被清空，重新打开只恢复由 cwd 路径推导出的层级，不恢复那一次放入分组
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     const group = (await service.createGroup('w1', '前端')).byWorkspace['w1']?.[0]

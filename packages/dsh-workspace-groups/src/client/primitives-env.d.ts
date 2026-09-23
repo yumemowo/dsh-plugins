@@ -57,7 +57,7 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
       right: number
       bottom: number
     } | null) | undefined
-    /** 挂在原语根节点上的类名；根节点默认是行内盒，行内使用时靠它调整 */
+    /** 挂在原语根节点上的类名，根节点默认是行内盒，行内使用时靠它调整 */
     className?: string
   }) => ReactNode
 

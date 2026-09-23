@@ -70,7 +70,7 @@ export interface RegionHeaderProps {
   /**
    * 「新建工作区分组」的入口文案，缺省时该入口不渲染
    *
-   * 与「添加工作区」分开传：后者要有官方 directoryFlow 洞的占用者才出现
+   * 与「添加工作区」分开传，后者要有官方 directoryFlow 洞的占用者才出现
    * 而建组只依赖本包的存储，两者在场条件不同
    */
   newVirtualWorkspace?: { label: string; onCreate: () => void } | undefined
@@ -90,7 +90,7 @@ export function RegionHeader({
   t,
 }: RegionHeaderProps): ReactElement {
   const expanded = search?.state.expanded === true
-  // 搜索展开时整块标题让位：两行一起收拢淡出，与官方单行标题同一个取舍
+  // 搜索展开时整块标题让位，两行一起收拢淡出，与官方单行标题同一个取舍
   const hidden = titleHidden || expanded
   return (
     <div className="wg-header wg-header-titled">

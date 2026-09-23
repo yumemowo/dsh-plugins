@@ -68,7 +68,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
         byWorkspace: { w1: [{ id: 'g1', name: '会话分组', sessionIds: ['a'] }] },
         workspaceGroups: [
           { id: 'wg1', name: '工作区分组', workspaceIds: ['w1'] },
-          // 空分组一起渲染：它的空态占位也有一条按结构写的缩进规则
+          // 空分组一起渲染，它的空态占位也有一条按结构写的缩进规则
           // 缺了它那条规则在下面那条「逐条命中」的断言里无从验证
           { id: 'wg2', name: '空组', workspaceIds: [] },
         ],
@@ -179,11 +179,10 @@ describe('workspace group DOM structure', () => {
 
     // 每条规则至少有一个选择器命中真实 DOM
     // 规则里常同时写「直接子项」与「隔一层包装」两档（挂了悬停卡片的工作区行会被官方 HoverCard 的根节点包一层）
-    // 因此按规则而不是按单个选择器断言：任一档命中就说明这层缩进真的作用到了行上
+    // 因此按规则而不是按单个选择器断言，任一档命中就说明这层缩进真的作用到了行上
     for (const { selectors, body } of rules) {
-      // 伪元素本身没有可查询的节点，但它的宿主元素有：
-      // 剥掉 ::before 后照样能验证引导线挂在哪个元素上——宿主不存在的话
-      // 那条线根本不会画出来
+      // 伪元素本身没有可查询的节点，但它的宿主元素有
+      // 剥掉 ::before 后照样能验证引导线挂在哪个元素上，宿主不存在的话那条线根本不会画出来
       const queryable = selectors.map((selector) => selector.split('::')[0] ?? selector)
       const matched = queryable.filter(
         (selector) => container.querySelectorAll(selector).length > 0,
@@ -256,9 +255,8 @@ describe('workspace group DOM structure', () => {
   })
 
   it('survives a host half that has not been restarted yet', async () => {
-    // 浏览器半边随热重载换新，宿主半边要重启 dsh 才换：
-    // 那段窗口里收到的是旧形状的快照（只有 byWorkspace）
-    // 缺格直接遍历会抛 `groups is not iterable`，把整片区域打挂——这里用真 DOM 走一遍
+    // 浏览器半边随热重载换新，宿主半边要重启 dsh 才换，那段窗口里收到的是旧形状的快照（只有 byWorkspace）
+    // 缺格直接遍历会抛 `groups is not iterable`，把整片区域打挂，这里用真 DOM 走一遍
     // 确认它退化成「没有工作区分组」
     const { container, root } = await mount({
       loadGroups: async () => ({ byWorkspace: {} }) as never,
@@ -275,7 +273,7 @@ describe('workspace group DOM structure', () => {
   it('marks the group row with the dashed folder, not a real one', async () => {
     const { container, root } = await mount()
 
-    // 分组头的文件夹槽走虚线：工作区分组形状上像一个工作区
+    // 分组头的文件夹槽走虚线，工作区分组形状上像一个工作区
     // 但本身不是一个真实工作区（没有目录、没有会话）。实线文件夹留给真实的工作区行
     const folder = container.querySelector('.wg-virtual-workspace-head .wg-folder')
     expect(folder?.innerHTML).toContain('stroke-dasharray')

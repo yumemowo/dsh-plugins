@@ -26,7 +26,7 @@ const internals = (React as unknown as {
 /**
  * 造一个跨次渲染保留状态的 dispatcher
  *
- * 每次渲染把游标归零，`useState` 按序号读写同一份状态表；setter 只改状态表
+ * 每次渲染把游标归零，`useState` 按序号读写同一份状态表，setter 只改状态表
  * 需要看新状态时由调用方自己再渲染一次
  */
 function statefulDispatcher(): { current: unknown; states: unknown[] } {
@@ -292,7 +292,7 @@ describe('AddWorkspaceControl', () => {
     const { actions } = face({ occupant: () => undefined })
     const { out } = renderControl(actions)
 
-    // 入口按钮仍在，但交互不渲染；区域订阅了占用情况，下一帧会连入口一起收掉
+    // 入口按钮仍在，但交互不渲染，区域订阅了占用情况，下一帧会连入口一起收掉
     expect(out.host.some((props) => props['aria-label'] === '添加工作区')).toBe(true)
     expect(out.owner).toBeUndefined()
   })
@@ -373,7 +373,7 @@ describe('AddWorkspaceControl', () => {
     await Promise.resolve()
 
     const after = rerender(actions, dispatcher)
-    // 取消只是收起请求：不采纳、不弹错（错误框常驻挂载，由 open 控制显隐）
+    // 取消只是收起请求，不采纳、不弹错（错误框常驻挂载，由 open 控制显隐）
     expect(created).toEqual([])
     expect(after.modals.every((props) => props['open'] === false)).toBe(true)
     expect(after.owner?.open).toBe(false)

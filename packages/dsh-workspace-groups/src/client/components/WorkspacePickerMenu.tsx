@@ -5,10 +5,10 @@
  * 放不下可折叠的分区头，也放不下挂在条目行尾的第二个按钮（置顶）
  * 这里按原语的外观与交互约定自绘一份：面板的定位与夹取、指针离开关闭、Escape 关闭、方向键在条目间移动，都照原语的做法
  *
- * 无障碍上是展开式弹出层而不是 `role="menu"`：面板里既有可折叠的分区头，也有挂在条目行尾的第二个按钮
+ * 无障碍上是展开式弹出层而不是 `role="menu"`，面板里既有可折叠的分区头，也有挂在条目行尾的第二个按钮
  * 而 `role="menu"` 只允许 `menuitem` 一类的子项
  * 分区头与行尾按钮都塞不进那个模型，因此面板取 `role="group"`，触发器只声明 `aria-expanded`
- * 不写 `aria-haspopup`：那等于承诺一个 `menu` 角色。键盘靠自然 Tab 顺序加上下面那套方向键
+ * 不写 `aria-haspopup`，那等于承诺一个 `menu` 角色。键盘靠自然 Tab 顺序加上下面那套方向键
  *
  * 面板 portal 到 `document.body`：header 自己带 `overflow: hidden`（搜索展开时整行要收拢淡出）
  * 就近渲染的面板会被它整个裁掉
@@ -73,7 +73,7 @@ export interface WorkspacePickerMenuProps {
 /**
  * 面板里的一行条目
  *
- * 结构与 `WorkspaceRow` 同形：行本身是 `role="button"` 的 div
+ * 结构与 `WorkspaceRow` 同形，行本身是 `role="button"` 的 div
  * 三枚 16px 操作按钮嵌在行内的操作位里（`.wg-row-actions`）
  * 行的可点区不能做成与按钮并排的两个热区——那样行的可点范围会比看起来窄
  *
@@ -110,7 +110,7 @@ function PickerRow({
       role="button"
       tabIndex={0}
       aria-current={focused ? 'true' : undefined}
-      // 缩进层级由条目自带；样式按这个属性换算，与列表里的层级步进同一个 16px
+      // 缩进层级由条目自带，样式按这个属性换算，与列表里的层级步进同一个 16px
       style={{ '--wg-picker-depth': String(entry.depth) } as Record<string, string>}
       onClick={() => onSelect(entry.key)}
       onKeyDown={(event) => handleRowKeyDown(event, () => onSelect(entry.key))}
@@ -237,7 +237,7 @@ export function WorkspacePickerMenu({
     window.addEventListener('scroll', measure, true)
     window.addEventListener('resize', measure)
     // 分区展开、置顶项改名都会改变面板高度，落点要跟着重算
-    // jsdom 没有 ResizeObserver；它只影响即时性，缺了不影响正确性
+    // jsdom 没有 ResizeObserver，它只影响即时性，缺了不影响正确性
     const observer =
       typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
     if (panelRef.current !== null) observer?.observe(panelRef.current)

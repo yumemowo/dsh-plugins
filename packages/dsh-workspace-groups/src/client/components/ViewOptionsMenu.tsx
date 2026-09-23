@@ -95,7 +95,7 @@ export function ViewOptionsMenu({
     window.addEventListener('scroll', measure, true)
     window.addEventListener('resize', measure)
     // 面板高度会随语言与文案变化，落点要跟着重算
-    // jsdom 没有 ResizeObserver；它只影响即时性，缺了不影响正确性
+    // jsdom 没有 ResizeObserver，它只影响即时性，缺了不影响正确性
     const observer =
       typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
     if (panelRef.current !== null) observer?.observe(panelRef.current)

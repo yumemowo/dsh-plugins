@@ -9,7 +9,7 @@ import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-sess
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionRow } from './types.ts'
 
-/** 会话是否为子代理来源；侧边栏不展示这些行 */
+/** 会话是否为子代理来源，侧边栏不展示这些行 */
 function isSubagent(summary: SessionSummary): boolean {
   return summary.origin === 'subagent'
 }
@@ -32,7 +32,7 @@ function isSessionVisible(
  * 沿子代理来源脉络统计每个会话名下的运行中子代理数
  *
  * 子代理行本身在侧边栏隐藏，但它运行时祖先行要亮起运行点，因此这里把它们逐个归到脉络上的每一个祖先
- * 只有「整条脉络都是子代理」才继续上溯，与官方一致；`seen` 防的是元数据自相矛盾（父指针成环）时死循环
+ * 只有「整条脉络都是子代理」才继续上溯，与官方一致，`seen` 防的是元数据自相矛盾（父指针成环）时死循环
  * @param byId - 会话摘要表
  * @returns 每个「可能是父级」的会话 id 对应的运行中子代理数
  */
@@ -63,13 +63,13 @@ function indexRunningSubagents(
  * 上一次投影的结果，按摘要对象本身缓存
  *
  * 流式期间每次活动只替换发生变化的那条摘要（其余对象保持同一引用），按摘要缓存即可
- * 让未变的行保持同一身份，供行级 memo 比对
+ * 这样未变的行保持同一身份，供行级 memo 比对
  *
  * 用 WeakMap：摘要被替换后旧条目自动回收，不会随会话数增长而堆积
  */
 const rowCache = new WeakMap<SessionSummary, SessionRow>()
 
-/** 把一个会话摘要投影成渲染行；输入未变时复用上一次的对象 */
+/** 把一个会话摘要投影成渲染行，输入未变时复用上一次的对象 */
 function toRow(summary: SessionSummary, runningSubagents: Map<string, number>): SessionRow {
   const id = String(summary.id)
   const runningSubagentCount = runningSubagents.get(id) ?? 0
@@ -97,7 +97,7 @@ interface VisibilityInput {
   byId: Record<string, SessionSummary | undefined>
   archived: Set<string>
   current: string | undefined
-  /** 每个会话名下的运行中子代理数；供状态位使用 */
+  /** 每个会话名下的运行中子代理数，供状态位使用 */
   runningSubagents: Map<string, number>
 }
 
@@ -144,7 +144,7 @@ export function groupSessionsByWorkspace(
 /**
  * 收集不属于任何工作区的会话行
  *
- * 删除工作区只移除注册，会话记录会原样保留；官方把这些无所属的会话收进末尾一个隐式的「未分组」区段
+ * 删除工作区只移除注册，会话记录会原样保留，官方把这些无所属的会话收进末尾一个隐式的「未分组」区段
  * 这里取同一做法，避免删除工作区后会话在侧边栏彻底消失
  */
 export function straySessions(

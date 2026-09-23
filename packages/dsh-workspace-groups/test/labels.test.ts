@@ -36,7 +36,7 @@ describe('locales', () => {
   })
 
   it('lists every package-owned key explicitly', () => {
-    // 自有键不多，逐个列出；新增文案时这里会提醒重新确认它是否真的官方没有
+    // 自有键不多，逐个列出，新增文案时这里会提醒重新确认它是否真的官方没有
     expect(Object.keys(zh).sort()).toEqual([
       'actions.group.aria',
       'actions.virtualWorkspace.aria',
@@ -129,7 +129,7 @@ describe('regionLabels', () => {
   })
 
   it('reads the row menu new-session item from the official sidebar key', () => {
-    // 菜单项是一次性动作，读作动词短语；它取官方 sidebar 新建按钮的文案
+    // 菜单项是一次性动作，读作动词短语，它取官方 sidebar 新建按钮的文案
     // 与行内 `+` 的无障碍标签（带对象名的 actions.newSession.aria）分工不同
     expect(labels.newSessionItem).toBe('新建会话')
     expect(labels.newSessionItem).not.toBe(labels.newSessionIn('w1'))
@@ -209,7 +209,7 @@ describe('regionLabels', () => {
 
   it('shares one move-to wording across the two grouping levels', () => {
     // 两个层级的归组一级项都是「点下去还要选一个目标」的二级菜单父项，措辞分工一致
-    // 因此共用同一句；层级由所在菜单本身区分，文案不必再加限定词
+    // 因此共用同一句，层级由所在菜单本身区分，文案不必再加限定词
     expect(labels.moveToGroup).toBe(labels.moveToVirtualWorkspace)
     expect(labels.moveToGroup).toBe('移动到…')
   })

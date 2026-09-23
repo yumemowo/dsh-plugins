@@ -23,7 +23,7 @@ export interface PickerEntry {
   /**
    * 对象自己的 id，不含前缀
    *
-   * 与 {@link key} 分开传：改名与删除要把它交给既有的对话框与宿主接口，而那两处收的都是裸 id（分组 id 或工作区 id）
+   * 与 {@link key} 分开传，改名与删除要把它交给既有的对话框与宿主接口，而那两处收的都是裸 id（分组 id 或工作区 id）
    * 让每个消费方各自去切前缀等于把 `rootEntry.ts` 的编码规则抄到多处
    */
   id: string
@@ -34,7 +34,7 @@ export interface PickerEntry {
   /**
    * 缩进层级，从 0 起
    *
-   * 工作区分组在 0，组内工作区从 1 起；子工作区在自己的容器里再深一层
+   * 工作区分组在 0，组内工作区从 1 起，子工作区在自己的容器里再深一层
    * 关闭嵌套时恒为 0，菜单与没有这个特性时逐行相同
    */
   depth: number
@@ -56,8 +56,8 @@ export function rootPickerEntries(
   /**
    * 把一段里的工作区按层级展开成条目，`base` 是该段第一层的缩进
    *
-   * 每个工作区只出一次，传入的 `ids` 理论上已经只剩这一段的顶层，但父带出的子项与它
-   * 可能重叠（例如调用方直接把整段传进来），去重后不会出现同一个工作区两行
+   * 每个工作区只出一次。传入的 `ids` 理论上已经只剩这一段的顶层
+   * 但父带出的子项与它可能重叠（例如调用方直接把整段传进来），去重后不会出现同一个工作区两行
    */
   const pushTree = (ids: readonly string[], base: number): void => {
     const seen = new Set<string>()
@@ -65,7 +65,7 @@ export function rootPickerEntries(
       if (seen.has(workspaceId)) return
       seen.add(workspaceId)
       const workspace = workspaceById.get(workspaceId)
-      // 布局只包含快照里存在的工作区，因此这里不会落空；防一手避免类型断言
+      // 布局只包含快照里存在的工作区，因此这里不会落空，防一手避免类型断言
       if (workspace !== undefined) {
         entries.push({
           key: rootWorkspaceKey(workspaceId),
@@ -103,7 +103,7 @@ export function rootPickerEntries(
 /**
  * 解析一个聚焦键指向的现存条目
  *
- * 记录比列表活得久：工作区被删、分组被解散之后，那个键仍可能躺在三份记录里
+ * 记录比列表活得久，工作区被删、分组被解散之后，那个键仍可能躺在三份记录里
  * 聚焦与两处渲染都从这里取「它现在还指着什么」，因此三处对同一条记录的判断不会各说一套——解析不到时一律当作没有聚焦
  * @param key - 聚焦记录里的键，空串表示「全部」
  * @returns 该键指向的条目，空串或指向已消失的对象时为 undefined
@@ -120,7 +120,7 @@ export function resolveFocus(
 export interface PickerSections {
   /** 最近聚焦过的若干条目，最近一次在最前 */
   recent: PickerEntry[]
-  /** 已置顶的条目；顺序按最近使用，从没用过的排在最后 */
+  /** 已置顶的条目，顺序按最近使用，从没用过的排在最后 */
   pinned: PickerEntry[]
   /** 全部条目，按列表的展示顺序 */
   all: PickerEntry[]
@@ -142,7 +142,7 @@ export function pickerSections(
     .map((key) => byKey.get(key))
     .filter((entry): entry is PickerEntry => entry !== undefined)
     .slice(0, RECENT_SHOWN)
-  // 置顶按最近使用顺序排：记录里的位置就是「最近一次用到它是多久以前」
+  // 置顶按最近使用顺序排，记录里的位置就是「最近一次用到它是多久以前」
   // 没进过记录的排在最后并在彼此之间保持传入顺序（`sort` 在稳定实现下保持原序）
   const rank = new Map(picker.recent.map((key, index) => [key, index]))
   const pinned = picker.pinned

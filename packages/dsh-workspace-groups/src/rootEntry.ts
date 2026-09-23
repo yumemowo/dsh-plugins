@@ -29,7 +29,7 @@ export function rootVirtualKey(groupId: string): string {
  *
  * 前缀不认识时返回 undefined 而不是抛错：键来自持久化记录，界面必须能在读到一条来路不明的记录时继续渲染
  * @param key - 形如 `<前缀><id>` 的条目键（见本模块顶部）
- * @returns 键指向的对象；前缀不认识时为 undefined
+ * @returns 键指向的对象，前缀不认识时为 undefined
  */
 export function parseRootEntryKey(
   key: string,

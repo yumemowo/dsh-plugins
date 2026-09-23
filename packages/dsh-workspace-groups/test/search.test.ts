@@ -85,7 +85,7 @@ describe('sanitizeSearchQuery', () => {
   })
 
   it('never splits a surrogate pair at the truncation point', () => {
-    // 上限前一个码元是高代理、上限处是低代理：整对一起留下或一起去掉，
+    // 上限前一个码元是高代理、上限处是低代理：整对一起留下或一起去掉
     // 否则后端会拿到一个孤立代理
     const query = 'x'.repeat(SEARCH_QUERY_MAX_CODE_UNITS - 1) + '\u{1f600}'
 

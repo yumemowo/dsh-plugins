@@ -6,7 +6,7 @@
  * Windows 风格路径没有 `~` 约定，整条跳过
  */
 
-/** 盘符或 UNC 前缀；这类路径不走 `~` 缩写 */
+/** 盘符或 UNC 前缀，这类路径不走 `~` 缩写 */
 function isWindowsStylePath(value: string): boolean {
   return /^[A-Za-z]:[/\\]/.test(value) || value.startsWith('\\\\')
 }
@@ -15,7 +15,7 @@ function isWindowsStylePath(value: string): boolean {
  * 把宿主的 home 目录缩写成 `~`
  *
  * 卡片里显示缩写路径，复制出去的仍是完整路径——缩写只影响这一处排版
- * @param home - 宿主的 home；缺省表示不知道，此时原样返回
+ * @param home - 宿主的 home，缺省表示不知道，此时原样返回
  * @returns home 自身为 `~`，其后代为 `~/…`，其余为 `path`
  */
 export function abbreviateHomePath(path: string, home?: string | undefined): string {

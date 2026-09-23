@@ -3,7 +3,7 @@
  *
  * 输入法组合期间的 Enter 属于候选词确认，不能当提交用
  *
- * 「取消」与「关闭」是通用词，直接取插槽注入的 `t` 座位；本包命名空间没有这两个键，查找链会回退到官方 `common` 命名空间
+ * 「取消」与「关闭」是通用词，直接取插槽注入的 `t` 座位，本包命名空间没有这两个键，查找链会回退到官方 `common` 命名空间
  */
 import { useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'

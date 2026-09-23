@@ -1,7 +1,7 @@
 /**
  * 一个工作区标题行
  *
- * 行内操作与官方工作区行同形：`...` 打开管理菜单（新建分组 / 重命名 / 删除），`+` 直接在该工作区新建会话
+ * 行内操作与官方工作区行同形，`...` 打开管理菜单（新建分组 / 重命名 / 删除），`+` 直接在该工作区新建会话
  * 静止时显示文件夹（开/闭随展开态），悬停时让位给三角箭头，两个槽常驻同一 16px 列，因此切换时标题不位移
  *
  * 「新建分组」不像「新建会话」那样高频，因此不占行内位置，收进菜单
@@ -80,14 +80,14 @@ export interface WorkspaceRowProps {
   onSelectVirtualWorkspace?: ((id: string) => void) | undefined
   /** 悬停卡片正文，缺省表示该行不挂卡片（未分组桶） */
   hover?: WorkspaceHoverData | undefined
-  /** 悬停卡片可复制的内容，取完整目录路径；缺省表示卡片只读 */
+  /** 悬停卡片可复制的内容，取完整目录路径，缺省表示卡片只读 */
   hoverCopy?: string | undefined
   /** 悬停卡片的文案 */
   hoverLabels?: OfficialHoverLabels | undefined
   /**
    * 该行「移动工作区分组」一级项及其子菜单的选项集
    *
-   * 与 `labels` 分开传：文案对所有行相同，归属却逐行不同
+   * 与 `labels` 分开传，文案对所有行相同，归属却逐行不同
    */
   virtualWorkspace?: VirtualWorkspaceMenuInput | undefined
   /**
@@ -125,7 +125,7 @@ export function WorkspaceRow({
   /**
    * 菜单选中项的分派
    *
-   * 行内 `...` 菜单与右键菜单共用它：两个入口的条目集合不同（右键多一项「新建会话」）
+   * 行内 `...` 菜单与右键菜单共用它，两个入口的条目集合不同（右键多一项「新建会话」）
    * 但 id 相同者必须落到同一件事上，否则同一个动作在两个入口下会各走一套
    */
   const select = (id: string): void => {
@@ -212,7 +212,7 @@ export function WorkspaceRow({
       }
       // 两种面板开着时都不挂卡片：行内 `...` 菜单与行右键菜单
       disabled={menuOpen || contextMenu.open}
-      // 复制的是完整路径而不是卡片里那份缩写：缩写只是排版，用户要的是能直接用的路径
+      // 复制的是完整路径而不是卡片里那份缩写，缩写只是排版，用户要的是能直接用的路径
       copyText={hoverCopy}
       copyLabel={hoverLabels.copy}
       copiedLabel={hoverLabels.copied}

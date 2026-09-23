@@ -125,7 +125,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
   }
 }
 
-/** 已挂载的根；收尾时统一卸载，见 `afterEach` */
+/** 已挂载的根，收尾时统一卸载，见 `afterEach` */
 const roots: { unmount: () => void }[] = []
 
 /** 挂载区域并等分组元数据落地 */
@@ -174,7 +174,7 @@ async function openCreateDialog(container: HTMLElement): Promise<void> {
   })
 }
 
-/** 面板里文案为 `label` 的那一行；找不到时抛错，避免断言在 undefined 上假通过 */
+/** 面板里文案为 `label` 的那一行，找不到时抛错，避免断言在 undefined 上假通过 */
 function rowOf(label: string): HTMLElement {
   const row = Array.from(document.body.querySelectorAll<HTMLElement>('.wg-picker-row')).find(
     (item) => item.querySelector('.wg-picker-label')?.textContent === label,
@@ -192,7 +192,7 @@ function actionOf(row: HTMLElement, label: string): HTMLButtonElement {
   return button
 }
 
-/** 当前打开的对话框；没有时抛错，避免断言在 null 上假通过 */
+/** 当前打开的对话框，没有时抛错，避免断言在 null 上假通过 */
 function dialog(): HTMLElement {
   const found = document.body.querySelector<HTMLElement>('[data-wg-test-modal]')
   if (found === null) throw new Error('no dialog is open')
@@ -528,12 +528,12 @@ describe('workspace picker in a real DOM', () => {
       actionOf(rowOf('W2'), '重命名“W2”').click()
     })
 
-    // 改名是对话形态，菜单让位；对话框里是官方的「重命名工作区」，初值是该工作区的名字
+    // 改名是对话形态，菜单让位，对话框里是官方的「重命名工作区」，初值是该工作区的名字
     expect(panel()).toBeNull()
     expect(dialogTitle()).toBe('重命名工作区')
     expect(dialogInputValue()).toBe('W2')
 
-    // 改成别的名字再确认：改成同名是空操作（`commitWorkspaceRename` 会直接返回）
+    // 改成别的名字再确认，改成同名是空操作（`commitWorkspaceRename` 会直接返回）
     // 那样这条断言就测不出东西
     const input = dialog().querySelector('input') as HTMLInputElement
     const setValue = Object.getOwnPropertyDescriptor(
@@ -713,7 +713,7 @@ describe('workspace picker in a real DOM', () => {
       await Promise.resolve()
     })
 
-    // 没勾就不动聚焦：建组本身照做，但不把用户从当前视野里带走
+    // 没勾就不动聚焦，建组本身照做，但不把用户从当前视野里带走
     expect(focused).toEqual([])
 
     await act(async () => root.unmount())

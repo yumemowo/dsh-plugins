@@ -2,19 +2,19 @@
  * 本包自绘的图标
  *
  * 优先复用官方原语不等于只能用它现成的那几个
- * 官方 primitives 里没有本包需要的两类字形：
+ * 官方 primitives 的导出表里没有本包需要的三类字形：
  * - 「带加号的文件夹」（文件夹族只有三个，全是实线，且没有一个带加号）
  * - 「虚线的文件夹」（同样只有实线版，见 {@link IconVirtualFolder16}）
+ * - 「图钉」（导出表里没有任何图钉字形，置顶按钮的两态都要自绘）
  *
  * 这里按官方 primitives 的绘制规范自绘，视觉上与它们同族：
  *
  * - `viewBox="0 0 16 16"`、`fill="none"`、无 `xmlns`（与官方内联 SVG 同形）
  * - 颜色一律 `currentColor`，因此继承行的文字色，不写死
  * - 只用描边，不填充：官方那几个 outline 图标同样是描边族
- * - 轮廓取官方 `IconFolderClose16` 的文件夹比例
- *   左右顶到 1.5 / 14.5、页签圆角 2.1 / 0.9、容器圆角 1.9、壁厚 1.3，两者因此同族
+ * - 文件夹轮廓取官方 `IconFolderClose16` 的中线（左右顶到 1.5 / 14.5，壁厚 1.3），两者因此同族
  *
- * 两个造型都在小尺寸下验证过：16px 时轮廓清晰、互不粘连或断开（验证方式见 `docs/custom-icons.md`）
+ * 三个造型都在小尺寸下验证过：16px 时轮廓清晰、互不粘连或断开（验证方式见 `docs/custom-icons.md`）
  */
 import type { ReactElement } from 'react'
 
@@ -51,8 +51,8 @@ const FOLDER_CLOSED =
 /**
  * 右上角开口的文件夹（新建入口用）
  *
- * 自右壁断口 `(14.5, 10.2)` 起笔绕到页签右肩 `(8.0231, 4.295)` 收笔，右上这一整段
- * 缺口留给加号。断口高度取 `10.2`：再往上会把右壁削短、文件夹读起来缺一个角
+ * 自右壁断口 `(14.5, 10.2)` 起笔绕到页签右肩 `(8.0231, 4.295)` 收笔，右上这一整段缺口留给加号
+ * 断口高度取 `10.2`：再往上会把右壁削短、文件夹读起来缺一个角
  */
 const FOLDER_NOTCHED =
   'M14.5 10.2V11.9127' +
@@ -72,9 +72,8 @@ const PLUS = 'M9.52 5.52H15.52M12.52 2.52V8.52'
  *
  * 用于「新建工作区分组」入口与「移动工作区分组」菜单项
  * 文件夹部分与 {@link IconVirtualFolder16} 是同一份轮廓（官方 `IconFolderClose16` 的中线）
- * 只是右上角不闭合，缺口留给加号——「文件夹 + 加号 + 开口方位」这一构图与官方
- * `IconProjectAddOutline16` 同源。虚线让它与相邻的实线文件夹（代表真实工作区）
- * 一眼可分
+ * 只是右上角不闭合，缺口留给加号——「文件夹 + 加号 + 开口方位」这一构图与官方 `IconProjectAddOutline16` 同源
+ * 虚线让它与相邻的实线文件夹（代表真实工作区）一眼可分
  */
 export function IconVirtualWorkspace16({ size = 16, className }: IconProps): ReactElement {
   return (
@@ -150,9 +149,9 @@ function pinCapAndNeedle(): ReactElement {
 /**
  * 未置顶的图钉：整枚走描边
  *
- * 用于菜单项行尾的置顶按钮。它与 {@link IconPinFill16} 是同一枚图钉的两态，几何
- * 逐点对齐，只有「描边 / 填充」这一个变量——菜单里同一个位置在两种状态下不能
- * 看起来是两枚不同的图标
+ * 用于菜单项行尾的置顶按钮。它与 {@link IconPinFill16} 是同一枚图钉的两态
+ * 几何逐点对齐，只有「描边 / 填充」这一个变量
+ * 菜单里同一个位置在两种状态下不能看起来是两枚不同的图标
  */
 export function IconPinOutline16({ size = 16, className }: IconProps): ReactElement {
   return (
@@ -166,8 +165,8 @@ export function IconPinOutline16({ size = 16, className }: IconProps): ReactElem
 /**
  * 已置顶的图钉：钉身填实
  *
- * 置顶态因此不只靠颜色——色阶在浅色主题下对比有限，实心与描边才是两种状态下
- * 一眼可分的差别
+ * 置顶态因此不只靠颜色——色阶在浅色主题下对比有限
+ * 实心与描边才是两种状态下一眼可分的差别
  */
 export function IconPinFill16({ size = 16, className }: IconProps): ReactElement {
   return (

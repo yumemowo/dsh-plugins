@@ -7,7 +7,7 @@ import {
 import type { SessionStatusLabels } from '../src/client/labels.ts'
 import type { SessionRow } from '../src/client/data/types.ts'
 
-/** 造一行会话渲染数据；只覆盖用例关心的字段 */
+/** 造一行会话渲染数据，只覆盖用例关心的字段 */
 function row(overrides: Partial<SessionRow> = {}): SessionRow {
   return {
     id: 's1',
@@ -34,7 +34,7 @@ const labels: SessionStatusLabels = {
 /**
  * 行首那个点
  *
- * 判据是「空冷不画点」，其余与卡片的第一条一致；这里按 `rowStatusDot` 逐条覆盖
+ * 判据是「空冷不画点」，其余与卡片的第一条一致，这里按 `rowStatusDot` 逐条覆盖
  */
 describe('rowStatusDot', () => {
   /** 行首那个点：从同一份状态推导里取第一条，再按「有没有要提醒的事」取舍 */
@@ -42,7 +42,7 @@ describe('rowStatusDot', () => {
     rowStatusDot(r, sessionStatuses(r, pendingKind, labels))
 
   it('reports no status for an idle session', () => {
-    // 空闲不画点，槽位留空因此标题不位移。
+    // 空闲不画点，槽位留空因此标题不位移
     expect(dot(row(), undefined)).toBeUndefined()
   })
 
@@ -82,12 +82,12 @@ describe('rowStatusDot', () => {
   })
 
   it('reports only the warning while the session also runs', () => {
-    // 待交互压过运行：用户要看的是「在等我」而不是「在跑」。
+    // 待交互压过运行：用户要看的是「在等我」而不是「在跑」
     expect(dot(row({ running: true }), 'approval')?.state).toBe('warning')
   })
 
   it('reports ongoing when the session is running and completed', () => {
-    // 运行压过完成提醒，避免刚跑完的行亮着绿色。
+    // 运行压过完成提醒，避免刚跑完的行亮着绿色
     expect(dot(row({ running: true, completed: true }), undefined)?.state).toBe(
       'ongoing',
     )
@@ -107,7 +107,7 @@ describe('rowStatusDot', () => {
   })
 
   it('falls back to the run state for an unknown pending kind', () => {
-    // 其他插件发布的交互种类不在侧边栏表意，忽略它而不是画一个没有文案的点。
+    // 其他插件发布的交互种类不在侧边栏表意，忽略它而不是画一个没有文案的点
     expect(dot(row({ running: true }), 'some-other-kind')).toEqual({
       state: 'ongoing',
       label: '进行中',

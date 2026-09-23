@@ -21,13 +21,13 @@ import type { MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
 export interface RowContextMenuEvent {
   clientX: number
   clientY: number
-  /** 收到事件的行元素；只有键盘触发的右键需要它 */
+  /** 收到事件的行元素，只有键盘触发的右键需要它 */
   currentTarget: unknown
   preventDefault: () => void
   stopPropagation: () => void
 }
 
-/** 面板定位矩形；官方原语只读四条边 */
+/** 面板定位矩形，官方原语只读四条边 */
 interface AnchorRect {
   left: number
   top: number
@@ -54,16 +54,16 @@ function rectAt(event: RowContextMenuEvent): AnchorRect {
 }
 
 export interface RowContextMenuOptions {
-  /** 菜单条目；缺省或为空表示该行没有右键菜单 */
+  /** 菜单条目，缺省或为空表示该行没有右键菜单 */
   items?: readonly MenuItem[] | undefined
-  /** 选中项 id 的分派；与行内 `...` 菜单共用同一个函数 */
+  /** 选中项 id 的分派，与行内 `...` 菜单共用同一个函数 */
   onSelect: (id: string) => void
 }
 
 export interface RowContextMenu {
-  /** 挂到行元素上的右键处理；没有菜单时为 undefined，那时右键保持浏览器默认行为 */
+  /** 挂到行元素上的右键处理，没有菜单时为 undefined，那时右键保持浏览器默认行为 */
   onContextMenu: ((event: RowContextMenuEvent) => void) | undefined
-  /** 随行渲染的菜单元素；没有菜单时为 null */
+  /** 随行渲染的菜单元素，没有菜单时为 null */
   menu: ReactElement | null
   /**
    * 右键面板是否开着

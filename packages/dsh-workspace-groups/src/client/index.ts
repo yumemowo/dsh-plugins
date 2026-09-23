@@ -6,7 +6,7 @@
  *
  * 本包自己不声明任何子插槽：`sidebar.workspaces.directoryFlow` 已被 ui-workspace 声明
  * 而一个插槽只能有一个声明者，重复声明会直接抛错
- * 「添加工作区」因此复用官方那个洞：接替父插槽只是不再渲染官方组件，官方那条注册仍留在 ledger 里
+ * 「添加工作区」因此复用官方那个洞，接替父插槽只是不再渲染官方组件，官方那条注册仍留在 ledger 里
  * 洞的声明与占用者（native / browse 目录选择器）都还在，本包直接取它的占用者渲染
  *
  * 文案走两条官方路径：本包自己的 `workspaceGroups` 命名空间由 `locale.register` 注册
@@ -82,7 +82,7 @@ export function apply(ctx: Context): void {
   /**
    * 远程命名空间就绪信号
    *
-   * 区域组件的首次拉取可能早于 `$mount` 完成；就绪时这里发布一次，订阅者借此重试此前被就绪性拒绝的加载
+   * 区域组件的首次拉取可能早于 `$mount` 完成，就绪时这里发布一次，订阅者借此重试此前被就绪性拒绝的加载
    */
   const readyListeners = new Set<() => void>()
   const onReady = (listener: () => void): (() => void) => {
@@ -129,7 +129,7 @@ export function apply(ctx: Context): void {
       return () => {
         disposed = true
         groupsApi = undefined
-        // 卸载是异步的；调用方不必等它，但必须发起
+        // 卸载是异步的，调用方不必等它，但必须发起
         void unmount?.()
       }
     },
@@ -139,7 +139,7 @@ export function apply(ctx: Context): void {
   // 官方 `workspace` 命名空间的翻译函数：绑定结果是稳定引用，且在调用时才读当前语言
   // 被缓存的是函数而不是投影后的文案表，因此可放心随 inject 结果或渲染期解析一起缓存，语言切换后调用它自然读到新语言
   const tWorkspace = locale.bind('workspace')
-  // 容器行右键菜单里的「新建会话」取官方 sidebar 新建按钮的动词短语，那个键在 `sidebar` 命名空间；绑定语义同上
+  // 容器行右键菜单里的「新建会话」取官方 sidebar 新建按钮的动词短语，那个键在 `sidebar` 命名空间，绑定语义同上
   const tSidebar = locale.bind('sidebar')
 
   const requireApi = (): Record<string, (...args: never[]) => Promise<never>> => {
@@ -157,7 +157,7 @@ export function apply(ctx: Context): void {
   /**
    * 调一个宿主方法并取回完整形状的快照
    *
-   * 每个方法都回整份快照，因此收口在这里统一补齐缺格：浏览器半边热重载会换到新客户端，而宿主半边要重启 `dsh` 才换
+   * 每个方法都回整份快照，因此收口在这里统一补齐缺格，浏览器半边热重载会换到新客户端，而宿主半边要重启 `dsh` 才换
    * 中间那段窗口里收到的是旧形状（没有 `workspaceGroups`），缺格不补会在遍历时抛错、把整片区域打挂
    * @param method - 宿主 remote 面上的方法名
    * @param args - 该方法的参数，按宿主声明的顺序
@@ -177,11 +177,11 @@ export function apply(ctx: Context): void {
    *
    * 动作直接调官方服务（`ctx.uiWorkspace` 的分叉/归档、`ctx.sessions` 绑定的重命名）
    * 这三处正是官方会话菜单内部调用的同一批接口，因此官方改行为时本包自动跟随
-   * 文案与相对时间在这里按调用时的语言投影：本函数由区域组件在每次渲染时调用（见 `RegionActions.official`）
+   * 文案与相对时间在这里按调用时的语言投影，本函数由区域组件在每次渲染时调用（见 `RegionActions.official`）
    * 因此语言切换后重新投影，不会冻结在注册那一刻
    *
-   * 官方 `ui-workspace` 不在场时返回 undefined：本包的区域本来就依赖它供的 `useWorkspaces` 全局 hook
-   * 正常情况下它必然加载；真缺失时菜单里那三项与行尾时间整体不渲染，不留点不动的入口
+   * 官方 `ui-workspace` 不在场时返回 undefined，本包的区域本来就依赖它供的 `useWorkspaces` 全局 hook
+   * 正常情况下它必然加载，真缺失时菜单里那三项与行尾时间整体不渲染，不留点不动的入口
    * @returns 官方动作，官方服务或控制器缺失时为 undefined
    */
   const officialActions = (): OfficialSessionActions | undefined => {
@@ -194,7 +194,7 @@ export function apply(ctx: Context): void {
     }
 
     const value: OfficialSessionActions = {
-      // 重命名没有走 uiWorkspace：官方把这条留在会话对象上，菜单里也是同一个入口
+      // 重命名没有走 uiWorkspace，官方把这条留在会话对象上，菜单里也是同一个入口
       // 走 binding 而不是另造 RPC，接受规范化与错误语义
       renameSession: async (sessionId, title) => {
         const face = sessions.binding(sessionId as never)?.session
@@ -207,7 +207,7 @@ export function apply(ctx: Context): void {
         void uiWorkspace.forkSession(sessionId as never).catch(() => {})
       },
       archiveSession: (sessionId) => uiWorkspace.archiveSession(sessionId as never),
-      // 文案在取用时才投影，不是在造这个对象时：绑定结果在调用时才读当前语言，写成取值器就能既复用对象、又让切换语言后的下一次读取拿到新译文
+      // 文案在取用时才投影，不是在造这个对象时，绑定结果在调用时才读当前语言，写成取值器就能既复用对象、又让切换语言后的下一次读取拿到新译文
       get labels() {
         return officialSessionLabels(tWorkspace)
       },
@@ -222,7 +222,7 @@ export function apply(ctx: Context): void {
    *
    * 采纳调官方工作区控制器的 `create`，选中后调官方 `uiWorkspace.startSession` 在新工作区里开会话
    * 两处正是官方 WorkspaceBrowser 内部调的同一批接口
-   * picking 交互整段借用官方 `sidebar.workspaces.directoryFlow` 洞的占用者：本包接替父插槽并未清除官方那条注册
+   * picking 交互整段借用官方 `sidebar.workspaces.directoryFlow` 洞的占用者，本包接替父插槽并未清除官方那条注册
    * 洞的声明与占用者因此都还在（见 `directoryFlow.ts`）
    *
    * 与 `officialActions` 同为延迟到渲染期的解析器。解析结果为空表示本包没读到占用者（宿主没装目录选择器插件）
@@ -238,9 +238,9 @@ export function apply(ctx: Context): void {
     const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace | undefined
     return {
       createWorkspace: (path) => workspaces.create({ path }),
-      // 官方在采纳成功后立刻在新工作区开会话；uiWorkspace 缺失时退化为只添加，不替它找一个「差不多」的替代入口
+      // 官方在采纳成功后立刻在新工作区开会话，uiWorkspace 缺失时退化为只添加，不替它找一个「差不多」的替代入口
       startSession: (workspaceId) => uiWorkspace?.startSession(workspaceId as never),
-      // 传解析器而不是当次读数：占用者可能在两次渲染之间换人
+      // 传解析器而不是当次读数，占用者可能在两次渲染之间换人
       occupant: () => directoryFlowOccupant(ctx.slots),
       // 区域组件把「刚采纳了哪个工作区」接回去，据此判断要不要问一句放进父所在的分组
       onAdopted,
@@ -310,7 +310,7 @@ export function apply(ctx: Context): void {
         // 官方 WorkspaceBrowser 的「新建」也是这条路径，因此连点两次不会攒出两条空会话
         // 它内部还用 `ctx.layout` 起了导航守卫，点完立刻切走时这次新建会被取代，与官方行为一致
         //
-        // 它返回 void，会话 id 因此从 `beforeOpen` 回调里取：官方只在这轮导航仍有效时才回调
+        // 它返回 void，会话 id 因此从 `beforeOpen` 回调里取，官方只在这轮导航仍有效时才回调
         // 被取代时回调不触发，id 停在 undefined
         const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace | undefined
         if (uiWorkspace === undefined) {
@@ -344,11 +344,11 @@ export function apply(ctx: Context): void {
       forgetWorkspace: (workspaceId) => callSnapshot('forgetWorkspace', [workspaceId]),
       focusEntry: (key) => callSnapshot('focusEntry', [key]),
       togglePinned: (key) => callSnapshot('togglePinned', [key]),
-      // 工作区自身的改名与删除直接走官方工作区控制器，不另造 RPC：删除只移除注册，文件夹与会话记录都由宿主保留
+      // 工作区自身的改名与删除直接走官方工作区控制器，不另造 RPC，删除只移除注册，文件夹与会话记录都由宿主保留
       renameWorkspace: (workspaceId, title) =>
         workspaces.rename(workspaceId as never, title).then(() => undefined),
       deleteWorkspace: (workspaceId) => workspaces.delete(workspaceId as never),
-      // 结果条数上限直接读官方控制器上的那一格，不自己定一个数：它就是线上响应契约里的上限，官方改它时本包自动跟随
+      // 结果条数上限直接读官方控制器上的那一格，不自己定一个数，它就是线上响应契约里的上限，官方改它时本包自动跟随
       searchResultLimit: sessions.searchResultLimit,
       tWorkspace,
       tSidebar,
@@ -360,7 +360,7 @@ export function apply(ctx: Context): void {
     }
   }
 
-  // 样式随插件挂载注入；卸载由模块系统的样式记账处理，无需显式移除
+  // 样式随插件挂载注入，卸载由模块系统的样式记账处理，无需显式移除
   insertStyles()
 
   // 对照模式：把左侧 `sidebar.workspaces` 交还官方 ui-workspace

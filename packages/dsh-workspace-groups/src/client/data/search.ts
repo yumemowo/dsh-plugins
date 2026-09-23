@@ -20,7 +20,7 @@ export const SEARCH_QUERY_MAX_CODE_UNITS = 500
 /**
  * 把一个输入值收进线上的查询契约
  *
- * 去掉 NUL 并按码元数截断；截断点上若正落在一个代理对中间就少取一个码元，否则半个字符会让后端拿到一个孤立代理
+ * 去掉 NUL 并按码元数截断，截断点上若正落在一个代理对中间就少取一个码元，否则半个字符会让后端拿到一个孤立代理
  */
 export function sanitizeSearchQuery(value: string): string {
   const withoutNul = value.replaceAll('\0', '')
@@ -40,9 +40,9 @@ export function sanitizeSearchQuery(value: string): string {
  */
 export interface SearchMatch {
   row: SessionRow
-  /** 会话所属工作区；无所属工作区时缺省 */
+  /** 会话所属工作区，无所属工作区时缺省 */
   workspace?: { id: string; title: string }
-  /** 会话所属分组；未归组时缺省 */
+  /** 会话所属分组，未归组时缺省 */
   group?: { id: string; name: string }
 }
 
@@ -62,7 +62,7 @@ function byRecency(a: SearchMatch, b: SearchMatch): number {
 
 /**
  * 会话标题或所属工作区标题包含查询词即命中
- * @param workspaceTitle - 该会话所属工作区的显示名；无所属工作区时缺省
+ * @param workspaceTitle - 该会话所属工作区的显示名，无所属工作区时缺省
  * @param query - 已转小写的查询词
  */
 function matchesQuery(
@@ -95,9 +95,9 @@ function groupsOf(groups: readonly Group[]): Map<string, { id: string; name: str
  *
  * 候选与渲染列表同源：归档、子代理来源与空闲的空白会话都不进结果，可见性规则因此只有一处（`data/sessions.ts`）
  * 无所属工作区的会话按官方的回退名渲染，但它本身没有工作区标题可匹配
- * @param query - 调用方输入；首尾空白忽略
+ * @param query - 调用方输入，首尾空白忽略
  * @param limit - 结果条数上限
- * @returns 命中的结果页；查询为空时没有结果
+ * @returns 命中的结果页，查询为空时没有结果
  */
 export function searchSessions(
   sessions: SessionListState,
