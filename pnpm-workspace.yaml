@@ -9,30 +9,33 @@ catalog:
   # Cordis 是插件运行时。务必使用带 scope 的 @deepseek-ai/cordis：
   # 不带 scope 的 `cordis` 是另一份模块身份，会破坏 Context 类型增强
   #（ctx.tools 等类型会消失）。
-  '@deepseek-ai/cordis': ^4.0.2
-  '@deepseek-ai/dsh-llm': ^0.1.5-rc.2
-  '@deepseek-ai/dsh-system-prompt': ^0.1.5-rc.2
-  '@deepseek-ai/dsh-tools': ^0.1.5-rc.2
-  '@deepseek-ai/schemastery': ^3.18.2
+  '@deepseek-ai/cordis': ~4.0.4
+  '@deepseek-ai/dsh-llm': ^0.1.7-rc.1
+  '@deepseek-ai/dsh-system-prompt': ^0.1.7-rc.1
+  '@deepseek-ai/dsh-tools': ^0.1.7-rc.1
+  '@deepseek-ai/schemastery': ^3.18.4
   '@types/node': ^26.5.1
   typescript: ^5.9.3
   vitest: ^5.0.0
 
   # 浏览器半边：客户端包与 Web shell 共享同一份运行时实例，
   # 因此 React 必须与 shell 基线一致（18.x），否则会出现两个 React 实例。
-  '@deepseek-ai/dsh-api-workspace-controller': ^0.1.5-rc.2
-  '@deepseek-ai/dsh-api-session-controller': ^0.1.5-rc.2
-  '@deepseek-ai/dsh-client-locale': ^0.1.5-rc.2
-  '@deepseek-ai/dsh-client-store': ^0.1.5-rc.2
-  '@deepseek-ai/dsh-client-ui-renderer': ^0.1.5-rc.2
-  '@deepseek-ai/dsh-client-ui-session': ^0.1.5-rc.2
-  '@deepseek-ai/dsh-client-ui-sidebar': ^0.1.5-rc.2
-  '@deepseek-ai/dsh-client-ui-slots': ^0.1.5-rc.2
+  '@deepseek-ai/dsh-api-workspace-controller': ^0.1.7-rc.1
+  '@deepseek-ai/dsh-api-session-controller': ^0.1.7-rc.1
+  '@deepseek-ai/dsh-client-locale': ^0.1.7-rc.1
+  '@deepseek-ai/dsh-client-store': ^0.1.7-rc.1
+  '@deepseek-ai/dsh-client-ui-renderer': ^0.1.7-rc.1
+  '@deepseek-ai/dsh-client-ui-session': ^0.1.7-rc.1
+  '@deepseek-ai/dsh-client-ui-sidebar': ^0.1.7-rc.1
+  '@deepseek-ai/dsh-client-ui-slots': ^0.1.7-rc.1
   # 只取类型：本包复用官方 workspace 语言包与 ctx.uiWorkspace 服务，
   # 需要官方的命名空间声明与动作契约，运行期由宿主解析、不打进产物。
-  '@deepseek-ai/dsh-client-ui-workspace': ^0.1.5-rc.2
-  '@deepseek-ai/dsh-session': ^0.1.5-rc.2
-  '@deepseek-ai/dsh-storage-domain': ^0.1.5-rc.2
+  '@deepseek-ai/dsh-client-ui-workspace': ^0.1.7-rc.1
+  # 只取类型：对照模式注册进官方原生右侧栏，需要 tab 类型契约与
+  # `sidebar.right.pane.tab` 的插槽声明，运行期同样由宿主解析。
+  '@deepseek-ai/dsh-client-ui-sidebar-right': ^0.1.7-rc.1
+  '@deepseek-ai/dsh-session': ^0.1.7-rc.1
+  '@deepseek-ai/dsh-storage-domain': ^0.1.7-rc.1
   '@types/react': ~18.3.1
   esbuild: ^0.28.2
   react: ^18.2.0

@@ -905,7 +905,7 @@ describe('client stylesheet', () => {
     }))
     const body = rules.find((rule) => rule.selectors.includes('.wg-picker-menu'))?.body ?? ''
 
-    // 面板是不透明的浮层，底下就是会话列表：底色必须真的解析出来
+    // 面板是浮层，底下就是会话列表：底色必须真的解析出来
     // 这里只认官方菜单面板那两个 token——
     // 写一个不存在的名字（如 --dsw-alias-bg-elevated）时 background 整条失效
     // 面板变透明、后面的会话穿过来，而界面上不会有任何报错
@@ -915,7 +915,11 @@ describe('client stylesheet', () => {
     // 不写会让整条 background 失效的回退值：面板必须有底色
     expect(body).not.toMatch(/background:\s*var\([^)]*,[^)]*\)/)
 
-    // 圆角与内边距取官方 .list / .submenu 面板的同一组值
+    // 底色带 alpha，背面模糊因此不可省
+    // 少了它后面的会话会清晰地穿过来，面板读起来像没上底色
+    expect(body).toMatch(/backdrop-filter:\s*var\(--dsw-menu-backdrop-filter\)/)
+
+    // 圆角与最小宽度取官方 .list / .submenu 面板的同一组值
     expect(body).toMatch(/border-radius:\s*20px/)
     expect(body).toMatch(/min-width:\s*218px/)
   })
@@ -929,10 +933,12 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    // 与工作区选择器面板同一条理由，面板是不透明浮层，底下就是会话列表
+    // 与工作区选择器面板同一条理由，面板是浮层，底下就是会话列表
     // token 名写错时 background 整条失效、面板变透明，而界面上不会有任何报错
     const panel = bodyOf('.wg-view-menu')
     expect(panel).toMatch(/background:\s*var\(--dsw-specific-menu/)
+    // 底色带 alpha，背面模糊必须跟着给
+    expect(panel).toMatch(/backdrop-filter:\s*var\(--dsw-menu-backdrop-filter\)/)
     expect(panel).toMatch(/box-shadow:\s*var\(--dsw-elevation-prominent\)/)
     expect(panel).toMatch(/--dsw-elevation-stroke-color:\s*var\(--dsw-alias-border-l1\)/)
     // 落点由组件量出来写成内联的 left/top，层级与官方菜单面板同档
@@ -946,6 +952,31 @@ describe('client stylesheet', () => {
     // 开关排在行尾，不被设置名挤动
     expect(bodyOf('.wg-view-option-switch')).toMatch(/flex:\s*none/)
     expect(bodyOf('.wg-view-option-label')).toMatch(/flex:\s*1/)
+  })
+
+  it('paints the submenu card opaque so it does not show the list through', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const body = rules.find((rule) => rule.selectors.includes(".wg-menu-list [role='menu']"))?.body ?? ''
+
+    // 二级面板是官方 .list 的后代，而 .list 自带 backdrop-filter，会形成 backdrop root
+    // 二级面板落在父层盒子之外，模糊采样不到内容，只剩半透明底色 → 后面的会话透出来
+    // 因此这里必须给不透明底色，并显式撤掉那条失效的模糊
+    expect(body).toMatch(/background:\s*var\(--dsw-alias-bg-layer-3\)/)
+    expect(body).toMatch(/backdrop-filter:\s*none/)
+    // 取带 alpha 的菜单底色等于没换
+    expect(body).not.toMatch(/background:\s*var\(--dsw-specific-menu\)/)
+
+    // 作用域必须挂在本包自己的类上：面板 portal 到 body，用官方 hash 类名会波及官方与其他插件的菜单
+    const unscoped = rules.filter(
+      (rule) =>
+        rule.body.includes('--dsw-alias-bg-layer-3') &&
+        rule.selectors.some((sel) => sel.includes("[role='menu']") && !sel.includes('.wg-')),
+    )
+    expect(unscoped).toEqual([])
   })
 
   it('pushes the submenu arrow to the right edge of the item', () => {

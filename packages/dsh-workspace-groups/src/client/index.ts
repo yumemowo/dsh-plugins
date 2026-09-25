@@ -56,7 +56,7 @@ const EMPTY_SNAPSHOT: WorkspaceGroupsSnapshot = {
  * 对照模式开关
  *
  * `true` 时左侧 `sidebar.workspaces` 交还官方 ui-workspace
- * 本区域改挂进 `dsh-better-sidebar` 的右侧栏 tab，便于和官方渲染同屏比对
+ * 本区域改挂进 DSH 原生右侧栏的一个 tab（`dsh-client-ui-sidebar-right`），便于和官方渲染同屏比对
  * `false` 时维持 `priority: -1` 接替左侧区域
  *
  * 之所以是编译期常量而不是配置项：这是开发期的对照开关，不是要交付给用户的能力，配置化反而要多一套 schema 与文档
@@ -80,22 +80,37 @@ export function apply(ctx: Context): void {
   )
 
   /**
-   * 远程命名空间就绪信号
+   * 数据面可重拉的时刻
    *
-   * 区域组件的首次拉取可能早于 `$mount` 完成，就绪时这里发布一次，订阅者借此重试此前被就绪性拒绝的加载
+   * 两个来源合成一条信号，两者都会让此前的拉取以失败告终，而失败之后没有别的东西会重试
+   * - 本包 remote 命名空间挂载完成，首次拉取常常早于它
+   * - 官方 `connection/reset`，连接建立（含服务重启后的重连）才允许发起调用
+   *
+   * 只挂「挂载完成」不够，连接未就绪时那次重拉同样失败，界面因此会停在空快照上
    */
   const readyListeners = new Set<() => void>()
+  /** 广播一次可重拉信号，订阅者各自重新拉取 */
+  const announceReady = (): void => {
+    for (const listener of [...readyListeners]) listener()
+  }
   const onReady = (listener: () => void): (() => void) => {
-    // 先挂订阅再看状态，避免「检查时未就绪、发布前刚就绪」的窗口漏报
-    if (groupsApi !== undefined) {
-      listener()
-      return () => {}
-    }
     readyListeners.add(listener)
+    // 挂订阅之后再补发一次：订阅者可能错过此前的连接建立，而 remote 已经可用
+    if (groupsApi !== undefined) listener()
     return () => {
       readyListeners.delete(listener)
     }
   }
+
+  // 连接建立（含重连）时必须重拉：此前失败的拉取没有别的重试机会
+  // 订阅在组件的 effect 之前注册，因此首帧那次失败必定能等到这里的补发
+  ctx.effect(
+    () =>
+      ctx.on('connection/reset', () => {
+        announceReady()
+      }),
+    'workspace-groups: connection reset',
+  )
 
   /** 挂载本包自己的 remote 命名空间，成功后取回可调用的方法表 */
   let groupsApi: Record<string, (...args: never[]) => Promise<never>> | undefined
@@ -118,8 +133,8 @@ export function apply(ctx: Context): void {
           // 服务键按 descriptor 的 namespace 注册（remote.<namespace>），不是包名
           // typert 网关以 namespace 归组安装方法表
           groupsApi = ctx.get(`remote.${SERVICE}`) as typeof groupsApi
-          for (const listener of [...readyListeners]) listener()
-          readyListeners.clear()
+          // 订阅者保持在册：连接重置时还要再通知一次，清掉就等于丢掉了重试入口
+          announceReady()
         })
         .catch((reason: unknown) => {
           // 挂载失败必须留下可查的痕迹：它让分组整体不可用，不接住这次 rejection 的话日志里什么都没有
@@ -303,7 +318,10 @@ export function apply(ctx: Context): void {
     }
     return {
       openSession: (sessionId: string) => {
-        sessions.open(sessionId as never)
+        // 选中会话是导航事实，归官方 `uiWorkspace` 独占，本包不自行改选中态
+        // 直接转调它，官方改导航行为时本包自动跟随
+        const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace | undefined
+        uiWorkspace?.openSession(sessionId as never)
       },
       startSession: async (workspaceId: string) => {
         // 新建会话整段走官方导航服务：`openWorkspace` 复用该工作区已有的空白会话，没有才新建
@@ -364,7 +382,7 @@ export function apply(ctx: Context): void {
   insertStyles()
 
   // 对照模式：把左侧 `sidebar.workspaces` 交还官方 ui-workspace
-  // 本区域改挂进 dsh-better-sidebar 的右侧栏 tab，好和官方渲染同屏比对
+  // 本区域改挂进 DSH 原生右侧栏的一个 tab，好和官方渲染同屏比对
   if (COMPARE_MODE) {
     ctx.effect(
       () => registerCompareTab(ctx, injected(), locale),

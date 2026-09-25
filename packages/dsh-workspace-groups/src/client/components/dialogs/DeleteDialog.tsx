@@ -7,14 +7,14 @@
  *
  * 「取消」与「关闭」是通用词，取插槽注入的 `t` 座位回退到官方 `common` 命名空间
  */
-import type { ReactElement, ReactNode } from 'react'
+import type { ReactElement } from 'react'
 import { Button, Modal } from '../../runtime.ts'
 import type { RegionTranslate } from '../../locales.ts'
 
 export interface DeleteDialogProps {
   title: string
-  /** 说明这次删除到底影响什么 */
-  description?: ReactNode
+  /** 说明这次删除到底影响什么，原语只接受纯文本 */
+  description?: string
   confirmLabel: string
   /** 本包命名空间的翻译座位（解析通用词） */
   t: RegionTranslate

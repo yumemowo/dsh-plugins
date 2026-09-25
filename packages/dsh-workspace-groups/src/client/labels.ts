@@ -134,7 +134,7 @@ export interface RegionLabels {
   add: OfficialAddLabels
   /** 搜索入口、输入框与结果列表的文案 */
   search: OfficialSearchLabels
-  /** 对照 tab 在 better-sidebar 里的一行说明 */
+  /** 对照 tab 在原生右侧栏引导页里的一行说明 */
   compareTabDescription: string
   /** 工作区内没有任何会话时的占位文案 */
   empty: string

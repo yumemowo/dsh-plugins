@@ -47,7 +47,7 @@
 
 ## 样式对齐
 
-样式取值取自官方侧边栏组件（`dsh-client-ui-sidebar` 与 `dsh-client-ui-workspace` 0.1.5-rc.2）的实际规则，而不是自定数值：
+样式取值取自官方侧边栏组件（`dsh-client-ui-sidebar` 与 `dsh-client-ui-workspace` 0.1.7-rc.1）的实际规则，而不是自定数值：
 
 | 项 | 取值 |
 | --- | --- |
@@ -56,7 +56,8 @@
 | 两行标题（上行「工作区」+ 下行聚焦对象） | 上行 `14px` / `20px` + `label-tertiary`，下行 `12px` / `17px` + `label-secondary`（两个层级的信息）；宽度上限 `45%` 挂在整个标题块上 |
 | 标题块（一个按钮） | 命中余量 `padding: 2px 4px`、圆角 `8px`、悬停 `--dsw-alias-interactive-bg-hover` |
 | 标题旁的菜单箭头 | `16px`，`--dsw-alias-label-tertiary`；开合时旋转 `180°` |
-| 工作区选择器面板 | 底色 `--dsw-specific-menu`、投影 `--dsw-elevation-prominent`、圆角 `20px`、内边距 `4px`、`min-width: 218px` / `max-width: 360px`、高度上限 `calc(100vh - 24px)`、边距 `12px`、缝隙 `4px`、`z-index: 1100`（全部同官方 `.list` / `.submenu` / `.portal` 面板） |
+| 工作区选择器面板 | 底色 `--dsw-specific-menu` + 背面模糊 `--dsw-menu-backdrop-filter`、投影 `--dsw-elevation-prominent`、圆角 `20px`、内边距 `4px`、`min-width: 218px` / `max-width: 360px`、高度上限 `calc(100vh - 24px)`、边距 `12px`、缝隙 `4px`、`z-index: 1100` |
+| 官方 `Menu` 的二级面板 | 底色换成**不透明**的 `--dsw-alias-bg-layer-3` 并撤掉 `backdrop-filter`：它嵌在带模糊的一级面板里、又落在父层盒子之外，模糊采不到内容（见 [与官方实现的复用关系](official-reuse.md)） |
 | 选择器条目行 / 分区头 | 条目 `min-height: 34px`、`5px 10px`、圆角 `10px`、14px/22px；分区头 `32px`、`8px 10px`、12px/16px（同官方 `.item` / `.label`） |
 | 条目行尾的置顶按钮 | `20px` 方块、`--dsw-alias-label-tertiary`；未置顶时 `opacity: 0` 且关掉指针事件，已置顶常驻可见 |
 | header 图标按钮 | `28px` 正圆、`--dsw-alias-label-secondary`、悬停 `-hover`（同官方 `.iconButton`） |

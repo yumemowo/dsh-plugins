@@ -6,72 +6,50 @@ import { snapshotSchema } from './spec.ts'
  *
  * typert-loader 按 package.json 的 `exports["./typert"]` 自动发现并注册本对象
  * 客户端据此通过 `remote.workspaceGroups.*` 调用宿主方法
- * 所有 codec 必须是 zod v4 实例，且为 strict 形态
+ * 每个 codec 都包一个 zod v4 schema，且必须是 strict 形态
+ * 造 schema 的活交给 `create()` 惰性工厂：注册表按需物化，且同一个 codec 只构造一次
  */
 
-const snapshotCodec = {
-  mode: 'strict',
-  typeSymbol: '@your-scope/dsh-workspace-groups#WorkspaceGroupsSnapshot',
-  schema: snapshotSchema,
+/**
+ * 造一个惰性 codec
+ *
+ * `create` 必须每次返回同一个实例——注册表会缓存首次结果，重复构造不报错但白费一遍
+ * @param typeSymbol - 该 codec 的 wire 类型名
+ * @param build - 造 schema 的工厂，首次调用时执行
+ * @returns 注册表要求的 strict codec
+ */
+function codec(typeSymbol: string, build: () => z.ZodType) {
+  let value: z.ZodType | undefined
+  return {
+    mode: 'strict' as const,
+    typeSymbol: `@your-scope/dsh-workspace-groups#${typeSymbol}`,
+    create: () => (value ??= build()),
+  }
 }
 
-const workspaceIdCodec = {
-  mode: 'strict',
-  typeSymbol: '@your-scope/dsh-workspace-groups#WorkspaceId',
-  schema: z.string(),
-}
+const snapshotCodec = codec('WorkspaceGroupsSnapshot', () => snapshotSchema)
 
-const groupIdCodec = {
-  mode: 'strict',
-  typeSymbol: '@your-scope/dsh-workspace-groups#GroupId',
-  schema: z.string(),
-}
+const workspaceIdCodec = codec('WorkspaceId', () => z.string())
 
-const virtualWorkspaceIdCodec = {
-  mode: 'strict',
-  typeSymbol: '@your-scope/dsh-workspace-groups#VirtualWorkspaceId',
-  schema: z.string(),
-}
+const groupIdCodec = codec('GroupId', () => z.string())
 
-const sessionIdCodec = {
-  mode: 'strict',
-  typeSymbol: '@your-scope/dsh-workspace-groups#SessionId',
-  schema: z.string(),
-}
+const virtualWorkspaceIdCodec = codec('VirtualWorkspaceId', () => z.string())
 
-const nameCodec = {
-  mode: 'strict',
-  typeSymbol: '@your-scope/dsh-workspace-groups#GroupName',
-  schema: z.string(),
-}
+const sessionIdCodec = codec('SessionId', () => z.string())
+
+const nameCodec = codec('GroupName', () => z.string())
 
 /** 一批工作区 id，一次把整棵子树写进同一个分组 */
-const workspaceIdsCodec = {
-  mode: 'strict',
-  typeSymbol: '@your-scope/dsh-workspace-groups#WorkspaceIds',
-  schema: z.array(z.string()),
-}
+const workspaceIdsCodec = codec('WorkspaceIds', () => z.array(z.string()))
 
 /** 嵌套渲染开关 */
-const nestedEnabledCodec = {
-  mode: 'strict',
-  typeSymbol: '@your-scope/dsh-workspace-groups#NestedEnabled',
-  schema: z.boolean(),
-}
+const nestedEnabledCodec = codec('NestedEnabled', () => z.boolean())
 
 /** 可空分组 id，null 表示「移出到未分组」 */
-const nullableGroupIdCodec = {
-  mode: 'strict',
-  typeSymbol: '@your-scope/dsh-workspace-groups#NullableGroupId',
-  schema: z.string().nullable(),
-}
+const nullableGroupIdCodec = codec('NullableGroupId', () => z.string().nullable())
 
 /** 菜单条目键：工作区与工作区分组共用一套带前缀的键（见 `rootEntry.ts`） */
-const entryKeyCodec = {
-  mode: 'strict',
-  typeSymbol: '@your-scope/dsh-workspace-groups#RootEntryKey',
-  schema: z.string(),
-}
+const entryKeyCodec = codec('RootEntryKey', () => z.string())
 
 const PACKAGE = '@your-scope/dsh-workspace-groups'
 const SERVICE = 'workspaceGroups'

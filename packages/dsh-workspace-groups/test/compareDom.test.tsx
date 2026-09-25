@@ -13,14 +13,14 @@ import type { Context } from '@deepseek-ai/cordis'
 /**
  * 对照 tab 的服务读取边界
  *
- * better-sidebar 交给 tab 的 context 不是本包的 fiber
- * 没有 inject 本包声明的服务
+ * 原生右侧栏把 tab 体当普通插槽渲染：标准 hook 与 `t` 座位由渲染器在渲染期注入
+ * 此时 `ctx` 不是本包的 fiber
  * cordis 的服务代理对未 inject 的属性直接抛错（`cannot get property "remote" without inject`）
- * 因此凡是 `ctx.xxx` 形态的读取都必须在本包自己的 context 上先解析好
+ * 因此凡是 `ctx.xxx` 形态的读取都必须在本包自己的 context 上先解析好，随 inject 面传进 tab 体
  *
  * 这类问题在只调 `registerCompareTab` 的测试里看不出来——注册本身不渲染组件
  * 异常要等 tab 真的挂上才发生
- * 这里按 cordis 的代理语义造出那个会抛错的 tab context，把组件渲染一遍
+ * 这里按 cordis 的代理语义造出那个会抛错的 tab 体上下文，把组件渲染一遍
  */
 
 /** 最小可用的注入动作 */
@@ -52,45 +52,7 @@ function actions(): RegionActions {
   }
 }
 
-/**
- * 按 cordis 的代理语义造一个 context
- *
- * `get` 照常返回服务（或 undefined），但属性读取对未 inject 的名字抛错——
- * 这正是 `ctx.remote` 在 tab context 上炸掉的原因
- * @param services - 可被 `get` 到、也可被属性访问到（若声明为 injected）的服务
- * @param injected - 这个 context 的 inject 列表
- */
-function fakeContext(
-  services: Record<string, unknown>,
-  injected: readonly string[] = [],
-): Context {
-  return new Proxy(
-    {},
-    {
-      get: (_target, prop: string) => {
-        if (prop === 'get') return (name: string) => services[name]
-        // 依赖已就绪时 cordis 当场跑回调（与 registerCompareTab 的用法一致）
-        if (prop === 'inject') {
-          return (deps: string[], callback: (ctx: Context) => unknown) => {
-            callback(fakeContext(services, [...injected, ...deps]))
-            return { dispose: async () => {} }
-          }
-        }
-        // 连接事件：本包的 hostInfoSource 会 ctx.on('connection/reset')
-        if (prop === 'on') return () => () => {}
-        if (injected.includes(prop)) return services[prop]
-        throw new Error(`cannot get property "${prop}" without inject`)
-      },
-    },
-  ) as unknown as Context
-}
-
-/**
- * 语言服务替身：bind 按命名空间给翻译函数，subscribe 记订阅者
- *
- * 快照必须是稳定引用，`useSyncExternalStore` 按 `Object.is` 比较
- * 每次新建对象会被判定为「一直在变」而把组件转进无限重渲染
- */
+/** 语言服务替身 */
 function fakeLocale(): LocaleRuntime {
   const bound = new Map<string, unknown>()
   const snapshot = { active: 'zh', locales: [], revision: 1 }
@@ -108,65 +70,96 @@ function fakeLocale(): LocaleRuntime {
   } as unknown as LocaleRuntime
 }
 
+/** 各标准源的空快照，组件挂得上即可 */
+const EMPTY_WORKSPACES = { items: [], archivedSessionIds: [] }
+const EMPTY_SESSIONS = { ids: [], byId: {}, phase: 'ready' }
+
+const workspacesSelector = (select: (state: never) => unknown): unknown =>
+  select(EMPTY_WORKSPACES as never)
+const sessionsSelector = (select: (state: never) => unknown): unknown =>
+  select(EMPTY_SESSIONS as never)
+const emptySelector = (select: (state: never) => unknown): unknown => select({} as never)
+const falseSelector = (select: (occupied: boolean) => unknown): unknown => select(false)
+
 /**
- * 注册一次对照 tab，返回描述符与那个会抛错的 tab context
+ * 注册一次对照 tab，取回那个 tab 体组件与它收到的 inject 面
  *
- * 注册 context 声明了 `remote`（本包 `inject` 列表里本来就有）
- * 因此它读得到宿主固定事实，tab context 什么都不声明
+ * 本包自己的 context 声明了 `remote`，因此注册期读得到宿主固定事实
+ * tab 体拿到的只是一个普通函数参数，任何 `ctx.xxx` 属性读取都会炸
  */
 function register() {
-  const registered: {
-    component: (props: { ctx: Context }) => unknown
+  const bodies: {
+    key: string
+    inject?: () => Record<string, unknown>
+    component: unknown
   }[] = []
-  const locale = fakeLocale()
   const services: Record<string, unknown> = {
-    betterSidebar: {
-      registerTab: (descriptor: (typeof registered)[number]) => {
-        registered.push(descriptor)
+    sidebarRightTabs: { register: () => () => {} },
+    sidebarRight: { openTab: () => {} },
+    remote: { $host: { home: '/home/user' } },
+    slots: {
+      inject: (_key: string, callback: () => unknown) => callback(),
+      // 登记项与它的组件是两个参数：座位按键控找体，体就是第二个参数
+      register: (entry: (typeof bodies)[number], component: unknown) => {
+        bodies.push({ ...entry, component })
         return () => {}
       },
-      openTab: () => {},
+      entriesOfSlot: () => [],
+      subscribe: () => () => {},
     },
-    // 本包的 `inject` 里有 remote，因此注册 context 读得到，tab context 读不到
-    remote: { $host: { home: '/home/user', isLoopback: true } },
   }
 
-  const owner = fakeContext(services, ['slots', 'sessions', 'workspaces', 'locale', 'remote'])
-  registerCompareTab(owner, actions(), locale)
-  return { registered, services }
+  const owner = {
+    get: (name: string) => services[name],
+    inject: (_deps: string[], callback: (ctx: { get: (name: string) => unknown }) => unknown) => {
+      const dispose = callback({ get: (name: string) => services[name] })
+      return { dispose: async () => void dispose }
+    },
+    slots: services['slots'],
+  } as unknown as Context
+
+  registerCompareTab(owner, actions(), fakeLocale())
+  return { bodies }
 }
 
 describe('compare tab service reads', () => {
-  it('renders the tab body without reading remote off the tab context', async () => {
-    const { registered, services } = register()
-    const tab = registered[0]
-    // 显式收窄而不是 toBeDefined()：下面的渲染要用它
-    if (tab === undefined) throw new Error('compare tab was not registered')
+  it('renders the tab body without reading services off a context', async () => {
+    const { bodies } = register()
+    const body = bodies[0]
+    if (body === undefined) throw new Error('compare tab body was not registered')
 
-    // tab context 只有 get（服务可缺）——属性访问一律抛错，与 cordis 一致
-    const tabCtx = fakeContext(services)
-
+    // tab 体拿到的 props 就是 inject 面的产物 + 渲染器补的标准座位
+    const injected = body.inject?.() ?? {}
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
 
-    // 修复前这里会抛 `cannot get property "remote" without inject`
     await act(async () => {
-      root.render(React.createElement(tab.component as never, { ctx: tabCtx }))
+      root.render(
+        React.createElement(body.component as never, {
+          ...injected,
+          // 渲染器会把 inject 面的 hooks 隔间绑成 use<Name> 选择器，这里照同一形状补上
+          t: translateFor('workspaceGroups'),
+          useWorkspaces: workspacesSelector,
+          useSessions: sessionsSelector,
+          useSessionStatus: emptySelector,
+          useDirectoryFlow: falseSelector,
+          useHostInfo: emptySelector,
+        }),
+      )
     })
 
     // 区域确实渲染出来了，而不是被异常吞成空树
     expect(container.querySelector('.wg-root')).not.toBeNull()
   })
 
-  it('keeps the tab context free of every property read the package needs', () => {
-    // 这条断言把边界写成契约：tab context 上任何属性读取都会抛错
-    // 因此组件只能用它的 `get`。若以后又有人从 tabProps.ctx 上直接读服务，这里会先炸
-    const tabCtx = fakeContext({})
+  it('passes the injected face through unchanged for the region to consume', () => {
+    const { bodies } = register()
+    const injected = bodies[0]?.inject?.() ?? {}
 
-    expect(() => (tabCtx as unknown as { remote: unknown }).remote).toThrow(
-      'cannot get property "remote" without inject',
-    )
-    expect((tabCtx as unknown as { get: (name: string) => unknown }).get('anything')).toBeUndefined()
+    // 动作面与展开请求都在 inject 结果里，组件不需要从 ctx 现取
+    expect(injected).toMatchObject({ wide: true })
+    expect(typeof injected['expandSidebar']).toBe('function')
+    expect(typeof injected['openSession']).toBe('function')
   })
 })

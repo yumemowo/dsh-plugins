@@ -10,8 +10,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ReactElement, RefObject } from 'react'
-import { Switch } from '../runtime.ts'
-import { IconVirtualFolder16 } from '../icons.tsx'
+import { IconWorkspaceTreeOutlineRegular, Switch } from '../runtime.ts'
 
 /** 面板与窗口边缘的最小距离，取官方 `Menu` 原语的同一个值 */
 const VIEWPORT_MARGIN = 12
@@ -179,7 +178,8 @@ export function ViewOptionsMenu({
           按下即生效、面板不关，用户多半要看着列表确认结果 */}
       <div className="wg-view-option">
         <span className="wg-view-option-icon">
-          <IconVirtualFolder16 />
+          {/* 官方在视图选项里就是用这个字形标「按工作区树分组」，而本条开关控制的正是子工作区的树形渲染 */}
+          <IconWorkspaceTreeOutlineRegular />
         </span>
         <span className="wg-view-option-label">{nesting.label}</span>
         <Switch

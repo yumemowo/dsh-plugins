@@ -7,7 +7,7 @@
 import type { ComponentType } from 'react'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { WorkspaceGroupsSnapshot } from './remote.ts'
 import type { HostInfo } from './hostInfo.ts'
 import type { GroupChoice } from './data/types.ts'
@@ -73,10 +73,12 @@ export interface RegionDataHooks {
   useWorkspaces: (selector: (state: WorkspaceState) => unknown) => unknown
   /** 全局会话列表选择器 */
   useSessions: (selector: (state: SessionListState) => unknown) => unknown
-  /** 会话级待交互快照选择器：等待审批 / 计划审阅 / 等待回答 */
-  useSessionPendingInteraction: (
-    selector: (state: SessionPendingInteractionSnapshot) => unknown,
-  ) => unknown
+  /**
+   * 会话级统一状态快照选择器
+   *
+   * 待交互、运行与完成提醒都在这一份快照里，不能从会话摘要里推
+   */
+  useSessionStatus: (selector: (state: SessionStatusSnapshot) => unknown) => unknown
   /**
    * directoryFlow 洞是否被占用
    *
@@ -115,7 +117,13 @@ export interface RegionActions {
   startSession: (workspaceId: string) => Promise<string | undefined>
   /** 读取分组快照 */
   loadGroups: () => Promise<WorkspaceGroupsSnapshot>
-  /** 远程数据面就绪后回调一次，返回反注册函数 */
+  /**
+   * 订阅数据面可重拉的时刻，返回反注册函数
+   *
+   * 本包 remote 命名空间挂载完成与官方 `connection/reset` 都会触发，可能触发多次
+   * @param listener - 可重拉时调用
+   * @returns 反注册函数
+   */
   onReady: (listener: () => void) => () => void
   /** 在工作区下新建会话分组，返回替换用的完整快照 */
   createGroup: (workspaceId: string, name: string) => Promise<WorkspaceGroupsSnapshot>

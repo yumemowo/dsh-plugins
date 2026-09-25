@@ -25,11 +25,11 @@ import { snapshot } from './snapshot-stub.ts'
 function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsProps {
   const created = new Date(2026, 0, 1, 0, 0).getTime()
   const byId: Record<string, unknown> = {
-    a: { id: 'a', displayTitle: '修复登录超时', running: false, blank: false, updatedAt: 1_000 },
+    a: { id: 'a', displayTitle: '修复登录超时', running: false, blank: false, retainedBy: {}, updatedAt: 1_000 },
     // 未归组的会话：它的缩进走 `.wg-sessions > .wg-row` 那一档，与组内会话不同
     // 缺了它那条规则就无从验证
-    b: { id: 'b', displayTitle: '散落会话', running: false, blank: false, updatedAt: 1_000 },
-    orphan: { id: 'orphan', displayTitle: 'Orphan', running: false, blank: false, updatedAt: 1_000 },
+    b: { id: 'b', displayTitle: '散落会话', running: false, blank: false, retainedBy: {}, updatedAt: 1_000 },
+    orphan: { id: 'orphan', displayTitle: 'Orphan', running: false, blank: false, retainedBy: {}, updatedAt: 1_000 },
   }
   const workspaces = [
     {
@@ -55,8 +55,8 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     useWorkspaces: ((select: (s: unknown) => unknown) =>
       select({ items: workspaces, archivedSessionIds: [] })) as never,
     useSessions: ((select: (s: unknown) => unknown) =>
-      select({ ids: ['a', 'b', 'orphan'], byId, current: undefined, phase: 'ready' })) as never,
-    useSessionPendingInteraction: ((select: (s: unknown) => unknown) =>
+      select({ ids: ['a', 'b', 'orphan'], byId, phase: 'ready' })) as never,
+    useSessionStatus: ((select: (s: unknown) => unknown) =>
       select(new Map())) as never,
     useDirectoryFlow: ((select: (occupied: boolean) => unknown) => select(true)) as never,
     useHostInfo: ((select: (info: { home: string | undefined }) => unknown) =>

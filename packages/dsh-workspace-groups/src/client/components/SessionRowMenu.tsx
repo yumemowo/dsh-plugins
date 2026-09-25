@@ -12,7 +12,7 @@
  */
 import { memo, useState } from 'react'
 import type { ReactElement } from 'react'
-import { IconEllipsisOutline16, Menu } from '../runtime.ts'
+import { IconEllipsisOutlineRegular, Menu } from '../runtime.ts'
 import { buildSessionMenuItems } from '../menus.tsx'
 import { sameGroupSections } from '../data/layout.ts'
 import { sameSessionStatuses } from '../data/status.ts'
@@ -205,6 +205,9 @@ function SessionRowMenuView({
             // 二级面板的方向由区域挂在 body 上的翻转标记控制（见 useFlipMarker），这里不感知宿主差异
             portal
             closeOnPointerLeave
+            // 面板被 portal 出去后不在本包的 DOM 子树里，官方为此留了这一个样式钩子
+            // 本包借它修二级面板的底色（见 styles.ts 的 .wg-menu-list）
+            listClassName="wg-menu-list"
             anchor={
               <button
                 type="button"
@@ -215,7 +218,7 @@ function SessionRowMenuView({
                   setMenuOpen((open) => !open)
                 }}
               >
-                <IconEllipsisOutline16 />
+                <IconEllipsisOutlineRegular />
               </button>
             }
             items={items}

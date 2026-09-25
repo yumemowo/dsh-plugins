@@ -10,6 +10,7 @@
  */
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { Group } from '../remote.ts'
 import { groupSessionsByWorkspace, straySessions } from './sessions.ts'
 import type { SessionRow } from './types.ts'
@@ -97,6 +98,7 @@ function groupsOf(groups: readonly Group[]): Map<string, { id: string; name: str
  * 无所属工作区的会话按官方的回退名渲染，但它本身没有工作区标题可匹配
  * @param query - 调用方输入，首尾空白忽略
  * @param limit - 结果条数上限
+ * @param statuses - 统一状态快照，透传给行的投影
  * @returns 命中的结果页，查询为空时没有结果
  */
 export function searchSessions(
@@ -106,11 +108,17 @@ export function searchSessions(
   archivedSessionIds: readonly string[],
   query: string,
   limit: number,
+  statuses: SessionStatusSnapshot = new Map(),
 ): SessionSearchResult {
   const normalized = query.trim().toLowerCase()
   if (normalized === '') return { matches: [], hasMore: false }
 
-  const rowsByWorkspace = groupSessionsByWorkspace(sessions, workspaces, archivedSessionIds)
+  const rowsByWorkspace = groupSessionsByWorkspace(
+    sessions,
+    workspaces,
+    archivedSessionIds,
+    statuses,
+  )
   const matches: SearchMatch[] = []
 
   for (const workspace of workspaces) {
@@ -126,7 +134,7 @@ export function searchSessions(
     }
   }
 
-  for (const row of straySessions(sessions, workspaces, archivedSessionIds)) {
+  for (const row of straySessions(sessions, workspaces, archivedSessionIds, statuses)) {
     if (row.blank) continue
     if (!matchesQuery(row, undefined, normalized)) continue
     matches.push({ row })

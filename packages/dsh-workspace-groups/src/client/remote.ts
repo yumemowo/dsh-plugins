@@ -6,7 +6,7 @@ import { normalizePickerState } from '../pickerState.ts'
  *
  * 宿主把 `./typert` 清单注册进 typert 注册表
  * 浏览器这一侧则必须显式 `ctx.remote.$mount(...)` 自己需要的命名空间，网关才会响应调用
- * 这里的 codec 同样必须是 zod v4 的 strict 实例
+ * 这里的 codec 与宿主那份同形：strict 形态 + `create()` 惰性工厂
  */
 
 const groupSchema = z.object({
@@ -40,21 +40,32 @@ const snapshotSchema = z.object({
   nested: z.boolean(),
 })
 
-const codec = (typeSymbol: string, schema: z.ZodType) => ({
-  mode: 'strict' as const,
-  typeSymbol: `@your-scope/dsh-workspace-groups#${typeSymbol}`,
-  schema,
-})
+/**
+ * 造一个惰性 codec
+ *
+ * 网关要求 `create()` 工厂而不是裸 schema，且同一个 codec 只物化一次
+ * @param typeSymbol - 该 codec 的 wire 类型名
+ * @param build - 造 schema 的工厂，首次调用时执行
+ * @returns 网关要求的 strict codec
+ */
+const codec = (typeSymbol: string, build: () => z.ZodType) => {
+  let value: z.ZodType | undefined
+  return {
+    mode: 'strict' as const,
+    typeSymbol: `@your-scope/dsh-workspace-groups#${typeSymbol}`,
+    create: () => (value ??= build()),
+  }
+}
 
 /** 与宿主 `./typert` 清单的方法集合一一对应 */
 const PACKAGE = '@your-scope/dsh-workspace-groups'
 /** 网关按此 namespace 归组方法表，客户端用 `remote.<namespace>` 取服务 */
 export const SERVICE = 'workspaceGroups'
 
-const snapshot = codec('WorkspaceGroupsSnapshot', snapshotSchema)
-const str = (name: string) => codec(name, z.string())
-const bool = (name: string) => codec(name, z.boolean())
-const strList = (name: string) => codec(name, z.array(z.string()))
+const snapshot = codec('WorkspaceGroupsSnapshot', () => snapshotSchema)
+const str = (name: string) => codec(name, () => z.string())
+const bool = (name: string) => codec(name, () => z.boolean())
+const strList = (name: string) => codec(name, () => z.array(z.string()))
 
 /** 构造一条 direct 调用描述，避免逐条重复 id/service/namespace */
 function descriptor(
@@ -97,7 +108,7 @@ export const REMOTE_CONTRIBUTION = {
     descriptor('moveSession', [
       { name: 'workspaceId', codec: str('WorkspaceId') },
       { name: 'sessionId', codec: str('SessionId') },
-      { name: 'groupId', codec: codec('NullableGroupId', z.string().nullable()) },
+      { name: 'groupId', codec: codec('NullableGroupId', () => z.string().nullable()) },
     ]),
     descriptor('createVirtualWorkspace', [{ name: 'name', codec: str('GroupName') }]),
     descriptor('renameVirtualWorkspace', [
@@ -109,7 +120,7 @@ export const REMOTE_CONTRIBUTION = {
     ]),
     descriptor('moveWorkspace', [
       { name: 'workspaceId', codec: str('WorkspaceId') },
-      { name: 'groupId', codec: codec('NullableGroupId', z.string().nullable()) },
+      { name: 'groupId', codec: codec('NullableGroupId', () => z.string().nullable()) },
     ]),
     descriptor('nestWorkspaces', [
       { name: 'workspaceIds', codec: strList('WorkspaceIds') },

@@ -10,6 +10,8 @@
 
 **只影响这一个区域。** logo（`sidebar.brand.*`）、面板列表（`sidebar.panellist`）、设置与底部操作（`sidebar.settings` / `sidebar.footer.action`）都是并列的兄弟插槽，不受影响；`conversation.hero.workspace`（新会话页的工作区选择器）仍由官方组件负责。
 
+本包对齐 **dsh 0.1.7-rc.1**：客户端与宿主两半的依赖都按那一版的接口写，图标名也按那一版的 primitives 导出表取。对照模式挂的是 DSH 原生右侧栏（`dsh-client-ui-sidebar-right`），不依赖第三方 sidebar 插件。
+
 插槽的 single 语义、官方注册为何仍然留在注册表里并因此能继续提供子插槽 `sidebar.workspaces.directoryFlow`（添加工作区的目录选择交互来源），见 [与官方实现的复用关系](docs/official-reuse.md)。
 
 ## 已提供的功能
@@ -28,7 +30,7 @@
 - **嵌套开关**：header 右侧的视图选项按钮打开的面板里，渲染成官方 `Switch` 原语，默认开启。关闭前弹确认框并列出会被解除嵌套的工作区，关闭后列表底部给出一行说明。
 - **会话数**：分组行行尾显示组内会话数，与 session 行的相对时间同格同形。空分组不显示，悬停/菜单展开时与会话行的时间一样隐去。
 - **展开折叠**：工作区行与分组行都可折叠，两者状态互不影响，展开/收起带过渡动作。
-- **新建会话**：工作区行与分组行右侧的 `+`。分组行的 `+` 会把新会话建在该分组所属工作区，并自动把它归入这个分组。建会话走官方导航服务，因此与官方组件一样复用同工作区已有的空白会话，连点两次不会攒出两条空会话。
+- **新建会话**：工作区行与分组行右侧的新建会话按钮（与官方工作区行同一枚字形）。分组行那枚会把新会话建在该分组所属工作区，并自动把它归入这个分组。建会话走官方导航服务，因此与官方组件一样复用同工作区已有的空白会话，连点两次不会攒出两条空会话。
 - **会话可见性**：与官方组件一致 —— 已归档、子代理来源的会话不显示；空白会话只保留当前选中的那一条。
 - **会话命名**：新建中的会话行显示官方的固定名「新会话」；会话正式启用后显示标题服务投影出的摘要名。
 - **会话状态点**：行首用官方 `StateDot` 原语显示状态，取值与官方 `ui-workspace` 的 `sessionStatuses` 逐条一致。
@@ -63,7 +65,7 @@ README 只讲本包是什么、怎么用。设计论证、对齐依据与踩过�
 | [布局与样式对齐](docs/layout-and-styling.md) | 尺寸、留白、色阶与层级缩进的取值来源 |
 | [折叠动效](docs/collapse-motion.md) | 折叠轨道、两段式展开、节奏参数、显隐为何必须 fail-open 与嵌套行为 |
 | [渲染性能与行级缓存](docs/render-performance.md) | 行级 memo 要怎样才能命中、推导放在哪一层的取舍（含实测数据） |
-| [自绘图标](docs/custom-icons.md) | 工作区分组字形、置顶图钉两态的构图依据与被否造型 |
+| [自绘图标](docs/custom-icons.md) | 工作区分组两个字形的构图依据，以及 0.1.7-rc.1 起改用官方图标的几处 |
 | [子工作区嵌套](docs/sub-workspace-nesting.md) | 父子关系怎么判定、渲染位置与段序、开关与确认框、放进分组时子工作区怎么跟随、缩进模型 |
 | [数据存储](docs/data-storage.md) | 存储位置、记录结构（含嵌套归属 / 聚焦 / 最近使用 / 置顶）、版本策略与变更回快照 |
 | [客户端集成](docs/client-integration.md) | cordis 代理语义、对照模式（`COMPARE_MODE`）、热重载与 `$mount` 配平 |
@@ -101,7 +103,7 @@ src/client/
 ├── actions.ts                  RegionActions / RegionDataHooks（组件与宿主的接口）
 ├── rootEntry.ts                根节点条目的键（工作区 / 工作区分组两类，含类别前缀）
 ├── pickerState.ts              聚焦 / 最近使用 / 置顶三份记录的形状与纯变换（宿主与浏览器共用）
-├── compare.tsx                 对照模式：挂进 better-sidebar 右侧栏 tab
+├── compare.tsx                 对照模式：挂进原生右侧栏 tab
 ├── remote.ts                   Remote 贡献声明与调用封装
 ├── runtime.ts                  primitives 值导入的唯一出口（external）
 ├── icons.tsx                   自绘图标（官方没有的字形；规范见 [自绘图标](docs/custom-icons.md)）

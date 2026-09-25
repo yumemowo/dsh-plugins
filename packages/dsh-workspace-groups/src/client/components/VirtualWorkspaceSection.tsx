@@ -10,7 +10,7 @@
  */
 import { useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
-import { IconTriangleRightFill14 } from '../runtime.ts'
+import { IconTriangleRightFillRegular } from '../runtime.ts'
 import { IconVirtualFolder16 } from '../icons.tsx'
 import {
   VIRTUAL_WORKSPACE_MENU,
@@ -97,7 +97,7 @@ export function VirtualWorkspaceSection({
           <IconVirtualFolder16 />
         </span>
         <span className="wg-slot wg-chevron">
-          <IconTriangleRightFill14 className={`wg-arrow${collapsed ? '' : ' wg-arrow-open'}`} />
+          <IconTriangleRightFillRegular className={`wg-arrow${collapsed ? '' : ' wg-arrow-open'}`} />
         </span>
         <span className="wg-virtual-workspace-label">{section.label}</span>
         {/* 工作区数自己成格贴在行右，与会话分组的会话数、session 行的时间同格同形

@@ -31,7 +31,7 @@
 
 | 环节 | 来源 |
 | --- | --- |
-| 入口按钮 | 本包自绘，几何与图标对齐官方 header（`IconProjectAddOutline16`） |
+| 入口按钮 | 本包自绘，几何与图标对齐官方 header（`IconProjectAddOutlineRegular`） |
 | picking 交互 | 官方洞的占用者整段渲染（native 的 OS 选择器 / browse 的应用内对话框） |
 | 采纳 | 官方工作区控制器 `ctx.workspaces.create({ path })` |
 | 采纳成功后 | 官方 `ctx.uiWorkspace.startSession(workspaceId)`，与官方 `onPick` 一致 |
@@ -49,15 +49,17 @@
 | 建组 / 改名 / 工作区重命名 / 会话重命名 | `Modal` + `Input` + `Button`（`outline` / `primary`） |
 | 删除分组 / 删除工作区 | `Modal` + `Button`（`outline`，确认按钮着错误色） |
 | 添加工作区失败 | `Modal` + `Button`（同上，文案取官方 `folderError.*`） |
-| 文件夹、三角、省略号 | `IconFolderClose16` / `IconFolderOpen16` / `IconTriangleRightFill14` / `IconEllipsisOutline16` |
-| 新建会话、新建分组、改名、删除 | `IconPlusOutline16` / `IconEditOutline16` / `IconTrashOutline16` |
-| 行右键菜单的「新建会话」项 | `IconNewChatOutline16`（与官方 sidebar 新建按钮同字形） |
-| header 的添加工作区 / 搜索 / 视图选项 | `IconProjectAddOutline16` / `IconSearchOutline16` / `IconPersonalizationOutline16`（与官方 header 同字形）；搜索框的清除按钮用 `IconCloseFill14` |
+| 文件夹、三角、省略号 | `IconFolderCloseRegular` / `IconFolderOpenRegular` / `IconTriangleRightFillRegular` / `IconEllipsisOutlineRegular` |
+| 行内新建会话、新建分组、改名、删除 | `IconNewChatOutlineRegular` / `IconPlusOutlineRegular` / `IconEditOutlineRegular` / `IconTrashOutlineRegular` |
+| 会话菜单与行右键菜单的「新建会话」项 | `IconNewChatOutlineRegular`（与行内那枚按钮同字形） |
+| 置顶按钮两态 | `IconPinOutlineRegular` / `IconPinFillRegular`（原语在这一版新增了图钉，本包不再自绘） |
+| header 的添加工作区 / 搜索 / 视图选项 | `IconProjectAddOutlineRegular` / `IconSearchOutlineRegular` / `IconSlidersTwoOutlineRegular`（与官方 header 同字形）；搜索框的清除按钮用 `IconCloseFillRegular` |
 | header 的新建工作区分组、菜单里的工作区分组项 | **本包自绘** `IconVirtualWorkspace16`（见 [自绘图标](custom-icons.md)） |
-| 会话菜单的分叉 / 归档项 | `IconBranchOutline16` / `IconArchiveOutline20`（与官方会话菜单同字形） |
-| 子菜单父项的行尾箭头 | `IconChevronRightOutline14`（与 composer slash 菜单给「可进入目录」候选画的箭头同字形） |
-| 窄栏展开入口 | `IconPanelLeftOutline16`（与官方侧栏折叠按钮同一字形） |
+| 会话菜单的分叉 / 归档项 | `IconBranchOutlineRegular` / `IconArchiveOutlineRegular`（与官方会话菜单同字形） |
+| 子菜单父项的行尾箭头 | `IconChevronRightOutlineRegular`（与 composer slash 菜单给「可进入目录」候选画的箭头同字形） |
+| 窄栏展开入口 | `IconPanelLeftOutlineRegular`（与官方侧栏折叠按钮同一字形） |
 | 会话状态点 | `StateDot`（运行态画追光方阵，其余画圆点；颜色由原语的主题规则给出） |
+| 视图选项面板里的嵌套开关 | `IconWorkspaceTreeOutlineRegular`（官方「按工作区树分组」那一项的字形） |
 | 行尾相对时间 | `relativeTime`（官方 `timeLabel` 用的同一个分桶函数，文案走官方语言包） |
 | 「添加工作区」入口提示 | `Tooltip`（与官方 header 同一 `delayMs` 与展开方向） |
 | 行内 `...` 菜单与行右键菜单 | `Menu`（右键那份走它的 `getAnchorRect`，官方 `WorkspacePickFlow` 用的同一入口） |
@@ -65,9 +67,13 @@
 
 原语的样式属于 ui-theme / ui-primitives：本包不为它们写颜色、阈值或高亮，只在 `styles.ts` 里保留自己的布局约定。唯一的例外是悬停卡片正文那三档文字色（`.wg-hover-*`）：卡片底色由原语写死为深色，随主题翻转的色阶在上面读不出来，只能照官方 `ui-workspace` 的取值为卡片单独定色。
 
+一处官方原语的缺陷需要本包兜住：
+
+- **官方 `Menu` 的二级面板会透出后面的内容。** `.submenu` 与一级面板 `.list` 共用一条规则，底色是带 alpha 的 `--dsw-specific-menu`，靠自身的 `backdrop-filter` 把内容糊开。但它在 DOM 上是 `.list` 的后代，而 `.list` 自己也有 `backdrop-filter`——按规范那会形成一个 backdrop root，后代只能采样这个 root 内部的内容；二级面板被放在父层盒子之外（`left: calc(100% + 9px)`），那片区域在 root 里是空的，模糊因此退化成无操作，只剩半透明底色。官方没有任何插件用过 `submenu`（只有 primitives 自己定义），所以这条路径从未被验证过。本包是唯一使用者，于是由本包兜住：给二级面板换不透明底色并撤掉那条失效的模糊，作用域挂 `listClassName` 传进来的 `.wg-menu-list`，不碰官方与其他插件的菜单（见 [布局与样式对齐](layout-and-styling.md)）。
+
 三处刻意的取舍：
 
-- **工作区分组的图标是自绘的。**「优先复用官方原语」指的是优先复用**接口与控件**，不是说字形只能用现成的那几个。primitives 实际导出的 76 个图标里没有任何「分组 / 容器 / 堆叠」类字形，也没有虚线的文件夹，而工作区分组既需要一个「新建」入口、又需要与旁边的实线文件夹（它代表**工作区本身**）区分开。因此按官方规范自绘一个，视觉上与它们同族（见 [自绘图标](custom-icons.md)）。
+- **工作区分组的图标是自绘的。**「优先复用官方原语」指的是优先复用**接口与控件**，不是说字形只能用现成的那几个。0.1.7-rc.1 的 primitives 导出表里没有任何「分组 / 容器 / 堆叠」类字形，也没有虚线的文件夹，而工作区分组既需要一个「新建」入口、又需要与旁边的实线文件夹（它代表**工作区本身**）区分开。因此按官方规范自绘一个，视觉上与它们同族（见 [自绘图标](custom-icons.md)）。同一版新增了图钉，置顶按钮因此从自绘换成官方字形。
 - **删除分组用普通 `Modal`，不用 `RiskConfirmation`。** 后者自带警告图标与「须勾选确认」的复选框，而删除分组只解散分组、不动会话本身，达不到那个破坏级别。危险语义改由确认按钮的错误色承载（`.wg-danger-action` 设 `--dsw-alias-state-error-primary`）——这与官方 `ui-workspace` 的删除按钮是同一做法：`Button` 没有 `danger` variant，改色就靠传 `className`。
 - **行内 16px 图标按钮保留自绘。** 官方 `ui-workspace` 的行内按钮也是它自己的 CSS Module（16px 命中区、4px 圆角、悬停提亮文字色），primitives 没有等价的 16px 行内按钮；换成 primitives 的 `Button`（28px 高、带悬停底色）会让行外观明显偏离官方。因此几何保留同一份 16px 约定，图标取原语。
 

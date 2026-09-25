@@ -114,6 +114,8 @@ export function useRowContextMenu({ items, onSelect }: RowContextMenuOptions): R
         // 留在行里会让行的 flex 排布多出一个子项（分组行还会多算一份 gap）
         // 该类的规则把它整盒去掉，面板本身是 portal 出去的，不受影响
         className="wg-context-menu"
+        // 二级面板的底色与 `...` 菜单同一处处理（见 styles.ts 的 .wg-menu-list）
+        listClassName="wg-menu-list"
       />
     ),
   }

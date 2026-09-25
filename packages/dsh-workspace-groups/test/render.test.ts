@@ -258,15 +258,29 @@ function render(
 }
 
 /** 把行内操作按钮的无障碍标签、原生提示与点击回调读出来 */
+/** 取一个行内按钮渲染的图标名，取不到时 undefined（图标组件由调用方整枚传进来） */
+function iconName(children: unknown): string | undefined {
+  const type = (children as { type?: unknown } | undefined)?.type
+  if (typeof type !== 'function') return undefined
+  try {
+    return String((type as (props: object) => unknown)({}))
+  } catch {
+    return undefined
+  }
+}
+
 function rowButtons(
   out: { buttons?: unknown[] },
-): { label: string; title: string | undefined; click: () => void }[] {
+): { label: string; title: string | undefined; icon: string | undefined; click: () => void }[] {
   return (out.buttons ?? []).map((b) => {
     const el = b as { props: Record<string, unknown> }
     const title = el.props['title']
+    // 行内按钮的图标由调用方整枚传进来，替身渲染成图标名，因而可以直接断言字形
+    const icon = el.props['children'] as { type?: () => unknown } | undefined
     return {
       label: String(el.props['aria-label'] ?? ''),
       title: typeof title === 'string' ? title : undefined,
+      icon: iconName(icon),
       // 按钮的 onClick 会先 stopPropagation，替身事件给出空实现即可
       click: () => (el.props['onClick'] as (e: unknown) => void)({ stopPropagation: () => {} }),
     }
@@ -647,7 +661,7 @@ function isOpen(collapse: unknown): boolean {
 function props(
   wide: boolean,
   options: {
-    pending?: Map<unknown, unknown>
+    pending?: Map<unknown, { pendingInteraction?: { kind: string } }>
     official?: boolean
     /** 缺省给官方「添加工作区」服务面，false 用于验证降级路径 */
     add?: boolean
@@ -675,6 +689,7 @@ function props(
     home?: string | undefined
     /** 会话 a 的最近更新时间，用于断言卡片里的相对时间与行尾那份不同 */
     updatedAt?: number
+
   } = {},
 ): WorkspaceGroupsProps {
   /**
@@ -692,6 +707,7 @@ function props(
       displayTitle: 'A',
       running: false,
       blank: false,
+      retainedBy: {},
       updatedAt: now,
     },
     orphan: {
@@ -699,6 +715,7 @@ function props(
       displayTitle: 'Orphan',
       running: false,
       blank: false,
+      retainedBy: {},
       // 比 `a` 早一点：两行都命中同一个查询词时，排序必须完全确定
       updatedAt: now - 1000,
     },
@@ -710,6 +727,8 @@ function props(
       displayTitle: 'w1',
       running: false,
       blank: true,
+      // 主视图保留计数就是「当前选中」这一事实（官方 mainSessionId 读它）
+      retainedBy: { mainView: 1 },
       // 同一个基准：空白行反正固定排最前，但夹具里只留一处时间源更好读
       updatedAt: now,
     }
@@ -731,13 +750,8 @@ function props(
     useWorkspaces: ((select: (s: unknown) => unknown) =>
       select({ items: workspaces, archivedSessionIds: [] })) as never,
     useSessions: ((select: (s: unknown) => unknown) =>
-      select({
-        ids: [...sessionIds, 'orphan'],
-        byId,
-        current: options.blankCurrent === true ? 'blank' : undefined,
-        phase: 'ready',
-      })) as never,
-    useSessionPendingInteraction: ((select: (s: unknown) => unknown) =>
+      select({ ids: [...sessionIds, 'orphan'], byId, phase: 'ready' })) as never,
+    useSessionStatus: ((select: (s: unknown) => unknown) =>
       select(options.pending ?? new Map())) as never,
     useDirectoryFlow: ((select: (occupied: boolean) => unknown) =>
       select(options.flowOccupied ?? true)) as never,
@@ -1198,7 +1212,7 @@ describe('WorkspaceGroupsRegion render', () => {
 
   it('leaves the status slot with an accessible label but no native tooltip', () => {
     const out = { menus: [] as unknown[], text: [] as string[], slots: [] as unknown[] }
-    const pending = new Map([['orphan', { kind: 'approval' }]])
+    const pending = new Map([['orphan', { pendingInteraction: { kind: 'approval' } }]])
     render(React.createElement(WorkspaceGroupsRegion, props(true, { pending })), out)
 
     // 状态点是纯视觉元素，语义靠槽位的 aria-label 承担
@@ -1218,14 +1232,22 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(menuItems(out)).toEqual([['rename', 'delete']])
   })
 
-  it('builds the group session through the plus button', () => {
+  it('builds the group session through the new-session button', () => {
     const created: string[] = []
     const out = renderGroupRow(() => created.push('g1'))
 
-    const plus = rowButtons(out).find((b) => b.label.includes('新建会话'))
-    expect(plus).toBeDefined()
-    plus?.click()
+    const create = rowButtons(out).find((b) => b.label.includes('新建会话'))
+    expect(create).toBeDefined()
+    create?.click()
     expect(created).toEqual(['g1'])
+  })
+
+  it('draws the row new-session button with the official new-chat glyph', () => {
+    const out = renderGroupRow(() => {})
+
+    // 取官方工作区行新建会话按钮的字形，与本包行内那枚按钮一致
+    const create = rowButtons(out).find((b) => b.label.includes('新建会话'))
+    expect(create?.icon).toBe('IconNewChatOutlineRegular')
   })
 
   it('moves a session created from the workspace row out of any group', async () => {
@@ -1371,7 +1393,7 @@ describe('WorkspaceGroupsRegion render', () => {
 
   it('renders a warning dot for a session awaiting user interaction', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
-    const pending = new Map([['orphan', { kind: 'approval' }]])
+    const pending = new Map([['orphan', { pendingInteraction: { kind: 'approval' } }]])
     render(React.createElement(WorkspaceGroupsRegion, props(true, { pending })), out)
 
     // 待交互压过其他状态：orphan 静置但仍在等用户审批
@@ -1675,7 +1697,7 @@ describe('hover cards', () => {
   })
 
   it('lists the pending interaction on the row that waits for the user', () => {
-    const pending = new Map([['orphan', { kind: 'approval' }]])
+    const pending = new Map([['orphan', { pendingInteraction: { kind: 'approval' } }]])
     const out = renderRegion({ pending })
     // 卡片按文档序发出，两条会话行里第二条是未分组桶里的 Orphan
     const cards = out.cards.filter((c) => anchorClass(c).startsWith('wg-row'))

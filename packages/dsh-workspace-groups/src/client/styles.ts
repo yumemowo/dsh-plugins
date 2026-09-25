@@ -943,17 +943,36 @@ export const CSS = `
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* 二级面板改用不透明底色
+ *
+ * 官方 .submenu 与一级面板共用一条规则，底色带 alpha，靠自身的 backdrop-filter 糊开
+ * 但它是 .list 的后代，而 .list 也有 backdrop-filter，会形成 backdrop root
+ * 二级面板落在父层盒子之外，那片区域在 root 里是空的，模糊因此退化成无操作
+ * 不透明底色不依赖模糊，取 --dsw-alias-bg-layer-3 而不取 --dsw-specific-menu
+ * 是因为后者本身带 alpha
+ *
+ * 作用域挂 listClassName 传进来的类而不是官方 hash 类名，面板 portal 到 body
+ * 只有这个类能准确落到本包自己的菜单上 */
+.wg-menu-list [role='menu'] {
+  background: var(--dsw-alias-bg-layer-3);
+  backdrop-filter: none;
+}
+
 /* 工作区下拉菜单：本包自绘的面板（官方 Menu 原语没有可折叠分区头、也没有挂在条目行尾的第二个按钮）
    外观逐条取官方菜单面板那一份规则的值
 
-   底色、描边与投影都必须用官方这一套 token，面板是不透明的浮层，底下就是会话
-   列表，用错 token 会让它透出后面的内容——引一个未定义的自定义属性会让整条声明
-   失效，面板因此变成透明的。三者的来源：
-   - --dsw-specific-menu = --dsw-alias-bg-layer-3，菜单专用底色
+   底色、描边、投影与背面模糊都必须用官方这一套 token，底下就是会话列表
+   引一个未定义的自定义属性会让整条声明失效，面板因此变成透明的。四者的来源：
+   - --dsw-specific-menu = 菜单专用底色，0.1.7-rc.1 起带 alpha（亮色 #f8f9fa94、暗色 #30313680）
    - --dsw-elevation-prominent = 一圈 .5px 描边 + 两层柔和投影，由主题按暗色/亮色
      各给一份
    - --dsw-elevation-stroke-color 要先被面板这一层重设，投影里那圈描边才跟着面板
      自己的圆角走
+   - --dsw-menu-backdrop-filter = blur(40px) saturate(150%)，官方 .list / .submenu 与
+     HoverCard 都用它把半透明底色后面的内容糊开
+
+   背面模糊这一条不能省：底色本身是半透明的，少了它后面的会话会清晰地穿过来，
+   面板读起来就成了「没上底色」。官方菜单卡片是同一个组合，本包照抄
 
    面板是 portal 到 body 的浮层，位置由组件量出来写成内联的 left/top */
 .wg-picker-menu {
@@ -971,6 +990,7 @@ export const CSS = `
   flex-direction: column;
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
   border: 0;
   border-radius: 20px;
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
@@ -1223,8 +1243,8 @@ body[data-wg-flip] [data-wg-hover-card] {
 }
 
 /* 视图选项面板，header 里那个按钮打开的自绘浮层
-   与下拉菜单面板同一套外观（底色取 --dsw-specific-menu，描边与投影取官方菜单面板那一档）
-   面板是不透明浮层，底下就是会话列表，因此这几个 token 名写错时面板会变透明
+   与下拉菜单面板同一套外观（底色取 --dsw-specific-menu，描边、投影与背面模糊取官方菜单面板那一档）
+   底下就是会话列表，因此这几个 token 名写错时面板会变透明
    而界面上不会有任何报错——test/styles.test.ts 直接断言这几个名字 */
 .wg-view-menu {
   box-sizing: border-box;
@@ -1234,6 +1254,8 @@ body[data-wg-flip] [data-wg-hover-card] {
   padding: 4px;
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-3));
+  /* 底色带 alpha，背面模糊必须跟着给，否则后面的会话清晰地穿过来 */
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
   /* 投影里那圈描边跟着面板自己的圆角走，因此在这里重设一次 */
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   border-radius: 20px;

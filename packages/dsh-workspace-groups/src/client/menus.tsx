@@ -5,13 +5,13 @@
  * 渲染由 `Menu` 原语负责，开合状态由持有锚点的行组件负责
  */
 import {
-  IconArchiveOutline20,
-  IconBranchOutline16,
-  IconChevronRightOutline14,
-  IconEditOutline16,
-  IconNewChatOutline16,
-  IconPlusOutline16,
-  IconTrashOutline16,
+  IconArchiveOutlineRegular,
+  IconBranchOutlineRegular,
+  IconChevronRightOutlineRegular,
+  IconEditOutlineRegular,
+  IconNewChatOutlineRegular,
+  IconPlusOutlineRegular,
+  IconTrashOutlineRegular,
 } from './runtime.ts'
 import type { ReactNode } from 'react'
 import type { MenuActionItem, MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -36,7 +36,7 @@ function submenuParentLabel(label: string, entries: readonly MenuActionItem[]): 
   return (
     <span className="wg-menu-label">
       <span className="wg-menu-label-text">{label}</span>
-      <IconChevronRightOutline14 className="wg-menu-arrow" />
+      <IconChevronRightOutlineRegular className="wg-menu-arrow" />
     </span>
   )
 }
@@ -101,9 +101,10 @@ export function buildSessionMenuItems(input: SessionMenuInput): readonly MenuIte
 
   if (official !== undefined) {
     items.push(
-      { id: 'rename', label: official.rename, icon: <IconEditOutline16 /> },
-      { id: 'fork', label: official.fork, icon: <IconBranchOutline16 /> },
-      { id: 'archive', label: official.archive, icon: <IconArchiveOutline20 size={16} /> },
+      { id: 'rename', label: official.rename, icon: <IconEditOutlineRegular /> },
+      { id: 'fork', label: official.fork, icon: <IconBranchOutlineRegular /> },
+      // 官方会话菜单的归档项传 size=14，照它取同一个值
+      { id: 'archive', label: official.archive, icon: <IconArchiveOutlineRegular size={14} /> },
     )
   }
 
@@ -151,11 +152,11 @@ export function buildVirtualWorkspaceMenuItems(
   input: GroupRowMenuInput,
 ): readonly MenuItem[] {
   return [
-    { id: VIRTUAL_WORKSPACE_MENU.rename, label: input.renameLabel, icon: <IconEditOutline16 /> },
+    { id: VIRTUAL_WORKSPACE_MENU.rename, label: input.renameLabel, icon: <IconEditOutlineRegular /> },
     {
       id: VIRTUAL_WORKSPACE_MENU.delete,
       label: input.deleteLabel,
-      icon: <IconTrashOutline16 />,
+      icon: <IconTrashOutlineRegular />,
       danger: true,
     },
   ]
@@ -170,8 +171,8 @@ export function buildVirtualWorkspaceMenuItems(
  */
 export function buildGroupMenuItems(input: GroupRowMenuInput): readonly MenuItem[] {
   return [
-    { id: GROUP_MENU.rename, label: input.renameLabel, icon: <IconEditOutline16 /> },
-    { id: GROUP_MENU.delete, label: input.deleteLabel, icon: <IconTrashOutline16 />, danger: true },
+    { id: GROUP_MENU.rename, label: input.renameLabel, icon: <IconEditOutlineRegular /> },
+    { id: GROUP_MENU.delete, label: input.deleteLabel, icon: <IconTrashOutlineRegular />, danger: true },
   ]
 }
 
@@ -371,12 +372,12 @@ export const ROW_MENU = {
 /**
  * 构造行右键菜单里的「新建会话」项
  *
- * 图标取官方 sidebar 新建按钮的 `IconNewChatOutline16`，同一个动作在行内是官方的 `+`
- * 而本菜单里还有一个「新建分组」也带 `+`，两项都用 `+` 就只能靠文字区分
+ * 图标取官方新建会话按钮的 `IconNewChatOutlineRegular`，与本包行内那枚按钮同一个字形
+ * 菜单里还有一个「新建分组」带 `+`，两项若都用 `+` 就只能靠文字区分
  * @returns Menu item
  */
 function newSessionItem(label: string): MenuActionItem {
-  return { id: ROW_MENU.newSession, label, icon: <IconNewChatOutline16 /> }
+  return { id: ROW_MENU.newSession, label, icon: <IconNewChatOutlineRegular /> }
 }
 
 /**
@@ -393,8 +394,8 @@ function newSessionItem(label: string): MenuActionItem {
  */
 export function buildWorkspaceMenuItems(input: WorkspaceMenuInput): readonly MenuItem[] {
   const items: MenuItem[] = [
-    { id: WORKSPACE_MENU.newGroup, label: input.newGroupLabel, icon: <IconPlusOutline16 /> },
-    { id: WORKSPACE_MENU.rename, label: input.renameLabel, icon: <IconEditOutline16 /> },
+    { id: WORKSPACE_MENU.newGroup, label: input.newGroupLabel, icon: <IconPlusOutlineRegular /> },
+    { id: WORKSPACE_MENU.rename, label: input.renameLabel, icon: <IconEditOutlineRegular /> },
   ]
   /** 菜单里是否有归类操作块，没有时删除项前面不该留一条分隔线 */
   let grouping = false
@@ -420,7 +421,7 @@ export function buildWorkspaceMenuItems(input: WorkspaceMenuInput): readonly Men
   items.push({
     id: WORKSPACE_MENU.delete,
     label: input.deleteLabel,
-    icon: <IconTrashOutline16 />,
+    icon: <IconTrashOutlineRegular />,
     danger: true,
   })
   return items

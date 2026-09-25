@@ -6,6 +6,9 @@
  *
  * 例外是 HoverCard：它那层包装会改变 DOM 结构，样式里有对应的选择器
  * 因此替身照真原语套一同样的盒
+ *
+ * 图标名与官方导出表一致：字形名不带尺寸后缀，线宽由 `Regular` / `Medium` 变体承担
+ * 本包一律取 `Regular`
  */
 import { createElement } from 'react'
 
@@ -41,20 +44,24 @@ export const Switch = ({ checked, onChange, label, disabled = false, title, clas
 /** 图标替身：返回元素名，测试据此断言渲染了哪个官方图标 */
 const icon = (name) => () => name
 
-export const IconFolderClose16 = icon('IconFolderClose16')
-export const IconFolderOpen16 = icon('IconFolderOpen16')
-export const IconTriangleRightFill14 = icon('IconTriangleRightFill14')
-export const IconEllipsisOutline16 = icon('IconEllipsisOutline16')
-export const IconPlusOutline16 = icon('IconPlusOutline16')
-export const IconNewChatOutline16 = icon('IconNewChatOutline16')
-export const IconEditOutline16 = icon('IconEditOutline16')
-export const IconTrashOutline16 = icon('IconTrashOutline16')
-export const IconPanelLeftOutline16 = icon('IconPanelLeftOutline16')
-export const IconBranchOutline16 = icon('IconBranchOutline16')
-export const IconArchiveOutline20 = icon('IconArchiveOutline20')
-export const IconChevronRightOutline14 = icon('IconChevronRightOutline14')
-export const IconChevronDownOutline14 = icon('IconChevronDownOutline14')
-export const IconCheckOutline14 = icon('IconCheckOutline14')
+export const IconFolderCloseRegular = icon('IconFolderCloseRegular')
+export const IconFolderOpenRegular = icon('IconFolderOpenRegular')
+export const IconTriangleRightFillRegular = icon('IconTriangleRightFillRegular')
+export const IconEllipsisOutlineRegular = icon('IconEllipsisOutlineRegular')
+export const IconPlusOutlineRegular = icon('IconPlusOutlineRegular')
+export const IconNewChatOutlineRegular = icon('IconNewChatOutlineRegular')
+export const IconEditOutlineRegular = icon('IconEditOutlineRegular')
+export const IconTrashOutlineRegular = icon('IconTrashOutlineRegular')
+export const IconPanelLeftOutlineRegular = icon('IconPanelLeftOutlineRegular')
+export const IconBranchOutlineRegular = icon('IconBranchOutlineRegular')
+export const IconArchiveOutlineRegular = icon('IconArchiveOutlineRegular')
+export const IconUnarchiveOutlineRegular = icon('IconUnarchiveOutlineRegular')
+export const IconChevronRightOutlineRegular = icon('IconChevronRightOutlineRegular')
+export const IconChevronDownOutlineRegular = icon('IconChevronDownOutlineRegular')
+export const IconCheckOutlineRegular = icon('IconCheckOutlineRegular')
+export const IconPinOutlineRegular = icon('IconPinOutlineRegular')
+export const IconPinFillRegular = icon('IconPinFillRegular')
+export const IconWorkspaceTreeOutlineRegular = icon('IconWorkspaceTreeOutlineRegular')
 
 /**
  * 相对时间替身：分桶规则与本包 `official.ts` 的契约一致，文案由调用方决定
@@ -86,10 +93,10 @@ export const Tooltip = ({ children }) => children
 export const HoverCard = ({ anchor }) =>
   createElement('span', { 'data-wg-hover-anchor': '' }, anchor)
 
-export const IconProjectAddOutline16 = icon('IconProjectAddOutline16')
-export const IconSearchOutline16 = icon('IconSearchOutline16')
-export const IconPersonalizationOutline16 = icon('IconPersonalizationOutline16')
-export const IconCloseFill14 = icon('IconCloseFill14')
+export const IconProjectAddOutlineRegular = icon('IconProjectAddOutlineRegular')
+export const IconSearchOutlineRegular = icon('IconSearchOutlineRegular')
+export const IconSlidersTwoOutlineRegular = icon('IconSlidersTwoOutlineRegular')
+export const IconCloseFillRegular = icon('IconCloseFillRegular')
 
 export default {
   Menu,
@@ -101,22 +108,26 @@ export default {
   Tooltip,
   HoverCard,
   relativeTime,
-  IconFolderClose16,
-  IconFolderOpen16,
-  IconTriangleRightFill14,
-  IconEllipsisOutline16,
-  IconPlusOutline16,
-  IconNewChatOutline16,
-  IconEditOutline16,
-  IconTrashOutline16,
-  IconPanelLeftOutline16,
-  IconBranchOutline16,
-  IconArchiveOutline20,
-  IconChevronRightOutline14,
-  IconChevronDownOutline14,
-  IconCheckOutline14,
-  IconProjectAddOutline16,
-  IconSearchOutline16,
-  IconPersonalizationOutline16,
-  IconCloseFill14,
+  IconFolderCloseRegular,
+  IconFolderOpenRegular,
+  IconTriangleRightFillRegular,
+  IconEllipsisOutlineRegular,
+  IconPlusOutlineRegular,
+  IconNewChatOutlineRegular,
+  IconEditOutlineRegular,
+  IconTrashOutlineRegular,
+  IconPanelLeftOutlineRegular,
+  IconBranchOutlineRegular,
+  IconArchiveOutlineRegular,
+  IconUnarchiveOutlineRegular,
+  IconChevronRightOutlineRegular,
+  IconChevronDownOutlineRegular,
+  IconCheckOutlineRegular,
+  IconPinOutlineRegular,
+  IconPinFillRegular,
+  IconWorkspaceTreeOutlineRegular,
+  IconProjectAddOutlineRegular,
+  IconSearchOutlineRegular,
+  IconSlidersTwoOutlineRegular,
+  IconCloseFillRegular,
 }

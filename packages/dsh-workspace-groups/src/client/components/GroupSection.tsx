@@ -8,7 +8,7 @@
  */
 import { useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
-import { IconTriangleRightFill14 } from '../runtime.ts'
+import { IconTriangleRightFillRegular } from '../runtime.ts'
 import { GROUP_MENU, ROW_MENU, buildGroupMenuItems, buildRowContextMenuItems } from '../menus.tsx'
 import { CollapsibleBody } from './CollapsibleBody.tsx'
 import { RowActions } from './RowActions.tsx'
@@ -100,7 +100,7 @@ export function GroupSection({
       >
         {contextMenu.menu}
         <span className="wg-slot">
-          <IconTriangleRightFill14 className={`wg-arrow${collapsed ? '' : ' wg-arrow-open'}`} />
+          <IconTriangleRightFillRegular className={`wg-arrow${collapsed ? '' : ' wg-arrow-open'}`} />
         </span>
         <span className="wg-group-label">{section.label}</span>
         {/* 会话数自己成格贴在行右，与 session 行的 time 同格同形，空分组不显示

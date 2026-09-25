@@ -22,7 +22,7 @@
  * 见样式表里的 `.wg-header-title`
  */
 import type { ReactElement, RefObject } from 'react'
-import { IconChevronDownOutline14, IconPersonalizationOutline16 } from '../runtime.ts'
+import { IconChevronDownOutlineRegular, IconSlidersTwoOutlineRegular } from '../runtime.ts'
 import { AddWorkspaceControl } from './AddWorkspaceControl.tsx'
 import { VirtualWorkspaceCreateControl } from './VirtualWorkspaceCreateControl.tsx'
 import { SearchEntry, SearchRailEntry } from './SearchControl.tsx'
@@ -106,7 +106,7 @@ export function RegionHeader({
       >
         <span className="wg-header-heading">
           <span className="wg-header-label">{title}</span>
-          <IconChevronDownOutline14
+          <IconChevronDownOutlineRegular
             className={`wg-header-caret${picker.open ? ' wg-header-caret-open' : ''}`}
           />
         </span>
@@ -126,7 +126,7 @@ export function RegionHeader({
           aria-expanded={viewOptions.open}
           onClick={viewOptions.onToggle}
         >
-          <IconPersonalizationOutline16 />
+          <IconSlidersTwoOutlineRegular />
         </button>
         {newVirtualWorkspace === undefined ? null : (
           <VirtualWorkspaceCreateControl

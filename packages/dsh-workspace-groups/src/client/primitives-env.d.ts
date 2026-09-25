@@ -5,6 +5,7 @@
  * 本文件必须是全局脚本形态（无顶层 import/export），declare module 才是环境声明而不是模块扩充
  *
  * 只声明本包实际用到的导出，props 只列本包会传的字段
+ * 图标名与官方导出表一致：字形名不带尺寸后缀，线宽由 `Regular` / `Medium` 变体承担
  */
 
 declare module '@deepseek-ai/dsh-client-ui-primitives' {
@@ -59,6 +60,12 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     } | null) | undefined
     /** 挂在原语根节点上的类名，根节点默认是行内盒，行内使用时靠它调整 */
     className?: string
+    /**
+     * 挂在面板（下拉卡片）上的类名
+     *
+     * 面板 portal 到 body 后不在使用方的 DOM 子树里，本包样式只认这个类
+     */
+    listClassName?: string
   }) => ReactNode
 
   /** 通用按钮，variant 决定填充、悬停与边框 */
@@ -76,8 +83,9 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
 
   /** 悬停提示，`disabled` 为真时不显示 */
   export const Tooltip: (props: {
-    label: ReactNode
-    side?: 'top' | 'bottom' | 'left' | 'right'
+    /** 气泡文案，函数形态在气泡可见时才求值 */
+    label: string | (() => string)
+    side?: 'top' | 'bottom' | 'right'
     delayMs?: number
     disabled?: boolean
     children?: ReactNode
@@ -122,10 +130,11 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const Modal: (props: {
     open: boolean
     onClose: () => void
-    title: ReactNode
+    title: string
+    /** 说明句，原语只接受纯文本 */
+    description?: string
     /** 关闭按钮的无障碍标签 */
     closeLabel: string
-    description?: ReactNode
     children?: ReactNode
     footer?: ReactNode
     className?: string
@@ -178,32 +187,38 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     to: number,
   ) => { unit: 'now' | 'minutes' | 'hours' | 'days' | 'months' | 'years'; n: number }
 
-  export const IconFolderClose16: IconComponent
-  export const IconFolderOpen16: IconComponent
-  export const IconTriangleRightFill14: IconComponent
+  export const IconFolderCloseRegular: IconComponent
+  export const IconFolderOpenRegular: IconComponent
+  export const IconTriangleRightFillRegular: IconComponent
   /** composer slash 菜单给「可深入」候选用的行尾箭头，用来表达此处有二级菜单 */
-  export const IconChevronRightOutline14: IconComponent
+  export const IconChevronRightOutlineRegular: IconComponent
   /** 下拉箭头，本包用它做菜单里可折叠分区的开合指示与 header 的菜单入口 */
-  export const IconChevronDownOutline14: IconComponent
+  export const IconChevronDownOutlineRegular: IconComponent
   /** 勾选标记，本包用它标出菜单里当前聚焦的那一条 */
-  export const IconCheckOutline14: IconComponent
-  export const IconEllipsisOutline16: IconComponent
-  export const IconPlusOutline16: IconComponent
-  /** 官方 sidebar「新建会话」按钮的图标 */
-  export const IconNewChatOutline16: IconComponent
-  export const IconEditOutline16: IconComponent
-  export const IconTrashOutline16: IconComponent
-  export const IconPanelLeftOutline16: IconComponent
+  export const IconCheckOutlineRegular: IconComponent
+  export const IconEllipsisOutlineRegular: IconComponent
+  export const IconPlusOutlineRegular: IconComponent
+  /** 官方 sidebar 与工作区行「新建会话」按钮的图标 */
+  export const IconNewChatOutlineRegular: IconComponent
+  export const IconEditOutlineRegular: IconComponent
+  export const IconTrashOutlineRegular: IconComponent
+  export const IconPanelLeftOutlineRegular: IconComponent
   /** 「添加工作区」入口用的图标，与官方 header 同字形 */
-  export const IconProjectAddOutline16: IconComponent
+  export const IconProjectAddOutlineRegular: IconComponent
   /** 官方 header「搜索」入口的图标 */
-  export const IconSearchOutline16: IconComponent
+  export const IconSearchOutlineRegular: IconComponent
   /** 官方搜索框清除按钮的图标 */
-  export const IconCloseFill14: IconComponent
+  export const IconCloseFillRegular: IconComponent
   /** 官方 header「视图选项」入口的图标 */
-  export const IconPersonalizationOutline16: IconComponent
+  export const IconSlidersTwoOutlineRegular: IconComponent
   /** 官方会话菜单「分叉」项用的图标 */
-  export const IconBranchOutline16: IconComponent
-  /** 官方会话菜单「归档」项用的图标，官方传 size=16 */
-  export const IconArchiveOutline20: IconComponent
+  export const IconBranchOutlineRegular: IconComponent
+  /** 官方会话菜单「归档 / 取消归档」项用的图标 */
+  export const IconArchiveOutlineRegular: IconComponent
+  export const IconUnarchiveOutlineRegular: IconComponent
+  /** 置顶按钮两态：钉身描边 / 填实 */
+  export const IconPinOutlineRegular: IconComponent
+  export const IconPinFillRegular: IconComponent
+  /** 官方「按工作区树分组」选项的字形，本包用它标出子工作区嵌套开关 */
+  export const IconWorkspaceTreeOutlineRegular: IconComponent
 }

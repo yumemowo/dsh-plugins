@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { COMPARE_MODE, apply } from '../src/client/index.ts'
 import type { Context } from '@deepseek-ai/cordis'
+import type { RegionActions } from '../src/client/actions.ts'
 
 /**
  * 对照模式下 `apply` 把左侧 `sidebar.workspaces` 交还官方 ui-workspace，改去注册
@@ -8,6 +9,18 @@ import type { Context } from '@deepseek-ai/cordis'
  * 而不是在两种模式下都硬跑——它们在对照模式下没有可断言的对象
  */
 const REGION_REGISTRATIONS = COMPARE_MODE ? 0 : 1
+
+/**
+ * 插槽登记里属于区域本身的那一条
+ *
+ * 对照模式下 apply 不注册区域，但仍会为对照 tab 的体登记一次座位
+ * 因此不能直接数 `register` 的调用次数，只数 `sidebar.workspaces` 那一条
+ */
+function regionRegistrations(registered: readonly unknown[]): unknown[] {
+  return registered.filter(
+    (entry) => (entry as { name?: string }).name === 'sidebar.workspaces',
+  )
+}
 
 /**
  * 浏览器半边挂载期的生命周期
@@ -25,12 +38,10 @@ function fakeContext(options: { mount?: () => Promise<() => Promise<void>> } = {
   const warnings: unknown[][] = []
   const registered: unknown[] = []
   const opened: unknown[] = []
+  const connectionListeners: (() => void)[] = []
   const services: Record<string, unknown> = {
     sessions: {
-      open: (sessionId: unknown) => {
-        opened.push(sessionId)
-      },
-      list: { getSnapshot: () => ({ current: undefined }) },
+      list: { getSnapshot: () => ({ ids: [], byId: {}, phase: 'ready' }) },
     },
     workspaces: {},
     locale: {
@@ -43,12 +54,20 @@ function fakeContext(options: { mount?: () => Promise<() => Promise<void>> } = {
       $mount: options.mount ?? (async () => async () => {}),
     },
     'remote.workspaceGroups': { list: async () => ({ ok: true, value: { byWorkspace: {} } }) },
+    // 对照模式下 apply 经 ctx.inject 等 sidebarRightTabs，并从这里自动打开一次
+    sidebarRightTabs: { register: () => () => {} },
+    sidebarRight: { openTab: () => {} },
     slots: {
+      // `slot.register` / `slot.inject` 都返回反注册函数，与真实渲染器一致
       inject: (_key: string, callback: () => unknown) => {
-        callback()
+        const dispose = callback()
+        return () => {
+          if (typeof dispose === 'function') (dispose as () => void)()
+        }
       },
       register: (entry: unknown) => {
         registered.push(entry)
+        return () => {}
       },
       entriesOfSlot: () => [],
       subscribe: () => () => {},
@@ -56,7 +75,12 @@ function fakeContext(options: { mount?: () => Promise<() => Promise<void>> } = {
   }
   const ctx = {
     get: (name: string) => services[name],
-    // 对照模式下 apply 会调 registerCompareTab，它经 ctx.inject 等 betterSidebar
+    // apply 订阅 connection/reset 以在连接建立（含重连）后重拉，缺了它 apply 直接 TypeError
+    on: (event: string, listener: () => void) => {
+      if (event === 'connection/reset') connectionListeners.push(listener)
+      return () => {}
+    },
+    // 对照模式下 apply 会调 registerCompareTab，它经 ctx.inject 等 sidebarRightTabs
     // 这里给一个立即视为就绪的替身，缺了它会在注册前就 TypeError
     inject: (_deps: string[], callback: (injected: { get: (name: string) => unknown }) => unknown) => {
       const dispose = callback({ get: (name: string) => services[name] })
@@ -88,6 +112,10 @@ function fakeContext(options: { mount?: () => Promise<() => Promise<void>> } = {
     warnings,
     registered,
     opened,
+    /** 触发一次连接建立信号 */
+    emitConnectionReset: () => {
+      for (const listener of [...connectionListeners]) listener()
+    },
     /** 跑一遍 apply 登记的全部 effect，并按逆序执行它们的收尾 */
     teardown: () => {
       for (const dispose of [...disposers].reverse()) dispose()
@@ -119,7 +147,7 @@ describe('client half remote mount', () => {
     apply(first.ctx)
     await settle()
     expect(mounts).toBe(1)
-    expect(first.registered).toHaveLength(REGION_REGISTRATIONS)
+    expect(regionRegistrations(first.registered)).toHaveLength(REGION_REGISTRATIONS)
 
     // 热重载：本包 fiber 卸载。`$mount` 的卸载函数必须被调用，否则第二次
     // 挂载会撞上「方法已挂载」——那正是分组功能整体失效的那条路径
@@ -132,7 +160,7 @@ describe('client half remote mount', () => {
     apply(second.ctx)
     await settle()
     expect(mounts).toBe(2)
-    expect(second.registered).toHaveLength(REGION_REGISTRATIONS)
+    expect(regionRegistrations(second.registered)).toHaveLength(REGION_REGISTRATIONS)
   })
 
   it('releases a mount that only lands after the plugin was unloaded', async () => {
@@ -182,6 +210,68 @@ describe.skipIf(COMPARE_MODE)('client half region registration', () => {
     expect(harness.registered).toEqual([
       expect.objectContaining({ name: 'sidebar.workspaces', priority: -1 }),
     ])
+  })
+})
+
+describe('client half data-plane retry', () => {
+  /** 取回区域注入面，并让 remote 挂载落地 */
+  async function injectedFace(
+    mount?: () => Promise<() => Promise<void>>,
+  ): Promise<{ harness: ReturnType<typeof fakeContext>; actions: RegionActions }> {
+    const harness = fakeContext(mount === undefined ? {} : { mount })
+    apply(harness.ctx)
+    await settle()
+    const entry = harness.registered[0] as { inject: () => RegionActions }
+    return { harness, actions: entry.inject() }
+  }
+
+  it('keeps the ready subscription registered so a later signal can still retry', async () => {
+    const { harness, actions } = await injectedFace()
+
+    // 挂载已经完成：订阅落在「remote 已就绪」这条路径上
+    let retries = 0
+    const dispose = actions.onReady(() => {
+      retries += 1
+    })
+    expect(retries).toBe(1)
+
+    // 连接建立（含 dsh web 重启后的重连）必须还能再通知一次
+    harness.emitConnectionReset()
+    expect(retries).toBe(2)
+
+    // 反注册之后不再通知
+    dispose()
+    harness.emitConnectionReset()
+    expect(retries).toBe(2)
+  })
+
+  it('announces readiness when the mount lands after subscription', async () => {
+    let release: (() => void) | undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const harness = fakeContext({
+      // 挂载故意悬着，模拟「订阅早于 $mount 完成」
+      mount: async () => {
+        await gate
+        return async () => {}
+      },
+    })
+    apply(harness.ctx)
+
+    const entry = harness.registered[0] as { inject: () => RegionActions }
+    const actions = entry.inject()
+    let retries = 0
+    actions.onReady(() => {
+      retries += 1
+    })
+    // 此时 remote 还没挂上，因此只有订阅、没有回调
+    expect(retries).toBe(0)
+
+    release?.()
+    await settle()
+    // 挂载落地时补发一次，早先失败的那次拉取因此有机会重来
+    expect(retries).toBe(1)
   })
 })
 
@@ -235,8 +325,14 @@ describe.skipIf(COMPARE_MODE)('client half session creation', () => {
     expect(await startSession('w1')).toBeUndefined()
   })
 
-  it('selects a session through the session controller', async () => {
+  it('selects a session through the official navigation service', async () => {
     const harness = fakeContext()
+    const services = harness.ctx as unknown as { get: (name: string) => unknown }
+    const original = services.get
+    const opened: string[] = []
+    ;(services as { get: (name: string) => unknown }).get = (name: string) =>
+      name === 'uiWorkspace' ? { openSession: (id: string) => opened.push(id) } : original(name)
+
     apply(harness.ctx)
     await settle()
 
@@ -245,7 +341,8 @@ describe.skipIf(COMPARE_MODE)('client half session creation', () => {
     }
     entry.inject().openSession('session-1')
 
-    expect(harness.opened).toEqual(['session-1'])
+    // 选中会话是导航事实，归官方 uiWorkspace 独占
+    expect(opened).toEqual(['session-1'])
   })
 
   it('fails loud when the official navigation service is absent', async () => {

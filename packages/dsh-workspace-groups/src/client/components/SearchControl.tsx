@@ -11,7 +11,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement, RefObject } from 'react'
-import { IconCloseFill14, IconSearchOutline16, StateDot, Tooltip } from '../runtime.ts'
+import { IconCloseFillRegular, IconSearchOutlineRegular, StateDot, Tooltip } from '../runtime.ts'
 import { sanitizeSearchQuery, SEARCH_QUERY_MAX_CODE_UNITS } from '../data/search.ts'
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
 import type { SessionStatus } from '../data/status.ts'
@@ -133,7 +133,7 @@ export function SearchEntry({ search, labels }: SearchEntryProps): ReactElement 
             aria-expanded={expanded}
             onClick={() => search.expand()}
           >
-            <IconSearchOutline16 size={expanded ? 11 : 14} />
+            <IconSearchOutlineRegular size={expanded ? 11 : 14} />
           </button>
         </Tooltip>
         <input
@@ -160,7 +160,7 @@ export function SearchEntry({ search, labels }: SearchEntryProps): ReactElement 
               search.clear()
             }}
           >
-            <IconCloseFill14 />
+            <IconCloseFillRegular />
           </button>
         ) : null}
       </div>
@@ -182,7 +182,7 @@ export function SearchRailEntry({
           aria-label={labels.entry}
           onClick={() => search.expandFromRail()}
         >
-          <IconSearchOutline16 size={18} />
+          <IconSearchOutlineRegular size={18} />
         </button>
       </Tooltip>
     </div>

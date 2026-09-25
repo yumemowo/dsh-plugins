@@ -316,7 +316,7 @@ describe('buildRowContextMenuItems', () => {
     const items = buildRowContextMenuItems(rowItems, '新建会话')
     const icon = (items[0] as { icon?: { type: () => unknown } }).icon
 
-    expect(icon?.type()).toBe('IconNewChatOutline16')
+    expect(icon?.type()).toBe('IconNewChatOutlineRegular')
   })
 })
 
@@ -720,7 +720,12 @@ describe('buildGroupMenuItems', () => {
 })
 
 describe('straySessions', () => {
-  /** 造一份最小可用的会话列表状态 */
+  /**
+   * 造一份最小可用的会话列表状态
+   *
+   * 「当前选中」落在会话自己的保留计数上，官方 `mainSessionId` 读的就是它
+   * 因此 `current` 参数写成谁的计数为 1，而不是再往快照上挂一个 `current` 字段
+   */
   function listState(
     rows: { id: string; origin?: 'subagent'; blank?: boolean }[],
     current?: string,
@@ -732,11 +737,12 @@ describe('straySessions', () => {
         displayTitle: item.id,
         running: false,
         blank: item.blank === true,
+        retainedBy: item.id === current ? { mainView: 1 } : {},
         updatedAt: 0,
         ...(item.origin === undefined ? {} : { origin: item.origin }),
       }
     }
-    return { ids: rows.map((r) => r.id), byId, current, phase: 'ready' } as unknown as SessionListState
+    return { ids: rows.map((r) => r.id), byId, phase: 'ready' } as unknown as SessionListState
   }
 
   /** 造一个工作区视图 */
@@ -805,7 +811,13 @@ describe('straySessions', () => {
 })
 
 describe('groupSessionsByWorkspace', () => {
-  /** 造一份最小可用的会话列表状态 */
+  /**
+   * 造一份最小可用的会话列表状态
+   *
+   * 每个会话的 `children` 是它名下那份子代理目录
+   * 落在 `projectionsBySession[parent].values.subagentCatalog` 上
+   * 与官方 `runningChildCount` 读的是同一格，子代理自身的运行态留在它自己的摘要里
+   */
   function listState(
     rows: {
       id: string
@@ -814,22 +826,37 @@ describe('groupSessionsByWorkspace', () => {
       parentId?: string
       running?: boolean
       displayTitle?: string
+      children?: { id: string }[]
     }[],
     current?: string,
   ): SessionListState {
     const byId: Record<string, unknown> = {}
+    const projectionsBySession: Record<string, unknown> = {}
     for (const item of rows) {
       byId[item.id] = {
         id: item.id,
         displayTitle: item.displayTitle ?? item.id,
         running: item.running === true,
         blank: item.blank === true,
+        retainedBy: item.id === current ? { mainView: 1 } : {},
         updatedAt: 0,
         ...(item.origin === undefined ? {} : { origin: item.origin }),
         ...(item.parentId === undefined ? {} : { parentId: item.parentId }),
       }
+      if (item.children !== undefined) {
+        projectionsBySession[item.id] = {
+          values: { subagentCatalog: item.children.map((child) => ({ id: child.id })) },
+          state: 'ready',
+          error: null,
+        }
+      }
     }
-    return { ids: rows.map((r) => r.id), byId, current, phase: 'ready' } as unknown as SessionListState
+    return {
+      ids: rows.map((r) => r.id),
+      byId,
+      projectionsBySession,
+      phase: 'ready',
+    } as unknown as SessionListState
   }
 
   /** 造一个工作区视图 */
@@ -931,20 +958,24 @@ describe('groupSessionsByWorkspace', () => {
 
   it('counts a running subagent against its ancestor row', () => {
     // 子代理行自己隐藏，但它运行时祖先行要亮起运行点
+    // 目录挂在父会话的宿主投影上，子代理自身的运行态仍在它自己的摘要里
     const grouped = groupSessionsByWorkspace(
-      listState([{ id: 'a' }, { id: 'child', origin: 'subagent', parentId: 'a', running: true }]),
+      listState([
+        { id: 'a', children: [{ id: 'child' }] },
+        { id: 'child', origin: 'subagent', parentId: 'a', running: true },
+      ]),
       [workspace('w1', ['a'])],
     )
 
     expect(grouped.get('w1')?.[0]?.runningSubagentCount).toBe(1)
   })
 
-  it('counts nested running subagents against every ancestor', () => {
+  it('counts every running direct child listed in the parent catalog', () => {
     const grouped = groupSessionsByWorkspace(
       listState([
-        { id: 'a' },
+        { id: 'a', children: [{ id: 'child' }, { id: 'other' }] },
         { id: 'child', origin: 'subagent', parentId: 'a', running: true },
-        { id: 'grandchild', origin: 'subagent', parentId: 'child', running: true },
+        { id: 'other', origin: 'subagent', parentId: 'a', running: true },
       ]),
       [workspace('w1', ['a'])],
     )
@@ -954,11 +985,27 @@ describe('groupSessionsByWorkspace', () => {
 
   it('does not count a finished subagent against its ancestor row', () => {
     const grouped = groupSessionsByWorkspace(
-      listState([{ id: 'a' }, { id: 'child', origin: 'subagent', parentId: 'a', running: false }]),
+      listState([
+        { id: 'a', children: [{ id: 'child' }] },
+        { id: 'child', origin: 'subagent', parentId: 'a', running: false },
+      ]),
       [workspace('w1', ['a'])],
     )
 
     expect(grouped.get('w1')?.[0]?.runningSubagentCount).toBe(0)
+  })
+
+  it('counts a child the status snapshot reports running before the summary does', () => {
+    // 统一状态快照优先于摘要里的运行态，与官方 sessionNode 同一分工
+    const sessions = listState([
+      { id: 'a', children: [{ id: 'child' }] },
+      { id: 'child', origin: 'subagent', parentId: 'a', running: false },
+    ])
+    const statuses = new Map([['child', { running: true }]]) as never
+
+    const grouped = groupSessionsByWorkspace(sessions, [workspace('w1', ['a'])], [], statuses)
+
+    expect(grouped.get('w1')?.[0]?.runningSubagentCount).toBe(1)
   })
 
   it('reports zero subagents for an ordinary session', () => {
@@ -986,10 +1033,11 @@ describe('session row identity', () => {
         displayTitle: item.displayTitle ?? item.id,
         running: false,
         blank: false,
+        retainedBy: item.id === current ? { mainView: 1 } : {},
         updatedAt: item.updatedAt ?? 0,
       }
     }
-    return { ids: rows.map((r) => r.id), byId, current, phase: 'ready' } as unknown as SessionListState
+    return { ids: rows.map((r) => r.id), byId, phase: 'ready' } as unknown as SessionListState
   }
 
   function workspaceOf(id: string, sessionIds: string[]): WorkspaceView {
@@ -1033,7 +1081,7 @@ describe('session row identity', () => {
   })
 
   it('rebuilds a row when the subagent count changes under it', () => {
-    // 子代理运行数由别的会话决定，与自身摘要不同步，因此也要参与缓存的有效性判断
+    // 子代理运行数由别的会话与宿主投影决定，与自身摘要不同步，因此也要参与缓存的有效性判断
     const base = listStateOf([{ id: 'a' }])
     const before = groupSessionsByWorkspace(base, [workspaceOf('w1', ['a'])]).get('w1')
     const withChild = listStateOf([{ id: 'a' }])
@@ -1042,11 +1090,15 @@ describe('session row identity', () => {
       displayTitle: 'child',
       running: true,
       blank: false,
+      retainedBy: {},
       updatedAt: 0,
       origin: 'subagent',
       parentId: 'a',
     }
     withChild.ids.push('child' as never)
+    ;(withChild as unknown as { projectionsBySession: Record<string, unknown> }).projectionsBySession = {
+      a: { values: { subagentCatalog: [{ id: 'child' }] }, state: 'ready', error: null },
+    }
     const after = groupSessionsByWorkspace(withChild, [workspaceOf('w1', ['a'])]).get('w1')
 
     expect(before?.[0]?.runningSubagentCount).toBe(0)

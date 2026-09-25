@@ -1,5 +1,5 @@
 /**
- * 容器行行尾的操作位：`...` 管理菜单加可选的 `+` 新建会话
+ * 容器行行尾的操作位：`...` 管理菜单加可选的新建会话按钮
  *
  * 工作区行与分组行共用同一份布局与显隐语义（`.wg-row-actions` 的 12px 间距、`.wg-row-action` 的悬停显隐）
  * 差异只在菜单条目与两个无障碍文案，因此收在这里而不是各写一遍
@@ -8,7 +8,11 @@
  * 该标记同时负责「菜单开着时锚点按钮不消失」（见 `styles.ts`）
  */
 import type { ReactElement } from 'react'
-import { IconEllipsisOutline16, IconPlusOutline16, Menu } from '../runtime.ts'
+import {
+  IconEllipsisOutlineRegular,
+  IconNewChatOutlineRegular,
+  Menu,
+} from '../runtime.ts'
 import type { MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconButton } from './IconButton.tsx'
 
@@ -47,6 +51,9 @@ export function RowActions({
           // 二级面板的方向由宿主挂的 body 标记控制（见 index.ts），这里不感知宿主差异
           portal
           closeOnPointerLeave
+          // 面板被 portal 出去后不在本包的 DOM 子树里，官方为此留了这一个样式钩子
+          // 本包借它修二级面板的底色（见 styles.ts 的 .wg-menu-list）
+          listClassName="wg-menu-list"
           anchor={
             <button
               type="button"
@@ -57,7 +64,7 @@ export function RowActions({
                 onMenuOpen(!menuOpen)
               }}
             >
-              <IconEllipsisOutline16 />
+              <IconEllipsisOutlineRegular />
             </button>
           }
           items={menuItems}
@@ -66,7 +73,9 @@ export function RowActions({
       {create === undefined ? null : (
         <IconButton
           ariaLabel={create.label}
-          icon={<IconPlusOutline16 />}
+          // 取官方工作区行新建会话按钮的字形，与本包行内那枚按钮一致
+          // 同一个动作的行内与菜单两处因此共用同一枚图标
+          icon={<IconNewChatOutlineRegular />}
           onClick={create.onCreate}
         />
       )}

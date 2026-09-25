@@ -85,7 +85,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
 function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsProps {
   const created = new Date(2026, 0, 1, 0, 0).toISOString()
   const byId: Record<string, unknown> = {
-    a: { id: 'a', displayTitle: '修复登录超时', running: false, blank: false, updatedAt: 1_000 },
+    a: { id: 'a', displayTitle: '修复登录超时', running: false, blank: false, retainedBy: {}, updatedAt: 1_000 },
   }
   const view = (workspaceId: string, path: string, title: string) => ({
     workspaceId,
@@ -107,8 +107,8 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     useWorkspaces: ((select: (s: unknown) => unknown) =>
       select({ items: workspaces, archivedSessionIds: [] })) as never,
     useSessions: ((select: (s: unknown) => unknown) =>
-      select({ ids: ['a'], byId, current: undefined, phase: 'ready' })) as never,
-    useSessionPendingInteraction: ((select: (s: unknown) => unknown) => select(new Map())) as never,
+      select({ ids: ['a'], byId, phase: 'ready' })) as never,
+    useSessionStatus: ((select: (s: unknown) => unknown) => select(new Map())) as never,
     useDirectoryFlow: ((select: (occupied: boolean) => unknown) => select(true)) as never,
     useHostInfo: ((select: (info: { home: string | undefined }) => unknown) =>
       select({ home: '/repo' })) as never,
@@ -235,7 +235,7 @@ describe('nested sub-workspaces in a real DOM', () => {
       useWorkspaces: ((select: (s: unknown) => unknown) =>
         select({ items: workspaces, archivedSessionIds: [] })) as never,
       useSessions: ((select: (s: unknown) => unknown) =>
-        select({ ids: [], byId: {}, current: undefined, phase: 'ready' })) as never,
+        select({ ids: [], byId: {}, phase: 'ready' })) as never,
       loadGroups: async () =>
         snapshot({
           workspaceGroups: [
@@ -308,7 +308,7 @@ describe('nested sub-workspaces in a real DOM', () => {
       useWorkspaces: ((select: (s: unknown) => unknown) =>
         select({ items: workspaces, archivedSessionIds: [] })) as never,
       useSessions: ((select: (s: unknown) => unknown) =>
-        select({ ids: [], byId: {}, current: undefined, phase: 'ready' })) as never,
+        select({ ids: [], byId: {}, phase: 'ready' })) as never,
       loadGroups: async () =>
         snapshot({
           // 父工作区体内有一个会话分组，新工作区落成的是它自己的归属

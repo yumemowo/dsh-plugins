@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { normalizeSnapshot } from '../remote.ts'
@@ -37,7 +37,7 @@ import {
   deriveNesting,
   nearestAncestorForPath,
 } from '../data/nest.ts'
-import { groupSessionsByWorkspace, straySessions } from '../data/sessions.ts'
+import { groupSessionsByWorkspace, mainSessionId, straySessions } from '../data/sessions.ts'
 import { focusedLayout, pickerSections, resolveFocus, rootPickerEntries } from '../data/picker.ts'
 import type { PickerEntry } from '../data/picker.ts'
 import { WorkspacePickerMenu } from './WorkspacePickerMenu.tsx'
@@ -119,7 +119,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     expandSidebar,
     useWorkspaces,
     useSessions,
-    useSessionPendingInteraction,
+    useSessionStatus,
     useDirectoryFlow,
     useHostInfo,
     openSession,
@@ -161,10 +161,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     (state) => state.archivedSessionIds,
   ) as readonly string[]
   const sessions = useSessions((state) => state) as SessionListState
-  // 待交互快照与会话列表是两个独立事实源，等待审批/回答时会话可能并不在 running，因此必须单独读，不能从会话摘要里推
-  const pendingInteractions = useSessionPendingInteraction(
-    (state) => state,
-  ) as SessionPendingInteractionSnapshot
+  // 待交互 / 运行 / 完成提醒是同一个事实源的三个字段，等待审批时会话可能并不在 running，因此必须单独读，不能从会话摘要里推
+  const statusSnapshot = useSessionStatus((state) => state) as SessionStatusSnapshot
   const [snapshot, setSnapshot] = useState<WorkspaceGroupsSnapshot>({
     byWorkspace: {},
     nesting: {},
@@ -221,7 +219,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    */
   const flipRef = useFlipMarker()
 
-  const currentSessionId = sessions.current === undefined ? undefined : String(sessions.current)
+  const currentSessionId = mainSessionId(sessions)
 
   // 搜索状态留在这里而不是 header 内部，窄栏入口要触发宽栏输入框的聚焦
   // 这一跨形态的联动需要一个共同宿主
@@ -393,7 +391,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    * @returns 按优先级排列的状态
    */
   const statusesOf = (row: SessionRow): SessionStatus[] =>
-    sessionStatuses(row, pendingInteractions.get(row.id as SessionId)?.kind, labels.status)
+    sessionStatuses(row, statusSnapshot.get(row.id as SessionId)?.pendingInteraction?.kind, labels.status)
 
   /**
    * 一个会话行行尾要显示的相对时间
@@ -439,6 +437,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
         archivedSessionIds,
         search.normalized,
         searchResultLimit,
+        statusSnapshot,
       ),
     [
       sessions,
@@ -447,6 +446,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
       archivedSessionIds,
       search.normalized,
       searchResultLimit,
+      statusSnapshot,
     ],
   )
 
@@ -997,10 +997,15 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     )
   }
 
-  const rowsByWorkspace = groupSessionsByWorkspace(sessions, workspaces, archivedSessionIds)
+  const rowsByWorkspace = groupSessionsByWorkspace(
+    sessions,
+    workspaces,
+    archivedSessionIds,
+    statusSnapshot,
+  )
   // 不属于任何工作区的会话，只有存在时才渲染末尾的「未分组」区段
   // 聚焦时整段不出现（`focusedLayout` 只交出被聚焦的那一片），因此这里也不必为它留位
-  const stray = straySessions(sessions, workspaces, archivedSessionIds)
+  const stray = straySessions(sessions, workspaces, archivedSessionIds, statusSnapshot)
   const ungroupedCollapsed = collapsedWorkspaces[UNGROUPED_KEY] === true
   const searching = search.normalized !== ''
 

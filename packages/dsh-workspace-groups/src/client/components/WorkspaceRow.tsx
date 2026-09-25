@@ -14,9 +14,9 @@ import { useState } from 'react'
 import type { ReactElement } from 'react'
 import {
   HoverCard,
-  IconFolderClose16,
-  IconFolderOpen16,
-  IconTriangleRightFill14,
+  IconFolderCloseRegular,
+  IconFolderOpenRegular,
+  IconTriangleRightFillRegular,
 } from '../runtime.ts'
 import {
   PARENT_GROUP_ITEM,
@@ -179,10 +179,10 @@ export function WorkspaceRow({
     >
       {contextMenu.menu}
       <span className={`wg-slot wg-folder${folderActive ? ' wg-folder-active' : ''}`}>
-        {collapsed ? <IconFolderClose16 /> : <IconFolderOpen16 />}
+        {collapsed ? <IconFolderCloseRegular /> : <IconFolderOpenRegular />}
       </span>
       <span className="wg-slot wg-chevron">
-        <IconTriangleRightFill14 className={`wg-arrow${collapsed ? '' : ' wg-arrow-open'}`} />
+        <IconTriangleRightFillRegular className={`wg-arrow${collapsed ? '' : ' wg-arrow-open'}`} />
       </span>
       <span className="wg-workspace-title">{title}</span>
       <RowActions

@@ -2,7 +2,7 @@
  * 「添加工作区」入口与它的 picking 流程
  *
  * 外观照官方 WorkspaceBrowser：section header 右侧一个 28px 圆形图标按钮
- * 图标取 `IconProjectAddOutline16`，tooltip 与无障碍标签都是官方的 `workspace.add`
+ * 图标取 `IconProjectAddOutlineRegular`，tooltip 与无障碍标签都是官方的 `workspace.add`
  * 窄栏下放大成 36px 并取 `label-primary`
  *
  * 行为也照官方，点击直接打开 directoryFlow 洞（侧边栏里官方用的是 `addOnly: true`，不先弹工作区列表菜单）
@@ -10,7 +10,7 @@
  */
 import { useState } from 'react'
 import type { ReactElement } from 'react'
-import { Button, IconProjectAddOutline16, Modal, Tooltip } from '../runtime.ts'
+import { Button, IconProjectAddOutlineRegular, Modal, Tooltip } from '../runtime.ts'
 import type { RegionTranslate } from '../locales.ts'
 import type { AddWorkspaceActions } from '../actions.ts'
 
@@ -77,7 +77,7 @@ export function AddWorkspaceControl({
             setFlowOpen(true)
           }}
         >
-          <IconProjectAddOutline16 size={narrow ? 18 : 16} />
+          <IconProjectAddOutlineRegular size={narrow ? 18 : 16} />
         </button>
       </Tooltip>
       {/* owner 会话的键排在 inject 面之后，同名时由 owner 的那份胜出 */}

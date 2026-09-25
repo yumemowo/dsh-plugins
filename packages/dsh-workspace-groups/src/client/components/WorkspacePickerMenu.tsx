@@ -17,13 +17,15 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom'
 import type { ReactElement, ReactNode, RefObject } from 'react'
 import {
-  IconCheckOutline14,
-  IconChevronDownOutline14,
-  IconEditOutline16,
-  IconFolderClose16,
-  IconTrashOutline16,
+  IconCheckOutlineRegular,
+  IconChevronDownOutlineRegular,
+  IconEditOutlineRegular,
+  IconFolderCloseRegular,
+  IconPinFillRegular,
+  IconPinOutlineRegular,
+  IconTrashOutlineRegular,
 } from '../runtime.ts'
-import { IconPinFill16, IconPinOutline16, IconVirtualFolder16 } from '../icons.tsx'
+import { IconVirtualFolder16 } from '../icons.tsx'
 import { IconButton } from './IconButton.tsx'
 import { handleRowKeyDown } from './rowKeyboard.ts'
 import type { PickerEntry, PickerSections } from '../data/picker.ts'
@@ -116,27 +118,27 @@ function PickerRow({
       onKeyDown={(event) => handleRowKeyDown(event, () => onSelect(entry.key))}
     >
       <span className="wg-picker-icon">
-        {entry.kind === 'virtual' ? <IconVirtualFolder16 /> : <IconFolderClose16 />}
+        {entry.kind === 'virtual' ? <IconVirtualFolder16 /> : <IconFolderCloseRegular />}
       </span>
       <span className="wg-picker-label">{entry.label}</span>
       {/* 选中标记排在操作位之前：操作位是行尾那个只在该行悬停/聚焦时露出的格子
           标记若排在它之后就会被顶得左右移动 */}
-      {focused ? <IconCheckOutline14 className="wg-picker-check" /> : null}
+      {focused ? <IconCheckOutlineRegular className="wg-picker-check" /> : null}
       <span className="wg-row-actions">
         <IconButton
           ariaLabel={labels.rename(entry.label)}
-          icon={<IconEditOutline16 />}
+          icon={<IconEditOutlineRegular />}
           onClick={() => onRename(entry)}
         />
         <IconButton
           ariaLabel={labels.remove(entry.label)}
-          icon={<IconTrashOutline16 />}
+          icon={<IconTrashOutlineRegular />}
           danger
           onClick={() => onDelete(entry)}
         />
         <IconButton
           ariaLabel={pinLabel}
-          icon={pinned ? <IconPinFill16 /> : <IconPinOutline16 />}
+          icon={pinned ? <IconPinFillRegular /> : <IconPinOutlineRegular />}
           pressed={pinned}
           onClick={() => onTogglePinned(entry.key)}
         />
@@ -170,7 +172,7 @@ function PickerGroup({
         onClick={onToggle}
       >
         <span className="wg-picker-section-title">{title}</span>
-        <IconChevronDownOutline14
+        <IconChevronDownOutlineRegular
           className={`wg-picker-caret${expanded ? ' wg-picker-caret-open' : ''}`}
         />
       </button>
@@ -337,7 +339,7 @@ export function WorkspacePickerMenu({
         <div className="wg-picker-section">
           <button type="button" className="wg-picker-reset" onClick={() => onSelect('')}>
             <span className="wg-picker-icon">
-              <IconFolderClose16 />
+              <IconFolderCloseRegular />
             </span>
             <span className="wg-picker-label">{labels.all}</span>
           </button>
