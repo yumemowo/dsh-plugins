@@ -18,3 +18,4 @@ wg-probe-store/
 .DS_Store
 
 .review/
+.chk/
