@@ -28,8 +28,8 @@ import {
   COLLAPSE_VARS,
   DEFAULT_COLLAPSE_MOTION,
   collapseMotionVars,
-} from '../utils/collapseMotion.ts'
-import type { CollapseMotion } from '../utils/collapseMotion.ts'
+} from '../../utils/collapseMotion.ts'
+import type { CollapseMotion } from '../../utils/collapseMotion.ts'
 
 // 节奏参数与自定义属性名都定义在 utils/collapseMotion.ts（样式表要用同一份），这里转发给元素组件使用
 export { COLLAPSE_VARS, DEFAULT_COLLAPSE_MOTION, collapseMotionVars }

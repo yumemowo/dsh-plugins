@@ -14,7 +14,7 @@ import {
   Menu,
 } from '../runtime.ts'
 import type { MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
-import { IconButton } from './IconButton.tsx'
+import { IconButton } from './components/IconButton.tsx'
 
 export interface RowActionsProps {
   menuOpen: boolean

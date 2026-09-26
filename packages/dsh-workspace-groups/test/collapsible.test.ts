@@ -4,8 +4,8 @@ import {
   planStaggerUnits,
   resolveLead,
   staggerDelayMs,
-} from '../src/client/components/CollapsibleBody.tsx'
-import type { StaggerTiming } from '../src/client/components/CollapsibleBody.tsx'
+} from '../src/client/views/components/CollapsibleBody.tsx'
+import type { StaggerTiming } from '../src/client/views/components/CollapsibleBody.tsx'
 
 /**
  * 逐个淡入的排期与延迟
@@ -239,7 +239,7 @@ describe('fail-open reveal', () => {
    */
   function componentSource(): string {
     return readFileSync(
-      new URL('../src/client/components/CollapsibleBody.tsx', import.meta.url),
+      new URL('../src/client/views/components/CollapsibleBody.tsx', import.meta.url),
       'utf8',
     ).replace(/\/\*[\s\S]*?\*\//g, '')
   }

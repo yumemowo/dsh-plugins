@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import * as React from 'react'
-import { GroupSection } from '../src/client/components/GroupSection.tsx'
-import { SessionRowMenu } from '../src/client/components/SessionRowMenu.tsx'
-import { WorkspaceSection } from '../src/client/components/WorkspaceSection.tsx'
-import type { WorkspaceSectionProps } from '../src/client/components/WorkspaceSection.tsx'
-import { WorkspaceGroupsRegion } from '../src/client/components/WorkspaceGroupsRegion.tsx'
-import type { WorkspaceGroupsProps } from '../src/client/components/WorkspaceGroupsRegion.tsx'
+import { GroupSection } from '../src/client/views/GroupSection.tsx'
+import { SessionRowMenu } from '../src/client/views/SessionRowMenu.tsx'
+import { WorkspaceSection } from '../src/client/views/WorkspaceSection.tsx'
+import type { WorkspaceSectionProps } from '../src/client/views/WorkspaceSection.tsx'
+import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
+import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import {
   officialAddLabels,
   officialHoverLabels,

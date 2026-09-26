@@ -17,10 +17,10 @@
 import { memo, useEffect, useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { HoverCard, StateDot } from '../runtime.ts'
-import { handleRowKeyDown } from './rowKeyboard.ts'
-import { SessionHoverContent } from './HoverCards.tsx'
+import { handleRowKeyDown } from './components/rowKeyboard.ts'
+import { SessionHoverContent } from './components/HoverCards.tsx'
 import { sameSessionStatuses } from '../data/status.ts'
-import type { RowContextMenuEvent } from './RowContextMenu.tsx'
+import type { RowContextMenuEvent } from './components/RowContextMenu.tsx'
 import type { OfficialHoverLabels } from '../official.ts'
 import type { SessionStatus } from '../data/status.ts'
 

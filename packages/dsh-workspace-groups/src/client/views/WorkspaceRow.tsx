@@ -30,9 +30,9 @@ import {
 } from '../menus.tsx'
 import type { ParentGroupMenuInput, VirtualWorkspaceMenuInput } from '../menus.tsx'
 import { RowActions } from './RowActions.tsx'
-import { WorkspaceHoverContent } from './HoverCards.tsx'
-import { useRowContextMenu } from './RowContextMenu.tsx'
-import { handleRowKeyDown } from './rowKeyboard.ts'
+import { WorkspaceHoverContent } from './components/HoverCards.tsx'
+import { useRowContextMenu } from './components/RowContextMenu.tsx'
+import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import type { OfficialHoverLabels } from '../official.ts'
 
 /** 工作区标题行的文案与无障碍标签 */

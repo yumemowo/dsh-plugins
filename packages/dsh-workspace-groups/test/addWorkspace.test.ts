@@ -5,7 +5,7 @@ import {
   directoryFlowOccupant,
   resolveOccupant,
 } from '../src/client/directoryFlow.ts'
-import { AddWorkspaceControl } from '../src/client/components/AddWorkspaceControl.tsx'
+import { AddWorkspaceControl } from '../src/client/views/AddWorkspaceControl.tsx'
 import type { AddWorkspaceActions, DirectoryFlowOwner } from '../src/client/actions.ts'
 import { officialAddLabels } from '../src/client/official.ts'
 import { regionTranslate, workspaceTranslate } from './locale-stub.ts'

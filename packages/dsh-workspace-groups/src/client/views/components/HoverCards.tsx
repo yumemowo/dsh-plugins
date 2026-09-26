@@ -11,9 +11,9 @@
  * 入场前的 `data-wg-stagger` 标记不打在这里：卡片内容是 portal 到 body 的浮层，与折叠体的逐个淡入无关
  */
 import type { ReactElement } from 'react'
-import { StateDot } from '../runtime.ts'
-import type { SessionStatus } from '../data/status.ts'
-import { CARD_ATTRIBUTE } from '../utils/flip.ts'
+import { StateDot } from '../../runtime.ts'
+import type { SessionStatus } from '../../data/status.ts'
+import { CARD_ATTRIBUTE } from '../../utils/flip.ts'
 
 /**
  * 给外层那张卡片打标记

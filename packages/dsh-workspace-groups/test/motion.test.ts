@@ -5,7 +5,7 @@ import {
   collapseMotionVars,
 } from '../src/client/utils/collapseMotion.ts'
 import { CSS } from '../src/client/styles.ts'
-import { staggerDelayMs } from '../src/client/components/CollapsibleBody.tsx'
+import { staggerDelayMs } from '../src/client/views/components/CollapsibleBody.tsx'
 
 describe('collapse motion parameters', () => {
   it('exposes the durations and the easing as inline custom properties', () => {

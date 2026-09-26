@@ -9,7 +9,7 @@
  */
 import { useCallback, useState } from 'react'
 import type { ReactElement } from 'react'
-import { Menu } from '../runtime.ts'
+import { Menu } from '../../runtime.ts'
 import type { MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /**

@@ -7,8 +7,8 @@
  */
 import { useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
-import { Button, Input, Modal } from '../../runtime.ts'
-import type { RegionTranslate } from '../../locales.ts'
+import { Button, Input, Modal } from '../../../runtime.ts'
+import type { RegionTranslate } from '../../../locales.ts'
 
 export interface NameDialogProps {
   title: string

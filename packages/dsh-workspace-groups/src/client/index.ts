@@ -37,7 +37,7 @@ import { officialAddLabels, officialSessionLabels, timeLabel } from './official.
 import type { RegionActions, AddWorkspaceActions, OfficialSessionActions } from './actions.ts'
 import { directoryFlowOccupant, directoryFlowSource } from './directoryFlow.ts'
 import { hostInfoSource } from './hostInfo.ts'
-import { WorkspaceGroupsRegion } from './components/WorkspaceGroupsRegion.tsx'
+import { WorkspaceGroupsRegion } from './views/WorkspaceGroupsRegion.tsx'
 import { insertStyles } from './styles.ts'
 import { createViewModeStore, sharedViewModeStore } from './viewMode.ts'
 

@@ -26,8 +26,8 @@ import {
   IconTrashOutlineRegular,
 } from '../runtime.ts'
 import { IconVirtualFolder16 } from '../icons.tsx'
-import { IconButton } from './IconButton.tsx'
-import { handleRowKeyDown } from './rowKeyboard.ts'
+import { IconButton } from './components/IconButton.tsx'
+import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import type { PickerEntry, PickerSections } from '../data/picker.ts'
 import type { PickerLabels } from '../labels.ts'
 

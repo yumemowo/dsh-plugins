@@ -17,10 +17,10 @@ import {
   buildRowContextMenuItems,
   buildVirtualWorkspaceMenuItems,
 } from '../menus.tsx'
-import { CollapsibleBody } from './CollapsibleBody.tsx'
+import { CollapsibleBody } from './components/CollapsibleBody.tsx'
 import { RowActions } from './RowActions.tsx'
-import { useRowContextMenu } from './RowContextMenu.tsx'
-import { handleRowKeyDown } from './rowKeyboard.ts'
+import { useRowContextMenu } from './components/RowContextMenu.tsx'
+import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import type { VirtualWorkspaceSection as VirtualWorkspaceSectionData } from '../data/types.ts'
 
 export interface VirtualWorkspaceSectionProps {

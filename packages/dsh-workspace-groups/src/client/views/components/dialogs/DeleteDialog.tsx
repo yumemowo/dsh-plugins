@@ -8,8 +8,8 @@
  * 「取消」与「关闭」是通用词，取插槽注入的 `t` 座位回退到官方 `common` 命名空间
  */
 import type { ReactElement } from 'react'
-import { Button, Modal } from '../../runtime.ts'
-import type { RegionTranslate } from '../../locales.ts'
+import { Button, Modal } from '../../../runtime.ts'
+import type { RegionTranslate } from '../../../locales.ts'
 
 export interface DeleteDialogProps {
   title: string

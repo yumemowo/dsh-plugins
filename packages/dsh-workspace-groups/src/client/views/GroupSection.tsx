@@ -10,10 +10,10 @@ import { useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { IconTriangleRightFillRegular } from '../runtime.ts'
 import { GROUP_MENU, ROW_MENU, buildGroupMenuItems, buildRowContextMenuItems } from '../menus.tsx'
-import { CollapsibleBody } from './CollapsibleBody.tsx'
+import { CollapsibleBody } from './components/CollapsibleBody.tsx'
 import { RowActions } from './RowActions.tsx'
-import { useRowContextMenu } from './RowContextMenu.tsx'
-import { handleRowKeyDown } from './rowKeyboard.ts'
+import { useRowContextMenu } from './components/RowContextMenu.tsx'
+import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import type { GroupSection as GroupSectionData } from '../data/types.ts'
 
 export interface GroupSectionProps {

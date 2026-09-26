@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest'
 import * as React from 'react'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { WorkspaceGroupsRegion } from '../src/client/components/WorkspaceGroupsRegion.tsx'
-import type { WorkspaceGroupsProps } from '../src/client/components/WorkspaceGroupsRegion.tsx'
+import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
+import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import {
   SessionHoverContent,
   WorkspaceHoverContent,
-} from '../src/client/components/HoverCards.tsx'
+} from '../src/client/views/components/HoverCards.tsx'
 import {
   officialAddLabels,
   officialSessionLabels,

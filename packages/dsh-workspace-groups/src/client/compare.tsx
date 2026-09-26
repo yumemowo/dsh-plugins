@@ -17,7 +17,7 @@ import type { RegionActions } from './actions.ts'
 import { NS } from './locales.ts'
 import { directoryFlowSource } from './directoryFlow.ts'
 import { hostInfoSource } from './hostInfo.ts'
-import { WorkspaceGroupsRegion } from './components/WorkspaceGroupsRegion.tsx'
+import { WorkspaceGroupsRegion } from './views/WorkspaceGroupsRegion.tsx'
 import { IconWorkspaceTreeOutlineRegular } from './runtime.ts'
 import type { ViewModeStoreHandle } from './viewMode.ts'
 

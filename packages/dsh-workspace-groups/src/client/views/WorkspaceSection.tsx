@@ -7,7 +7,7 @@
  * 子工作区本身仍是一个完整的工作区块，由 `renderChildWorkspace` 交回，深度任意层都不必在这里知道层级
  */
 import type { ReactElement, ReactNode } from 'react'
-import { CollapsibleBody } from './CollapsibleBody.tsx'
+import { CollapsibleBody } from './components/CollapsibleBody.tsx'
 import { GroupSection } from './GroupSection.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
 import type { WorkspaceHoverData, WorkspaceRowLabels, WorkspaceRowProps } from './WorkspaceRow.tsx'
