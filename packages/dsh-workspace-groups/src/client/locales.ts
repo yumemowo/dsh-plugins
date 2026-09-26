@@ -60,6 +60,9 @@ export const zh = {
   'nested.mergeSkip': '先不放进分组',
   'nested.addTitle': '把新工作区放进分组？',
   'nested.addDesc': '新工作区“{name}”落在“{parent}”之下，而“{parent}”已在分组“{group}”里。是否一并放进去？',
+  'viewMode.label': '展示方式',
+  'viewMode.workspace': '按工作区',
+  'viewMode.flat': '平铺',
 }
 
 /** 英文字典，键集与 {@link zh} 完全一致 */
@@ -113,6 +116,9 @@ export const en = {
   'nested.addTitle': 'Put the new workspace into a group?',
   'nested.addDesc':
     'The new workspace “{name}” sits under “{parent}”, which is already in the group “{group}”. Move it in as well?',
+  'viewMode.label': 'Layout',
+  'viewMode.workspace': 'By workspace',
+  'viewMode.flat': 'In one list',
 } as const
 
 /** 本命名空间的键域，同时是 {@link zh} 的键集 */

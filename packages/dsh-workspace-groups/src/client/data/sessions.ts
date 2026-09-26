@@ -193,6 +193,59 @@ export function groupSessionsByWorkspace(
 }
 
 /**
+ * 会话行的显示顺序：新建中的空白会话排最前，其余按最近更新倒序
+ *
+ * 官方单列表用同一口径，三种段落（分组内、未归组段、平铺列表）都拿它排序，顺序因此不会各说一套
+ */
+export function compareSessionRows(a: SessionRow, b: SessionRow): number {
+  if (a.blank !== b.blank) return a.blank ? -1 : 1
+  return b.updatedAt - a.updatedAt
+}
+
+/**
+ * 平铺列表的全部可见会话行，成员与工作区归属无关
+ *
+ * 可见性判定与工作区视图共用，排序交给消费方按 {@link compareSessionRows} 做
+ * @param statuses - 统一状态快照，缺省时只有摘要里的运行态可用
+ */
+export function flatSessionRows(
+  sessions: SessionListState,
+  archivedSessionIds: readonly string[] = [],
+  statuses: SessionStatusSnapshot = new Map(),
+): SessionRow[] {
+  const { byId, archived, current } = visibilityInput(sessions, archivedSessionIds)
+  const rows: SessionRow[] = []
+  for (const id of sessions.ids) {
+    const key = String(id)
+    const summary = byId[key]
+    if (summary === undefined || !isSessionVisible(summary, current, archived)) continue
+    rows.push(toRow(sessions, statuses, summary))
+  }
+  return rows
+}
+
+/**
+ * 按聚焦范围收窄平铺列表
+ *
+ * `allowed` 为 undefined 表示没有聚焦、全部保留；无所属的会话不在索引里，聚焦时因此被排除
+ * @param rows - 平铺列表的全部可见行
+ * @param workspaceOf - 会话 id → 所属工作区 id，无所属的会话不在其中
+ * @param allowed - 聚焦允许出现的工作区，undefined 表示全部
+ */
+export function flatRowsInFocus(
+  rows: readonly SessionRow[],
+  workspaceOf: ReadonlyMap<string, string>,
+  allowed: readonly string[] | undefined,
+): SessionRow[] {
+  if (allowed === undefined) return [...rows]
+  const permits = new Set(allowed)
+  return rows.filter((row) => {
+    const workspaceId = workspaceOf.get(row.id)
+    return workspaceId !== undefined && permits.has(workspaceId)
+  })
+}
+
+/**
  * 收集不属于任何工作区的会话行
  *
  * 删除工作区只移除注册，会话记录会原样保留，官方把这些无所属的会话收进末尾一个隐式的「未分组」区段

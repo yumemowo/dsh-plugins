@@ -37,9 +37,24 @@ import {
   deriveNesting,
   nearestAncestorForPath,
 } from '../data/nest.ts'
-import { groupSessionsByWorkspace, mainSessionId, straySessions } from '../data/sessions.ts'
-import { focusedLayout, pickerSections, resolveFocus, rootPickerEntries } from '../data/picker.ts'
+import {
+  compareSessionRows,
+  flatRowsInFocus,
+  flatSessionRows,
+  groupSessionsByWorkspace,
+  mainSessionId,
+  straySessions,
+} from '../data/sessions.ts'
+import {
+  focusedLayout,
+  focusedWorkspaceIds,
+  pickerSections,
+  resolveFocus,
+  rootPickerEntries,
+} from '../data/picker.ts'
 import type { PickerEntry } from '../data/picker.ts'
+import type { PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ViewModeStoreHandle } from '../viewMode.ts'
 import { WorkspacePickerMenu } from './WorkspacePickerMenu.tsx'
 import { ViewOptionsMenu } from './ViewOptionsMenu.tsx'
 import { EMPTY_PICKER_STATE } from '../../pickerState.ts'
@@ -81,6 +96,9 @@ import { NameDialog } from './dialogs/NameDialog.tsx'
 /** 未分组桶在工作区状态表里占用的键，它没有真实的 workspaceId */
 const UNGROUPED_KEY = ''
 
+/** 平铺列表不渲染时交出的空行集，恒定同一份引用，避免每次渲染换新数组 */
+const EMPTY_ROWS: readonly SessionRow[] = []
+
 /**
  * 一次待确认的「把新增的子工作区放进父所在的分组」
  *
@@ -102,9 +120,10 @@ interface MergeDraft {
   workspaceIds: string[]
 }
 
-/** 组件消费的 props，全局数据 hook + 注入的动作 + 两个文案座位 + shell 的宽窄状态 */
+/** 组件消费的 props，全局数据 hook + 注入的动作 + store 座位 + 两个文案座位 + shell 的宽窄状态 */
 export type WorkspaceGroupsProps = RegionDataHooks &
-  RegionActions & {
+  RegionActions &
+  PropsStore<ViewModeStoreHandle> & {
     /** shell 折叠状态：宽栏渲染完整内容，窄栏只渲染展开入口 */
     wide: boolean
     /** 窄栏图标请求展开侧边栏 */
@@ -148,7 +167,13 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     tWorkspace,
     tSidebar,
     t,
+    useStore,
+    actions,
   } = props
+
+  // 展示方式读走选择器 hook、写走 actions，与官方 ui-workspace 的 groupBy 同一套
+  const viewMode = useStore((state) => state.mode)
+  const setViewMode = actions.setMode
 
   // 文案表按三个翻译座位缓存：它每次渲染都是新对象
   // 里面的函数（如 sessionActions）会直接传给行组件，每渲染新建一份会让整片列表的 memo 失效
@@ -1010,6 +1035,97 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const searching = search.normalized !== ''
 
   /**
+   * 渲染一个会话行
+   *
+   * 空白行的名字取语言包的固定名（官方 `session.new`），并且像官方一样不挂行尾菜单
+   * 它只是「准备开始一个新会话」的占位，没有会话可重命名或归档
+   * `grouping` 缺省表示该行没有分组可归（「未分组」桶或平铺列表）
+   *
+   * 传下去的字段都是原语或稳定引用，动作传的是未绑定的函数本身，行级 memo 要按字段比对，任何一处每渲染新建都会让它整片失效
+   *
+   * 提到工作区区块之外：平铺列表要渲染同样的行，两条路径因此共用一套状态点、悬停卡片与空白行取舍
+   */
+  const renderSession = (
+    row: SessionRow,
+    grouping?: SessionGroupingContext,
+    flat = false,
+  ): ReactElement => {
+    // 只有被打开的那一行带揭示请求，它的闭包每渲染新建一份，因此每次重渲染会让这一行重渲染一次——行滚进可视区并回报后标记即被清掉
+    // 这个代价只落在该行上
+    const reveal = row.id === revealSessionId ? () => acknowledgeReveal(row.id) : undefined
+    // 状态只推导一次，行首那个点与卡片那几条取自同一份结果
+    const statuses = statusesOf(row)
+    const status = rowStatusDot(row, statuses)
+    if (row.blank) {
+      return (
+        <SessionRowView
+          key={row.id}
+          sessionId={row.id}
+          title={labels.newSession}
+          selected={row.id === currentSessionId}
+          status={status}
+          time={timeOf(row)}
+          statuses={statuses}
+          hoverTime={hoverTimeOf(row)}
+          hoverLabels={hoverLabels}
+          flat={flat}
+          onOpenSession={openSession}
+          onReveal={reveal}
+        />
+      )
+    }
+    return (
+      <SessionRowMenu
+        key={row.id}
+        row={row}
+        title={row.title}
+        selected={row.id === currentSessionId}
+        status={status}
+        time={timeOf(row)}
+        statuses={statuses}
+        hoverTime={hoverTimeOf(row)}
+        hoverLabels={hoverLabels}
+        grouping={grouping}
+        official={official}
+        actionsLabel={labels.sessionActions}
+        flat={flat}
+        onOpenSession={openSession}
+        t={t}
+        onReveal={reveal}
+      />
+    )
+  }
+
+  /**
+   * 会话 id → 它所属的工作区 id，无所属的会话不在其中
+   *
+   * 平铺列表按聚焦范围过滤时要用它：只有归属能回答「这一行属于哪一片内容」
+   * 索引一次建好，逐行去各工作区的名单里找会退化成与工作区数平方成正比
+   */
+  const workspaceOfSession = ((): Map<string, string> => {
+    const index = new Map<string, string>()
+    for (const [workspaceId, rows] of rowsByWorkspace) {
+      for (const row of rows) index.set(row.id, workspaceId)
+    }
+    return index
+  })()
+
+  /**
+   * 平铺列表的行
+   *
+   * 成员集合与工作区归属无关，因此「未分组」桶里的会话也在其中，且顺序与分组视图共用一套
+   * 聚焦时按归属收窄，聚焦工作区分组取的是归属全集而不是分组视图那份渲染层级
+   */
+  const flatRows =
+    viewMode !== 'flat'
+      ? EMPTY_ROWS
+      : flatRowsInFocus(
+          flatSessionRows(sessions, archivedSessionIds, statusSnapshot),
+          workspaceOfSession,
+          focusedWorkspaceIds(rootLayout, pickerEntries, snapshot.picker.focused),
+        ).sort(compareSessionRows)
+
+  /**
    * 渲染一个工作区区块，以及它体内按 cwd 路径挂着的子工作区
    *
    * 递归由这里一层承担，子工作区仍是一个完整的工作区块，只是从父工作区的折叠体里长出来
@@ -1034,64 +1150,6 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
 
     /** 这个工作区体内的一个子工作区，它自己也是一个完整的工作区块 */
     const renderChild = (childId: string): ReactNode => renderWorkspace(childId)
-
-    /**
-     * 渲染一个会话行
-     *
-     * 空白行的名字取语言包的固定名（官方 `session.new`），并且像官方一样不挂行尾菜单
-     * 它只是「准备开始一个新会话」的占位，没有会话可重命名或归档
-     * `grouping` 缺省表示该行没有分组可归（「未分组」桶）
-     *
-     * 传下去的字段都是原语或稳定引用，动作传的是未绑定的函数本身，行级 memo 要按字段比对，任何一处每渲染新建都会让它整片失效
-     */
-    const renderSession = (
-      row: SessionRow,
-      grouping?: SessionGroupingContext,
-    ): ReactElement => {
-      // 只有被打开的那一行带揭示请求，它的闭包每渲染新建一份，因此每次重渲染会让这一行重渲染一次——行滚进可视区并回报后标记即被清掉
-      // 这个代价只落在该行上
-      const reveal =
-        row.id === revealSessionId ? () => acknowledgeReveal(row.id) : undefined
-      // 状态只推导一次，行首那个点与卡片那几条取自同一份结果
-      const statuses = statusesOf(row)
-      const status = rowStatusDot(row, statuses)
-      if (row.blank) {
-        return (
-          <SessionRowView
-            key={row.id}
-            sessionId={row.id}
-            title={labels.newSession}
-            selected={row.id === currentSessionId}
-            status={status}
-            time={timeOf(row)}
-            statuses={statuses}
-            hoverTime={hoverTimeOf(row)}
-            hoverLabels={hoverLabels}
-            onOpenSession={openSession}
-            onReveal={reveal}
-          />
-        )
-      }
-      return (
-        <SessionRowMenu
-          key={row.id}
-          row={row}
-          title={row.title}
-          selected={row.id === currentSessionId}
-          status={status}
-          time={timeOf(row)}
-          statuses={statuses}
-          hoverTime={hoverTimeOf(row)}
-          hoverLabels={hoverLabels}
-          grouping={grouping}
-          official={official}
-          actionsLabel={labels.sessionActions}
-          onOpenSession={openSession}
-          t={t}
-          onReveal={reveal}
-        />
-      )
-    }
 
     return (
       <WorkspaceSection
@@ -1158,6 +1216,22 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     )
   }
 
+  /**
+   * 列表底部那两条说明
+   *
+   * 提到渲染分支之外：嵌套开关是根节点级的设置，平铺列表下也要说明它被关掉了
+   */
+  const notes = (
+    <>
+      {snapshot.nested ? null : (
+        <div className="wg-note wg-note-nested" role="status">
+          {`${labels.nested.disabledNote} ${labels.nested.reEnableHint}`}
+        </div>
+      )}
+      <div className="wg-note">{labels.unimplemented}</div>
+    </>
+  )
+
   return (
     <div className="wg-root" ref={flipRef}>
       <RegionHeader
@@ -1193,6 +1267,9 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
           label: labels.nested.setting,
           onToggle: requestNestedToggle,
         }}
+        mode={viewMode}
+        viewMode={labels.viewMode}
+        onSelectMode={setViewMode}
         onClose={() => setViewOptionsOpen(false)}
       />
       {/* 搜索展开时标题整块让位（指针事件也关掉），面板若还开着就悬在一片与它无关的
@@ -1219,7 +1296,17 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
           labels={labels.search}
           onOpen={openSearchResult}
         />
+      ) : viewMode === 'flat' ? (
+        /* 平铺：全部可见会话在同一条列表里，与官方「单列表」（groupBy: 'flat'）一致 */
+        <div className="wg-list wg-panel">
+          <div className="wg-flat-list">
+            {flatRows.map((row) => renderSession(row, undefined, true))}
+          </div>
+          {flatRows.length === 0 ? <div className="wg-empty">{labels.empty}</div> : null}
+          {notes}
+        </div>
       ) : (
+        /* 按工作区：工作区分组段 + 未归组工作区 + 末尾的「未分组」桶 */
         <div className="wg-list wg-panel">
           {/* 工作区分组段排在前面，未归组的工作区平铺在其后、不带区段头
               没有建过分组时 rootLayout.groups 为空、全部工作区都在 loose 里
@@ -1311,14 +1398,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
               </CollapsibleBody>
             </section>
           )}
-          {/* 嵌套关着时明确说一句，界面看起来与没有这个特性时完全一样，用户需要知道自己关掉了什么
-              后一句说明「重新启用能恢复什么」，否则「关掉」读起来像一次不可逆的破坏 */}
-          {snapshot.nested ? null : (
-            <div className="wg-note wg-note-nested" role="status">
-              {`${labels.nested.disabledNote} ${labels.nested.reEnableHint}`}
-            </div>
-          )}
-          <div className="wg-note">{labels.unimplemented}</div>
+          {notes}
         </div>
       )}
       {/* 对话框挂在列表之外

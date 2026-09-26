@@ -185,3 +185,24 @@ export function focusedLayout(
   }
   return { groups: [], loose: [entry.id] }
 }
+
+/**
+ * 当前聚焦允许出现的工作区
+ *
+ * 平铺列表不分段，只能按工作区归属过滤，因此这里交出的是归属而不是 {@link focusedLayout} 那种渲染层级
+ * 聚焦一个工作区分组时组内被嵌套的成员也算在内：平铺下它们与顶层成员同属这片内容
+ * @param layout - 未聚焦时的根节点布局
+ * @param entries - 菜单条目，聚焦对象必须是其中之一才算数
+ * @param focused - 当前聚焦的条目键，空串表示「全部」
+ * @returns 允许出现的工作区 id，无聚焦或聚焦已失效时为 undefined，表示「全部」
+ */
+export function focusedWorkspaceIds(
+  layout: RootLayout,
+  entries: readonly PickerEntry[],
+  focused: string,
+): readonly string[] | undefined {
+  const entry = resolveFocus(entries, focused)
+  if (entry === undefined) return undefined
+  if (entry.kind === 'workspace') return [entry.id]
+  return layout.groups.find((group) => group.id === entry.id)?.workspaceIds ?? []
+}

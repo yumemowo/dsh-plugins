@@ -66,6 +66,12 @@ export interface SessionRowViewProps {
   /** 行尾操作位，缺省表示该行没有任何可用操作（如未分组桶里的会话） */
   action?: ReactNode
   /**
+   * 平铺列表里的行
+   *
+   * 行首没有状态位时整格不占位，与官方 `.flatSessionRowWithoutStatus` 同一取舍
+   */
+  flat?: boolean | undefined
+  /**
    * 行右键处理，缺省表示该行没有右键菜单，右键保持浏览器默认行为
    *
    * 通过 props 下发而不是在行内自建：菜单条目与分派都属于「这一行有哪些操作」，由持有菜单的组件决定
@@ -100,6 +106,7 @@ function SessionRowViewImpl({
   hoverLabels,
   menuOpen = false,
   action,
+  flat = false,
   onContextMenu,
   onOpenSession,
   onReveal,
@@ -118,7 +125,10 @@ function SessionRowViewImpl({
     <div
       ref={rowRef}
       className={
-        'wg-row' + (selected ? ' wg-row-selected' : '') + (menuOpen ? ' wg-row-menu-open' : '')
+        'wg-row' +
+        (selected ? ' wg-row-selected' : '') +
+        (menuOpen ? ' wg-row-menu-open' : '') +
+        (flat && status === undefined ? ' wg-row-flat' : '')
       }
       // 参与所在折叠体的逐个淡入，序号由折叠体按文档序下发
       data-wg-stagger=""
@@ -128,7 +138,7 @@ function SessionRowViewImpl({
       onKeyDown={(event) => handleRowKeyDown(event, open)}
       onContextMenu={onContextMenu}
     >
-      {status === undefined ? (
+      {status === undefined && flat ? null : status === undefined ? (
         <span className="wg-slot" />
       ) : (
         <span className="wg-slot" role="img" aria-label={status.label}>
@@ -187,6 +197,7 @@ function sameRowViewProps(prev: SessionRowViewProps, next: SessionRowViewProps):
     prev.hoverCopy === next.hoverCopy &&
     prev.hoverLabels === next.hoverLabels &&
     prev.menuOpen === next.menuOpen &&
+    prev.flat === next.flat &&
     prev.action === next.action &&
     prev.onContextMenu === next.onContextMenu &&
     prev.onOpenSession === next.onOpenSession &&

@@ -16,6 +16,7 @@ import {
 } from '../src/client/official.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { viewModeProps } from './viewMode-stub.ts'
 
 /**
  * 悬停卡片的真实 DOM 冒烟
@@ -81,6 +82,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     t: regionTranslate(),
     tWorkspace: workspaceTranslate(),
     tSidebar: sidebarTranslate(),
+    ...viewModeProps(),
     official: () => ({
       renameSession: async () => {},
       forkSession: () => {},

@@ -19,6 +19,7 @@ export {
   IconCloseFillRegular,
   IconEditOutlineRegular,
   IconEllipsisOutlineRegular,
+  IconFlatListOutlineRegular,
   IconFolderCloseRegular,
   IconFolderOpenRegular,
   IconNewChatOutlineRegular,

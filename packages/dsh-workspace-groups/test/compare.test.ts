@@ -7,6 +7,7 @@ import {
 import type { RegionActions } from '../src/client/actions.ts'
 import { sidebarTranslate, translateFor, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { createViewModeStore } from '../src/client/viewMode.ts'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { Context } from '@deepseek-ai/cordis'
 
@@ -149,6 +150,7 @@ function register(options: { present?: boolean } = {}) {
     }),
     actions(),
     locale.service,
+    createViewModeStore(),
   )
   return { sidebar, locale, bodies }
 }
@@ -218,6 +220,7 @@ describe('registerCompareTab', () => {
         fakeContext({ sidebarRightTabs: undefined, sidebarRight: sidebar.right, bodies }),
         actions(),
         locale.service,
+        createViewModeStore(),
       ),
     ).not.toThrow()
     expect(sidebar.types).toEqual([])
@@ -234,6 +237,7 @@ describe('registerCompareTab', () => {
       fakeContext({ sidebarRightTabs: undefined, sidebarRight: sidebar.right, bodies }),
       actions(),
       locale.service,
+      createViewModeStore(),
     )
 
     expect(bodies).toHaveLength(1)

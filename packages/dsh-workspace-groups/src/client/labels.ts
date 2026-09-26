@@ -146,6 +146,22 @@ export interface RegionLabels {
   picker: PickerLabels
   /** 子工作区嵌套的开关、提示与归组入口文案 */
   nested: NestedLabels
+  /** 视图选项面板里「展示方式」那一组的文案 */
+  viewMode: ViewModeLabels
+}
+
+/** 视图选项面板里「展示方式」那一组 */
+export interface ViewModeLabels {
+  /**
+   * 这一组的标题
+   *
+   * 面板里有两组设置，与官方菜单用 `label` 条目给「分组方式 / 排序方式」分组同一做法
+   */
+  label: string
+  /** 「按工作区」这一项：工作区分组结构照常渲染 */
+  workspace: string
+  /** 「平铺」这一项：全部可见会话在同一条列表里，与官方「单列表」一致 */
+  flat: string
 }
 
 /** 子工作区嵌套相关的文案 */
@@ -319,6 +335,12 @@ export function regionLabels(
       addTitle: t('nested.addTitle'),
       addDesc: (name: string, parent: string, group: string) =>
         t('nested.addDesc', { name, parent, group }),
+    },
+    viewMode: {
+      // 官方菜单里那组「分组方式 / 按工作区 / 单列表」的措辞本包不复用：这边的三个取值是另一套语义
+      label: t('viewMode.label'),
+      workspace: t('viewMode.workspace'),
+      flat: t('viewMode.flat'),
     },
   }
 }

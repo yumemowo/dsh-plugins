@@ -78,6 +78,8 @@ export interface SessionRowMenuProps {
   actionsLabel: (name: string) => string
   /** 本包命名空间的翻译座位，供重命名对话框解析通用词 */
   t: RegionTranslate
+  /** 该行是否平铺列表里的行，行首没有状态位时不占那一格 */
+  flat?: boolean | undefined
   /** 请求把这一行滚进可视区，只在从搜索结果打开时下发 */
   onReveal?: (() => void) | undefined
 }
@@ -124,6 +126,7 @@ function sameRowMenuProps(prev: SessionRowMenuProps, next: SessionRowMenuProps):
     prev.official === next.official &&
     prev.onOpenSession === next.onOpenSession &&
     prev.actionsLabel === next.actionsLabel &&
+    prev.flat === next.flat &&
     prev.t === next.t &&
     prev.onReveal === next.onReveal &&
     sameGrouping(prev.grouping, next.grouping)
@@ -144,6 +147,7 @@ function SessionRowMenuView({
   onOpenSession,
   actionsLabel,
   t,
+  flat = false,
   onReveal,
 }: SessionRowMenuProps): ReactElement {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -193,6 +197,7 @@ function SessionRowMenuView({
         menuOpen={menuOpen}
         // 卡片要在两种面板开着时都让位：行内 `...` 菜单与行右键菜单
         hoverDisabled={menuOpen || contextMenu.open}
+        flat={flat}
         onOpenSession={onOpenSession}
         onReveal={onReveal}
         onContextMenu={contextMenu.onContextMenu}

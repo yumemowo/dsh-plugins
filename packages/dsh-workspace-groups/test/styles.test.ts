@@ -954,6 +954,46 @@ describe('client stylesheet', () => {
     expect(bodyOf('.wg-view-option-label')).toMatch(/flex:\s*1/)
   })
 
+  it('paints the display mode rows as clickable and the group label as inert', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 可选行与开关行相反：它整行可点，因此必须有指针与悬停底色
+    const row = bodyOf('.wg-view-option-row')
+    expect(row).toMatch(/display:\s*flex/)
+    expect(row).toMatch(/cursor:\s*pointer/)
+    expect(bodyOf('.wg-view-option-row:hover')).toMatch(
+      /background:\s*var\(--dsw-alias-interactive-bg-hover\)/,
+    )
+    // 标题只是说明这一组选的是哪件事，不可点也不是停点
+    expect(bodyOf('.wg-view-group-label')).not.toMatch(/cursor:\s*pointer/)
+    // 分隔线取官方菜单 separator 同一档：0.5px 的 border-l2
+    const separator = bodyOf('.wg-view-separator')
+    expect(separator).toMatch(/height:\s*0\.5px/)
+    expect(separator).toMatch(/background:\s*var\(--dsw-alias-border-l2\)/)
+  })
+
+  it('lays the flat list out as one column at the grouped view row spacing', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 一条列表的成员排成一列，行距与工作区体内那几段同值（2px）
+    expect(bodyOf('.wg-flat-list')).toMatch(/flex-direction:\s*column/)
+    expect(bodyOf('.wg-flat-list > * + *')).toMatch(/margin-top:\s*2px/)
+    // 平铺行没有状态位时标题回到行左缘，与官方同名类的取舍一致
+    expect(bodyOf('.wg-row-flat .wg-row-title')).toMatch(/margin-left:\s*0/)
+  })
+
   it('paints the submenu card opaque so it does not show the list through', () => {
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({

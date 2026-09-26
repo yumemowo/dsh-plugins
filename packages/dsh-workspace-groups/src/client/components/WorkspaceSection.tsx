@@ -13,6 +13,7 @@ import { WorkspaceRow } from './WorkspaceRow.tsx'
 import type { WorkspaceHoverData, WorkspaceRowLabels, WorkspaceRowProps } from './WorkspaceRow.tsx'
 
 import type { OfficialHoverLabels } from '../official.ts'
+import { compareSessionRows } from '../data/sessions.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
 
 export interface WorkspaceSectionProps {
@@ -78,18 +79,6 @@ export interface WorkspaceSectionProps {
   renderSession: (row: SessionRow) => ReactNode
   /** 把一个子工作区渲染成一个完整的工作区块，深度由区域组件自己算 */
   renderChildWorkspace: (workspaceId: string) => ReactNode
-}
-
-/**
- * 会话行的显示顺序：新建中的空白会话排最前，其余按最近更新倒序
- *
- * 空白会话是刚点出来的那条占位行，还没有自己的内容与时间，排在所属区段（分组内或未归组区）的最前才符合「刚新建的就是这条」的预期
- * 它一旦启用就回到与其他会话同一套排序里
- * @returns 供 `Array.prototype.sort` 使用的比较值
- */
-function compareSessionRows(a: SessionRow, b: SessionRow): number {
-  if (a.blank !== b.blank) return a.blank ? -1 : 1
-  return b.updatedAt - a.updatedAt
 }
 
 export function WorkspaceSection({

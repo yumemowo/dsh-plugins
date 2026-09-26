@@ -6,11 +6,22 @@
  * 贴触发器下缘展开、放不下翻到上方、两个方向都夹进窗口、指针离开延迟关闭、点外/Escape 关闭、方向键在条目间移动
  *
  * 面板是不透明浮层，底色与描边必须用官方菜单面板那套 token（见样式表），否则 token 名写错时面板会变透明而界面不会报错
+ *
+ * 内容分两组：上面是展示方式（两条互斥的可选项，行尾以勾标记当前值），下面是子工作区嵌套开关
+ * 两组之间用一条分隔线隔开，与官方把「分组方式」和「排序方式」分成两段的做法一致
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ReactElement, RefObject } from 'react'
-import { IconWorkspaceTreeOutlineRegular, Switch } from '../runtime.ts'
+import {
+  IconCheckOutlineRegular,
+  IconFlatListOutlineRegular,
+  IconFolderCloseRegular,
+  IconWorkspaceTreeOutlineRegular,
+  Switch,
+} from '../runtime.ts'
+import type { ViewMode } from '../data/types.ts'
+import type { ViewModeLabels } from '../labels.ts'
 
 /** 面板与窗口边缘的最小距离，取官方 `Menu` 原语的同一个值 */
 const VIEWPORT_MARGIN = 12
@@ -27,6 +38,19 @@ interface PanelRect {
   top: number
 }
 
+/**
+ * 展示方式的两个取值，按面板里的先后
+ *
+ * 图标与官方那组「分组方式」同字形：按工作区是文件夹，平铺是一条列表
+ */
+const VIEW_MODES: readonly {
+  mode: ViewMode
+  icon: ReactElement
+}[] = [
+  { mode: 'workspace', icon: <IconFolderCloseRegular /> },
+  { mode: 'flat', icon: <IconFlatListOutlineRegular /> },
+]
+
 export interface ViewOptionsMenuProps {
   /** 菜单是否打开，开合状态由持有触发器的 header 持有 */
   open: boolean
@@ -34,7 +58,9 @@ export interface ViewOptionsMenuProps {
   triggerRef: RefObject<HTMLElement>
   /** 面板的无障碍标签 */
   label: string
-  /** 唯一的条目：子工作区嵌套开关 */
+  /** 当前选中的展示方式 */
+  mode: ViewMode
+  /** 另一组设置：子工作区嵌套开关 */
   nesting: {
     /** 当前是否开启 */
     enabled: boolean
@@ -42,6 +68,10 @@ export interface ViewOptionsMenuProps {
     label: string
     onToggle: () => void
   }
+  /** 展示方式那一组的文案 */
+  viewMode: ViewModeLabels
+  /** 选中一个展示方式 */
+  onSelectMode: (mode: ViewMode) => void
   onClose: () => void
 }
 
@@ -49,7 +79,10 @@ export function ViewOptionsMenu({
   open,
   triggerRef,
   label,
+  mode,
   nesting,
+  viewMode,
+  onSelectMode,
   onClose,
 }: ViewOptionsMenuProps): ReactElement | null {
   const panelRef = useRef<HTMLDivElement>(null)
@@ -138,9 +171,11 @@ export function ViewOptionsMenu({
         return
       }
       if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-      // 焦点落在开关控件自己身上，条目行不再是可聚焦的按钮，否则一条会读出两个控件
+      // 可选行与开关自己都是可聚焦控件，这一列就是全部可停点
       const items = Array.from(
-        panelRef.current?.querySelectorAll<HTMLElement>('.wg-view-option-switch') ?? [],
+        panelRef.current?.querySelectorAll<HTMLElement>(
+          '.wg-view-option-row, .wg-view-option-switch',
+        ) ?? [],
       )
       if (items.length === 0) return
       const at = items.indexOf(document.activeElement as HTMLElement)
@@ -158,6 +193,10 @@ export function ViewOptionsMenu({
 
   if (!open) return null
 
+  /** 两条可选行的文案 */
+  const modeLabel = (candidate: ViewMode): string =>
+    candidate === 'flat' ? viewMode.flat : viewMode.workspace
+
   return createPortal(
     <div
       ref={panelRef}
@@ -171,11 +210,28 @@ export function ViewOptionsMenu({
       onPointerEnter={cancelClose}
       onPointerLeave={armClose}
     >
-      {/* 用官方的 `Switch` 原语，而不是把菜单条目做成「有选中态的一行」
-          开关的语义（role="switch"、aria-checked、键盘 Space/Enter、品牌色轨道）都由原语承担
-          行本身因此不再是按钮，把 Switch 嵌进可点的一行会造成两层按钮，读屏也会报两个控件
-          文案与控件并排而不是嵌进控件，`Switch` 的 label 只做无障碍名，视觉上它挨着左边的设置名
-          按下即生效、面板不关，用户多半要看着列表确认结果 */}
+      {/* 展示方式：标题 + 两条互斥的可选项 */}
+      <>
+        <div className="wg-view-group-label">{viewMode.label}</div>
+        {VIEW_MODES.map(({ mode: candidate, icon }) => {
+          const selected = candidate === mode
+          return (
+            <button
+              key={candidate}
+              type="button"
+              className={`wg-view-option-row${selected ? ' wg-view-option-row-selected' : ''}`}
+              aria-pressed={selected}
+              onClick={() => onSelectMode(candidate)}
+            >
+              <span className="wg-view-option-icon">{icon}</span>
+              <span className="wg-view-option-label">{modeLabel(candidate)}</span>
+              {selected ? <IconCheckOutlineRegular className="wg-view-option-check" /> : null}
+            </button>
+          )
+        })}
+      </>
+      <div className="wg-view-separator" role="separator" />
+      {/* 子工作区嵌套：行不可点——`Switch` 自己已是按钮，嵌进可点的行会叠两层控件 */}
       <div className="wg-view-option">
         <span className="wg-view-option-icon">
           {/* 官方在视图选项里就是用这个字形标「按工作区树分组」，而本条开关控制的正是子工作区的树形渲染 */}

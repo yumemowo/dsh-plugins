@@ -19,6 +19,7 @@ import { directoryFlowSource } from './directoryFlow.ts'
 import { hostInfoSource } from './hostInfo.ts'
 import { WorkspaceGroupsRegion } from './components/WorkspaceGroupsRegion.tsx'
 import { IconWorkspaceTreeOutlineRegular } from './runtime.ts'
+import type { ViewModeStoreHandle } from './viewMode.ts'
 
 /** 注册进原生右侧栏的实现 id，同时是 tab 体座位的键 */
 export const COMPARE_TAB_ID = '@your-scope/dsh-workspace-groups/compare'
@@ -60,6 +61,7 @@ export function registerCompareTab(
   ctx: Context,
   actions: RegionActions,
   locale: LocaleRuntime,
+  viewModeStore: ViewModeStoreHandle,
 ): () => void {
   // 宿主固定事实源在本包自己的 context 上起：`ctx.remote` 要求 remote 在 inject 列表里
   const remote = ctx.get('remote')
@@ -71,12 +73,14 @@ export function registerCompareTab(
   }
 
   // tab 体：座位按键控，键就是下面那个 `id`
+  // 本座位是会话作用域的，交共享实例（见 `sharedViewModeStore`）展示方式才不按会话分开存
   const bodyFiber = ctx.slots.inject('sidebar.right.pane.tab', () =>
     ctx.slots.register(
       {
         name: 'sidebar.right.pane.tab',
         key: COMPARE_TAB_ID,
         locale: NS,
+        store: viewModeStore,
         // 右侧栏没有 shell 的折叠态：始终按宽栏渲染，展开请求是空操作
         inject: () => ({ ...actions, wide: true as const, expandSidebar: noop, hooks }),
       },

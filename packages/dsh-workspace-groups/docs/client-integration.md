@@ -92,3 +92,17 @@
 客户端 bundle 把 `@deepseek-ai/dsh-client-ui-primitives` 标成 external，运行期由宿主从基线模块表解析。因此**图标名必须与宿主那一版的导出表逐字对上**：拼错一个，解析结果是 `undefined`，React 渲染到它时整棵挂载失败，而 tsc 因为 ambient 声明（`src/client/primitives-env.d.ts`）是自己写的，照样放行。
 
 dsh 0.1.7-rc.1 把图标名从「字形 + 尺寸」改成了「字形 + 线宽变体」（`IconPlusOutline16` → `IconPlusOutlineRegular`），本包的全部图标引用随之更新。`test/bundle.test.ts` 直接读构建产物断言这一批老名字一个都不剩——单测 import 源码看不见这一层，只有产物才是宿主真正加载的东西。
+
+## 基线模块与 node 测试替身
+
+产物里能出现的 `require` 只有基线模块。本包用的是这几个：
+
+| external | 用途 |
+| --- | --- |
+| `react` / `react-dom` / `react/jsx-runtime` / `react-dom/client` | 组件与 portal |
+| `@deepseek-ai/dsh-client-ui-primitives` | 图标与官方控件原语 |
+| `@deepseek-ai/dsh-client-store` | 展示方式的状态与持久化（`defineStore`） |
+
+**后两个在 node 测试环境里取不到真包**：primitives 只存在于客户端的基线静态模块表，client-store 的引擎则依赖未随本仓库安装的 `zustand` / `immer`（顶层 `import 'zustand/vanilla'` 会直接 `ERR_MODULE_NOT_FOUND`）。因此 `vitest.config.ts` 给这两个各配了一个 `resolve.alias` 替身（`test/primitives-stub.mjs` / `test/store-stub.mjs`），替身只实现测试用到的那部分契约。
+
+这条替身链有两个盲区，都由 `test/bundle.test.ts` 补上：单测 import 的是替身，看不到真包的导出表（图标名拼错、`defineStore` 的 `create()` 契约不符都测不出）；而它按宿主的方式装载产物、并为每个 external 单独交出模块，因此能断言产物只 require 基线模块、且图标名与新版导出表逐字对得上。

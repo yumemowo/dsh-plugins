@@ -17,6 +17,7 @@ const BASELINE = new Set([
   'react/jsx-runtime',
   'react-dom/client',
   '@deepseek-ai/dsh-client-ui-primitives',
+  '@deepseek-ai/dsh-client-store',
 ])
 
 /** 基线模块替身：图标是一个可断言的空组件 */
@@ -36,6 +37,7 @@ function baselineModule(name: string): unknown {
       relativeTime: () => ({ unit: 'now', n: 0 }),
       IconFolderCloseRegular: icon('folder-close'),
       IconFolderOpenRegular: icon('folder-open'),
+      IconFlatListOutlineRegular: icon('flat-list'),
       IconTriangleRightFillRegular: icon('triangle'),
       IconEllipsisOutlineRegular: icon('ellipsis'),
       IconPlusOutlineRegular: icon('plus'),
@@ -57,6 +59,10 @@ function baselineModule(name: string): unknown {
       IconSlidersTwoOutlineRegular: icon('sliders'),
       IconCloseFillRegular: icon('close'),
     }
+  }
+  // 真包是客户端基线的静态模块表成员，node 里用替身满足 require（见 test/store-stub.mjs）
+  if (name === '@deepseek-ai/dsh-client-store') {
+    return require(resolve(import.meta.dirname, './store-stub.mjs'))
   }
   if (name === 'react') return require('react')
   if (name === 'react-dom') return require('react-dom')

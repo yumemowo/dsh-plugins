@@ -6,6 +6,8 @@ import { createRoot } from 'react-dom/client'
 import { registerCompareTab } from '../src/client/compare.tsx'
 import type { RegionActions } from '../src/client/actions.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { createViewModeStore } from '../src/client/viewMode.ts'
+import { viewModeProps } from './viewMode-stub.ts'
 import { sidebarTranslate, translateFor, workspaceTranslate } from './locale-stub.ts'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { Context } from '@deepseek-ai/cordis'
@@ -118,7 +120,7 @@ function register() {
     slots: services['slots'],
   } as unknown as Context
 
-  registerCompareTab(owner, actions(), fakeLocale())
+  registerCompareTab(owner, actions(), fakeLocale(), createViewModeStore())
   return { bodies }
 }
 
@@ -145,6 +147,7 @@ describe('compare tab service reads', () => {
           useSessionStatus: emptySelector,
           useDirectoryFlow: falseSelector,
           useHostInfo: emptySelector,
+          ...viewModeProps(),
         }),
       )
     })

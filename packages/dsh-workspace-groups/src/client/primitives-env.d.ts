@@ -189,6 +189,8 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
 
   export const IconFolderCloseRegular: IconComponent
   export const IconFolderOpenRegular: IconComponent
+  /** 官方「单列表」（flat）那一项的字形，本包用它标「平铺」这条展示方式 */
+  export const IconFlatListOutlineRegular: IconComponent
   export const IconTriangleRightFillRegular: IconComponent
   /** composer slash 菜单给「可深入」候选用的行尾箭头，用来表达此处有二级菜单 */
   export const IconChevronRightOutlineRegular: IconComponent

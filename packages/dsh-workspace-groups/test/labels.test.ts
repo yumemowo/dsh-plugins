@@ -80,6 +80,9 @@ describe('locales', () => {
       'ungroup',
       'ungroupWorkspace',
       'unimplemented',
+      'viewMode.flat',
+      'viewMode.label',
+      'viewMode.workspace',
       'virtualWorkspaceEmpty',
       'virtualWorkspaceNamePrompt',
     ])

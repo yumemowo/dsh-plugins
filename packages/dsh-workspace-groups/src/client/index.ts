@@ -39,6 +39,7 @@ import { directoryFlowOccupant, directoryFlowSource } from './directoryFlow.ts'
 import { hostInfoSource } from './hostInfo.ts'
 import { WorkspaceGroupsRegion } from './components/WorkspaceGroupsRegion.tsx'
 import { insertStyles } from './styles.ts'
+import { createViewModeStore, sharedViewModeStore } from './viewMode.ts'
 
 /** 浏览器半边声明的服务依赖 */
 export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'remote']
@@ -381,11 +382,16 @@ export function apply(ctx: Context): void {
   // 样式随插件挂载注入，卸载由模块系统的样式记账处理，无需显式移除
   insertStyles()
 
+  // 展示方式的存储只建一份，两条注册路径共用它
+  // 对照模式下本区域挂在会话作用域的右侧栏 tab 里，若各建一份实例，展示方式就会按会话分开存
+  // `sharedViewModeStore` 让 `create` 恒交回这一个实例，于是两种形态读到的是同一份设置、同一个持久化键
+  const viewModeStore = sharedViewModeStore(createViewModeStore())
+
   // 对照模式：把左侧 `sidebar.workspaces` 交还官方 ui-workspace
   // 本区域改挂进 DSH 原生右侧栏的一个 tab，好和官方渲染同屏比对
   if (COMPARE_MODE) {
     ctx.effect(
-      () => registerCompareTab(ctx, injected(), locale),
+      () => registerCompareTab(ctx, injected(), locale, viewModeStore),
       'workspace-groups: compare tab',
     )
     return
@@ -394,9 +400,16 @@ export function apply(ctx: Context): void {
   // 接替模式：priority: -1 —— 覆盖官方 ui-workspace（其优先级为默认 0）
   // `locale: NS` 让 shell 在渲染期注入本包命名空间的 `t` 座位
   // 官方 `workspace` 语言包不另占座位，由 officialActions 自行 bind（见那里）
+  // `store` 座位让渲染器把 `useStore` 与已绑定的 `actions` 一并交给区域组件
   ctx.slots.inject('sidebar.workspaces', () =>
     ctx.slots.register(
-      { name: 'sidebar.workspaces', priority: -1, inject: injected, locale: NS },
+      {
+        name: 'sidebar.workspaces',
+        priority: -1,
+        store: viewModeStore,
+        inject: injected,
+        locale: NS,
+      },
       WorkspaceGroupsRegion as never,
     ),
   )

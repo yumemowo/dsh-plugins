@@ -1278,8 +1278,42 @@ body[data-wg-flip] [data-wg-hover-card] {
   align-items: center;
   gap: 8px;
 }
-/* 开关排在行尾，不被设置名挤动 */
-.wg-view-option-switch { flex: none; }
+
+/* 分组标题：官方菜单的 label 条目同一角色，说明下面这一组选的是哪件事
+   字号与官方那一条同档（比条目小一档、tertiary 色阶），它不可点也不是停点 */
+.wg-view-group-label {
+  padding: 3px 10px 5px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+/* 与下面那条开关行相反：这一行整行可点，因此带指针与悬停底色 */
+.wg-view-option-row {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.wg-view-option-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
+/* 选中态由行尾那个勾承担，行本身不再多加一层底色，与官方 selection: 'check' 同一取舍
+   焦点态也走同一条底色，官方菜单条目就是这么写的（outline: none） */
+.wg-view-option-row:focus-visible { background: var(--dsw-alias-interactive-bg-hover); outline: none; }
+.wg-view-option-check {
+  flex: none;
+  color: var(--dsw-alias-label-primary);
+}
+/* 图标列与开关行共用同一个位置与宽度，两组的行文字因此落在同一条竖线上 */
 .wg-view-option-icon {
   width: 16px;
   height: 22px;
@@ -1296,6 +1330,27 @@ body[data-wg-flip] [data-wg-hover-card] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* 分隔线取官方菜单 separator 同一档（0.5px、border-l2），两侧各留 3px
+   与条目之间那条 gap: 3px 同一节奏，四边缩进则与条目的内边距对齐 */
+.wg-view-separator {
+  flex: none;
+  height: 0.5px;
+  margin: 3px 8px;
+  background: var(--dsw-alias-border-l2);
+}
+
+/* 开关排在行尾，不被设置名挤动 */
+.wg-view-option-switch { flex: none; }
+
+/* 平铺列表：全部可见会话排在一条列里，没有工作区分组头
+   行距取官方 .flatList 的同一档（相邻行 2px），与工作区体内那几段一致 */
+.wg-flat-list { display: flex; flex-direction: column; }
+.wg-flat-list > * + * { margin-top: 2px; }
+
+/* 平铺行且没有状态位时行首那格不占位——平铺列表里没有要对齐的邻居
+   官方 .flatSessionRowWithoutStatus 的 title margin-left: 0 是同一取舍 */
+.wg-row-flat .wg-row-title { margin-left: 0; }
 
 /* 嵌套关着时那条说明，与底部那条实验性说明同形，但要在视觉上先被读到 */
 .wg-note-nested { color: var(--dsw-alias-label-secondary); padding-top: 12px; }

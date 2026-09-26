@@ -9,6 +9,7 @@ import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/clie
 import { CSS } from '../src/client/styles.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { viewModeProps, viewModeStoreStub, storeViewModeProps } from './viewMode-stub.ts'
 
 // 对话框与按钮在基线替身里渲染成 null，而「关闭前先确认」这条路径必须看得到名单
 // 这里按 pickerDom 的同一套做法把它们渲染成可断言的真实结构
@@ -136,6 +137,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     t: regionTranslate(),
     tWorkspace: workspaceTranslate(),
     tSidebar: sidebarTranslate(),
+    ...viewModeProps(),
     official: () => ({
       renameSession: async () => {},
       forkSession: () => {},
@@ -569,6 +571,84 @@ describe('nested sub-workspaces in a real DOM', () => {
     expect(options[0]?.textContent).toContain('子工作区嵌套')
     const toggle = options[0]?.querySelector<HTMLButtonElement>('[role="switch"]')
     expect(toggle?.getAttribute('aria-checked')).toBe('true')
+
+    await act(async () => root.unmount())
+  })
+
+  it('offers both display modes above the nesting switch', async () => {
+    const { container, root } = await mount()
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.wg-header-action[aria-label="视图选项"]')
+        ?.click()
+    })
+
+    // 这一组的标题与两条可选行都在，标题说明它们选的是哪件事
+    expect(document.body.querySelector('.wg-view-group-label')?.textContent).toBe('展示方式')
+    const rows = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>('.wg-view-option-row'),
+    )
+    // 图标的替身把字形名渲染成文本，因此文案取自行内那一格，不看整行的 textContent
+    expect(rows.map((element) => element.querySelector('.wg-view-option-label')?.textContent)).toEqual([
+      '按工作区',
+      '平铺',
+    ])
+    // 当前值由 aria-pressed 与行尾那个勾表达，两者不会各说一套
+    expect(rows[0]?.getAttribute('aria-pressed')).toBe('true')
+    expect(rows[1]?.getAttribute('aria-pressed')).toBe('false')
+    // 勾与字形都取官方图标，替身把字形名渲染成文本；替身不吃 className，因此按文本来认
+    expect(rows[0]?.textContent).toContain('IconCheckOutlineRegular')
+    expect(rows[1]?.textContent).not.toContain('IconCheckOutlineRegular')
+    // 两条各取自己的字形：文件夹 / 单列表，与官方那组「分组方式」同字形
+    expect(rows[0]?.textContent).toContain('IconFolderCloseRegular')
+    expect(rows[1]?.textContent).toContain('IconFlatListOutlineRegular')
+    // 两组设置之间有一条分隔线
+    expect(document.body.querySelector('.wg-view-separator')).not.toBeNull()
+
+    await act(async () => root.unmount())
+  })
+
+  it('writes the picked display mode and re-renders the list as one flat column', async () => {
+    const store = viewModeStoreStub()
+    const { container, root } = await mount(storeViewModeProps(store))
+    const sectionsIn = (): number => container.querySelectorAll('.wg-workspace').length
+    expect(sectionsIn()).toBeGreaterThan(0)
+    expect(container.querySelector('.wg-flat-list')).toBeNull()
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.wg-header-action[aria-label="视图选项"]')
+        ?.click()
+    })
+    const flat = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>('.wg-view-option-row'),
+    ).find((element) => element.querySelector('.wg-view-option-label')?.textContent === '平铺')
+    await act(async () => flat?.click())
+
+    // 选中的方式真的写进了存储，界面也换成了那条平铺列表：工作区分组结构整个消失
+    expect(store.getSnapshot().mode).toBe('flat')
+    expect(container.querySelector('.wg-flat-list')).not.toBeNull()
+    expect(sectionsIn()).toBe(0)
+    // 会话仍在，只是不再按工作区分组
+    expect(container.querySelector('.wg-flat-list .wg-row-title')?.textContent).toBe(
+      '修复登录超时',
+    )
+
+    await act(async () => root.unmount())
+  })
+
+  it('keeps the picker as the only filter in the flat list', async () => {
+    // 平铺下聚焦语义照旧：它把这批内容收窄到某个工作区，而不是让第二行写着聚焦对象、列表却无动于衷
+    const { container, root } = await mount({
+      ...viewModeProps('flat'),
+      loadGroups: async () => snapshot({ picker: { focused: 'ws:w2', recent: [], pinned: [] } }),
+    })
+
+    // 聚焦在 w2 上，而 w2 名下没有会话，因此平铺列表是空的，w1 那条会话不再出现
+    expect(container.querySelector('.wg-flat-list')).not.toBeNull()
+    expect(container.querySelector('.wg-row-title')).toBeNull()
+    expect(container.querySelector('.wg-empty')?.textContent).toBe('暂无会话')
 
     await act(async () => root.unmount())
   })

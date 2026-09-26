@@ -9,7 +9,13 @@ import {
 } from '../src/client/data/layout.ts'
 import { deriveNesting } from '../src/client/data/nest.ts'
 import { sameSessionStatus } from '../src/client/data/status.ts'
-import { groupSessionsByWorkspace, straySessions } from '../src/client/data/sessions.ts'
+import {
+  compareSessionRows,
+  flatRowsInFocus,
+  flatSessionRows,
+  groupSessionsByWorkspace,
+  straySessions,
+} from '../src/client/data/sessions.ts'
 import {
   buildGroupMenuItems,
   buildParentGroupMenuItem,
@@ -716,6 +722,109 @@ describe('buildGroupMenuItems', () => {
 
     // 「新建分组」是工作区行的事，分组行的高频建造操作是行内 `+`
     expect(items.some((item) => (item as { id?: string }).id === 'new-group')).toBe(false)
+  })
+})
+
+describe('flatSessionRows', () => {
+  /** 造一份会话列表状态，`updatedAt` 决定最近更新倒序 */
+  function listState(
+    rows: { id: string; updatedAt?: number; blank?: boolean; origin?: 'subagent' }[],
+    current?: string,
+  ): SessionListState {
+    const byId: Record<string, unknown> = {}
+    for (const item of rows) {
+      byId[item.id] = {
+        id: item.id,
+        displayTitle: item.id,
+        running: false,
+        blank: item.blank === true,
+        retainedBy: item.id === current ? { mainView: 1 } : {},
+        updatedAt: item.updatedAt ?? 0,
+        ...(item.origin === undefined ? {} : { origin: item.origin }),
+      }
+    }
+    return { ids: rows.map((r) => r.id), byId, phase: 'ready' } as unknown as SessionListState
+  }
+
+  it('collects every visible session regardless of workspace', () => {
+    // 平铺列表的成员集合与工作区归属无关，这正是官方「单列表」的含义
+    const rows = flatSessionRows(listState([{ id: 'a' }, { id: 'b' }]))
+
+    expect(rows.map((r) => r.id)).toEqual(['a', 'b'])
+  })
+
+  it('applies the same visibility rules as the grouped view', () => {
+    // 归档、子代理来源与未选中的空白会话都不出现，两个视图的取舍必须一致
+    const rows = flatSessionRows(
+      listState([
+        { id: 'a' },
+        { id: 'archived' },
+        { id: 'child', origin: 'subagent' },
+        { id: 'blank', blank: true },
+        { id: 'current', blank: true },
+      ], 'current'),
+      ['archived'],
+    )
+
+    expect(rows.map((r) => r.id)).toEqual(['a', 'current'])
+  })
+
+  it('reports nothing when the list has no visible session', () => {
+    expect(flatSessionRows(listState([]))).toEqual([])
+  })
+})
+
+describe('flatRowsInFocus', () => {
+  /** 会话 id → 属于哪个工作区，无所属的会话不登记 */
+  const owners = new Map([
+    ['a', 'w1'],
+    ['b', 'w2'],
+  ])
+
+  it('keeps every row when nothing is focused', () => {
+    const rows = [row('a'), row('b'), row('orphan')]
+
+    expect(flatRowsInFocus(rows, owners, undefined).map((r) => r.id)).toEqual([
+      'a',
+      'b',
+      'orphan',
+    ])
+  })
+
+  it('keeps only the rows owned by the focused scope', () => {
+    expect(flatRowsInFocus([row('a'), row('b')], owners, ['w2']).map((r) => r.id)).toEqual(['b'])
+  })
+
+  it('drops rows that belong to no workspace while something is focused', () => {
+    // 无所属的会话在「未分组」桶里，聚焦到某一片内容时与它们无关
+    // 它们不在索引里，因此不需要单独判断
+    expect(flatRowsInFocus([row('orphan')], owners, ['w1'])).toEqual([])
+  })
+
+  it('drops everything when the focused scope owns no visible session', () => {
+    expect(flatRowsInFocus([row('a'), row('b')], owners, ['w9'])).toEqual([])
+  })
+
+  it('does not mutate the rows it was given', () => {
+    const rows = [row('a'), row('b')]
+
+    const kept = flatRowsInFocus(rows, owners, undefined)
+
+    expect(kept).not.toBe(rows)
+    expect(rows.map((r) => r.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('compareSessionRows', () => {
+  it('leads with the blank session and orders the rest by recency', () => {
+    // 与工作区视图用同一个比较器，两种展示方式下的先后因此一致
+    const rows = [
+      { ...row('old'), updatedAt: 1 },
+      { ...row('blank'), blank: true, updatedAt: 0 },
+      { ...row('new'), updatedAt: 9 },
+    ]
+
+    expect([...rows].sort(compareSessionRows).map((r) => r.id)).toEqual(['blank', 'new', 'old'])
   })
 })
 

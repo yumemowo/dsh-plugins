@@ -60,6 +60,8 @@
 | 窄栏展开入口 | `IconPanelLeftOutlineRegular`（与官方侧栏折叠按钮同一字形） |
 | 会话状态点 | `StateDot`（运行态画追光方阵，其余画圆点；颜色由原语的主题规则给出） |
 | 视图选项面板里的嵌套开关 | `IconWorkspaceTreeOutlineRegular`（官方「按工作区树分组」那一项的字形） |
+| 视图选项面板里的两条展示方式 | `IconFolderCloseRegular` / `IconFlatListOutlineRegular`（官方「按工作区」与「单列表」同字形）；选中标记用 `IconCheckOutlineRegular` |
+| 展示方式的状态与持久化 | `defineStore`（`@deepseek-ai/dsh-client-store`，与官方 `groupBy` 同一引擎；组件读 `useStore`、写 `actions`） |
 | 行尾相对时间 | `relativeTime`（官方 `timeLabel` 用的同一个分桶函数，文案走官方语言包） |
 | 「添加工作区」入口提示 | `Tooltip`（与官方 header 同一 `delayMs` 与展开方向） |
 | 行内 `...` 菜单与行右键菜单 | `Menu`（右键那份走它的 `getAnchorRect`，官方 `WorkspacePickFlow` 用的同一入口） |
@@ -76,8 +78,25 @@
 - **工作区分组的图标是自绘的。**「优先复用官方原语」指的是优先复用**接口与控件**，不是说字形只能用现成的那几个。0.1.7-rc.1 的 primitives 导出表里没有任何「分组 / 容器 / 堆叠」类字形，也没有虚线的文件夹，而工作区分组既需要一个「新建」入口、又需要与旁边的实线文件夹（它代表**工作区本身**）区分开。因此按官方规范自绘一个，视觉上与它们同族（见 [自绘图标](custom-icons.md)）。同一版新增了图钉，置顶按钮因此从自绘换成官方字形。
 - **删除分组用普通 `Modal`，不用 `RiskConfirmation`。** 后者自带警告图标与「须勾选确认」的复选框，而删除分组只解散分组、不动会话本身，达不到那个破坏级别。危险语义改由确认按钮的错误色承载（`.wg-danger-action` 设 `--dsw-alias-state-error-primary`）——这与官方 `ui-workspace` 的删除按钮是同一做法：`Button` 没有 `danger` variant，改色就靠传 `className`。
 - **行内 16px 图标按钮保留自绘。** 官方 `ui-workspace` 的行内按钮也是它自己的 CSS Module（16px 命中区、4px 圆角、悬停提亮文字色），primitives 没有等价的 16px 行内按钮；换成 primitives 的 `Button`（28px 高、带悬停底色）会让行外观明显偏离官方。因此几何保留同一份 16px 约定，图标取原语。
+- **展示方式的三个取值用本包自有文案。** 官方那组是「分组方式 / 按工作区 / 单列表」，语义是官方自己那三种排布；本包只有两种，取值也不同（`workspace` / `flat`），照抄官方键名会让两边对不上号。因此另起 `viewMode.label` / `viewMode.workspace` / `viewMode.flat`，中文取「展示方式 / 按工作区 / 平铺」。字形仍取官方同款（`IconFolderCloseRegular` / `IconFlatListOutlineRegular`），外观上读得出与官方那组是同一族。
 
 primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标成 external 由宿主从基线模块表解析；它是 shell 静态模块表的成员，不会多出第二份实例。
+
+## 展示方式的状态：复用官方 store 引擎与座位
+
+**展示方式（按工作区 / 平铺）是浏览器本地偏好**，不是分组元数据：它不进宿主的存储域，也不随快照往返。这一层整段照官方 `ui-workspace` 管 `groupBy` 的做法：
+
+| 环节 | 用的东西 |
+| --- | --- |
+| 状态与持久化 | `@deepseek-ai/dsh-client-store` 的 `defineStore`（`persist` 写 localStorage） |
+| 交给组件 | 插槽注册项的 `store` 座位——渲染器绑出 `useStore` 选择器与已绑定的 `actions` |
+| 注册 | 生产形态挂在 `sidebar.workspaces`（root 作用域），对照 tab 挂在 `sidebar.right.pane.tab`（session 作用域） |
+
+**这两个座位的定义都写在源码树里**（`src/client/viewMode.ts` 的 `createViewModeStore`），但 `defineStore` 是值导入，因此打包脚本必须把 `@deepseek-ai/dsh-client-store` 标成 external 由宿主从基线模块表解析。漏标会让产物打进第二份引擎、出现第二个 store 实例。
+
+**对照模式下必须共享同一个实例。** `sidebar.right.pane.tab` 是 session 作用域的座位，渲染器会按会话各调一次 `create`；直接用原句柄会让展示方式变成「每个会话各存一份」，切会话就变回「按工作区」。因此 `apply` 里建一次实例，用 `sharedViewModeStore` 把 `create` 收成恒返回它，两条注册路径读到的才是同一份设置、同一个持久化键。官方的视图状态存储也是这么做的（`{ ...viewHandle, create: () => viewInstance }`）。
+
+存储键取 `dsh.workspace-groups.view.v1`，与官方 `dsh.workspace.view.*` 不共用：两者是两套独立的界面状态，共用键会让两边互相覆盖。
 
 ## 语言包
 
@@ -94,7 +113,7 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 
 悬停卡片的文案同样一个键都不用加：创建时刻取官方 `hover.created` + `date.ymd`，复制提示取 `common` 的通用词 `copy`、成功反馈取 `hover.copied`，卡片那份相对时间取 `time.ago`；会话卡片里「空闲」那一条取官方的 `status.idle`——行首不画点但卡片要把它列出来，那个词官方本来就有，不另造。
 
-本包字典只剩官方没有对应词的键：会话分组那一套（`actions.group.aria` / `newGroup` / `renameGroup` / `deleteGroup` / `groupNamePrompt` / `delete.desc.group` / `moveToGroup` / `ungroup`）、工作区分组那一套（`actions.virtualWorkspace.aria` / `newVirtualWorkspace` / `menu.newVirtualWorkspace` / `renameVirtualWorkspace` / `deleteVirtualWorkspace` / `virtualWorkspaceNamePrompt` / `delete.desc.virtualWorkspace` / `moveToVirtualWorkspace` / `ungroupWorkspace` / `virtualWorkspaceEmpty`），加 `compareTabDescription` 与 `unimplemented`。「添加工作区」与「搜索」的文案因此一个键都不用加：添加入口取官方 `workspace.add`、错误框取 `folderError.title` 与 `folderError.retry`；搜索的入口 tooltip、输入框与结果区取官方 `search` / `search.sessions.aria` / `search.placeholder` / `search.clear` / `search.results.aria` / `search.noMatches` / `search.hasMore`。注意添加入口是 `workspace.add`（「添加工作区」），不是 `menu.addWorkspace`（「添加工作区…」）——后者是工作区列表菜单里那一项，带省略号表示还要再选一次。`actions.group.aria` 是分组自己的无障碍标签（官方只有工作区与会话两个），分组 `+` 的标签则直接复用官方的 `actions.newSession.aria`——语义完全相同，不另造一个同义键。`labels.test.ts` 会断言字典里没有任何与官方重合的键，避免以后又抄回来。
+本包字典只剩官方没有对应词的键：会话分组那一套（`actions.group.aria` / `newGroup` / `renameGroup` / `deleteGroup` / `groupNamePrompt` / `delete.desc.group` / `moveToGroup` / `ungroup`）、工作区分组那一套（`actions.virtualWorkspace.aria` / `newVirtualWorkspace` / `menu.newVirtualWorkspace` / `renameVirtualWorkspace` / `deleteVirtualWorkspace` / `virtualWorkspaceNamePrompt` / `delete.desc.virtualWorkspace` / `moveToVirtualWorkspace` / `ungroupWorkspace` / `virtualWorkspaceEmpty`）、展示方式那一套（`viewMode.label` / `viewMode.workspace` / `viewMode.flat`），加 `compareTabDescription` 与 `unimplemented`。「添加工作区」与「搜索」的文案因此一个键都不用加：添加入口取官方 `workspace.add`、错误框取 `folderError.title` 与 `folderError.retry`；搜索的入口 tooltip、输入框与结果区取官方 `search` / `search.sessions.aria` / `search.placeholder` / `search.clear` / `search.results.aria` / `search.noMatches` / `search.hasMore`。注意添加入口是 `workspace.add`（「添加工作区」），不是 `menu.addWorkspace`（「添加工作区…」）——后者是工作区列表菜单里那一项，带省略号表示还要再选一次。`actions.group.aria` 是分组自己的无障碍标签（官方只有工作区与会话两个），分组 `+` 的标签则直接复用官方的 `actions.newSession.aria`——语义完全相同，不另造一个同义键。`labels.test.ts` 会断言字典里没有任何与官方重合的键，避免以后又抄回来。
 
 **「重命名」这个动作有两个键，不是同一个文案。** 菜单项用官方的通用动词 `rename`（`重命名` / `Rename`），对话框标题才用点明对象的键。这不是本包的取舍，而是照官方 `ui-workspace` 抄的：
 

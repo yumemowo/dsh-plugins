@@ -46,6 +46,7 @@ const icon = (name) => () => name
 
 export const IconFolderCloseRegular = icon('IconFolderCloseRegular')
 export const IconFolderOpenRegular = icon('IconFolderOpenRegular')
+export const IconFlatListOutlineRegular = icon('IconFlatListOutlineRegular')
 export const IconTriangleRightFillRegular = icon('IconTriangleRightFillRegular')
 export const IconEllipsisOutlineRegular = icon('IconEllipsisOutlineRegular')
 export const IconPlusOutlineRegular = icon('IconPlusOutlineRegular')
@@ -110,6 +111,7 @@ export default {
   relativeTime,
   IconFolderCloseRegular,
   IconFolderOpenRegular,
+  IconFlatListOutlineRegular,
   IconTriangleRightFillRegular,
   IconEllipsisOutlineRegular,
   IconPlusOutlineRegular,

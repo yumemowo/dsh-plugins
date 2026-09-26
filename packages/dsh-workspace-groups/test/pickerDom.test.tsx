@@ -8,6 +8,7 @@ import type { WorkspaceGroupsProps } from '../src/client/components/WorkspaceGro
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { viewModeProps } from './viewMode-stub.ts'
 import { rootVirtualKey, rootWorkspaceKey } from '../src/rootEntry.ts'
 
 /**
@@ -107,6 +108,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     t: regionTranslate(),
     tWorkspace: workspaceTranslate(),
     tSidebar: sidebarTranslate(),
+    ...viewModeProps(),
     official: () => ({
       renameSession: async () => {},
       forkSession: () => {},

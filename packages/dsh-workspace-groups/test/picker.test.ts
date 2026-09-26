@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   focusedLayout,
+  focusedWorkspaceIds,
   pickerSections,
   resolveFocus,
   rootPickerEntries,
@@ -282,5 +283,34 @@ describe('focusedLayout', () => {
       groups: [],
       loose: [],
     })
+  })
+})
+
+describe('focusedWorkspaceIds', () => {
+  const entries = rootPickerEntries(LAYOUT, VIEWS)
+
+  it('allows everything when nothing is focused', () => {
+    expect(focusedWorkspaceIds(LAYOUT, entries, '')).toBeUndefined()
+  })
+
+  it('allows only that workspace when one is focused', () => {
+    expect(focusedWorkspaceIds(LAYOUT, entries, rootWorkspaceKey('w4'))).toEqual(['w4'])
+  })
+
+  it('allows the whole group membership rather than its rendered roots', () => {
+    // 平铺列表没有层级，组内被嵌套的成员与顶层成员一样是这片内容的一部分
+    // 归属（workspaceIds）与渲染（roots）在开启嵌套时会不同，这里要的是前者
+    const layout = {
+      groups: [{ id: 'vg1', label: '前端仓库', workspaceIds: ['w1', 'w2', 'w3'], roots: ['w1'] }],
+      loose: [],
+    }
+    const nested = rootPickerEntries(layout, VIEWS)
+
+    expect(focusedWorkspaceIds(layout, nested, rootVirtualKey('vg1'))).toEqual(['w1', 'w2', 'w3'])
+  })
+
+  it('falls back to everything when the focused key is unknown', () => {
+    // 记录比列表活得久，解析不到时按没有聚焦处理，而不是空数组（那会让列表整片空掉）
+    expect(focusedWorkspaceIds(LAYOUT, entries, 'nonsense')).toBeUndefined()
   })
 })

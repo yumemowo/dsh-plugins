@@ -9,6 +9,7 @@ import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/clie
 import { CSS } from '../src/client/styles.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { viewModeProps } from './viewMode-stub.ts'
 
 /**
  * 工作区分组的真实 DOM 结构
@@ -94,6 +95,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     t: regionTranslate(),
     tWorkspace: workspaceTranslate(),
     tSidebar: sidebarTranslate(),
+    ...viewModeProps(),
     official: () => ({
       renameSession: async () => {},
       forkSession: () => {},

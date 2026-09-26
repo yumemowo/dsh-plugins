@@ -10,12 +10,15 @@ export default defineConfig({
   },
   // @deepseek-ai/dsh-client-ui-primitives 只存在于客户端基线模块表
   // node 测试环境用最小替身满足 require
+  // @deepseek-ai/dsh-client-store 是同一类基线模块，而它的引擎依赖 zustand / immer 未随本仓库安装
+  // 替身只提供测试用到的那部分（defineStore 与 localStorage 持久化），见 test/store-stub.mjs
   resolve: {
     alias: {
       '@deepseek-ai/dsh-client-ui-primitives': new URL(
         './test/primitives-stub.mjs',
         import.meta.url,
       ).pathname,
+      '@deepseek-ai/dsh-client-store': new URL('./test/store-stub.mjs', import.meta.url).pathname,
     },
   },
 })

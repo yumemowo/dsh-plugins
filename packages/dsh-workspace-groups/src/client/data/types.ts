@@ -4,6 +4,13 @@
  * 只承载展示所需的事实，不复制整份会话或工作区快照
  */
 
+/**
+ * 会话列表的展示方式
+ *
+ * `flat` 的语义与官方「单列表」（`groupBy: 'flat'`）一致
+ */
+export type ViewMode = 'workspace' | 'flat'
+
 /** 一个会话在列表中的渲染行 */
 export interface SessionRow {
   id: string

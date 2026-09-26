@@ -15,6 +15,7 @@ import {
 import { regionTranslate, sidebarTranslate, translateWith, workspaceTranslate } from './locale-stub.ts'
 import { menuLabelArrow, menuLabelText } from './menu-label.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { viewModeProps } from './viewMode-stub.ts'
 
 /**
  * 区域组件的渲染冒烟
@@ -809,6 +810,7 @@ function props(
     t: regionTranslate(),
     tWorkspace: workspaceTranslate(),
     tSidebar: sidebarTranslate(),
+    ...viewModeProps(),
     // 官方三项操作与相对时间：缺省不给，用于验证降级路径
     ...(options.official === false
       ? {}
