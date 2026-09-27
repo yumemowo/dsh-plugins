@@ -12,10 +12,9 @@
 import type { ReactElement } from 'react'
 import { Tooltip } from '../runtime.ts'
 import { IconVirtualWorkspace16 } from '../icons.tsx'
+import { useLocale } from '../useLocale.ts'
 
 export interface VirtualWorkspaceCreateControlProps {
-  /** 入口的 tooltip 与无障碍标签 */
-  label: string
   /** 窄栏（rail）形态：按钮放大、色阶提亮，与官方一致 */
   narrow: boolean
   /** 点下去打开新建工作区分组的命名框 */
@@ -23,10 +22,11 @@ export interface VirtualWorkspaceCreateControlProps {
 }
 
 export function VirtualWorkspaceCreateControl({
-  label,
   narrow,
   onCreate,
 }: VirtualWorkspaceCreateControlProps): ReactElement {
+  const { labels } = useLocale()
+  const label = labels.newVirtualWorkspace
   return (
     <Tooltip label={label} side="bottom" delayMs={500}>
       <button

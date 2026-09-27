@@ -7,7 +7,7 @@ import {
 import type { RegionActions } from '../src/client/actions.ts'
 import { sidebarTranslate, translateFor, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
-import { createViewModeStore } from '../src/client/viewMode.ts'
+import { createViewModeStore } from '../src/client/store/viewMode.ts'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { Context } from '@deepseek-ai/cordis'
 

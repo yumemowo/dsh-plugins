@@ -10,8 +10,7 @@ import type { ReactElement } from 'react'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { GroupNameDraft, VirtualWorkspaceNameDraft, WorkspaceNameDraft } from '../data/types.ts'
-import type { RegionLabels } from '../labels.ts'
-import type { RegionTranslate } from '../locales.ts'
+import { useLocale } from '../useLocale.ts'
 import { DeleteDialog } from './components/dialogs/DeleteDialog.tsx'
 import { ListDialog } from './components/dialogs/ListDialog.tsx'
 import { NameDialog } from './components/dialogs/NameDialog.tsx'
@@ -101,14 +100,13 @@ interface RegionDialogsProps {
   layout: RegionDialogLayout
   /** 全部工作区视图，工作区改名要按它判断重名与「名字没变」 */
   workspaces: readonly WorkspaceView[]
-  labels: RegionLabels
   official: OfficialSessionActions | undefined
-  t: RegionTranslate
   actions: RegionDialogActions
 }
 
 export function RegionDialogs(props: RegionDialogsProps): ReactElement {
-  const { labels, official, t, overlay, setOverlay, actions } = props
+  const { labels, t } = useLocale()
+  const { official, overlay, setOverlay, actions } = props
   const officialRename = official?.labels.rename ?? t('ok')
 
   if (overlay === null) return <></>
@@ -122,7 +120,6 @@ export function RegionDialogs(props: RegionDialogsProps): ReactElement {
           placeholder={labels.groupNamePrompt}
           // 新建走通用词的「确定」，改名用官方 workspace 语言包的短动词，与官方改名对话框同词
           confirmLabel={overlay.groupId === '' ? t('ok') : officialRename}
-          t={t}
           confirmDisabled={overlay.value.trim() === ''}
           onValueChange={(value) => setOverlay({ ...overlay, value })}
           onConfirm={actions.commitGroupNameDraft}
@@ -138,7 +135,6 @@ export function RegionDialogs(props: RegionDialogsProps): ReactElement {
           value={overlay.value}
           placeholder={labels.virtualWorkspaceNamePrompt}
           confirmLabel={overlay.groupId === '' ? t('ok') : officialRename}
-          t={t}
           confirmDisabled={overlay.value.trim() === ''}
           // 「切换到新工作区」只在当前不是「显示全部工作区」时才给：
           // 已经看着全部内容时没有可切的目的地，勾了也无事可做。改名时不出现（它不新建东西）
@@ -164,7 +160,6 @@ export function RegionDialogs(props: RegionDialogsProps): ReactElement {
           title={labels.deleteVirtualWorkspace}
           description={labels.confirmDeleteVirtualWorkspace(overlay.label)}
           confirmLabel={labels.deleteVirtualWorkspace}
-          t={t}
           onConfirm={actions.commitVirtualWorkspaceDelete}
           onClose={() => setOverlay(null)}
         />
@@ -186,7 +181,6 @@ export function RegionDialogs(props: RegionDialogsProps): ReactElement {
           value={overlay.value}
           placeholder={labels.workspaceNamePrompt}
           confirmLabel={officialRename}
-          t={t}
           confirmDisabled={name === '' || name === current || conflict !== undefined}
           error={conflict === undefined ? null : labels.workspaceConflict(conflict)}
           onValueChange={(value) => setOverlay({ ...overlay, value })}
@@ -202,7 +196,6 @@ export function RegionDialogs(props: RegionDialogsProps): ReactElement {
           title={labels.deleteGroup}
           description={labels.confirmDeleteGroup(overlay.label)}
           confirmLabel={labels.deleteGroup}
-          t={t}
           onConfirm={actions.commitGroupDelete}
           onClose={() => setOverlay(null)}
         />
@@ -215,7 +208,6 @@ export function RegionDialogs(props: RegionDialogsProps): ReactElement {
           title={labels.deleteWorkspace}
           description={labels.confirmDeleteWorkspace(overlay.label)}
           confirmLabel={labels.deleteWorkspace}
-          t={t}
           onConfirm={actions.commitWorkspaceDelete}
           onClose={() => setOverlay(null)}
         />
@@ -230,7 +222,6 @@ export function RegionDialogs(props: RegionDialogsProps): ReactElement {
           items={props.layout.groupedChildLabels}
           confirmLabel={labels.nested.disable}
           danger
-          t={t}
           onConfirm={actions.commitNestedOff}
           onClose={() => setOverlay(null)}
         />
@@ -245,7 +236,6 @@ export function RegionDialogs(props: RegionDialogsProps): ReactElement {
           items={overlay.workspaceIds.map((id) => props.layout.workspaceById.get(id)?.title ?? id)}
           confirmLabel={labels.nested.mergeConfirm}
           alt={{ label: labels.nested.mergeSkip, onSelect: () => actions.commitMerge(false) }}
-          t={t}
           onConfirm={() => actions.commitMerge(true)}
           onClose={() => actions.commitMerge(false)}
         />

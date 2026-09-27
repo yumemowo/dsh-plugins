@@ -39,7 +39,7 @@ import { directoryFlowOccupant, directoryFlowSource } from './directoryFlow.ts'
 import { hostInfoSource } from './hostInfo.ts'
 import { WorkspaceGroupsRegion } from './views/WorkspaceGroupsRegion.tsx'
 import { insertStyles } from './styles.ts'
-import { createViewModeStore, sharedViewModeStore } from './viewMode.ts'
+import { createViewModeStore, sharedViewModeStore } from './store/viewMode.ts'
 
 /** 浏览器半边声明的服务依赖 */
 export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'remote']

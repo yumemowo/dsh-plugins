@@ -12,6 +12,7 @@ import { GroupSection } from './GroupSection.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
 import type { WorkspaceRowProps } from './WorkspaceRow.tsx'
 
+import { useLocale } from '../useLocale.ts'
 import { compareSessionRows } from '../data/sessions.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
 
@@ -29,22 +30,6 @@ export interface WorkspaceSectionProps {
   layout: WorkspaceLayout
   /** 分组的折叠态查询，折叠键的构成由区域组件持有 */
   isGroupCollapsed: (groupId: string) => boolean
-  emptyLabel: string
-  /** 未归组会话那一段的小标题，只在需要与会话分组/子工作区区分时才渲染 */
-  sessionsLabel: string
-  /** 分组行行尾操作位的文案 */
-  groupActionLabels: {
-    /** `...` 按钮的无障碍标签，取分组名 */
-    actions: (name: string) => string
-    /** 「新建会话」菜单项 */
-    newSessionItem: string
-    /** 「重命名分组」菜单项 */
-    rename: string
-    /** 「删除分组」菜单项 */
-    delete: string
-    /** `+` 按钮的无障碍标签，取分组名 */
-    newSession: (name: string) => string
-  }
   /** 该工作区块在层级里的深度，从 0 起，缩进由它换算 */
   depth: number
   groupActions: WorkspaceGroupActions
@@ -58,14 +43,12 @@ export function WorkspaceSection({
   row,
   layout,
   isGroupCollapsed,
-  emptyLabel,
-  sessionsLabel,
-  groupActionLabels,
   depth,
   groupActions,
   renderSession,
   renderChildWorkspace,
 }: WorkspaceSectionProps): ReactElement {
+  const { labels } = useLocale()
   const childIds = layout.children ?? []
   const hasAnyRow =
     layout.groups.length > 0 || layout.loose.length > 0 || childIds.length > 0
@@ -97,9 +80,7 @@ export function WorkspaceSection({
               onCreateSession={() =>
                 groupActions.onCreateSession({ id: section.id, label: section.label })
               }
-              labels={groupActionLabels}
               renderChildWorkspace={renderChildWorkspace}
-              sessionsLabel={sessionsLabel}
             >
               {[...section.sessions].sort(compareSessionRows).map(renderSession)}
             </GroupSection>
@@ -111,7 +92,7 @@ export function WorkspaceSection({
             <div className="wg-sessions">
               {childIds.length > 0 || layout.groups.length > 0 ? (
                 <div className="wg-sessions-title" data-wg-stagger="">
-                  {sessionsLabel}
+                  {labels.sessions}
                 </div>
               ) : null}
               {[...layout.loose].sort(compareSessionRows).map(renderSession)}
@@ -120,7 +101,7 @@ export function WorkspaceSection({
           {hasAnyRow ? null : (
             // 空态也是折叠体里要露面的子元素，与行一样参与逐个淡入
             <div className="wg-empty" data-wg-stagger="">
-              {emptyLabel}
+              {labels.empty}
             </div>
           )}
         </div>

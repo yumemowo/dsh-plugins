@@ -20,15 +20,19 @@ import { HoverCard, StateDot } from '../runtime.ts'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { SessionHoverContent } from './components/HoverCards.tsx'
 import { sameSessionStatuses } from '../data/status.ts'
+import { useLocale } from '../useLocale.ts'
 import type { RowContextMenuEvent } from './components/RowContextMenu.tsx'
-import type { OfficialHoverLabels } from '../official.ts'
 import type { SessionStatus } from '../data/status.ts'
 
 export interface SessionRowViewProps {
   /** 本行对应的会话 id */
   sessionId: string
-  /** 行上显示的标题，空白会话由调用方套语言包的固定名 */
-  title: string
+  /**
+   * 行上显示的标题
+   *
+   * 传 null 表示这是一条新建中的空白会话，标题取语言包的固定名
+   */
+  title: string | null
   selected: boolean
   /** 该行要显示的状态位，空闲时为 undefined，槽位仍占位 */
   status?: SessionStatus | undefined
@@ -58,8 +62,6 @@ export interface SessionRowViewProps {
   hoverDisabled?: boolean | undefined
   /** 悬停卡片可复制的内容，取会话标题，缺省表示卡片只读（新建中的空白行） */
   hoverCopy?: string | undefined
-  /** 悬停卡片的文案 */
-  hoverLabels?: OfficialHoverLabels | undefined
   /** 菜单展开时行上挂标记：锚点按钮只靠 :hover 显示，菜单还开着时指针一旦
    * 移开按钮就会消失，标记让样式把它留住 */
   menuOpen?: boolean
@@ -103,7 +105,6 @@ function SessionRowViewImpl({
   hover,
   hoverDisabled = false,
   hoverCopy,
-  hoverLabels,
   menuOpen = false,
   action,
   flat = false,
@@ -111,8 +112,10 @@ function SessionRowViewImpl({
   onOpenSession,
   onReveal,
 }: SessionRowViewProps): ReactElement {
+  const { labels } = useLocale()
   const open = () => onOpenSession(sessionId)
   const rowRef = useRef<HTMLDivElement | null>(null)
+  const shownTitle = title ?? labels.newSession
 
   // 挂载后把自己滚进可视区，并立刻回报一次：请求方要在收到回报后清掉标记，否则该行会在后续每次重新挂载时再滚一次
   useEffect(() => {
@@ -145,7 +148,7 @@ function SessionRowViewImpl({
           <StateDot state={status.state} />
         </span>
       )}
-      <span className="wg-row-title">{title}</span>
+      <span className="wg-row-title">{shownTitle}</span>
       {time === undefined ? null : <span className="wg-row-time">{time}</span>}
       {action === undefined ? null : (
         <span className="wg-row-action-slot" onClick={(event) => event.stopPropagation()}>
@@ -158,21 +161,21 @@ function SessionRowViewImpl({
   // 卡片要的逐条状态缺省时退回行首那一条：两条渲染路径（带菜单的行与未分组桶里的裸行）因此都能挂上卡片
   // 不必各自去算一遍状态列表
   const hoverStatuses = statuses ?? (status === undefined ? [] : [status])
-  if (hover === false || hoverLabels === undefined) return row
+  if (hover === false) return row
 
   return (
     <HoverCard
       anchor={row}
       content={
-        <SessionHoverContent title={title} time={hoverTime} statuses={hoverStatuses} />
+        <SessionHoverContent title={shownTitle} time={hoverTime} statuses={hoverStatuses} />
       }
       // 任一面板（行内 `...` 菜单或行右键菜单）开着时都让位，否则同一处会叠两层浮层
       disabled={hoverDisabled}
       // 空白（新建中）会话的标题是语言包里的占位文案，不是会话内容
       // 复制它没有意义，调用方对这类行不传可复制内容
       copyText={hoverCopy}
-      copyLabel={hoverLabels.copy}
-      copiedLabel={hoverLabels.copied}
+      copyLabel={labels.hover.copy}
+      copiedLabel={labels.hover.copied}
     />
   )
 }
@@ -195,7 +198,6 @@ function sameRowViewProps(prev: SessionRowViewProps, next: SessionRowViewProps):
     prev.hover === next.hover &&
     prev.hoverDisabled === next.hoverDisabled &&
     prev.hoverCopy === next.hoverCopy &&
-    prev.hoverLabels === next.hoverLabels &&
     prev.menuOpen === next.menuOpen &&
     prev.flat === next.flat &&
     prev.action === next.action &&

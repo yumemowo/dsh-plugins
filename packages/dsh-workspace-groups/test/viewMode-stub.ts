@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { ViewMode } from '../src/client/data/types.ts'
-import type { ViewModeActions, ViewModeState } from '../src/client/viewMode.ts'
+import type { ViewModeActions, ViewModeState } from '../src/client/store/viewMode.ts'
 
 /**
  * 区域组件所需要的那份 store 座位替身

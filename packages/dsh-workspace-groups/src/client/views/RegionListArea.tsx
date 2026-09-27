@@ -21,11 +21,10 @@ import { relativeTimeOfRow, statusViewOfRow } from '../data/rows.ts'
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
 import type { RootLayout, SessionRow, ViewMode } from '../data/types.ts'
 import type { RegionLabels } from '../labels.ts'
-import type { RegionTranslate } from '../locales.ts'
 import type { ParentGroupMenuInput, VirtualWorkspaceMenuInput } from '../menus.tsx'
-import type { OfficialHoverLabels } from '../official.ts'
 import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { abbreviateHomePath } from '../utils/pathUtils.ts'
+import { useLocale } from '../useLocale.ts'
 import { CollapsibleBody } from './components/CollapsibleBody.tsx'
 import { SearchResults } from './SearchControl.tsx'
 import { SessionRowMenu } from './SessionRowMenu.tsx'
@@ -33,22 +32,35 @@ import type { SessionGroupingContext } from './SessionRowMenu.tsx'
 import { SessionRowView } from './SessionRowView.tsx'
 import { VirtualWorkspaceSection } from './VirtualWorkspaceSection.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
-import type { WorkspaceRowLabels } from './WorkspaceRow.tsx'
 import { WorkspaceSection } from './WorkspaceSection.tsx'
 
-/** 渲染一个会话行所需的稳定上下文 */
+/**
+ * 会话行工厂消费的那两格文案
+ *
+ * 两个工厂是普通函数而不是组件（行由 `map` 生成，写成组件会给每一行多挂一层 fiber），
+ * 因此它们不能自己调 `useLocale()`，文案由调用点作为实参交给它们
+ */
+export interface SessionRowLabels {
+  /** 状态位的分组文案，行首那个点与卡片那几条都从它推导 */
+  status: RegionLabels['status']
+  /** 悬停卡片里的相对时间模板（`…前`），与行尾那份紧凑形态不同 */
+  hoverTimeAgo: RegionLabels['hover']['timeAgo']
+}
+
+/**
+ * 渲染一个会话行所需的稳定上下文
+ *
+ * 只装随快照变化的数据与稳定引用的回调：这些字段会随行级 `memo` 的逐格比对走
+ */
 export interface SessionRowScope {
-  labels: RegionLabels
   currentSessionId: string | undefined
   official: OfficialSessionActions | undefined
-  hoverLabels: OfficialHoverLabels | undefined
   statusSnapshot: SessionStatusSnapshot
   /** 行尾与卡片相对时间的基准时刻，渲染当刻取一次 */
   now: number
   revealSessionId: string | undefined
   acknowledgeReveal: (sessionId: string) => void
   openSession: (sessionId: string) => void
-  t: RegionTranslate
 }
 
 /** 列表侧消费的派生布局 */
@@ -117,8 +129,6 @@ export interface WorkspaceNodeScope {
   rowsByWorkspace: ReadonlyMap<string, readonly SessionRow[]>
   currentSessionId: string | undefined
   home: string | undefined
-  labels: RegionLabels
-  workspaceRowLabels: WorkspaceRowLabels
   session: SessionRowScope
 }
 
@@ -137,8 +147,10 @@ interface RegionListAreaProps {
 }
 
 export function RegionListArea(props: RegionListAreaProps): ReactElement {
+  const { labels } = useLocale()
   const { scope } = props
-  const { labels, session, currentSessionId } = scope
+  const { session, currentSessionId } = scope
+  const rowLabels = sessionRowLabels(labels)
 
   if (props.searching) {
     return (
@@ -147,8 +159,6 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
         limit={props.searchResultLimit}
         currentSessionId={currentSessionId}
         statusOf={(match) => statusViewOfRow(match.row, session.statusSnapshot, labels.status).dot}
-        ungrouped={labels.ungrouped}
-        labels={labels.search}
         onOpen={props.onOpenSearchResult}
       />
     )
@@ -159,10 +169,10 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
       /* 平铺：全部可见会话在同一条列表里，与官方「单列表」（groupBy: 'flat'）一致 */
       <div className="wg-list wg-panel">
         <div className="wg-flat-list">
-          {props.flatRows.map((row) => sessionRowElement(row, session, undefined, true))}
+          {props.flatRows.map((row) => sessionRowElement(row, session, rowLabels, undefined, true))}
         </div>
         {props.flatRows.length === 0 ? <div className="wg-empty">{labels.empty}</div> : null}
-        <RegionNotes nested={scope.snapshot.nested} labels={labels} />
+        <RegionNotes nested={scope.snapshot.nested} />
       </div>
     )
   }
@@ -178,14 +188,6 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
           key={section.id}
           section={section}
           collapsed={scope.ui.collapsedVirtualWorkspaces[section.id] === true}
-          emptyLabel={labels.virtualWorkspaceEmpty}
-          labels={{
-            actions: labels.virtualWorkspaceActions,
-            // 菜单项用通用动词，与工作区行、会话分组行同一分工
-            // 只有对话框标题才点明对象（`renameVirtualWorkspace`，见 RegionDialogs）
-            rename: labels.rename,
-            delete: labels.deleteVirtualWorkspace,
-          }}
           onToggle={() => scope.ui.toggleVirtualWorkspace(section.id)}
           onRename={() => scope.edits.onRenameVirtualWorkspace(section.id, section.label)}
           onDelete={() => scope.edits.onDeleteVirtualWorkspace(section.id, section.label)}
@@ -211,22 +213,28 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
               containsSession(props.stray, currentSessionId)
             }
             onToggle={props.onToggleUngrouped}
-            labels={scope.workspaceRowLabels}
           />
           <CollapsibleBody open={!props.ungroupedCollapsed}>
             <div className="wg-workspace-body">
               {/* 这些会话不属于任何工作区，没有分组可归，因此菜单里只有官方三项（归组项无处落）
                 * 宿主未提供官方服务时菜单会是空的，那时直接渲染无菜单的行，不留点不动的省略号 */}
               <div className="wg-sessions">
-                {props.stray.map((row) => ungroupedRowElement(row, session))}
+                {props.stray.map((row) => ungroupedRowElement(row, session, rowLabels))}
               </div>
             </div>
           </CollapsibleBody>
         </section>
       )}
-      <RegionNotes nested={scope.snapshot.nested} labels={labels} />
+      <RegionNotes nested={scope.snapshot.nested} />
     </div>
   )
+}
+
+/**
+ * 从区域文案里摘出行工厂要用的那两格
+ */
+function sessionRowLabels(labels: RegionLabels): SessionRowLabels {
+  return { status: labels.status, hoverTimeAgo: labels.hover.timeAgo }
 }
 
 /**
@@ -244,7 +252,8 @@ function WorkspaceNode({
   workspaceId: string
   scope: WorkspaceNodeScope
 }): ReactElement | null {
-  const { snapshot, layout, ui, edits, commands, rowsByWorkspace, labels } = scope
+  const { labels } = useLocale()
+  const { snapshot, layout, ui, edits, commands, rowsByWorkspace } = scope
   const workspace = layout.workspaceById.get(workspaceId)
   // 布局只包含快照里存在的工作区，因此这里不会落空，防御一下避免类型断言
   if (workspace === undefined) return null
@@ -260,7 +269,7 @@ function WorkspaceNode({
   /**
    * 该工作区行上那份「移动工作区分组」菜单的选项集
    *
-   * 归属与可选分组都随行而变，因此不能与 `workspaceRowLabels` 一起缓存
+   * 归属与可选分组都随行而变，因此不能与行文案一起缓存
    * 每行一份新对象，行级 memo 因此按内容比对（`sameGroupSections`）
    */
   const virtualWorkspaceMenu: VirtualWorkspaceMenuInput = {
@@ -314,19 +323,21 @@ function WorkspaceNode({
         folderActive:
           !collapsed &&
           containsSession(rowsByWorkspace.get(workspaceId) ?? [], scope.currentSessionId),
-        labels: scope.workspaceRowLabels,
         virtualWorkspace: virtualWorkspaceMenu,
         parentGroup: parentGroupMenu,
         // 「移动工作区分组」入口：把该工作区放进某个根节点分组，或先建一个再放
         onSelectVirtualWorkspace: (id) => commands.selectVirtualWorkspace(workspaceId, id),
         onSelectParentGroup: (id) => commands.selectParentGroup(workspaceId, id),
-        hover: {
-          label: workspace.title,
-          path: abbreviateHomePath(workspace.path, scope.home),
-          created: labels.hover.created(Date.parse(workspace.createdAt)),
-        },
+        // 官方服务不在场时官方卡片文案整体拿不到，整卡因此不挂
+        hover:
+          scope.session.official === undefined
+            ? undefined
+            : {
+                label: workspace.title,
+                path: abbreviateHomePath(workspace.path, scope.home),
+                created: labels.hover.created(Date.parse(workspace.createdAt)),
+              },
         hoverCopy: workspace.path,
-        hoverLabels: scope.session.hoverLabels,
         onToggle: () => ui.toggleWorkspace(workspaceId),
         onCreateSession: () => commands.createSessionIn(workspaceId, ''),
         onNewGroup: () => edits.onNewGroup(workspaceId),
@@ -336,15 +347,6 @@ function WorkspaceNode({
       layout={built}
       depth={layout.nesting.levelOf(workspaceId)}
       isGroupCollapsed={(groupId) => ui.collapsedGroups[`${workspaceId}:${groupId}`] === true}
-      emptyLabel={labels.empty}
-      sessionsLabel={labels.sessions}
-      groupActionLabels={{
-        actions: labels.groupActions,
-        newSessionItem: labels.newSessionItem,
-        rename: labels.rename,
-        delete: labels.deleteGroup,
-        newSession: labels.newSessionInGroup,
-      }}
       groupActions={{
         onToggle: (groupId) => ui.toggleGroup(`${workspaceId}:${groupId}`),
         onRename: (section) => edits.onRenameGroup(workspaceId, section.id, section.label),
@@ -355,12 +357,10 @@ function WorkspaceNode({
         <WorkspaceNode key={childId} workspaceId={childId} scope={scope} />
       )}
       renderSession={(row) =>
-        sessionRowElement(row, scope.session, {
+        sessionRowElement(row, scope.session, sessionRowLabels(labels), {
           workspaceId,
           sections: built.groups,
           currentGroupId: groupIdOfSession(built.groups, row.id),
-          groupLabel: labels.moveToGroup,
-          ungroupLabel: labels.ungroup,
           onSelectGroup: commands.selectSessionGroup,
         })
       }
@@ -374,14 +374,18 @@ function WorkspaceNode({
  * 两处只在格式化函数上不同：行尾是官方的紧凑形态，卡片要套「…前」模板
  * 官方服务不在场时两者都不渲染，卡片那份也因此跟着缺席
  */
-function rowTimes(row: SessionRow, context: SessionRowScope): {
+function rowTimes(
+  row: SessionRow,
+  context: SessionRowScope,
+  labels: SessionRowLabels,
+): {
   time: string | undefined
   hoverTime: string | undefined
 } {
-  const { official, labels, now } = context
+  const { official, now } = context
   return {
     time: relativeTimeOfRow(row, official?.relativeTime, now),
-    hoverTime: relativeTimeOfRow(row, official === undefined ? undefined : labels.hover.timeAgo, now),
+    hoverTime: relativeTimeOfRow(row, official === undefined ? undefined : labels.hoverTimeAgo, now),
   }
 }
 
@@ -398,6 +402,7 @@ function rowTimes(row: SessionRow, context: SessionRowScope): {
 export function sessionRowElement(
   row: SessionRow,
   context: SessionRowScope,
+  labels: SessionRowLabels,
   grouping?: SessionGroupingContext,
   flat = false,
 ): ReactElement {
@@ -406,20 +411,20 @@ export function sessionRowElement(
   const reveal =
     row.id === context.revealSessionId ? () => context.acknowledgeReveal(row.id) : undefined
   // 状态只推导一次，行首那个点与卡片那几条取自同一份结果
-  const view = statusViewOfRow(row, context.statusSnapshot, context.labels.status)
-  const { time, hoverTime } = rowTimes(row, context)
+  const view = statusViewOfRow(row, context.statusSnapshot, labels.status)
+  const { time, hoverTime } = rowTimes(row, context, labels)
   if (row.blank) {
     return (
       <SessionRowView
         key={row.id}
         sessionId={row.id}
-        title={context.labels.newSession}
+        title={null}
         selected={row.id === context.currentSessionId}
         status={view.dot}
         time={time}
         statuses={view.statuses}
         hoverTime={hoverTime}
-        hoverLabels={context.hoverLabels}
+        hover={context.official !== undefined}
         flat={flat}
         onOpenSession={context.openSession}
         onReveal={reveal}
@@ -436,13 +441,10 @@ export function sessionRowElement(
       time={time}
       statuses={view.statuses}
       hoverTime={hoverTime}
-      hoverLabels={context.hoverLabels}
       grouping={grouping}
       official={context.official}
-      actionsLabel={context.labels.sessionActions}
       flat={flat}
       onOpenSession={context.openSession}
-      t={context.t}
       onReveal={reveal}
     />
   )
@@ -455,24 +457,28 @@ export function sessionRowElement(
  * 宿主未提供官方服务时菜单会是空的，那时直接渲染无菜单的行，不留点不动的省略号
  * 与工作区内的行分开成两处：那里的行按分组上下文渲染，这里的行没有那层上下文
  */
-export function ungroupedRowElement(row: SessionRow, context: SessionRowScope): ReactElement {
-  const view = statusViewOfRow(row, context.statusSnapshot, context.labels.status)
+export function ungroupedRowElement(
+  row: SessionRow,
+  context: SessionRowScope,
+  labels: SessionRowLabels,
+): ReactElement {
+  const view = statusViewOfRow(row, context.statusSnapshot, labels.status)
   const reveal =
     row.id === context.revealSessionId ? () => context.acknowledgeReveal(row.id) : undefined
-  const { time, hoverTime } = rowTimes(row, context)
+  const { time, hoverTime } = rowTimes(row, context, labels)
   if (context.official === undefined || row.blank) {
     return (
       <SessionRowView
         key={row.id}
         sessionId={row.id}
-        title={row.blank ? context.labels.newSession : row.title}
+        title={row.blank ? null : row.title}
         selected={row.id === context.currentSessionId}
         status={view.dot}
         time={time}
         statuses={view.statuses}
         hoverTime={hoverTime}
         hoverCopy={row.blank ? undefined : row.title}
-        hoverLabels={context.hoverLabels}
+        hover={context.official !== undefined}
         onOpenSession={context.openSession}
         onReveal={reveal}
       />
@@ -488,11 +494,8 @@ export function ungroupedRowElement(row: SessionRow, context: SessionRowScope): 
       time={time}
       statuses={view.statuses}
       hoverTime={hoverTime}
-      hoverLabels={context.hoverLabels}
       official={context.official}
       onOpenSession={context.openSession}
-      actionsLabel={context.labels.sessionActions}
-      t={context.t}
       onReveal={reveal}
     />
   )
@@ -503,13 +506,8 @@ export function ungroupedRowElement(row: SessionRow, context: SessionRowScope): 
  *
  * 嵌套开关是根节点级的设置，平铺列表下也要说明它被关掉了
  */
-function RegionNotes({
-  nested,
-  labels,
-}: {
-  nested: boolean
-  labels: RegionLabels
-}): ReactElement {
+function RegionNotes({ nested }: { nested: boolean }): ReactElement {
+  const { labels } = useLocale()
   return (
     <>
       {nested ? null : (

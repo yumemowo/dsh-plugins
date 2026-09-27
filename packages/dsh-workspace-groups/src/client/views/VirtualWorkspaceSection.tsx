@@ -21,6 +21,7 @@ import { CollapsibleBody } from './components/CollapsibleBody.tsx'
 import { RowActions } from './RowActions.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
+import { useLocale } from '../useLocale.ts'
 import type { VirtualWorkspaceSection as VirtualWorkspaceSectionData } from '../data/types.ts'
 
 export interface VirtualWorkspaceSectionProps {
@@ -31,17 +32,6 @@ export interface VirtualWorkspaceSectionProps {
   onDelete: () => void
   /** 已渲染好的组内工作区区块 */
   children: ReactNode
-  /** 组内没有任何工作区时的占位文案 */
-  emptyLabel: string
-  /** 分组行操作位的文案 */
-  labels: {
-    /** `...` 按钮的无障碍标签，取分组名 */
-    actions: (name: string) => string
-    /** 「重命名工作区分组」菜单项 */
-    rename: string
-    /** 「删除工作区分组」菜单项 */
-    delete: string
-  }
 }
 
 export function VirtualWorkspaceSection({
@@ -51,9 +41,8 @@ export function VirtualWorkspaceSection({
   onRename,
   onDelete,
   children,
-  emptyLabel,
-  labels,
 }: VirtualWorkspaceSectionProps): ReactElement {
+  const { labels } = useLocale()
   const [menuOpen, setMenuOpen] = useState(false)
 
   /**
@@ -68,8 +57,9 @@ export function VirtualWorkspaceSection({
   }
 
   const menuItems = buildVirtualWorkspaceMenuItems({
+    // 菜单项用通用动词，只有对话框标题才点明对象（见 RegionDialogs）
     renameLabel: labels.rename,
-    deleteLabel: labels.delete,
+    deleteLabel: labels.deleteVirtualWorkspace,
   })
 
   // 这一层没有行内 `+`（新建工作区在区域 header），因此右键菜单就是 `...` 菜单本身
@@ -112,7 +102,7 @@ export function VirtualWorkspaceSection({
             onMenuOpen={setMenuOpen}
             onMenuSelect={select}
             menuItems={menuItems}
-            actionsLabel={labels.actions(section.label)}
+            actionsLabel={labels.virtualWorkspaceActions(section.label)}
           />
         </span>
       </div>
@@ -122,7 +112,7 @@ export function VirtualWorkspaceSection({
         <div className="wg-virtual-workspace-body">
           {section.workspaceIds.length <= 0 ? (
             <div className="wg-empty" data-wg-stagger="">
-              {emptyLabel}
+              {labels.virtualWorkspaceEmpty}
             </div>
           ) : (
             children

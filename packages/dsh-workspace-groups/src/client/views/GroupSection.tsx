@@ -14,6 +14,7 @@ import { CollapsibleBody } from './components/CollapsibleBody.tsx'
 import { RowActions } from './RowActions.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
+import { useLocale } from '../useLocale.ts'
 import type { GroupSection as GroupSectionData } from '../data/types.ts'
 
 export interface GroupSectionProps {
@@ -26,23 +27,8 @@ export interface GroupSectionProps {
   onCreateSession?: (() => void) | undefined
   /** 已渲染好的组内会话行 */
   children: ReactNode
-  /** 组内会话那一段的小标题，只在组里同时有子工作区时才渲染 */
-  sessionsLabel: string
   /** 把一个子工作区渲染成一个完整的工作区块 */
   renderChildWorkspace: (workspaceId: string) => ReactNode
-  /** 分组行操作位的文案 */
-  labels: {
-    /** `...` 按钮的无障碍标签，取分组名 */
-    actions: (name: string) => string
-    /** 「新建会话」菜单项 */
-    newSessionItem: string
-    /** 「重命名分组」菜单项 */
-    rename: string
-    /** 「删除分组」菜单项 */
-    delete: string
-    /** `+` 按钮的无障碍标签，取分组名 */
-    newSession: (name: string) => string
-  }
 }
 
 export function GroupSection({
@@ -53,10 +39,9 @@ export function GroupSection({
   onDelete,
   onCreateSession,
   children,
-  sessionsLabel,
   renderChildWorkspace,
-  labels,
 }: GroupSectionProps): ReactElement {
+  const { labels } = useLocale()
   const [menuOpen, setMenuOpen] = useState(false)
 
   /**
@@ -74,8 +59,9 @@ export function GroupSection({
   }
 
   const menuItems = buildGroupMenuItems({
+    // 菜单项用通用动词，只有对话框标题才点明对象（见 RegionDialogs）
     renameLabel: labels.rename,
-    deleteLabel: labels.delete,
+    deleteLabel: labels.deleteGroup,
   })
 
   const contextMenu = useRowContextMenu({
@@ -115,11 +101,11 @@ export function GroupSection({
             onMenuOpen={setMenuOpen}
             onMenuSelect={select}
             menuItems={menuItems}
-            actionsLabel={labels.actions(section.label)}
+            actionsLabel={labels.groupActions(section.label)}
             create={
               onCreateSession === undefined
                 ? undefined
-                : { label: labels.newSession(section.label), onCreate: onCreateSession }
+                : { label: labels.newSessionInGroup(section.label), onCreate: onCreateSession }
             }
           />
         </span>
@@ -138,7 +124,7 @@ export function GroupSection({
                     加一个小标题并拉开间距，否则读不出哪几行是会话 */}
                 {childIds.length > 0 ? (
                   <div className="wg-sessions-title" data-wg-stagger="">
-                    {sessionsLabel}
+                    {labels.sessions}
                   </div>
                 ) : null}
                 {children}

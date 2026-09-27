@@ -5,9 +5,12 @@
  * 引擎用官方 `@deepseek-ai/dsh-client-store` 的 `defineStore`，与官方 ui-workspace 的 `groupBy` 同一套
  *
  * 存储键与官方 `dsh.workspace.view.*` 分开：两者是两套独立的界面状态，共用键会互相覆盖
+ *
+ * 这里是浏览器内持久化状态的唯一去处：插槽的 `store` 座位只接受一个 `StoreDecl`，而 `persist` 整份序列化状态
+ * 后续新增的浏览器本地状态因此要并进本文件的状态对象，不能各起一个键
  */
 import { defineStore } from '@deepseek-ai/dsh-client-store'
-import type { ViewMode } from './data/types.ts'
+import type { ViewMode } from '../data/types.ts'
 
 /** 展示方式的状态形状，同时是选择器读数的输入 */
 export interface ViewModeState {

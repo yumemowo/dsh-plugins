@@ -29,7 +29,7 @@ import { IconVirtualFolder16 } from '../icons.tsx'
 import { IconButton } from './components/IconButton.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import type { PickerEntry, PickerSections } from '../data/picker.ts'
-import type { PickerLabels } from '../labels.ts'
+import { useLocale } from '../useLocale.ts'
 
 /** 面板与窗口边缘的最小距离，取官方 `Menu` 原语的同一个值 */
 const VIEWPORT_MARGIN = 12
@@ -60,7 +60,6 @@ export interface WorkspacePickerMenuProps {
   focused: string
   /** 菜单的三个分区 */
   sections: PickerSections
-  labels: PickerLabels
   onClose: () => void
   /** 选中一个条目：聚焦它 */
   onSelect: (key: string) => void
@@ -90,7 +89,6 @@ function PickerRow({
   entry,
   focused,
   pinned,
-  labels,
   onSelect,
   onTogglePinned,
   onRename,
@@ -99,13 +97,14 @@ function PickerRow({
   entry: PickerEntry
   focused: boolean
   pinned: boolean
-  labels: PickerLabels
   onSelect: (key: string) => void
   onTogglePinned: (key: string) => void
   onRename: (entry: PickerEntry) => void
   onDelete: (entry: PickerEntry) => void
 }): ReactElement {
-  const pinLabel = pinned ? labels.unpin(entry.label) : labels.pin(entry.label)
+  const { labels } = useLocale()
+  const picker = labels.picker
+  const pinLabel = pinned ? picker.unpin(entry.label) : picker.pin(entry.label)
   return (
     <div
       className="wg-row wg-picker-row"
@@ -126,12 +125,12 @@ function PickerRow({
       {focused ? <IconCheckOutlineRegular className="wg-picker-check" /> : null}
       <span className="wg-row-actions">
         <IconButton
-          ariaLabel={labels.rename(entry.label)}
+          ariaLabel={picker.rename(entry.label)}
           icon={<IconEditOutlineRegular />}
           onClick={() => onRename(entry)}
         />
         <IconButton
-          ariaLabel={labels.remove(entry.label)}
+          ariaLabel={picker.remove(entry.label)}
           icon={<IconTrashOutlineRegular />}
           danger
           onClick={() => onDelete(entry)}
@@ -188,13 +187,14 @@ export function WorkspacePickerMenu({
   triggerRef,
   focused,
   sections,
-  labels,
   onClose,
   onSelect,
   onTogglePinned,
   onRename,
   onDelete,
 }: WorkspacePickerMenuProps): ReactElement | null {
+  const { labels } = useLocale()
+  const picker = labels.picker
   const panelRef = useRef<HTMLDivElement>(null)
   const [rect, setRect] = useState<PanelRect | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -321,7 +321,7 @@ export function WorkspacePickerMenu({
       ref={panelRef}
       className="wg-picker-menu"
       role="group"
-      aria-label={labels.entry}
+      aria-label={picker.entry}
       // 首次渲染时还没量过，先藏起来，否则面板会先在窗口左上角露一帧再跳到落点
       style={
         rect === null
@@ -341,13 +341,13 @@ export function WorkspacePickerMenu({
             <span className="wg-picker-icon">
               <IconFolderCloseRegular />
             </span>
-            <span className="wg-picker-label">{labels.all}</span>
+            <span className="wg-picker-label">{picker.all}</span>
           </button>
         </div>
       )}
       {sections.recent.length === 0 ? null : (
         <PickerGroup
-          title={labels.recent}
+          title={picker.recent}
           expanded={!recentCollapsed}
           onToggle={() => setCollapsed((prev) => ({ ...prev, recent: !recentCollapsed }))}
         >
@@ -357,7 +357,6 @@ export function WorkspacePickerMenu({
               entry={entry}
               focused={entry.key === focused}
               pinned={sections.pinned.some((item) => item.key === entry.key)}
-              labels={labels}
               onSelect={onSelect}
               onTogglePinned={onTogglePinned}
               onRename={onRename}
@@ -368,7 +367,7 @@ export function WorkspacePickerMenu({
       )}
       {sections.pinned.length === 0 ? null : (
         <PickerGroup
-          title={labels.pinned}
+          title={picker.pinned}
           expanded={!pinnedCollapsed}
           onToggle={() => setCollapsed((prev) => ({ ...prev, pinned: !pinnedCollapsed }))}
         >
@@ -378,7 +377,6 @@ export function WorkspacePickerMenu({
               entry={entry}
               focused={entry.key === focused}
               pinned
-              labels={labels}
               onSelect={onSelect}
               onTogglePinned={onTogglePinned}
               onRename={onRename}
@@ -398,7 +396,6 @@ export function WorkspacePickerMenu({
               entry={entry}
               focused={entry.key === focused}
               pinned={sections.pinned.some((item) => item.key === entry.key)}
-              labels={labels}
               onSelect={onSelect}
               onTogglePinned={onTogglePinned}
               onRename={onRename}

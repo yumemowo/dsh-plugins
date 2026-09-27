@@ -50,7 +50,9 @@ import { normalizeSnapshot } from '../remote.ts'
 import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { rootVirtualKey } from '../../rootEntry.ts'
 import { useFlipMarker } from '../useFlipMarker.ts'
-import type { ViewModeStoreHandle } from '../viewMode.ts'
+import type { ViewModeStoreHandle } from '../store/viewMode.ts'
+import { RegionLocaleProvider } from '../useLocale.ts'
+import type { RegionLocale } from '../useLocale.ts'
 import { RegionDialogs } from './RegionDialogs.tsx'
 import type { MergeDraft, RegionDialogActions, RegionOverlay } from './RegionDialogs.tsx'
 import { RegionHeaderArea, RegionRailHeader } from './RegionHeaderArea.tsx'
@@ -65,7 +67,6 @@ import type {
 import { useSearch } from './SearchControl.tsx'
 import type { SearchState } from './SearchControl.tsx'
 import { WorkspaceRail } from './WorkspaceRail.tsx'
-import type { WorkspaceRowLabels } from './WorkspaceRow.tsx'
 
 // ── 本文件的形状 ──
 
@@ -1107,31 +1108,20 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   // 对照模式下区域挂右侧栏、贴着窗口右缘，官方卡片固定向右展开会开到屏幕外
   const flipRef = useFlipMarker()
 
-  const workspaceRowLabels: WorkspaceRowLabels = {
-    actions: labels.workspaceActions,
-    newSession: labels.newSessionIn,
-    newSessionItem: labels.newSessionItem,
-    newGroup: labels.newGroup,
-    // 与官方工作区菜单一致：菜单项用通用动词，对话框标题才点明对象
-    rename: labels.rename,
-    delete: labels.deleteWorkspace,
-  }
+  // 文案表与翻译函数合成一个稳定的 value：行级 memo 按引用比对 props，每次渲染新建会让每一行都判定为变过
+  const locale: RegionLocale = useMemo(() => ({ t, labels }), [t, labels])
 
   // 窄栏，官方在这里也只留搜索与「添加工作区」两个入口（外加 shell 的展开入口）
   if (!wide) {
     return (
-      <>
+      <RegionLocaleProvider value={locale}>
         <RegionRailHeader
           addWorkspace={addWorkspace}
-          search={{ state: search, labels: labels.search }}
-          newVirtualWorkspace={{
-            label: labels.newVirtualWorkspace,
-            onCreate: nestActions.startVirtualWorkspaceCreate,
-          }}
-          t={t}
+          search={search}
+          newVirtualWorkspace={{ onCreate: nestActions.startVirtualWorkspaceCreate }}
         />
         <WorkspaceRail label={labels.title} onExpand={expandSidebar} />
-      </>
+      </RegionLocaleProvider>
     )
   }
 
@@ -1176,16 +1166,13 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
         ).sort(compareSessionRows)
 
   const session: SessionRowScope = {
-    labels,
     currentSessionId,
     official,
-    hoverLabels: official === undefined ? undefined : labels.hover,
     statusSnapshot,
     now,
     revealSessionId: ui.revealSessionId,
     acknowledgeReveal: ui.acknowledgeReveal,
     openSession,
-    t,
   }
 
   // 列表侧收的是「编辑哪个对象」，浮层的形状因此不出这一层
@@ -1223,8 +1210,6 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     rowsByWorkspace,
     currentSessionId,
     home,
-    labels,
-    workspaceRowLabels,
     session,
   }
 
@@ -1263,47 +1248,45 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   }
 
   return (
-    <div className="wg-root" ref={flipRef}>
-      <RegionHeaderArea
-        labels={labels}
-        layout={layout}
-        overlays={headerOverlays}
-        commands={headerCommands}
-        searching={searching}
-        viewMode={viewMode}
-        onSelectMode={setViewMode}
-        nestingEnabled={snapshot.nested}
-        onToggleNested={nestActions.requestNestedToggle}
-        focusedKey={snapshot.picker.focused}
-        addWorkspace={addWorkspace}
-        search={search}
-        t={t}
-      />
-      <RegionListArea
-        viewMode={viewMode}
-        searching={searching}
-        searchResult={searchResult}
-        searchResultLimit={searchResultLimit}
-        onOpenSearchResult={openSearchResult}
-        scope={scope}
-        flatRows={flatRows}
-        stray={stray}
-        ungroupedCollapsed={ui.collapsedWorkspaces[UNGROUPED_KEY] === true}
-        onToggleUngrouped={() => ui.toggleWorkspace(UNGROUPED_KEY)}
-      />
-      {/* 对话框挂在列表之外
-        * 它们都是 portal 到 body 的浮层，放进 overflow
-          容器只会多一层无用的裁剪上下文 */}
-      <RegionDialogs
-        overlay={ui.overlay}
-        setOverlay={ui.openOverlay}
-        layout={layout}
-        workspaces={workspaces}
-        labels={labels}
-        official={official}
-        t={t}
-        actions={dialogActions}
-      />
-    </div>
+    <RegionLocaleProvider value={locale}>
+      <div className="wg-root" ref={flipRef}>
+        <RegionHeaderArea
+          layout={layout}
+          overlays={headerOverlays}
+          commands={headerCommands}
+          searching={searching}
+          viewMode={viewMode}
+          onSelectMode={setViewMode}
+          nestingEnabled={snapshot.nested}
+          onToggleNested={nestActions.requestNestedToggle}
+          focusedKey={snapshot.picker.focused}
+          addWorkspace={addWorkspace}
+          search={search}
+        />
+        <RegionListArea
+          viewMode={viewMode}
+          searching={searching}
+          searchResult={searchResult}
+          searchResultLimit={searchResultLimit}
+          onOpenSearchResult={openSearchResult}
+          scope={scope}
+          flatRows={flatRows}
+          stray={stray}
+          ungroupedCollapsed={ui.collapsedWorkspaces[UNGROUPED_KEY] === true}
+          onToggleUngrouped={() => ui.toggleWorkspace(UNGROUPED_KEY)}
+        />
+        {/* 对话框挂在列表之外
+          * 它们都是 portal 到 body 的浮层，放进 overflow
+            容器只会多一层无用的裁剪上下文 */}
+        <RegionDialogs
+          overlay={ui.overlay}
+          setOverlay={ui.openOverlay}
+          layout={layout}
+          workspaces={workspaces}
+          official={official}
+          actions={dialogActions}
+        />
+      </div>
+    </RegionLocaleProvider>
   )
 }

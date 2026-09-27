@@ -33,23 +33,7 @@ import { RowActions } from './RowActions.tsx'
 import { WorkspaceHoverContent } from './components/HoverCards.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
-import type { OfficialHoverLabels } from '../official.ts'
-
-/** 工作区标题行的文案与无障碍标签 */
-export interface WorkspaceRowLabels {
-  /** 工作区「更多操作」按钮的无障碍标签，取工作区名 */
-  actions: (name: string) => string
-  /** 新建会话按钮的无障碍标签，取工作区名 */
-  newSession: (name: string) => string
-  /** 菜单里的「新建会话」项 */
-  newSessionItem: string
-  /** 菜单里的「新建分组」项 */
-  newGroup: string
-  /** 菜单里的「重命名工作区」项 */
-  rename: string
-  /** 菜单里的「删除工作区」项 */
-  delete: string
-}
+import { useLocale } from '../useLocale.ts'
 
 /** 工作区悬停卡片要显示的正文 */
 export interface WorkspaceHoverData {
@@ -78,12 +62,14 @@ export interface WorkspaceRowProps {
    * 与其它回调平级，缺省表示该行不提供工作区分组入口（未分组桶的工作区行）
    */
   onSelectVirtualWorkspace?: ((id: string) => void) | undefined
-  /** 悬停卡片正文，缺省表示该行不挂卡片（未分组桶） */
+  /**
+   * 悬停卡片正文，缺省表示该行不挂卡片
+   *
+   * 未分组桶不是真实工作区（没有目录与创建时刻），官方服务不在场时卡片文案也整体拿不到
+   */
   hover?: WorkspaceHoverData | undefined
   /** 悬停卡片可复制的内容，取完整目录路径，缺省表示卡片只读 */
   hoverCopy?: string | undefined
-  /** 悬停卡片的文案 */
-  hoverLabels?: OfficialHoverLabels | undefined
   /**
    * 该行「移动工作区分组」一级项及其子菜单的选项集
    *
@@ -98,7 +84,6 @@ export interface WorkspaceRowProps {
   parentGroup?: ParentGroupMenuInput | undefined
   /** 「移动到分组」子菜单的选中分派，条目 id 形如 `pg:<父 id>:<分组 id>` 或 `ungroup-child-workspace` */
   onSelectParentGroup?: ((id: string) => void) | undefined
-  labels: WorkspaceRowLabels
 }
 
 export function WorkspaceRow({
@@ -115,10 +100,9 @@ export function WorkspaceRow({
   onSelectParentGroup,
   hover,
   hoverCopy,
-  hoverLabels,
   virtualWorkspace,
-  labels,
 }: WorkspaceRowProps): ReactElement {
+  const { labels } = useLocale()
   const [menuOpen, setMenuOpen] = useState(false)
   const manageable = onNewGroup !== undefined || onRename !== undefined || onDelete !== undefined
 
@@ -149,7 +133,7 @@ export function WorkspaceRow({
     ? buildWorkspaceMenuItems({
         newGroupLabel: labels.newGroup,
         renameLabel: labels.rename,
-        deleteLabel: labels.delete,
+        deleteLabel: labels.deleteWorkspace,
         // 没有移入入口的行（未分组桶）不出现这一项，否则是个点不动的死入口
         virtualWorkspaceGrouping: onSelectVirtualWorkspace === undefined ? undefined : virtualWorkspace,
         parentGrouping: onSelectParentGroup === undefined ? undefined : parentGroup,
@@ -190,11 +174,11 @@ export function WorkspaceRow({
         onMenuOpen={setMenuOpen}
         onMenuSelect={select}
         menuItems={menuItems}
-        actionsLabel={labels.actions(title)}
+        actionsLabel={labels.workspaceActions(title)}
         create={
           onCreateSession === undefined
             ? undefined
-            : { label: labels.newSession(title), onCreate: onCreateSession }
+            : { label: labels.newSessionIn(title), onCreate: onCreateSession }
         }
       />
     </div>
@@ -202,7 +186,7 @@ export function WorkspaceRow({
 
   // 没有正文（未分组桶）或拿不到官方文案时不挂浮层
   // 卡片里那几行文案与复制反馈都属官方语言包，缺了它们只会浮出一个空壳
-  if (hover === undefined || hoverLabels === undefined) return row
+  if (hover === undefined) return row
 
   return (
     <HoverCard
@@ -214,8 +198,8 @@ export function WorkspaceRow({
       disabled={menuOpen || contextMenu.open}
       // 复制的是完整路径而不是卡片里那份缩写，缩写只是排版，用户要的是能直接用的路径
       copyText={hoverCopy}
-      copyLabel={hoverLabels.copy}
-      copiedLabel={hoverLabels.copied}
+      copyLabel={labels.hover.copy}
+      copiedLabel={labels.hover.copied}
     />
   )
 }

@@ -15,7 +15,7 @@ import { IconCloseFillRegular, IconSearchOutlineRegular, StateDot, Tooltip } fro
 import { sanitizeSearchQuery, SEARCH_QUERY_MAX_CODE_UNITS } from '../data/search.ts'
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
 import type { SessionStatus } from '../data/status.ts'
-import type { OfficialSearchLabels } from '../official.ts'
+import { useLocale } from '../useLocale.ts'
 
 /**
  * 侧栏列滑动的时长（官方 `--ds-transition-duration-slow`）
@@ -107,13 +107,14 @@ export function useSearch(wide: boolean, expandSidebar: () => void): SearchState
   }
 }
 
-/** 宽栏 header 里的搜索槽位 */
+/** 宽栏 header 里的搜索槽位，入口与输入框的文案取自 `useLocale()` */
 export interface SearchEntryProps {
   search: SearchState
-  labels: OfficialSearchLabels
 }
 
-export function SearchEntry({ search, labels }: SearchEntryProps): ReactElement {
+export function SearchEntry({ search }: SearchEntryProps): ReactElement {
+  const { labels: region } = useLocale()
+  const labels = region.search
   const { expanded, query, inputRef, rootRef } = search
   return (
     <div className={`wg-search-slot${expanded ? ' wg-search-slot-expanded' : ''}`}>
@@ -169,10 +170,9 @@ export function SearchEntry({ search, labels }: SearchEntryProps): ReactElement 
 }
 
 /** 窄栏里的搜索入口：展开侧栏后再聚焦宽栏的输入框 */
-export function SearchRailEntry({
-  search,
-  labels,
-}: SearchEntryProps): ReactElement {
+export function SearchRailEntry({ search }: SearchEntryProps): ReactElement {
+  const { labels: region } = useLocale()
+  const labels = region.search
   return (
     <div className="wg-search wg-search-rail">
       <Tooltip label={labels.hint}>
@@ -199,9 +199,6 @@ export interface SearchResultsProps {
   currentSessionId?: string | undefined
   /** 结果行的状态位推导，与常规会话行同一份实现 */
   statusOf: (match: SearchMatch) => SessionStatus | undefined
-  /** 没有工作区归属时的回退名（官方 `group.ungrouped`） */
-  ungrouped: string
-  labels: OfficialSearchLabels
   /** 打开一条结果所在的会话 */
   onOpen: (match: SearchMatch) => void
 }
@@ -243,18 +240,18 @@ export function SearchResults({
   limit,
   currentSessionId,
   statusOf,
-  ungrouped,
-  labels,
   onOpen,
 }: SearchResultsProps): ReactElement {
+  const { labels } = useLocale()
+  const search = labels.search
   return (
     // wg-panel 让整块结果面板淡入，与常规列表来回切换时各有一段淡入（官方三种内容体共用的 .treeBody 也是这么挂的）
     <div className="wg-list wg-panel">
-      <div className="wg-search-results" role="tree" aria-label={labels.results}>
+      <div className="wg-search-results" role="tree" aria-label={search.results}>
         {result.matches.map((match) => {
           const selected = match.row.id === currentSessionId
           const status = statusOf(match)
-          const path = resultPath(match, ungrouped)
+          const path = resultPath(match, labels.ungrouped)
           return (
             <button
               key={match.row.id}
@@ -296,10 +293,10 @@ export function SearchResults({
         })}
       </div>
       {result.matches.length === 0 ? (
-        <div className="wg-empty">{labels.noMatches}</div>
+        <div className="wg-empty">{search.noMatches}</div>
       ) : null}
       {result.hasMore ? (
-        <div className="wg-search-status">{labels.truncated(limit)}</div>
+        <div className="wg-search-status">{search.truncated(limit)}</div>
       ) : null}
     </div>
   )

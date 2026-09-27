@@ -21,7 +21,7 @@ import {
   Switch,
 } from '../runtime.ts'
 import type { ViewMode } from '../data/types.ts'
-import type { ViewModeLabels } from '../labels.ts'
+import { useLocale } from '../useLocale.ts'
 
 /** 面板与窗口边缘的最小距离，取官方 `Menu` 原语的同一个值 */
 const VIEWPORT_MARGIN = 12
@@ -56,20 +56,14 @@ export interface ViewOptionsMenuProps {
   open: boolean
   /** 触发器元素，面板贴它的下缘展开 */
   triggerRef: RefObject<HTMLElement>
-  /** 面板的无障碍标签 */
-  label: string
   /** 当前选中的展示方式 */
   mode: ViewMode
   /** 另一组设置：子工作区嵌套开关 */
   nesting: {
     /** 当前是否开启 */
     enabled: boolean
-    /** 设置名，不随开关状态变化（状态由控件自己表达） */
-    label: string
     onToggle: () => void
   }
-  /** 展示方式那一组的文案 */
-  viewMode: ViewModeLabels
   /** 选中一个展示方式 */
   onSelectMode: (mode: ViewMode) => void
   onClose: () => void
@@ -78,13 +72,13 @@ export interface ViewOptionsMenuProps {
 export function ViewOptionsMenu({
   open,
   triggerRef,
-  label,
   mode,
   nesting,
-  viewMode,
   onSelectMode,
   onClose,
 }: ViewOptionsMenuProps): ReactElement | null {
+  const { labels } = useLocale()
+  const viewMode = labels.viewMode
   const panelRef = useRef<HTMLDivElement>(null)
   const [rect, setRect] = useState<PanelRect | null>(null)
   const closeTimer = useRef<number | null>(null)
@@ -202,7 +196,7 @@ export function ViewOptionsMenu({
       ref={panelRef}
       className="wg-view-menu"
       role="group"
-      aria-label={label}
+      aria-label={labels.add.viewOptions}
       // 首次渲染时还没量过，先藏起来，否则面板会先在窗口左上角露一帧再跳到落点
       style={
         rect === null ? { visibility: 'hidden', left: 0, top: 0 } : { left: rect.left, top: rect.top }
@@ -237,10 +231,10 @@ export function ViewOptionsMenu({
           {/* 官方在视图选项里就是用这个字形标「按工作区树分组」，而本条开关控制的正是子工作区的树形渲染 */}
           <IconWorkspaceTreeOutlineRegular />
         </span>
-        <span className="wg-view-option-label">{nesting.label}</span>
+        <span className="wg-view-option-label">{labels.nested.setting}</span>
         <Switch
           checked={nesting.enabled}
-          label={nesting.label}
+          label={labels.nested.setting}
           className="wg-view-option-switch"
           onChange={() => nesting.onToggle()}
         />

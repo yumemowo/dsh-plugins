@@ -19,9 +19,8 @@ import { sameSessionStatuses } from '../data/status.ts'
 import { SessionRowView } from './SessionRowView.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { NameDialog } from './components/dialogs/NameDialog.tsx'
+import { useLocale } from '../useLocale.ts'
 import type { OfficialSessionActions } from '../actions.ts'
-import type { OfficialHoverLabels } from '../official.ts'
-import type { RegionTranslate } from '../locales.ts'
 import type { SessionStatus } from '../data/status.ts'
 import type { GroupSection, SessionRow } from '../data/types.ts'
 
@@ -37,10 +36,6 @@ export interface SessionGroupingContext {
   sections: readonly GroupSection[]
   /** 目标会话当前所属分组 id，空串表示未归组 */
   currentGroupId: string
-  /** 「移动到…」一级项文案，省略号表示点下去还要选一个目标 */
-  groupLabel: string
-  /** 「取消分组」文案 */
-  ungroupLabel: string
   /**
    * 归组选中项：`ungroup` 或 `group:<id>`
    *
@@ -51,8 +46,12 @@ export interface SessionGroupingContext {
 
 export interface SessionRowMenuProps {
   row: SessionRow
-  /** 行上显示的标题，空白会话取语言包的固定名 */
-  title: string
+  /**
+   * 行上显示的标题
+   *
+   * 传 null 表示这是一条新建中的空白会话，标题由行组件取语言包的固定名
+   */
+  title: string | null
   selected: boolean
   /** 该行要显示的状态位，空闲时为 undefined */
   status?: SessionStatus | undefined
@@ -62,8 +61,6 @@ export interface SessionRowMenuProps {
   statuses?: readonly SessionStatus[] | undefined
   /** 悬停卡片里的相对时间文案（`5分钟前`），缺省时卡片里不显示这一行 */
   hoverTime?: string | undefined
-  /** 悬停卡片的文案，缺省表示官方文案不在场，卡片整体不挂 */
-  hoverLabels?: OfficialHoverLabels | undefined
   /** 归组上下文，缺省时菜单里没有归组项 */
   grouping?: SessionGroupingContext | undefined
   /** 官方三项会话操作，缺省时菜单里没有官方三项 */
@@ -74,10 +71,6 @@ export interface SessionRowMenuProps {
    * 传动作本身而不是绑好 id 的闭包：绑好的闭包每次渲染都是新引用，行级 memo 因此永远判定为变过
    */
   onOpenSession: (sessionId: string) => void
-  /** 行尾操作按钮的无障碍标签，取会话标题 */
-  actionsLabel: (name: string) => string
-  /** 本包命名空间的翻译座位，供重命名对话框解析通用词 */
-  t: RegionTranslate
   /** 该行是否平铺列表里的行，行首没有状态位时不占那一格 */
   flat?: boolean | undefined
   /** 请求把这一行滚进可视区，只在从搜索结果打开时下发 */
@@ -98,8 +91,6 @@ function sameGrouping(
   if (
     a.workspaceId !== b.workspaceId ||
     a.currentGroupId !== b.currentGroupId ||
-    a.groupLabel !== b.groupLabel ||
-    a.ungroupLabel !== b.ungroupLabel ||
     a.onSelectGroup !== b.onSelectGroup
   ) {
     return false
@@ -121,13 +112,10 @@ function sameRowMenuProps(prev: SessionRowMenuProps, next: SessionRowMenuProps):
     prev.selected === next.selected &&
     prev.time === next.time &&
     prev.hoverTime === next.hoverTime &&
-    prev.hoverLabels === next.hoverLabels &&
     sameSessionStatuses(prevStatuses, nextStatuses) &&
     prev.official === next.official &&
     prev.onOpenSession === next.onOpenSession &&
-    prev.actionsLabel === next.actionsLabel &&
     prev.flat === next.flat &&
-    prev.t === next.t &&
     prev.onReveal === next.onReveal &&
     sameGrouping(prev.grouping, next.grouping)
   )
@@ -141,19 +129,27 @@ function SessionRowMenuView({
   time,
   statuses,
   hoverTime,
-  hoverLabels,
   grouping,
   official,
   onOpenSession,
-  actionsLabel,
-  t,
   flat = false,
   onReveal,
 }: SessionRowMenuProps): ReactElement {
+  const { labels } = useLocale()
   const [menuOpen, setMenuOpen] = useState(false)
   const [renameDraft, setRenameDraft] = useState<string | null>(null)
 
-  const items = buildSessionMenuItems({ grouping, official: official?.labels })
+  const items = buildSessionMenuItems({
+    grouping:
+      grouping === undefined
+        ? undefined
+        : {
+            ...grouping,
+            groupLabel: labels.moveToGroup,
+            ungroupLabel: labels.ungroup,
+          },
+    official: official?.labels,
+  })
 
   /**
    * 菜单选中项的分派
@@ -192,8 +188,9 @@ function SessionRowMenuView({
         statuses={statuses}
         hoverTime={hoverTime}
         // 空白行由调用方整段不渲染，因此走到这里的标题一定是会话内容，可复制
-        hoverCopy={title}
-        hoverLabels={hoverLabels}
+        hoverCopy={title ?? undefined}
+        // 宿主没加载官方 ui-workspace 时官方文案整体拿不到，浮出一个空壳不如不浮
+        hover={official !== undefined}
         menuOpen={menuOpen}
         // 卡片要在两种面板开着时都让位：行内 `...` 菜单与行右键菜单
         hoverDisabled={menuOpen || contextMenu.open}
@@ -217,7 +214,7 @@ function SessionRowMenuView({
               <button
                 type="button"
                 className="wg-row-action"
-                aria-label={actionsLabel(row.title)}
+                aria-label={labels.sessionActions(row.title)}
                 onClick={(event) => {
                   event.stopPropagation()
                   setMenuOpen((open) => !open)
@@ -238,7 +235,6 @@ function SessionRowMenuView({
           placeholder={official.labels.sessionNamePrompt}
           confirmLabel={official.labels.rename}
           confirmDisabled={renameDraft.trim() === ''}
-          t={t}
           onValueChange={setRenameDraft}
           onConfirm={() => {
             const title = renameDraft.trim()

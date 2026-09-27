@@ -17,7 +17,7 @@
  *
  * 两张浮层面板（视图选项、选择器）也挂在 `RegionHeaderArea` 这一层，并分别在搜索展开时收起
  * 搜索会顶掉标题与入口组，面板若还开着就悬在一片与它无关的结果列表上
- *
+
  * 窄栏由 `RegionRailHeader` 渲染：官方 rail 下这些入口不是并排的一行
  * section header 里只留建造型入口，36px 一个，与「新建工作区分组」并列
  * 搜索是它们下方独立的一个 36px 块（官方 rail 下那条搜索规则自带 `margin: 0 0 12px`），标题与视图选项在窄栏都不渲染
@@ -27,9 +27,7 @@ import type { AddWorkspaceActions } from '../actions.ts'
 import { pickerSections } from '../data/picker.ts'
 import type { PickerEntry } from '../data/picker.ts'
 import type { ViewMode } from '../data/types.ts'
-import type { RegionLabels } from '../labels.ts'
-import type { RegionTranslate } from '../locales.ts'
-import type { OfficialSearchLabels } from '../official.ts'
+import { useLocale } from '../useLocale.ts'
 import { IconChevronDownOutlineRegular, IconSlidersTwoOutlineRegular } from '../runtime.ts'
 import { AddWorkspaceControl } from './AddWorkspaceControl.tsx'
 import { SearchEntry, SearchRailEntry } from './SearchControl.tsx'
@@ -78,7 +76,6 @@ export interface RegionHeaderCommands {
 }
 
 interface RegionHeaderAreaProps {
-  labels: RegionLabels
   layout: RegionHeaderLayout
   overlays: RegionHeaderOverlays
   commands: RegionHeaderCommands
@@ -93,7 +90,6 @@ interface RegionHeaderAreaProps {
   /** 解析出来的「添加工作区」服务面，缺省时该入口不渲染 */
   addWorkspace: AddWorkspaceActions | undefined
   search: SearchState
-  t: RegionTranslate
 }
 
 /**
@@ -103,7 +99,8 @@ interface RegionHeaderAreaProps {
  * 与 `RegionRailHeader` 是一个顶部的两种形态，因此同处一个文件
  */
 export function RegionHeaderArea(props: RegionHeaderAreaProps): ReactElement {
-  const { labels, search, t } = props
+  const { labels } = useLocale()
+  const { search } = props
   const expanded = search.expanded
   // 搜索展开时整块标题让位，两行一起收拢淡出，与官方单行标题同一个取舍
   const hidden = props.searching || expanded
@@ -133,7 +130,7 @@ export function RegionHeaderArea(props: RegionHeaderAreaProps): ReactElement {
             * 靠字号与色阶一起区分 */}
           <span className="wg-header-focus">{props.layout.currentFocus}</span>
         </button>
-        <SearchEntry search={search} labels={labels.search} />
+        <SearchEntry search={search} />
         <div className={`wg-header-actions${expanded ? ' wg-header-actions-hidden' : ''}`}>
           {/* 官方的位置与字形保留，但这里是一个真的入口，点开的是本包的视图选项面板 */}
           <button
@@ -147,26 +144,19 @@ export function RegionHeaderArea(props: RegionHeaderAreaProps): ReactElement {
             <IconSlidersTwoOutlineRegular />
           </button>
           <VirtualWorkspaceCreateControl
-            label={labels.newVirtualWorkspace}
             narrow={false}
             onCreate={props.commands.startVirtualWorkspaceCreate}
           />
           {props.addWorkspace === undefined ? null : (
-            <AddWorkspaceControl actions={props.addWorkspace} narrow={false} t={t} />
+            <AddWorkspaceControl actions={props.addWorkspace} narrow={false} />
           )}
         </div>
       </div>
       <ViewOptionsMenu
         open={viewOptionsOpen && !props.searching}
         triggerRef={props.overlays.viewOptions.triggerRef}
-        label={labels.add.viewOptions}
-        nesting={{
-          enabled: props.nestingEnabled,
-          label: labels.nested.setting,
-          onToggle: props.onToggleNested,
-        }}
+        nesting={{ enabled: props.nestingEnabled, onToggle: props.onToggleNested }}
         mode={props.viewMode}
-        viewMode={labels.viewMode}
         onSelectMode={props.onSelectMode}
         onClose={props.overlays.viewOptions.onClose}
       />
@@ -175,7 +165,6 @@ export function RegionHeaderArea(props: RegionHeaderAreaProps): ReactElement {
         triggerRef={props.overlays.picker.triggerRef}
         focused={props.focusedKey}
         sections={props.layout.picker}
-        labels={labels.picker}
         onClose={props.overlays.picker.onClose}
         onSelect={props.commands.onSelectFocus}
         onTogglePinned={props.commands.onTogglePinned}
@@ -196,12 +185,10 @@ export function RegionRailHeader({
   addWorkspace,
   search,
   newVirtualWorkspace,
-  t,
 }: {
   addWorkspace?: AddWorkspaceActions | undefined
-  search?: { state: SearchState; labels: OfficialSearchLabels } | undefined
-  newVirtualWorkspace?: { label: string; onCreate: () => void } | undefined
-  t: RegionTranslate
+  search?: SearchState | undefined
+  newVirtualWorkspace?: { onCreate: () => void } | undefined
 }): ReactElement | null {
   if (addWorkspace === undefined && search === undefined && newVirtualWorkspace === undefined) {
     return null
@@ -213,20 +200,14 @@ export function RegionRailHeader({
       {!creates ? null : (
         <div className="wg-header wg-header-rail">
           {newVirtualWorkspace === undefined ? null : (
-            <VirtualWorkspaceCreateControl
-              label={newVirtualWorkspace.label}
-              narrow
-              onCreate={newVirtualWorkspace.onCreate}
-            />
+            <VirtualWorkspaceCreateControl narrow onCreate={newVirtualWorkspace.onCreate} />
           )}
           {addWorkspace === undefined ? null : (
-            <AddWorkspaceControl actions={addWorkspace} narrow t={t} />
+            <AddWorkspaceControl actions={addWorkspace} narrow />
           )}
         </div>
       )}
-      {search === undefined ? null : (
-        <SearchRailEntry search={search.state} labels={search.labels} />
-      )}
+      {search === undefined ? null : <SearchRailEntry search={search} />}
     </>
   )
 }

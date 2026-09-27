@@ -3,7 +3,7 @@ import {
   VIEW_MODE_PERSIST_KEY,
   createViewModeStore,
   sharedViewModeStore,
-} from '../src/client/viewMode.ts'
+} from '../src/client/store/viewMode.ts'
 
 /**
  * 展示方式的存储

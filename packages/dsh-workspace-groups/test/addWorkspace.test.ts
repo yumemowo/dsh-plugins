@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import * as React from 'react'
+import type { ReactElement } from 'react'
 import {
   DIRECTORY_FLOW_SLOT,
   directoryFlowOccupant,
   resolveOccupant,
 } from '../src/client/directoryFlow.ts'
 import { AddWorkspaceControl } from '../src/client/views/AddWorkspaceControl.tsx'
+import { RegionLocaleProvider } from '../src/client/useLocale.ts'
+import { regionLabels } from '../src/client/labels.ts'
 import type { AddWorkspaceActions, DirectoryFlowOwner } from '../src/client/actions.ts'
 import { officialAddLabels } from '../src/client/official.ts'
-import { regionTranslate, workspaceTranslate } from './locale-stub.ts'
+import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 
 /**
  * 组件渲染冒烟
@@ -50,6 +53,8 @@ function statefulDispatcher(): { current: unknown; states: unknown[] } {
     useEffect: () => {},
     useRef: (initial: unknown) => ({ current: initial }),
     useMemo: (fn: () => unknown) => fn(),
+    // 文案提供者读的就是这一格，`RegionLocaleProvider` 进入时写、退出时还原
+    useContext: (context: { _currentValue?: unknown }) => context._currentValue,
   }
   return {
     get current() {
@@ -88,6 +93,24 @@ function renderTree(node: unknown, dispatcher: unknown, out: Rendered): void {
     }
     if (!React.isValidElement(n)) return
     const el = n as React.ReactElement & { type: unknown; props: Record<string, unknown> }
+    // 文案提供者：替身的 useContext 直接读 `_currentValue`，因此进入时写、退出时还原
+    const provider = el.type as { $$typeof?: symbol; _context?: { _currentValue?: unknown } } | undefined
+    if (
+      provider !== null &&
+      typeof provider === 'object' &&
+      provider.$$typeof === Symbol.for('react.provider') &&
+      provider._context !== undefined
+    ) {
+      const context = provider._context
+      const prev = context._currentValue
+      context._currentValue = el.props['value']
+      try {
+        walk(el.props['children'])
+      } finally {
+        context._currentValue = prev
+      }
+      return
+    }
     if (typeof el.type === 'function') {
       // Modal 形状：有标题也有页脚，且没有 children 数组式的菜单条目
       if (el.props['title'] !== undefined && el.props['footer'] !== undefined) {
@@ -136,6 +159,19 @@ function face(overrides: Partial<AddWorkspaceActions> = {}): {
   }
 }
 
+/**
+ * 把一个组件元素包进文案提供者
+ *
+ * 叶子组件通过 `useLocale()` 取文案，直接渲染叶子时那一层要自己补上
+ */
+function withLocale(node: ReactElement): ReactElement {
+  const t = regionTranslate()
+  return React.createElement(RegionLocaleProvider, {
+    value: { t, labels: regionLabels(t, workspaceTranslate(), sidebarTranslate()) },
+    children: node,
+  })
+}
+
 /** 最近一次渲染时占用者收到的 owner 会话 */
 let capturedOwner: DirectoryFlowOwner | undefined
 
@@ -150,15 +186,7 @@ function renderControl(
   const dispatcher = statefulDispatcher()
   const out: Rendered = { host: [], modals: [], owner: undefined }
   capturedOwner = undefined
-  renderTree(
-    React.createElement(AddWorkspaceControl, {
-      actions,
-      narrow,
-      t: regionTranslate(),
-    }),
-    dispatcher.current,
-    out,
-  )
+  renderTree(withLocale(React.createElement(AddWorkspaceControl, { actions, narrow })), dispatcher.current, out)
   out.owner = capturedOwner
   return { out, dispatcher }
 }
@@ -168,7 +196,7 @@ function rerender(actions: AddWorkspaceActions, dispatcher: { current: unknown }
   const out: Rendered = { host: [], modals: [], owner: undefined }
   capturedOwner = undefined
   renderTree(
-    React.createElement(AddWorkspaceControl, { actions, narrow: false, t: regionTranslate() }),
+    withLocale(React.createElement(AddWorkspaceControl, { actions, narrow: false })),
     dispatcher.current,
     out,
   )

@@ -19,7 +19,7 @@ import { directoryFlowSource } from './directoryFlow.ts'
 import { hostInfoSource } from './hostInfo.ts'
 import { WorkspaceGroupsRegion } from './views/WorkspaceGroupsRegion.tsx'
 import { IconWorkspaceTreeOutlineRegular } from './runtime.ts'
-import type { ViewModeStoreHandle } from './viewMode.ts'
+import type { ViewModeStoreHandle } from './store/viewMode.ts'
 
 /** 注册进原生右侧栏的实现 id，同时是 tab 体座位的键 */
 export const COMPARE_TAB_ID = '@your-scope/dsh-workspace-groups/compare'

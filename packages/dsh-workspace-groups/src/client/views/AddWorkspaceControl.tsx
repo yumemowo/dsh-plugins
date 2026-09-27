@@ -11,7 +11,7 @@
 import { useState } from 'react'
 import type { ReactElement } from 'react'
 import { Button, IconProjectAddOutlineRegular, Modal, Tooltip } from '../runtime.ts'
-import type { RegionTranslate } from '../locales.ts'
+import { useLocale } from '../useLocale.ts'
 import type { AddWorkspaceActions } from '../actions.ts'
 
 export interface AddWorkspaceControlProps {
@@ -19,15 +19,13 @@ export interface AddWorkspaceControlProps {
   actions: AddWorkspaceActions
   /** 窄栏（rail）形态：按钮放大、色阶提亮，与官方一致 */
   narrow: boolean
-  /** 本包命名空间的翻译座位，供错误框解析通用词 */
-  t: RegionTranslate
 }
 
 export function AddWorkspaceControl({
   actions,
   narrow,
-  t,
 }: AddWorkspaceControlProps): ReactElement {
+  const { t } = useLocale()
   // 一次 picking 请求的开合，用户点入口时置真，占用者完成后交回结果
   const [flowOpen, setFlowOpen] = useState(false)
   // 采纳选中的路径期间的忙碌位，占用者据此禁用提交入口

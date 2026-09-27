@@ -3,12 +3,10 @@
  *
  * 两处用它：关闭嵌套时列出会被解除嵌套的工作区，以及新增工作区时让用户决定要不要放进父所在的分组
  * 名单是这次操作会影响到的东西，放在说明与按钮之间，用户据此判断要不要继续
- *
- * 「取消」与「关闭」是通用词，取插槽注入的 `t` 座位回退到官方 `common` 命名空间
  */
 import type { ReactElement } from 'react'
 import { Button, Modal } from '../../../runtime.ts'
-import type { RegionTranslate } from '../../../locales.ts'
+import { useLocale } from '../../../useLocale.ts'
 
 export interface ListDialogProps {
   title: string
@@ -21,7 +19,6 @@ export interface ListDialogProps {
   danger?: boolean | undefined
   /** 第二个可选动作，缺省时页脚只有「取消 + 确认」 */
   alt?: { label: string; onSelect: () => void } | undefined
-  t: RegionTranslate
   onConfirm: () => void
   onClose: () => void
 }
@@ -33,10 +30,10 @@ export function ListDialog({
   confirmLabel,
   danger,
   alt,
-  t,
   onConfirm,
   onClose,
 }: ListDialogProps): ReactElement {
+  const { t } = useLocale()
   return (
     <Modal
       open

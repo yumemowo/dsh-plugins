@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import * as React from 'react'
+import type { ReactElement } from 'react'
 import { GroupSection } from '../src/client/views/GroupSection.tsx'
 import { SessionRowMenu } from '../src/client/views/SessionRowMenu.tsx'
 import { WorkspaceSection } from '../src/client/views/WorkspaceSection.tsx'
 import type { WorkspaceSectionProps } from '../src/client/views/WorkspaceSection.tsx'
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
-import {
-  officialAddLabels,
-  officialHoverLabels,
-  officialSessionLabels,
-  timeLabel,
-} from '../src/client/official.ts'
+import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
+import { RegionLocaleProvider } from '../src/client/useLocale.ts'
+import { regionLabels } from '../src/client/labels.ts'
 import { regionTranslate, sidebarTranslate, translateWith, workspaceTranslate } from './locale-stub.ts'
 import { menuLabelArrow, menuLabelText } from './menu-label.ts'
 import { snapshot } from './snapshot-stub.ts'
@@ -171,6 +169,25 @@ function render(
     }
     if (!React.isValidElement(n)) return
     const el = n as React.ReactElement & { type: unknown; props: Record<string, unknown> }
+    // 文案提供者：替身的 useContext 直接读 `_currentValue`，因此进入时写、退出时还原
+    // 真实 react-dom 会自己做这件事，这条分支只服务本文件那套手写 dispatcher
+    const provider = el.type as { $$typeof?: symbol; _context?: { _currentValue?: unknown } } | undefined
+    if (
+      provider !== null &&
+      typeof provider === 'object' &&
+      provider.$$typeof === Symbol.for('react.provider') &&
+      provider._context !== undefined
+    ) {
+      const context = provider._context
+      const prev = context._currentValue
+      context._currentValue = el.props['value']
+      try {
+        walk(el.props['children'] as unknown)
+      } finally {
+        context._currentValue = prev
+      }
+      return
+    }
     // memo 包出来的组件其 type 是对象而不是函数，函数体挂在 type.type 上
     // 替身没有 React 的比对逻辑，这里取内层函数直接调用即可——本测试关心结构
     // 不关心某次渲染是否被 memo 挡下
@@ -448,12 +465,26 @@ function contextMenuAnchorRect(out: { contextMenus?: unknown[] }): unknown {
  * @param options.grouping - 归组上下文，缺省表示该行没有分组可归
  * @param options.groupSections - 可移入的分组，只给 `grouping` 为真时有意义
  */
+/**
+ * 把一个组件元素包进文案提供者
+ *
+ * 叶子组件通过 `useLocale()` 取文案，直接渲染叶子（不走区域容器）时那一层要自己补上
+ * 提供者的 value 每次新建一份，但本文件断言的都是结构与文案，不涉及行级缓存
+ */
+function withLocale(node: ReactElement): ReactElement {
+  const t = regionTranslate()
+  return React.createElement(RegionLocaleProvider, {
+    value: { t, labels: regionLabels(t, workspaceTranslate(), sidebarTranslate()) },
+    children: node,
+  })
+}
+
 function sessionRowNode(options: {
   official?: boolean
   grouping?: boolean
   groupSections?: { id: string; label: string; sessions: [] }[]
 } = {}): unknown {
-  return React.createElement(SessionRowMenu, {
+  return withLocale(React.createElement(SessionRowMenu, {
     row: {
       id: 's1',
       title: '会话一',
@@ -465,9 +496,7 @@ function sessionRowNode(options: {
     },
     title: '会话一',
     selected: false,
-    actionsLabel: (name: string) => `会话“${name}”的操作`,
     onOpenSession: () => {},
-    t: regionTranslate(),
     ...(options.official === false
       ? {}
       : {
@@ -485,35 +514,25 @@ function sessionRowNode(options: {
             workspaceId: 'w1',
             sections: options.groupSections ?? [],
             currentGroupId: '',
-            groupLabel: '移动到…',
-            ungroupLabel: '取消分组',
             onSelectGroup: () => {},
           },
         }
       : {}),
-  })
+  }))
 }
 
 /** 一个分组行的元素，供右键测试直接渲染一行 */
 function groupRowNode(onCreateSession?: () => void): unknown {
-  return React.createElement(GroupSection, {
+  return withLocale(React.createElement(GroupSection, {
     section: { id: 'g1', label: '前端', sessions: [] },
     collapsed: false,
     onToggle: () => {},
     onRename: () => {},
     onDelete: () => {},
     ...(onCreateSession === undefined ? {} : { onCreateSession }),
-    labels: {
-      actions: (name: string) => `分组“${name}”的操作`,
-      rename: '重命名',
-      delete: '删除分组',
-      newSessionItem: '新建会话',
-      newSession: (name: string) => `在“${name}”中新建会话`,
-    },
     renderChildWorkspace: () => null,
-    sessionsLabel: '会话',
     children: null,
-  })
+  }))
 }
 
 /**
@@ -547,37 +566,30 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, collapse
     contextMenus: [] as unknown[],
   }
   render(
-    React.createElement(GroupSection, {
-      section: {
-        id: 'g1',
-        label: '前端',
-        sessions: Array.from({ length: sessionCount }, (_, index) => ({
-          id: `s${index}`,
-          title: `会话 ${index}`,
-          blank: false,
-          running: false,
-          runningSubagentCount: 0,
-          completed: false,
-          updatedAt: 0,
-        })),
-      },
-      collapsed,
-      onToggle: () => {},
-      onRename: () => {},
-      onDelete: () => {},
-      ...(onCreateSession === undefined ? {} : { onCreateSession }),
-      labels: {
-        actions: (name: string) => `分组“${name}”的操作`,
-        // 菜单项用官方通用动词，对话框标题才点明对象
-        rename: '重命名',
-        delete: '删除分组',
-        newSessionItem: '新建会话',
-        newSession: (name: string) => `在“${name}”中新建会话`,
-      },
-      renderChildWorkspace: () => null,
-      sessionsLabel: '会话',
-      children: null,
-    }),
+    withLocale(
+      React.createElement(GroupSection, {
+        section: {
+          id: 'g1',
+          label: '前端',
+          sessions: Array.from({ length: sessionCount }, (_, index) => ({
+            id: `s${index}`,
+            title: `会话 ${index}`,
+            blank: false,
+            running: false,
+            runningSubagentCount: 0,
+            completed: false,
+            updatedAt: 0,
+          })),
+        },
+        collapsed,
+        onToggle: () => {},
+        onRename: () => {},
+        onDelete: () => {},
+        ...(onCreateSession === undefined ? {} : { onCreateSession }),
+        renderChildWorkspace: () => null,
+        children: null,
+      }),
+    ),
     out,
   )
   return out
@@ -599,14 +611,6 @@ function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
       title: 'W1',
       collapsed,
       folderActive: false,
-      labels: {
-        actions: (name: string) => `工作区“${name}”的操作`,
-        newSession: (name: string) => `在“${name}”中新建会话`,
-        newSessionItem: '新建会话',
-        newGroup: '新建分组',
-        rename: '重命名',
-        delete: '删除工作区',
-      },
       virtualWorkspace: {
         sections: [],
         currentGroupId: '',
@@ -625,15 +629,6 @@ function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
     layout: { groups: [], loose, children: [] },
     isGroupCollapsed: () => false,
     depth: 0,
-    emptyLabel: '还没有会话',
-    sessionsLabel: '会话',
-    groupActionLabels: {
-      actions: (name: string) => `分组“${name}”的操作`,
-      rename: '重命名',
-      delete: '删除分组',
-      newSessionItem: '新建会话',
-      newSession: (name: string) => `在“${name}”中新建会话`,
-    },
     groupActions: {
       onToggle: () => {},
       onRename: () => {},
@@ -653,7 +648,7 @@ function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
     order: [] as string[],
     collapses: [] as unknown[],
   }
-  render(React.createElement(WorkspaceSection, props), out)
+  render(withLocale(React.createElement(WorkspaceSection, props)), out)
   return out
 }
 
@@ -1756,7 +1751,7 @@ describe('hover cards', () => {
   it('suppresses the card on a row while either of its panels is open', () => {
     // 单行渲染，测试替身按组件类型给状态分桶，同一类型的多个实例共用一份状态
     // 整片列表里所有会话行会一起「被右键」，那样断言不出「只有这一行让位」
-    const node = React.createElement(SessionRowMenu, {
+    const node = withLocale(React.createElement(SessionRowMenu, {
       row: {
         id: 's1',
         title: '会话一',
@@ -1770,10 +1765,7 @@ describe('hover cards', () => {
       selected: false,
       statuses: [{ state: 'done', label: '空闲' }],
       hoverTime: '5分钟前',
-      hoverLabels: officialHoverLabels(workspaceTranslate()),
-      actionsLabel: (name: string) => `会话“${name}”的操作`,
       onOpenSession: () => {},
-      t: regionTranslate(),
       official: {
         renameSession: async () => {},
         forkSession: () => {},
@@ -1781,7 +1773,7 @@ describe('hover cards', () => {
         labels: officialSessionLabels(workspaceTranslate()),
         relativeTime: () => '',
       },
-    })
+    }))
 
     const harness = renderingDispatcher()
     const before = {
@@ -1805,7 +1797,7 @@ describe('hover cards', () => {
 
   it('suppresses the card while the row own menu is open', () => {
     // 行内 `...` 菜单是另一处浮在行上的面板，两条路径都要让位
-    const node = React.createElement(SessionRowMenu, {
+    const node = withLocale(React.createElement(SessionRowMenu, {
       row: {
         id: 's1',
         title: '会话一',
@@ -1818,10 +1810,7 @@ describe('hover cards', () => {
       title: '会话一',
       selected: false,
       hoverTime: '5分钟前',
-      hoverLabels: officialHoverLabels(workspaceTranslate()),
-      actionsLabel: (name: string) => `会话“${name}”的操作`,
       onOpenSession: () => {},
-      t: regionTranslate(),
       official: {
         renameSession: async () => {},
         forkSession: () => {},
@@ -1829,7 +1818,7 @@ describe('hover cards', () => {
         labels: officialSessionLabels(workspaceTranslate()),
         relativeTime: () => '',
       },
-    })
+    }))
 
     const harness = renderingDispatcher()
     const before = { menus: [] as unknown[], text: [] as string[], cards: [] as unknown[] }
