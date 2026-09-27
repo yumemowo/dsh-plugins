@@ -34,6 +34,8 @@ import { WorkspaceHoverContent } from './components/HoverCards.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { useLocale } from '../useLocale.ts'
+import styles from './components/rows.module.css'
+import clsx from 'clsx'
 
 /** 工作区悬停卡片要显示的正文 */
 export interface WorkspaceHoverData {
@@ -154,7 +156,7 @@ export function WorkspaceRow({
 
   const row = (
     <div
-      className={'wg-workspace-head' + (menuOpen ? ' wg-row-menu-open' : '')}
+      className={clsx(styles.workspaceHead, menuOpen && styles.rowMenuOpen)}
       role="button"
       tabIndex={0}
       onClick={onToggle}
@@ -162,13 +164,13 @@ export function WorkspaceRow({
       onContextMenu={contextMenu.onContextMenu}
     >
       {contextMenu.menu}
-      <span className={`wg-slot wg-folder${folderActive ? ' wg-folder-active' : ''}`}>
+      <span className={clsx(styles.slot, styles.folder, folderActive && styles.folderActive)}>
         {collapsed ? <IconFolderCloseRegular /> : <IconFolderOpenRegular />}
       </span>
-      <span className="wg-slot wg-chevron">
-        <IconTriangleRightFillRegular className={`wg-arrow${collapsed ? '' : ' wg-arrow-open'}`} />
+      <span className={clsx(styles.slot, styles.chevron)}>
+        <IconTriangleRightFillRegular className={clsx(styles.arrow, !(collapsed) && styles.arrowOpen)} />
       </span>
-      <span className="wg-workspace-title">{title}</span>
+      <span className={styles.workspaceTitle}>{title}</span>
       <RowActions
         menuOpen={menuOpen}
         onMenuOpen={setMenuOpen}

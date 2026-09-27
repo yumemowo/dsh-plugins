@@ -1,0 +1,204 @@
+/* 区域 section header，几何照官方 WorkspaceBrowser 的 .sectionHeader
+   规格为 36px 高、圆角 12px、左内边距 4px、控件间距 4px、下间距 4px
+
+   margin-right 同样照官方取 -4px，官方那条负值是相对「自带整块右留白」的根节点写的
+   本包 .root 有同一份留白，因此两者相抵后 header 的右缘与官方一样落在离栏缘 8px 处 */
+.header {
+  box-sizing: border-box;
+  height: 36px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-bottom: 4px;
+  padding-left: 4px;
+  margin-top: 2px;
+  margin-right: -4px;
+  color: var(--dsw-alias-label-tertiary);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* 标题块
+   上下两行合成一个按钮，最多占 45%（官方 .sectionLabel 同此约束）
+   宽度上限挂在这一层而不是行上——两行要共用同一条右缘
+   各自算百分比会让较窄的那行先截断而较宽的那行顶出去 */
+.headerTitle {
+  box-sizing: border-box;
+  cursor: pointer;
+  min-width: 0;
+  max-width: 45%;
+  flex: none;
+  margin: 0;
+  /* 上下各 2px、左右各 4px 的命中余量
+     悬停底色要包住两行文字
+     而 header 是 align-items: center 的 44px 行，这点余量不会把行撑高 */ 
+  padding: 2px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: 0 0;
+  border: none;
+  border-radius: 8px;
+  text-align: left;
+  transition:
+    max-width .18s var(--ds-ease-in-out, ease-in-out),
+    margin-right .18s var(--ds-ease-in-out, ease-in-out),
+    opacity .12s var(--ds-ease-in-out, ease-in-out),
+    transform .18s var(--ds-ease-in-out, ease-in-out),
+    visibility 0s linear;
+}
+
+.headerTitle:hover { background: var(--dsw-alias-interactive-bg-hover); }
+
+/* 搜索展开时标题让位，宽度收成 0、向左移一点并淡出，整行只剩搜索框
+   四条属性与官方 .sectionLabelHidden 一致，时长取官方那套 .18s/.12s
+   一并关掉指针事件：两行标题现在都是按钮，只靠 visibility 仍会在收拢动画期间留下可点中的热区
+   （visibility 的切换要等淡出走完） */
+.headerTitleHidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  max-width: 0;
+  margin-right: -4px;
+  /* visibility 要等淡出走完再切，否则标题会当场消失、没有过渡 */
+  transition-delay: 0s, 0s, 0s, 0s, .18s;
+  transform: translate(-4px);
+}
+
+/* 上行：「工作区」文字 + 紧跟其后的下拉箭头
+   箭头不是独立按钮，它就是整块按钮自己的开合指示 */
+.headerHeading {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.headerLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* 箭头在菜单开合之间翻转，两条状态各自一个方向，读起来才是「收起了 / 展开了」 */
+.headerCaret { flex: none; transition: transform .15s var(--ds-ease-in-out, ease-in-out); }
+
+.headerCaretOpen { transform: rotate(180deg); }
+
+/* 下行：当前聚焦的工作区或工作区分组。它与上行是两个层级的信息（层级名 / 层级里的取值）
+   因此比上行小一档字号、亮一档色阶
+   两行同色同字号时读起来像同一个标题被折成了两行，而不是「分类 + 取值」
+   没有聚焦时显示「全部工作区」
+
+   色阶写在这一行上（上行那份写在自己的行盒上）
+   两行各自声明自己的颜色，比对时不必先回到按钮那一层去找继承来的值 */
+.headerFocus {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+/* 带两行标题的 header 不能沿用基线那条 36px 定高（它是为官方单行标题写的）
+   沿用它会连同 overflow:hidden 一起把第二行裁掉
+   界面上只是「聚焦的那一行不见了」，不会有任何报错。高度按内容放开
+
+   左内边距同时撤到 0
+   标题块是一个按钮，命中余量由它自己的 padding 给，否则会与基线那条叠加成 8px */
+.headerTitled {
+  height: auto;
+  padding-left: 0;
+}
+
+.headerActions {
+  /* 三个 28px 入口加两格 4px 间距 = 92px（视图选项 / 新建工作区分组 / 添加工作区）
+   这里必须给足，否则 overflow: hidden 会把最右边那个入口整个裁掉
+   它不会报错，只是界面上少一个按钮 */
+  max-width: 92px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  /* 不设 margin-left: auto，把整组推向右缘的是前面搜索槽位那一个 auto
+     多一个 auto 会与它平分剩余空间，把搜索框挤到行中间 */
+  overflow: hidden;
+  transition:
+    max-width .18s var(--ds-ease-in-out, ease-in-out),
+    opacity .12s var(--ds-ease-in-out, ease-in-out),
+    transform .18s var(--ds-ease-in-out, ease-in-out),
+    visibility 0s linear;
+}
+
+/* 视图选项与「添加工作区」在搜索展开时整体让位，向右收拢并淡出，与标题对称 */
+.headerActionsHidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  max-width: 0;
+  transition-delay: 0s, 0s, 0s, .18s;
+  transform: translate(4px);
+}
+
+/* header 里的图标按钮，官方 .iconButton 的几何（28px 正圆、label-secondary，悬停出底色）
+   与行内 16px 按钮分开，因为尺寸与命中区都不是一套 */
+.headerAction {
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+  background: 0 0;
+  border: none;
+  border-radius: 50%;
+  /* 正圆必须配对 round，否则会被主题的全局超级椭圆磨成方圆角 */
+  corner-shape: round;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.headerAction:hover { background: var(--dsw-alias-interactive-bg-hover); }
+
+/* 窄栏
+   官方 rail 下 header 只留一个 36px 的入口，标题与搜索都不渲染
+   窄栏一行放不下两个 36px 入口（栏宽不足 72px），因此每个入口各占一行，与官方 rail 的节奏一致（那里也是「添加」一行、搜索一行）
+   基线那条 36px 定高与 overflow:hidden 是为宽栏单行写的，这里必须撤掉，否则第二个入口被裁掉 */
+.headerRail {
+  justify-content: flex-start;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  height: auto;
+  overflow: visible;
+  margin-bottom: 12px;
+  margin-top: 0;
+  margin-right: 0;
+  padding-left: 0;
+}
+
+.headerRail .headerAction {
+  width: 36px;
+  height: 36px;
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 搜索的展开、标题与入口组的让位都直接落位 */
+  .headerTitle,
+  .headerActions { transition: none; }
+
+  /* 两处箭头直接落位，翻转动画在 reduced-motion 下没有意义 */
+  .headerCaret { transition: none; }
+}

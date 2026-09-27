@@ -4,7 +4,7 @@
  * 它是「工作区一级」的容器，与会话分组（`GroupSection`）是两个层级的不同概念：
  * 这里装的是工作区，且只出现在列表最外层，不会落在某个工作区内部
  *
- * 行结构与会话分组头刻意同形（同一 `.wg-group-head` 基类、同样的行尾操作位与可收放槽位）
+ * 行结构与会话分组头刻意同形（同一 `.groupHead` 基类、同样的行尾操作位与可收放槽位）
  * 只在两处不同：缩进按根节点取 8px 而不是 24px，且没有 `+`
  * 分组里要放的是工作区，而新建工作区的入口在区域 header（`workspace.add`）
  */
@@ -23,6 +23,8 @@ import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { useLocale } from '../useLocale.ts'
 import type { VirtualWorkspaceSection as VirtualWorkspaceSectionData } from '../data/types.ts'
+import styles from './components/rows.module.css'
+import clsx from 'clsx'
 
 export interface VirtualWorkspaceSectionProps {
   section: VirtualWorkspaceSectionData
@@ -69,11 +71,9 @@ export function VirtualWorkspaceSection({
   })
 
   return (
-    <div className="wg-virtual-workspace">
+    <div className={styles.virtualWorkspace}>
       <div
-        className={
-          'wg-group-head wg-virtual-workspace-head' + (menuOpen ? ' wg-row-menu-open' : '')
-        }
+        className={clsx(styles.groupHead, styles.virtualWorkspaceHead, menuOpen && styles.rowMenuOpen)}
         role="button"
         tabIndex={0}
         onClick={onToggle}
@@ -83,20 +83,20 @@ export function VirtualWorkspaceSection({
         {contextMenu.menu}
         {/* 文件夹槽与箭头槽常驻同一个 16px 列，与工作区行同一套：静止时显示文件夹、悬停换成箭头，因此切换不会让标题位移
             这里的文件夹走虚线：工作区分组形状上像一个工作区，但本身不是一个真实工作区 */}
-        <span className="wg-slot wg-folder">
+        <span className={clsx(styles.slot, styles.folder)}>
           <IconVirtualFolder16 />
         </span>
-        <span className="wg-slot wg-chevron">
-          <IconTriangleRightFillRegular className={`wg-arrow${collapsed ? '' : ' wg-arrow-open'}`} />
+        <span className={clsx(styles.slot, styles.chevron)}>
+          <IconTriangleRightFillRegular className={clsx(styles.arrow, !(collapsed) && styles.arrowOpen)} />
         </span>
-        <span className="wg-virtual-workspace-label">{section.label}</span>
+        <span className={styles.virtualWorkspaceLabel}>{section.label}</span>
         {/* 工作区数自己成格贴在行右，与会话分组的会话数、session 行的时间同格同形
             空分组不显示 */}
         {section.workspaceIds.length <= 0 ? null : (
-          <span className="wg-group-count">{section.workspaceIds.length}</span>
+          <span className={styles.groupCount}>{section.workspaceIds.length}</span>
         )}
         {/* 操作位收进 session 行同一套可收放槽位：静止时不占宽，上面的工作区数因此贴到行右，悬停/菜单展开/键盘聚焦时槽位展开，工作区数隐去 */}
-        <span className="wg-row-action-slot">
+        <span className={styles.rowActionSlot}>
           <RowActions
             menuOpen={menuOpen}
             onMenuOpen={setMenuOpen}
@@ -109,9 +109,9 @@ export function VirtualWorkspaceSection({
       {/* 空分组照样有内容要露：占位文案落在折叠体里，因此「建完分组还没移入
           工作区」时用户看得到它，而不是一个点下去什么都没发生的分组头 */}
       <CollapsibleBody open={!collapsed}>
-        <div className="wg-virtual-workspace-body">
+        <div className={styles.virtualWorkspaceBody}>
           {section.workspaceIds.length <= 0 ? (
-            <div className="wg-empty" data-wg-stagger="">
+            <div className={styles.empty} data-wg-stagger="">
               {labels.virtualWorkspaceEmpty}
             </div>
           ) : (

@@ -4,7 +4,7 @@ import {
   DEFAULT_COLLAPSE_MOTION,
   collapseMotionVars,
 } from '../src/client/utils/collapseMotion.ts'
-import { CSS } from '../src/client/styles.ts'
+import { readAllCss, readReducedMotionCss } from './readCss.ts'
 import { staggerDelayMs } from '../src/client/views/components/CollapsibleBody.tsx'
 
 describe('collapse motion parameters', () => {
@@ -20,14 +20,22 @@ describe('collapse motion parameters', () => {
     expect(vars['--wg-collapse-delay']).toBeUndefined()
   })
 
-  it('writes the default constant into the CSS fallbacks', () => {
-    // 回退值直接由常量插值而来，两者不可能漂移，这里确认插值确实落到了 CSS 里
-    // 而不是留下 `${...}` 字面量或手写数字
-    const css = CSS
-    expect(css).toContain(`var(${COLLAPSE_VARS.duration}, ${DEFAULT_COLLAPSE_MOTION.duration}ms)`)
-    expect(css).toContain(`var(${COLLAPSE_VARS.easing}, ${DEFAULT_COLLAPSE_MOTION.easing})`)
-    expect(css).toContain(`var(${COLLAPSE_VARS.fade}, ${DEFAULT_COLLAPSE_MOTION.fade}ms)`)
-    expect(css).not.toContain('${')
+  it('keeps the rhythm values out of the stylesheet', () => {
+    // 时长与缓动只由 CollapsibleBody 内联下发（它恒设这三个自定义属性）
+    // 样式表里再写一份回退值就成了第二个来源，改常量时 CSS 不会跟着变
+    // 因此断言样式表只消费变量、不出现默认值本身
+    const css = readAllCss()
+    expect(css).toContain(`var(${COLLAPSE_VARS.duration})`)
+    expect(css).toContain(`var(${COLLAPSE_VARS.easing})`)
+    expect(css).toContain(`var(${COLLAPSE_VARS.fade})`)
+
+    // 缓动的默认值形如 var(--ds-ease-in-out, ease-in-out)，字面量 ease-in-out 会命中
+    // 因此只查时长：默认毫秒数不得在样式表里出现
+    expect(css).not.toContain(`${DEFAULT_COLLAPSE_MOTION.duration}ms`)
+    expect(css).not.toContain(`${DEFAULT_COLLAPSE_MOTION.fade}ms`)
+
+    // 延迟是个例外：元素没被排期时（如收起态）没有任何内联值，必须有 0 兜底
+    expect(css).toContain(`var(${COLLAPSE_VARS.delay}, 0ms)`)
   })
 
   it('lets a caller override a single field without restating the rest', () => {
@@ -55,20 +63,18 @@ describe('collapse motion parameters', () => {
   })
 
   it('keeps the focus handoff delay tied to the same duration variable', () => {
-    const css = CSS
+    const css = readAllCss()
 
     // 收起后交出焦点顺序的延时若与容器时长各写一份，改一处就会失配
     // 两者必须同源，内容可能在视觉上没合拢时就能被 Tab 聚焦
     expect(css).toMatch(
-      new RegExp(`\\.wg-collapse-clip\\s*\\{[^}]*transition:\\s*visibility 0s linear var\\(${COLLAPSE_VARS.duration}`),
+      new RegExp(`\\.collapseClip\\s*\\{[^}]*transition:\\s*visibility 0s linear var\\(${COLLAPSE_VARS.duration}`),
     )
     expect(css).not.toMatch(/transition:\s*visibility 0s linear \d/)
   })
 
   it('drops the stagger delay too when motion is reduced', () => {
-    const css = CSS
-    const reduced =
-      /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+    const reduced = readReducedMotionCss()
 
     // 逐个淡入的延迟由组件下发到元素上，reduced-motion 下要把那条展开态规则的过渡
     // 一起清掉，否则行仍是逐个出现

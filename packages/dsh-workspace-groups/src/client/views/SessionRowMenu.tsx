@@ -23,6 +23,8 @@ import { useLocale } from '../useLocale.ts'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { SessionStatus } from '../data/status.ts'
 import type { GroupSection, SessionRow } from '../data/types.ts'
+import rowsStyles from './components/rows.module.css'
+import menusStyles from '../menus.module.css'
 
 /**
  * 一个会话行的归组上下文，缺省表示该行没有分组可归
@@ -208,12 +210,12 @@ function SessionRowMenuView({
             portal
             closeOnPointerLeave
             // 面板被 portal 出去后不在本包的 DOM 子树里，官方为此留了这一个样式钩子
-            // 本包借它修二级面板的底色（见 styles.ts 的 .wg-menu-list）
-            listClassName="wg-menu-list"
+            // 本包借它修二级面板的底色（见 `menus.module.css` 的 `.menuList`）
+            listClassName={menusStyles.menuList}
             anchor={
               <button
                 type="button"
-                className="wg-row-action"
+                className={rowsStyles.rowAction}
                 aria-label={labels.sessionActions(row.title)}
                 onClick={(event) => {
                   event.stopPropagation()

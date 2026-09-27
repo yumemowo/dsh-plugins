@@ -3,12 +3,14 @@
  *
  * 官方行内按钮几何来自 ui-workspace 的 CSS Module
  * primitives 没有等价的 16px 行内按钮，因此保留本地 16px 几何，图标仍取 primitives 导出
- * 显隐由 `.wg-row-action` 统一负责，调用方不需要再传额外类名
+ * 显隐由 `.rowAction` 统一负责，调用方不需要再传额外类名
  *
  * 点击一律 `stopPropagation`：它总是嵌在一个自己也可点的行里，例如工作区行、分组行、下拉菜单的条目行
  * 不拦住就会连带触发整行的动作
  */
 import type { ReactElement } from 'react'
+import styles from './rows.module.css'
+import clsx from 'clsx'
 
 export interface IconButtonProps {
   /** 无障碍标签 */
@@ -36,7 +38,7 @@ export function IconButton({
   return (
     <button
       type="button"
-      className={'wg-row-action' + (danger === true ? ' wg-row-action-danger' : '')}
+      className={clsx(styles.rowAction, danger === true && styles.rowActionDanger)}
       aria-label={ariaLabel}
       {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
       onClick={(event) => {

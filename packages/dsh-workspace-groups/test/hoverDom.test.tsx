@@ -147,7 +147,7 @@ async function mountRoot(
  * 这里给出真实浏览器里会出现的两种几何
  *
  * 区域节点必须从本次挂载的容器里取，同文件其他用例挂载后不收尾
- * 按文档查 `.wg-root` 会拿到先前那次留下的旧节点，而 resize 监听挂在本次这个节点上
+ * 按文档查 `.root` 会拿到先前那次留下的旧节点，而 resize 监听挂在本次这个节点上
  * @param container - 本次挂载的容器
  * @param viewportWidth - 布局视口宽度
  * @param rect - 区域矩形的左右边
@@ -162,7 +162,7 @@ function stubGeometry(
     value: viewportWidth,
     configurable: true,
   })
-  const region = container.querySelector('.wg-root') as HTMLElement
+  const region = container.querySelector('.root') as HTMLElement
   region.getBoundingClientRect = () =>
     ({
       left: rect.left,
@@ -190,7 +190,7 @@ describe('hover cards in a real DOM', () => {
 
     // 行现在被 HoverCard 那层包装包着，但它仍要能被选择器找到——层级缩进
     // 引导线与逐个淡入都按行自身的选择器生效
-    const rows = container.querySelectorAll('.wg-row')
+    const rows = container.querySelectorAll('.row')
     expect(rows.length).toBeGreaterThan(0)
     for (const row of Array.from(rows)) {
       expect(row.getAttribute('data-wg-stagger')).toBe('')
@@ -198,9 +198,9 @@ describe('hover cards in a real DOM', () => {
       expect(row.getAttribute('role')).toBe('button')
     }
 
-    // 挂卡片的那一行确实多了一层包装：行不再是 .wg-sessions 的直接子项
-    const sessions = container.querySelector('.wg-sessions') as HTMLElement
-    const firstRow = sessions.querySelector('.wg-row') as HTMLElement
+    // 挂卡片的那一行确实多了一层包装：行不再是 .sessions 的直接子项
+    const sessions = container.querySelector('.sessions') as HTMLElement
+    const firstRow = sessions.querySelector('.row') as HTMLElement
     expect(firstRow.parentElement).not.toBe(sessions)
     // 包装层是行内盒，不生成 flex 项以外的影响面
     expect(firstRow.parentElement?.tagName).toBe('SPAN')
@@ -210,9 +210,9 @@ describe('hover cards in a real DOM', () => {
     const container = await mount()
 
     // 工作区行同样被包了一层，但它必须仍是工作区区块的第一个子项：
-    // `.wg-workspace > * + *` 那份 2px 间距靠的就是这个位置
-    const workspace = container.querySelector('.wg-workspace') as HTMLElement
-    const head = container.querySelector('.wg-workspace-head') as HTMLElement
+    // `.workspace > * + *` 那份 2px 间距靠的就是这个位置
+    const workspace = container.querySelector('.workspace') as HTMLElement
+    const head = container.querySelector('.workspaceHead') as HTMLElement
     expect(head).not.toBeNull()
     expect(workspace.contains(head)).toBe(true)
     expect(head.parentElement).not.toBe(workspace)
@@ -224,10 +224,10 @@ describe('hover cards in a real DOM', () => {
     const container = await mount({ official: undefined })
 
     // 官方文案拿不到时不挂浮层，行因此退回直接子项，结构没有任何包装层
-    expect(container.querySelectorAll('.wg-row').length).toBeGreaterThan(0)
-    const sessions = container.querySelector('.wg-sessions') as HTMLElement
+    expect(container.querySelectorAll('.row').length).toBeGreaterThan(0)
+    const sessions = container.querySelector('.sessions') as HTMLElement
     for (const row of Array.from(sessions.children)) {
-      expect(row.className).toContain('wg-row')
+      expect(row.className).toContain('row')
     }
   })
 
@@ -247,10 +247,10 @@ describe('hover cards in a real DOM', () => {
       )
     })
 
-    expect(container.querySelector('.wg-hover-content')).not.toBeNull()
-    expect(container.querySelector('.wg-hover-title')?.textContent).toBe('W1')
-    expect(container.querySelector('.wg-hover-path')?.textContent).toBe('~/src/dsh_plugins')
-    expect(container.querySelector('.wg-hover-time')?.textContent).toBe('创建于 2026年1月1日 00:00')
+    expect(container.querySelector('.hoverContent')).not.toBeNull()
+    expect(container.querySelector('.hoverTitle')?.textContent).toBe('W1')
+    expect(container.querySelector('.hoverPath')?.textContent).toBe('~/src/dsh_plugins')
+    expect(container.querySelector('.hoverTime')?.textContent).toBe('创建于 2026年1月1日 00:00')
 
     // 会话卡片多一列状态：每条都是「状态点 + 文案」。状态点替身返回一个字符串
     // 因此这里读到的文本里带它的标记
@@ -270,11 +270,11 @@ describe('hover cards in a real DOM', () => {
       )
     })
 
-    const statuses = sessionContainer.querySelectorAll('.wg-hover-status')
+    const statuses = sessionContainer.querySelectorAll('.hoverStatus')
     expect(statuses).toHaveLength(2)
     expect(statuses[0]?.textContent).toContain('等待审批')
     expect(statuses[1]?.textContent).toContain('2 个子代理运行中')
-    expect(sessionContainer.querySelector('.wg-hover-time')?.textContent).toBe('5分钟前')
+    expect(sessionContainer.querySelector('.hoverTime')?.textContent).toBe('5分钟前')
   })
 })
 

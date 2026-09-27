@@ -38,7 +38,6 @@ import type { RegionActions, AddWorkspaceActions, OfficialSessionActions } from 
 import { directoryFlowOccupant, directoryFlowSource } from './directoryFlow.ts'
 import { hostInfoSource } from './hostInfo.ts'
 import { WorkspaceGroupsRegion } from './views/WorkspaceGroupsRegion.tsx'
-import { insertStyles } from './styles.ts'
 import { createViewModeStore, sharedViewModeStore } from './store/viewMode.ts'
 
 /** 浏览器半边声明的服务依赖 */
@@ -379,8 +378,8 @@ export function apply(ctx: Context): void {
     }
   }
 
-  // 样式随插件挂载注入，卸载由模块系统的样式记账处理，无需显式移除
-  insertStyles()
+  // 样式由各组件的 .module.css 在 import 时注入（构建期已折进产物）
+  // 卸载由模块系统的样式记账处理，无需显式移除
 
   // 展示方式的存储只建一份，两条注册路径共用它
   // 对照模式下本区域挂在会话作用域的右侧栏 tab 里，若各建一份实例，展示方式就会按会话分开存

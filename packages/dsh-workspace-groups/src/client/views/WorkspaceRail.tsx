@@ -5,6 +5,7 @@
  */
 import type { ReactElement } from 'react'
 import { IconPanelLeftOutlineRegular } from '../runtime.ts'
+import styles from './WorkspaceRail.module.css'
 
 export interface WorkspaceRailProps {
   /** 图标按钮的无障碍标签 */
@@ -14,10 +15,10 @@ export interface WorkspaceRailProps {
 
 export function WorkspaceRail({ label, onExpand }: WorkspaceRailProps): ReactElement {
   return (
-    <div className="wg-rail">
+    <div className={styles.rail}>
       <button
         type="button"
-        className="wg-rail-button"
+        className={styles.railButton}
         aria-label={label}
         onClick={onExpand}
       >

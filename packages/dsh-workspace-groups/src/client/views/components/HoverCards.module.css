@@ -1,0 +1,40 @@
+/* 悬停详情卡片的正文。卡片外框（宽度、内边距、圆角、投影、底色）
+   全属官方 HoverCard 原语，这里只排它内部这几行
+
+   三档文字色与官方 ui-workspace 的 hover 卡片同值
+   卡片底色在两种主题下都是原语写死的深色（--dsw-hovercard-bg 为 #2C2C2E）
+   因此不能用随主题翻转的 --dsw-alias-label-*，浅色主题下那些是近黑色，落在深色卡片上会看不见 */
+.hoverContent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hoverTitle {
+  color: #fff;
+  overflow-wrap: break-word;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.hoverPath {
+  color: #cfd3d6;
+  word-break: break-all;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.hoverTime {
+  color: #cfd3d6;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.hoverStatus {
+  color: #adb2b8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 20px;
+}

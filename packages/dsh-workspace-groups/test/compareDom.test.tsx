@@ -153,7 +153,7 @@ describe('compare tab service reads', () => {
     })
 
     // 区域确实渲染出来了，而不是被异常吞成空树
-    expect(container.querySelector('.wg-root')).not.toBeNull()
+    expect(container.querySelector('.root')).not.toBeNull()
   })
 
   it('passes the injected face through unchanged for the region to consume', () => {

@@ -23,6 +23,8 @@ import { sameSessionStatuses } from '../data/status.ts'
 import { useLocale } from '../useLocale.ts'
 import type { RowContextMenuEvent } from './components/RowContextMenu.tsx'
 import type { SessionStatus } from '../data/status.ts'
+import styles from './components/rows.module.css'
+import clsx from 'clsx'
 
 export interface SessionRowViewProps {
   /** 本行对应的会话 id */
@@ -127,12 +129,12 @@ function SessionRowViewImpl({
   const row = (
     <div
       ref={rowRef}
-      className={
-        'wg-row' +
-        (selected ? ' wg-row-selected' : '') +
-        (menuOpen ? ' wg-row-menu-open' : '') +
-        (flat && status === undefined ? ' wg-row-flat' : '')
-      }
+      className={clsx(
+        styles.row,
+        selected && styles.rowSelected,
+        menuOpen && styles.rowMenuOpen,
+        flat && status === undefined && styles.rowFlat,
+      )}
       // 参与所在折叠体的逐个淡入，序号由折叠体按文档序下发
       data-wg-stagger=""
       role="button"
@@ -142,16 +144,16 @@ function SessionRowViewImpl({
       onContextMenu={onContextMenu}
     >
       {status === undefined && flat ? null : status === undefined ? (
-        <span className="wg-slot" />
+        <span className={styles.slot} />
       ) : (
-        <span className="wg-slot" role="img" aria-label={status.label}>
+        <span className={styles.slot} role="img" aria-label={status.label}>
           <StateDot state={status.state} />
         </span>
       )}
-      <span className="wg-row-title">{shownTitle}</span>
-      {time === undefined ? null : <span className="wg-row-time">{time}</span>}
+      <span className={styles.rowTitle}>{shownTitle}</span>
+      {time === undefined ? null : <span className={styles.rowTime}>{time}</span>}
       {action === undefined ? null : (
-        <span className="wg-row-action-slot" onClick={(event) => event.stopPropagation()}>
+        <span className={styles.rowActionSlot} onClick={(event) => event.stopPropagation()}>
           {action}
         </span>
       )}

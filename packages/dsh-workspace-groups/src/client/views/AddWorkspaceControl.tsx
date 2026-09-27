@@ -13,6 +13,8 @@ import type { ReactElement } from 'react'
 import { Button, IconProjectAddOutlineRegular, Modal, Tooltip } from '../runtime.ts'
 import { useLocale } from '../useLocale.ts'
 import type { AddWorkspaceActions } from '../actions.ts'
+import dialogsStyles from './components/dialogs/dialogs.module.css'
+import headerStyles from './header.module.css'
 
 export interface AddWorkspaceControlProps {
   /** 官方服务面，缺省时整个入口不渲染 */
@@ -68,7 +70,7 @@ export function AddWorkspaceControl({
       <Tooltip label={labels.add} side="bottom" delayMs={500}>
         <button
           type="button"
-          className={`wg-header-action${narrow ? ' wg-header-action-rail' : ''}`}
+          className={headerStyles.headerAction}
           aria-label={labels.add}
           onClick={() => {
             setError(null)
@@ -114,7 +116,7 @@ export function AddWorkspaceControl({
           </>
         }
       >
-        <div className="wg-dialog-error" role="alert">
+        <div className={dialogsStyles.dialogError} role="alert">
           {error}
         </div>
       </Modal>

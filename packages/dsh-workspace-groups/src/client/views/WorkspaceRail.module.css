@@ -1,0 +1,19 @@
+.rail { box-sizing: border-box; display: flex; flex-direction: column; }
+
+.railButton {
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  color: var(--dsw-alias-label-primary);
+  background: 0 0;
+  border: none;
+  border-radius: 50%;
+  /* 正圆必须配对 round，否则会被主题的全局超级椭圆磨成方圆角 */
+  corner-shape: round;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.railButton:hover { background: var(--dsw-alias-interactive-bg-hover); }

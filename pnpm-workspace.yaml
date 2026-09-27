@@ -37,7 +37,12 @@ catalog:
   '@deepseek-ai/dsh-session': ^0.1.7-rc.1
   '@deepseek-ai/dsh-storage-domain': ^0.1.7-rc.1
   '@types/react': ~18.3.1
+  # 组件内聚样式后类名拼接用官方同一套（web-styling 规定 CSS Modules + clsx）
+  # 它不是平台基线模块，会被打进产物
+  clsx: ^2.1.1
   esbuild: ^0.28.2
+  # 组件级 .module.css 的编译期（类名哈希 + :global 支持），由 build-client.mjs 调用
+  lightningcss: ^1.33.0
   react: ^18.2.0
   # 与 dsh-storage-domain 的依赖线一致。刻意钉住具体版本：pnpm 11 的
   # minimumReleaseAge 门禁（24 小时）会拒绝刚发布的版本，浮动范围会在

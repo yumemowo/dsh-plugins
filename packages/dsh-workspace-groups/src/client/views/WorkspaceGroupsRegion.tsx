@@ -67,6 +67,7 @@ import type {
 import { useSearch } from './SearchControl.tsx'
 import type { SearchState } from './SearchControl.tsx'
 import { WorkspaceRail } from './WorkspaceRail.tsx'
+import styles from './WorkspaceGroupsRegion.module.css'
 
 // ── 本文件的形状 ──
 
@@ -1249,7 +1250,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
 
   return (
     <RegionLocaleProvider value={locale}>
-      <div className="wg-root" ref={flipRef}>
+      <div className={styles.root} ref={flipRef}>
         <RegionHeaderArea
           layout={layout}
           overlays={headerOverlays}

@@ -1,0 +1,49 @@
+/* 对话框里的勾选项（新建工作区分组时的「切换到新工作区」）
+
+   整行做成 label，勾选框自己只有 16px，而那句话是要读的，点文字也该切换它
+   几何取官方 RiskConfirmation 里那条「我已知晓」同一档：12px/18px 的说明文字色 */
+.dialogCheck {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.dialogCheck input {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--dsw-alias-brand-primary, var(--dsw-alias-state-business-primary));
+}
+
+/* 确认框里的名单，这次操作会影响到的工作区逐个列出
+   限高滚动，对话框因此不会被一个巨大的分组撑出屏幕。几何取说明文字同一档 */
+.dialogList {
+  margin: 8px 0 0;
+  padding: 0 0 0 18px;
+  max-height: 180px;
+  overflow-y: auto;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.dialogList li { margin: 0; }
+
+/* 对话框内的错误提示，例如工作区重名，只上错误色，几何走官方 Modal */
+.dialogError {
+  color: var(--dsw-alias-state-error-primary);
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* 危险操作的确认按钮，只换文字色，按钮几何仍由官方 Button 拥有
+   与官方删除按钮同一做法（错误色 token --dsw-alias-state-error-primary） */
+.dangerAction:not(:disabled) { color: var(--dsw-alias-state-error-primary); }

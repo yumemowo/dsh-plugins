@@ -18,13 +18,14 @@ import type { MenuActionItem, MenuItem } from '@deepseek-ai/dsh-client-ui-primit
 import { IconVirtualWorkspace16 } from './icons.tsx'
 import type { OfficialSessionLabels } from './official.ts'
 import type { GroupSection, VirtualWorkspaceSection } from './data/types.ts'
+import styles from './menus.module.css'
 
 /**
  * 给带二级菜单的一级项补一个行尾箭头
  *
  * 官方 `Menu` 的项只有「前导图标 → 文案 → 尾部选中标记」三个槽，没有表达「悬停展开二级菜单」的槽位
  * 只给 `aria-haspopup` / `aria-expanded` 这类无障碍信号，箭头因此塞进 `label` 里
- * 由 `.wg-menu-label` 两端对齐推到行尾
+ * 由 `.menuLabel` 两端对齐推到行尾
  *
  * 子菜单为空时不加，原语只在 `submenu` 非空时才把该项当子菜单父项（展开、键盘进入、`aria-haspopup` 都按这个判断）
  * 加了箭头就是在指一个展不开的菜单
@@ -34,9 +35,9 @@ import type { GroupSection, VirtualWorkspaceSection } from './data/types.ts'
 function submenuParentLabel(label: string, entries: readonly MenuActionItem[]): ReactNode {
   if (entries.length === 0) return label
   return (
-    <span className="wg-menu-label">
-      <span className="wg-menu-label-text">{label}</span>
-      <IconChevronRightOutlineRegular className="wg-menu-arrow" />
+    <span className={styles.menuLabel}>
+      <span className={styles.menuLabelText}>{label}</span>
+      <IconChevronRightOutlineRegular className={styles.menuArrow} />
     </span>
   )
 }

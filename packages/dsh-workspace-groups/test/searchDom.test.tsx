@@ -113,7 +113,7 @@ async function mount(wide = true): Promise<{ container: HTMLElement }> {
 
 /** 在受控输入上敲入一段文本，走 React 认的原生事件路径 */
 async function type(container: HTMLElement, value: string): Promise<void> {
-  const input = container.querySelector('.wg-search-input') as HTMLInputElement
+  const input = container.querySelector('.searchInput') as HTMLInputElement
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(
       window.HTMLInputElement.prototype,
@@ -127,7 +127,7 @@ async function type(container: HTMLElement, value: string): Promise<void> {
 /** 展开搜索框 */
 async function expandSearch(container: HTMLElement): Promise<void> {
   await act(async () => {
-    ;(container.querySelector('.wg-search') as HTMLElement).click()
+    ;(container.querySelector('.search') as HTMLElement).click()
   })
 }
 
@@ -136,29 +136,29 @@ describe('search in a real DOM', () => {
     const { container } = await mount()
 
     // 初始：标题与右侧入口都在，输入框收起
-    expect(container.querySelector('.wg-header-title')?.className).not.toContain(
-      'wg-header-title-hidden',
+    expect(container.querySelector('.headerTitle')?.className).not.toContain(
+      'headerTitleHidden',
     )
-    expect(container.querySelector('.wg-header-actions')?.className).not.toContain(
-      'wg-header-actions-hidden',
+    expect(container.querySelector('.headerActions')?.className).not.toContain(
+      'headerActionsHidden',
     )
 
     await expandSearch(container)
 
     // 展开，标题向左让位、入口组向右让位，槽位与框体同时拉开
     // 让位发生在整个标题块上（两行一起收），因此查的是它而不是其中某一行
-    expect(container.querySelector('.wg-header-title')?.className).toContain(
-      'wg-header-title-hidden',
+    expect(container.querySelector('.headerTitle')?.className).toContain(
+      'headerTitleHidden',
     )
-    expect(container.querySelector('.wg-header-actions')?.className).toContain(
-      'wg-header-actions-hidden',
+    expect(container.querySelector('.headerActions')?.className).toContain(
+      'headerActionsHidden',
     )
-    expect(container.querySelector('.wg-search-slot')?.className).toContain(
-      'wg-search-slot-expanded',
+    expect(container.querySelector('.searchSlot')?.className).toContain(
+      'searchSlotExpanded',
     )
-    expect(container.querySelector('.wg-search')?.className).toContain('wg-search-expanded')
+    expect(container.querySelector('.search')?.className).toContain('searchExpanded')
     // 清除按钮只在展开时出现，且带着官方的无障碍标签
-    const clear = container.querySelector('.wg-search-clear')
+    const clear = container.querySelector('.searchClear')
     expect(clear?.getAttribute('aria-label')).toBe('清除搜索')
   })
 
@@ -167,37 +167,37 @@ describe('search in a real DOM', () => {
     await expandSearch(container)
     await type(container, '修复')
 
-    const rows = container.querySelectorAll('.wg-search-result')
+    const rows = container.querySelectorAll('.searchResult')
     expect(rows).toHaveLength(1)
     // 「工作区/分组」：本包在官方的工作区名之后补上分组，两段各是一档色阶
-    expect(container.querySelector('.wg-search-result-workspace')?.textContent).toBe('W1')
-    expect(container.querySelector('.wg-search-result-group')?.textContent).toBe('/前端')
-    expect(container.querySelector('.wg-search-result-meta')?.textContent).toBe('W1/前端')
+    expect(container.querySelector('.searchResultWorkspace')?.textContent).toBe('W1')
+    expect(container.querySelector('.searchResultGroup')?.textContent).toBe('/前端')
+    expect(container.querySelector('.searchResultMeta')?.textContent).toBe('W1/前端')
     // 结果框进的是 tree，无障碍标签取官方的结果区文案
     expect(container.querySelector('[role="tree"]')?.getAttribute('aria-label')).toBe('搜索结果')
     // 常规列表整段让位：工作区行与底部说明都不渲染
-    expect(container.querySelector('.wg-workspace')).toBeNull()
-    expect(container.querySelector('.wg-note')).toBeNull()
+    expect(container.querySelector('.workspace')).toBeNull()
+    expect(container.querySelector('.note')).toBeNull()
   })
 
   it('gives both panels the fade-in class so each switch replays it', async () => {
     const { container } = await mount()
 
-    // 常规列表与搜索结果各是一个面板，两者都带 wg-panel
+    // 常规列表与搜索结果各是一个面板，两者都带 panel
     // 切换内容体时 React 换掉整个节点
     // 动画因此重放（官方三种内容体共用 .treeBody 同理）
-    const treePanel = container.querySelector('.wg-list')
-    expect(treePanel?.className).toContain('wg-panel')
+    const treePanel = container.querySelector('.list')
+    expect(treePanel?.className).toContain('panel')
 
     await expandSearch(container)
     await type(container, '修复')
 
-    const searchPanel = container.querySelector('.wg-list')
-    expect(searchPanel?.className).toContain('wg-panel')
+    const searchPanel = container.querySelector('.list')
+    expect(searchPanel?.className).toContain('panel')
     // 关键：必须是另一个节点。若 React 原地复用同一个节点，动画不会重放
     // 淡入只在首次挂载时发生一次——这正是要防的退化
     expect(searchPanel).not.toBe(treePanel)
-    expect(container.querySelector('.wg-search-results')).not.toBeNull()
+    expect(container.querySelector('.searchResults')).not.toBeNull()
   })
 
   it('keeps the two path segments adjacent, with nothing between them', async () => {
@@ -209,10 +209,10 @@ describe('search in a real DOM', () => {
     // 路径两段若直接做它的子项，那 6px 会插进「工作区」与「分组」之间
     // 把一条连续的路径读成两截。因此这里断言两段的从属结构：它们同属一个中间层
     // 外层 gap 够不到两者之间，那条 gap 的取值本身由 styles.test.ts 从 CSS 文本上钉住
-    const meta = container.querySelector('.wg-search-result-meta') as HTMLElement
-    const path = container.querySelector('.wg-search-result-path') as HTMLElement
-    const workspace = container.querySelector('.wg-search-result-workspace') as HTMLElement
-    const group = container.querySelector('.wg-search-result-group') as HTMLElement
+    const meta = container.querySelector('.searchResultMeta') as HTMLElement
+    const path = container.querySelector('.searchResultPath') as HTMLElement
+    const workspace = container.querySelector('.searchResultWorkspace') as HTMLElement
+    const group = container.querySelector('.searchResultGroup') as HTMLElement
 
     // 两段都装在同一项里，且那一层没有别的内容——路径因此是一个整体
     expect(path.contains(workspace)).toBe(true)
@@ -229,7 +229,7 @@ describe('search in a real DOM', () => {
     await type(container, 'Orphan')
 
     // 无所属工作区的会话退回官方的「未分组」，而不是拼出一条空路径
-    expect(container.querySelector('.wg-search-result-workspace')?.textContent).toBe('未分组')
+    expect(container.querySelector('.searchResultWorkspace')?.textContent).toBe('未分组')
   })
 
   it('shows the no-match empty state and never a dangling tree body', async () => {
@@ -237,37 +237,37 @@ describe('search in a real DOM', () => {
     await expandSearch(container)
     await type(container, '不存在的词')
 
-    expect(container.querySelectorAll('.wg-search-result')).toHaveLength(0)
-    expect(container.querySelector('.wg-empty')?.textContent).toBe('无匹配会话')
+    expect(container.querySelectorAll('.searchResult')).toHaveLength(0)
+    expect(container.querySelector('.empty')?.textContent).toBe('无匹配会话')
   })
 
   it('leaves search and restores the tree when Escape is pressed', async () => {
     const { container } = await mount()
     await expandSearch(container)
     await type(container, '修复')
-    expect(container.querySelectorAll('.wg-search-result')).toHaveLength(1)
+    expect(container.querySelectorAll('.searchResult')).toHaveLength(1)
 
-    const input = container.querySelector('.wg-search-input') as HTMLInputElement
+    const input = container.querySelector('.searchInput') as HTMLInputElement
     await act(async () => {
       input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     })
 
     // 回到常规列表，输入框也收起
-    expect(container.querySelector('.wg-workspace')).not.toBeNull()
-    expect((container.querySelector('.wg-search-input') as HTMLInputElement).value).toBe('')
-    expect(container.querySelector('.wg-search')?.className).not.toContain('wg-search-expanded')
+    expect(container.querySelector('.workspace')).not.toBeNull()
+    expect((container.querySelector('.searchInput') as HTMLInputElement).value).toBe('')
+    expect(container.querySelector('.search')?.className).not.toContain('searchExpanded')
   })
 
   it('focuses the input once expanded, and takes it out of the tab order when collapsed', async () => {
     const { container } = await mount()
 
     // 收起态不可聚焦，Tab 不该停在这里
-    expect((container.querySelector('.wg-search-input') as HTMLInputElement).tabIndex).toBe(-1)
+    expect((container.querySelector('.searchInput') as HTMLInputElement).tabIndex).toBe(-1)
 
     await expandSearch(container)
 
-    expect((container.querySelector('.wg-search-input') as HTMLInputElement).tabIndex).toBe(0)
-    expect(document.activeElement).toBe(container.querySelector('.wg-search-input'))
+    expect((container.querySelector('.searchInput') as HTMLInputElement).tabIndex).toBe(0)
+    expect(document.activeElement).toBe(container.querySelector('.searchInput'))
   })
 
   it('opens the matched session, expands its group and scrolls its row into view', async () => {
@@ -298,7 +298,7 @@ describe('search in a real DOM', () => {
 
       await expandSearch(container)
       await type(container, '修复')
-      const row = container.querySelector('.wg-search-result') as HTMLElement
+      const row = container.querySelector('.searchResult') as HTMLElement
       await act(async () => {
         row.click()
       })
@@ -310,10 +310,10 @@ describe('search in a real DOM', () => {
       // 打开的是结果指向的那条会话
       expect(opened).toEqual(['a'])
       // 查询被清掉，结果列表让位给常规列表
-      expect((container.querySelector('.wg-search-input') as HTMLInputElement).value).toBe('')
+      expect((container.querySelector('.searchInput') as HTMLInputElement).value).toBe('')
       // 被揭示的正是那条会话所在的行（标题为它的 displayTitle，行里还有时间）
       expect(scrolled.length).toBe(1)
-      expect(scrolled[0]?.querySelector('.wg-row-title')?.textContent).toBe('修复登录超时')
+      expect(scrolled[0]?.querySelector('.rowTitle')?.textContent).toBe('修复登录超时')
     } finally {
       Element.prototype.scrollIntoView = originalScroll
     }
@@ -323,9 +323,9 @@ describe('search in a real DOM', () => {
     const { container } = await mount(false)
 
     // 窄栏只放入口：输入框在宽栏的 header 里
-    expect(container.querySelector('.wg-search-input')).toBeNull()
+    expect(container.querySelector('.searchInput')).toBeNull()
     expect(
-      container.querySelector('.wg-search-button')?.getAttribute('aria-label'),
+      container.querySelector('.searchButton')?.getAttribute('aria-label'),
     ).toBe('搜索会话')
   })
 })

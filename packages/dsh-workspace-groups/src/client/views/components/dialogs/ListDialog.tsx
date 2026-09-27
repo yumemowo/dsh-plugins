@@ -7,6 +7,7 @@
 import type { ReactElement } from 'react'
 import { Button, Modal } from '../../../runtime.ts'
 import { useLocale } from '../../../useLocale.ts'
+import styles from './dialogs.module.css'
 
 export interface ListDialogProps {
   title: string
@@ -53,7 +54,7 @@ export function ListDialog({
           )}
           <Button
             variant={danger === true ? 'outline' : 'primary'}
-            {...(danger === true ? { className: 'wg-danger-action' } : {})}
+            {...(danger === true ? { className: styles.dangerAction } : {})}
             onClick={onConfirm}
           >
             {confirmLabel}
@@ -63,7 +64,7 @@ export function ListDialog({
     >
       {items.length === 0 ? null : (
         // 名单可能很长，限高滚动，对话框因此不会被一个巨大的分组撑出屏幕
-        <ul className="wg-dialog-list">
+        <ul className={styles.dialogList}>
           {items.map((item) => (
             <li key={item}>{item}</li>
           ))}

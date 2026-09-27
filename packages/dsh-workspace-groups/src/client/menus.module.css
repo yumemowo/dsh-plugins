@@ -1,0 +1,49 @@
+/* 原语根节点是 position: relative 的行内盒，而且它自己没有 DOM 子节点
+   面板是 portal 到 body 的。留在流里它就是个空 flex 项：行的 gap 照样算
+   几个 6px 就把标题推开了，分组行的会话数也同理偏移
+   display: contents 让它不生成盒子，面板不在这个盒子里，不受影响
+
+   类名写两遍是为了抬一次优先级：原语自己的根类是一条单类规则，谁后注入谁赢，而插件的样式标签与基线样式表的先后不由本包决定 */
+.contextMenu.contextMenu { display: contents; }
+
+/* 带二级菜单的一级项：把文字与行尾箭头分成两端
+   官方 Menu 的项只有「前导图标 → 文案 → 尾部选中标记」三个槽，没有表达「悬停展开」的槽位
+   因此这里补一个自己的行盒，文案侧 flex:1 吃掉余量，箭头被推到项的最右缘
+
+   这个行盒落在官方 .itemLabel 里
+   .itemLabel 是 flex 项（已被块化），且带 flex:1 / min-width:0 / 省略号
+   文字因此要在这里再包一层可收缩的槽
+   长文案省略的是文字本身，而不是把箭头压扁或挤出项外 */
+.menuLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.menuLabelText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 箭头与官方项图标同一档色阶（tertiary），不抢文案的视觉权重，不参与伸缩，因此长文案省略的是文字而不是把箭头压扁 */
+.menuArrow {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 二级面板改用不透明底色
+ *
+ * 官方 .submenu 与一级面板共用一条规则，底色带 alpha，靠自身的 backdrop-filter 糊开
+ * 但它是 .list 的后代，而 .list 也有 backdrop-filter，会形成 backdrop root
+ * 二级面板落在父层盒子之外，那片区域在 root 里是空的，模糊因此退化成无操作
+ * 不透明底色不依赖模糊，取 --dsw-alias-bg-layer-3 而不取 --dsw-specific-menu，是因为后者本身带 alpha
+ *
+ * 作用域挂 listClassName 传进来的类而不是官方 hash 类名：面板 portal 到 body
+ * 只有这个类能准确落到本包自己的菜单上 */
+.menuList [role='menu'] {
+  background: var(--dsw-alias-bg-layer-3);
+  backdrop-filter: none;
+}

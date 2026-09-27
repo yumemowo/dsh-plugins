@@ -15,6 +15,7 @@ import type { WorkspaceRowProps } from './WorkspaceRow.tsx'
 import { useLocale } from '../useLocale.ts'
 import { compareSessionRows } from '../data/sessions.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
+import styles from './components/rows.module.css'
 
 /** 本工作区块体内会话分组的操作，作用于哪个分组由参数指明 */
 export interface WorkspaceGroupActions {
@@ -60,13 +61,13 @@ export function WorkspaceSection({
    */
   const indent = { '--wg-depth': String(depth) } as Record<string, string>
   return (
-    <section className="wg-workspace" style={indent}>
+    <section className={styles.workspace} style={indent}>
       <WorkspaceRow {...row} />
       <CollapsibleBody open={!row.collapsed}>
-        <div className="wg-workspace-body">
+        <div className={styles.workspaceBody}>
           {/* 子工作区排在会话分组之前，与分组内部同一顺序，文件夹在前 */}
           {childIds.length === 0 ? null : (
-            <div className="wg-nest">{childIds.map(renderChildWorkspace)}</div>
+            <div className={styles.nest}>{childIds.map(renderChildWorkspace)}</div>
           )}
           {/* 只有用户建过分组时才渲染分组结构 */}
           {layout.groups.map((section) => (
@@ -89,9 +90,9 @@ export function WorkspaceSection({
               同一段里还有子工作区或会话分组时，两者的行文字左缘处在同一条竖线上
               这时给会话这一段加一个小标题并拉开间距，否则读不出哪几行是会话 */}
           {layout.loose.length === 0 ? null : (
-            <div className="wg-sessions">
+            <div className={styles.sessions}>
               {childIds.length > 0 || layout.groups.length > 0 ? (
-                <div className="wg-sessions-title" data-wg-stagger="">
+                <div className={styles.sessionsTitle} data-wg-stagger="">
                   {labels.sessions}
                 </div>
               ) : null}
@@ -100,7 +101,7 @@ export function WorkspaceSection({
           )}
           {hasAnyRow ? null : (
             // 空态也是折叠体里要露面的子元素，与行一样参与逐个淡入
-            <div className="wg-empty" data-wg-stagger="">
+            <div className={styles.empty} data-wg-stagger="">
               {labels.empty}
             </div>
           )}

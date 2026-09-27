@@ -7,6 +7,7 @@ import { useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { Button, Input, Modal } from '../../../runtime.ts'
 import { useLocale } from '../../../useLocale.ts'
+import styles from './dialogs.module.css'
 
 export interface NameDialogProps {
   title: string
@@ -82,7 +83,7 @@ export function NameDialog({
       />
       {check === undefined ? null : (
         // 整行可点：勾选框自己只有 16px，而这句话是要读的
-        <label className="wg-dialog-check">
+        <label className={styles.dialogCheck}>
           <input
             type="checkbox"
             checked={check.checked}
@@ -92,7 +93,7 @@ export function NameDialog({
         </label>
       )}
       {error === undefined || error === null ? null : (
-        <div className="wg-dialog-error" role="alert">
+        <div className={styles.dialogError} role="alert">
           {error}
         </div>
       )}

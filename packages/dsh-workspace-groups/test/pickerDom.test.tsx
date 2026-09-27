@@ -150,24 +150,24 @@ async function mount(
 
 /** 面板在 body 上，不在容器里 */
 function panel(): HTMLElement | null {
-  return document.body.querySelector('.wg-picker-menu')
+  return document.body.querySelector('.pickerMenu')
 }
 
 /** 点开菜单：header 那个两行标题按钮 */
 async function openMenu(container: HTMLElement): Promise<void> {
   await act(async () => {
-    ;(container.querySelector('.wg-header-title') as HTMLElement).click()
+    ;(container.querySelector('.headerTitle') as HTMLElement).click()
   })
 }
 
 /**
  * 点 header 里的「新建工作区分组」入口
  *
- * 那个按钮是入口组里的第二个 `.wg-header-action`（第一个是视图选项）
+ * 那个按钮是入口组里的第二个 `.headerAction`（第一个是视图选项）
  */
 async function openCreateDialog(container: HTMLElement): Promise<void> {
   const buttons = Array.from(
-    container.querySelectorAll<HTMLElement>('.wg-header-actions .wg-header-action'),
+    container.querySelectorAll<HTMLElement>('.headerActions .headerAction'),
   )
   const create = buttons.find((button) => button.getAttribute('aria-label') === '新建工作区分组')
   if (create === undefined) throw new Error('the header has no new-workspace-group entry')
@@ -178,8 +178,8 @@ async function openCreateDialog(container: HTMLElement): Promise<void> {
 
 /** 面板里文案为 `label` 的那一行，找不到时抛错，避免断言在 undefined 上假通过 */
 function rowOf(label: string): HTMLElement {
-  const row = Array.from(document.body.querySelectorAll<HTMLElement>('.wg-picker-row')).find(
-    (item) => item.querySelector('.wg-picker-label')?.textContent === label,
+  const row = Array.from(document.body.querySelectorAll<HTMLElement>('.pickerRow')).find(
+    (item) => item.querySelector('.pickerLabel')?.textContent === label,
   )
   if (row === undefined) throw new Error(`no picker row labelled "${label}"`)
   return row
@@ -187,7 +187,7 @@ function rowOf(label: string): HTMLElement {
 
 /** 行内某枚操作按钮，按无障碍标签定位（三枚都只有字形） */
 function actionOf(row: HTMLElement, label: string): HTMLButtonElement {
-  const button = Array.from(row.querySelectorAll<HTMLButtonElement>('.wg-row-action')).find(
+  const button = Array.from(row.querySelectorAll<HTMLButtonElement>('.rowAction')).find(
     (item) => item.getAttribute('aria-label') === label,
   )
   if (button === undefined) throw new Error(`no action "${label}" in row "${row.textContent}"`)
@@ -223,7 +223,7 @@ function dialogCheckbox(): HTMLInputElement {
  *
  * 取页脚最后一个按钮：
  * 两个对话框都把「翻页脚最后一格」留给确认，命名框是 `variant="primary"`
- * 删除框是带 `wg-danger-action` 的 outline，因此按位置取比按样式取更稳——
+ * 删除框是带 `dangerAction` 的 outline，因此按位置取比按样式取更稳——
  * 删除框那两个按钮的 variant 恰好相同
  */
 function confirmDialog(): void {
@@ -237,7 +237,7 @@ function confirmDialog(): void {
 
 /** 面板里一条条目的文案，按文档序 */
 function rowLabels(): string[] {
-  return Array.from(document.body.querySelectorAll('.wg-picker-row .wg-picker-label')).map(
+  return Array.from(document.body.querySelectorAll('.pickerRow .pickerLabel')).map(
     (node) => node.textContent ?? '',
   )
 }
@@ -261,23 +261,23 @@ describe('workspace picker in a real DOM', () => {
 
     // 两行合起来是一个按钮，它们表达同一件事，即当前在看哪个工作区、点开可以换一个
     // 分成两个可点区域只会让「点上面还是点下面」变成一个需要试的问题
-    const trigger = container.querySelector('.wg-header-title')
+    const trigger = container.querySelector('.headerTitle')
     expect(trigger?.tagName).toBe('BUTTON')
     expect(trigger?.getAttribute('aria-expanded')).toBe('false')
     expect(trigger?.getAttribute('aria-label')).toBe('切换工作区：全部工作区')
 
     // 两行都在这个按钮里面
-    expect(trigger?.querySelector('.wg-header-heading .wg-header-label')?.textContent).toBe(
+    expect(trigger?.querySelector('.headerHeading .headerLabel')?.textContent).toBe(
       '工作区',
     )
-    expect(trigger?.querySelector('.wg-header-focus')?.textContent).toBe('全部工作区')
+    expect(trigger?.querySelector('.headerFocus')?.textContent).toBe('全部工作区')
 
     // 箭头不是独立按钮，它就是这块按钮自己的开合指示。整块标题下因此一个按钮都没有——
     // 这一条正是「两行合成一个按钮」最容易退回两处可点区域的地方
-    expect(container.querySelectorAll('.wg-header-title button')).toHaveLength(0)
+    expect(container.querySelectorAll('.headerTitle button')).toHaveLength(0)
     // 上行是「文字 + 箭头」两个节点。测试替身把官方图标渲染成文本节点
     // 因此这里数的是子节点而不是元素：箭头被删掉时这一条会失败
-    const heading = trigger?.querySelector('.wg-header-heading')
+    const heading = trigger?.querySelector('.headerHeading')
     expect(heading?.childNodes).toHaveLength(2)
     expect(heading?.textContent).toContain('工作区')
 
@@ -293,7 +293,7 @@ describe('workspace picker in a real DOM', () => {
     const menu = panel()
     expect(menu).not.toBeNull()
     // 没有聚焦、没有置顶时只有「全部」一栏，而它没有标题
-    expect(menu?.querySelector('.wg-picker-section-title')).toBeNull()
+    expect(menu?.querySelector('.pickerSectionTitle')).toBeNull()
     // 虚拟分组只列它自己，w1 已归入 vg1，因此不在菜单里单独出现
     // 未归组的 W2 / W3 平铺在后面（它们之间没有 cwd 父子关系）
     expect(rowLabels()).toEqual(['前端仓库', 'W2', 'W3'])
@@ -311,9 +311,9 @@ describe('workspace picker in a real DOM', () => {
     })
     await openMenu(container)
 
-    const rows = Array.from(document.body.querySelectorAll('.wg-picker-row'))
+    const rows = Array.from(document.body.querySelectorAll('.pickerRow'))
     const labelOf = (row: Element): string =>
-      row.querySelector('.wg-picker-label')?.textContent ?? ''
+      row.querySelector('.pickerLabel')?.textContent ?? ''
     const depthOf = (label: string): string =>
       (rows.find((row) => labelOf(row) === label) as HTMLElement | undefined)?.style.getPropertyValue(
         '--wg-picker-depth',
@@ -337,11 +337,11 @@ describe('workspace picker in a real DOM', () => {
         }),
     })
 
-    expect(container.querySelector('.wg-header-focus')?.textContent).toBe('前端仓库')
+    expect(container.querySelector('.headerFocus')?.textContent).toBe('前端仓库')
     // 根节点那层不再重复渲染组头：第二行已经写着组名
-    expect(container.querySelector('.wg-virtual-workspace-head')).toBeNull()
+    expect(container.querySelector('.virtualWorkspaceHead')).toBeNull()
     // 组内工作区照常渲染，未归组的 W2 / W3 不再出现
-    const titles = Array.from(container.querySelectorAll('.wg-workspace-title')).map(
+    const titles = Array.from(container.querySelectorAll('.workspaceTitle')).map(
       (node) => node.textContent,
     )
     expect(titles).toEqual(['W1'])
@@ -359,7 +359,7 @@ describe('workspace picker in a real DOM', () => {
 
     // 无所属工作区的会话落在末尾那个隐式区段，聚焦时整段不出现
     expect(container.textContent).not.toContain('未分组')
-    const titles = Array.from(container.querySelectorAll('.wg-workspace-title')).map(
+    const titles = Array.from(container.querySelectorAll('.workspaceTitle')).map(
       (node) => node.textContent,
     )
     expect(titles).toEqual(['W2'])
@@ -378,10 +378,10 @@ describe('workspace picker in a real DOM', () => {
         }),
     })
 
-    expect(container.querySelector('.wg-header-focus')?.textContent).toBe('全部工作区')
+    expect(container.querySelector('.headerFocus')?.textContent).toBe('全部工作区')
     // 分组层整段回来：没有聚焦时列表与没有这个特性时完全一致
-    expect(container.querySelector('.wg-virtual-workspace-head')).not.toBeNull()
-    const titles = Array.from(container.querySelectorAll('.wg-workspace-title')).map(
+    expect(container.querySelector('.virtualWorkspaceHead')).not.toBeNull()
+    const titles = Array.from(container.querySelectorAll('.workspaceTitle')).map(
       (node) => node.textContent,
     )
     expect(titles).toContain('W2')
@@ -392,7 +392,7 @@ describe('workspace picker in a real DOM', () => {
   it('offers the all-workspaces entry only while something is focused', async () => {
     const { container, root } = await mount()
     await openMenu(container)
-    expect(document.body.querySelector('.wg-picker-reset')).toBeNull()
+    expect(document.body.querySelector('.pickerReset')).toBeNull()
     await act(async () => root.unmount())
 
     // 已聚焦时它是恢复入口
@@ -403,7 +403,7 @@ describe('workspace picker in a real DOM', () => {
         }),
     })
     await openMenu(focused.container)
-    expect(document.body.querySelector('.wg-picker-reset')?.textContent).toContain('全部工作区')
+    expect(document.body.querySelector('.pickerReset')?.textContent).toContain('全部工作区')
     await act(async () => focused.root.unmount())
   })
 
@@ -422,19 +422,19 @@ describe('workspace picker in a real DOM', () => {
     await openMenu(container)
 
     // 「最近使用」与「置顶」两栏各有标题，「全部」那一栏没有
-    const titles = Array.from(document.body.querySelectorAll('.wg-picker-section-title')).map(
+    const titles = Array.from(document.body.querySelectorAll('.pickerSectionTitle')).map(
       (node) => node.textContent,
     )
     expect(titles).toEqual(['最近使用', '置顶'])
     // 已置顶的条目在它出现的每一个分区里都显示为按下态（同一个条目可能同时在「最近使用」「置顶」「全部」里）
     // 未置顶的那几条始终是抬起态
-    const pressed = Array.from(document.body.querySelectorAll<HTMLElement>('.wg-picker-row'))
+    const pressed = Array.from(document.body.querySelectorAll<HTMLElement>('.pickerRow'))
       .filter((row) =>
-        Array.from(row.querySelectorAll('.wg-row-action')).some(
+        Array.from(row.querySelectorAll('.rowAction')).some(
           (button) => button.getAttribute('aria-pressed') === 'true',
         ),
       )
-      .map((row) => row.querySelector('.wg-picker-label')?.textContent)
+      .map((row) => row.querySelector('.pickerLabel')?.textContent)
     expect(new Set(pressed)).toEqual(new Set(['前端仓库']))
 
     await act(async () => root.unmount())
@@ -488,7 +488,7 @@ describe('workspace picker in a real DOM', () => {
     await openMenu(container)
 
     expect(panel()).not.toBeNull()
-    expect(container.querySelector('.wg-header-title')?.getAttribute('aria-expanded')).toBe('true')
+    expect(container.querySelector('.headerTitle')?.getAttribute('aria-expanded')).toBe('true')
 
     await act(async () => root.unmount())
   })
@@ -500,7 +500,7 @@ describe('workspace picker in a real DOM', () => {
     await openMenu(container)
     expect(panel()).not.toBeNull()
 
-    const input = container.querySelector('.wg-search-input') as HTMLInputElement
+    const input = container.querySelector('.searchInput') as HTMLInputElement
     const setter = Object.getOwnPropertyDescriptor(
       window.HTMLInputElement.prototype,
       'value',
@@ -510,7 +510,7 @@ describe('workspace picker in a real DOM', () => {
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
 
-    expect(container.querySelector('.wg-search-results')).not.toBeNull()
+    expect(container.querySelector('.searchResults')).not.toBeNull()
     expect(panel()).toBeNull()
 
     await act(async () => root.unmount())
@@ -597,7 +597,7 @@ describe('workspace picker in a real DOM', () => {
     const row = rowOf('W2')
     expect(row.tagName).toBe('DIV')
     expect(row.getAttribute('role')).toBe('button')
-    expect(row.querySelectorAll('.wg-row-action')).toHaveLength(3)
+    expect(row.querySelectorAll('.rowAction')).toHaveLength(3)
     await act(async () => {
       actionOf(row, '置顶“W2”').click()
     })
@@ -736,7 +736,7 @@ describe('workspace picker in a real DOM', () => {
     // 按元素身份取序列：
     // 同一个工作区可能同时出现在「最近使用」与「全部」两栏（标签文本因此会重复）
     // 按文本查位置会命中前面那一条
-    const rows = Array.from(document.body.querySelectorAll<HTMLElement>('.wg-picker-row'))
+    const rows = Array.from(document.body.querySelectorAll<HTMLElement>('.pickerRow'))
     expect(rows.length).toBeGreaterThan(1)
 
     const press = async (key: string): Promise<void> => {
@@ -747,7 +747,7 @@ describe('workspace picker in a real DOM', () => {
     /** 当前聚焦行在列表里的位置，焦点不在行上时抛错 */
     const at = (): number => {
       const active = document.activeElement as HTMLElement
-      if (!active.classList.contains('wg-picker-row')) {
+      if (!active.classList.contains('pickerRow')) {
         throw new Error(`focus is on <${active.tagName}.${active.className}>, not a row`)
       }
       return rows.indexOf(active)

@@ -16,6 +16,8 @@ import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { useLocale } from '../useLocale.ts'
 import type { GroupSection as GroupSectionData } from '../data/types.ts'
+import styles from './components/rows.module.css'
+import clsx from 'clsx'
 
 export interface GroupSectionProps {
   section: GroupSectionData
@@ -73,9 +75,9 @@ export function GroupSection({
   })
 
   return (
-    <div className="wg-group">
+    <div className={styles.group}>
       <div
-        className={'wg-group-head' + (menuOpen ? ' wg-row-menu-open' : '')}
+        className={clsx(styles.groupHead, menuOpen && styles.rowMenuOpen)}
         // 参与所在折叠体的逐个淡入，序号由折叠体按文档序下发
         data-wg-stagger=""
         role="button"
@@ -85,17 +87,17 @@ export function GroupSection({
         onContextMenu={contextMenu.onContextMenu}
       >
         {contextMenu.menu}
-        <span className="wg-slot">
-          <IconTriangleRightFillRegular className={`wg-arrow${collapsed ? '' : ' wg-arrow-open'}`} />
+        <span className={styles.slot}>
+          <IconTriangleRightFillRegular className={clsx(styles.arrow, !(collapsed) && styles.arrowOpen)} />
         </span>
-        <span className="wg-group-label">{section.label}</span>
+        <span className={styles.groupLabel}>{section.label}</span>
         {/* 会话数自己成格贴在行右，与 session 行的 time 同格同形，空分组不显示
             只算会话，放进来的子工作区另用层级表达，混进同一个数会看不出组里是什么 */}
         {section.sessions.length <= 0 ? null : (
-          <span className="wg-group-count">{section.sessions.length}</span>
+          <span className={styles.groupCount}>{section.sessions.length}</span>
         )}
         {/* 操作位收进 session 行同一套可收放槽位，静止时不占宽，上面的会话数因此贴到行右，悬停/菜单展开/键盘聚焦时槽位展开，会话数隐去 */}
-        <span className="wg-row-action-slot">
+        <span className={styles.rowActionSlot}>
           <RowActions
             menuOpen={menuOpen}
             onMenuOpen={setMenuOpen}
@@ -114,16 +116,16 @@ export function GroupSection({
       {section.sessions.length <= 0 && childIds.length <= 0 ? null : (
         // 组内同样是「子工作区 → 会话」，先文件夹后文件，与父工作区体内同一顺序
         <CollapsibleBody open={!collapsed}>
-          <div className="wg-group-body">
+          <div className={styles.groupBody}>
             {childIds.length === 0 ? null : (
-              <div className="wg-nest">{childIds.map(renderChildWorkspace)}</div>
+              <div className={styles.nest}>{childIds.map(renderChildWorkspace)}</div>
             )}
             {section.sessions.length <= 0 ? null : (
-              <div className="wg-sessions">
+              <div className={styles.sessions}>
                 {/* 组里同时有子工作区时，两者的行文字左缘落在同一条竖线上
                     加一个小标题并拉开间距，否则读不出哪几行是会话 */}
                 {childIds.length > 0 ? (
-                  <div className="wg-sessions-title" data-wg-stagger="">
+                  <div className={styles.sessionsTitle} data-wg-stagger="">
                     {labels.sessions}
                   </div>
                 ) : null}

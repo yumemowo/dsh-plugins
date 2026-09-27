@@ -22,6 +22,7 @@ import {
 } from '../runtime.ts'
 import type { ViewMode } from '../data/types.ts'
 import { useLocale } from '../useLocale.ts'
+import styles from './ViewOptionsMenu.module.css'
 
 /** 面板与窗口边缘的最小距离，取官方 `Menu` 原语的同一个值 */
 const VIEWPORT_MARGIN = 12
@@ -168,7 +169,7 @@ export function ViewOptionsMenu({
       // 可选行与开关自己都是可聚焦控件，这一列就是全部可停点
       const items = Array.from(
         panelRef.current?.querySelectorAll<HTMLElement>(
-          '.wg-view-option-row, .wg-view-option-switch',
+          `.${styles.viewOptionRow}, .${styles.viewOptionSwitch}`,
         ) ?? [],
       )
       if (items.length === 0) return
@@ -194,7 +195,7 @@ export function ViewOptionsMenu({
   return createPortal(
     <div
       ref={panelRef}
-      className="wg-view-menu"
+      className={styles.viewMenu}
       role="group"
       aria-label={labels.add.viewOptions}
       // 首次渲染时还没量过，先藏起来，否则面板会先在窗口左上角露一帧再跳到落点
@@ -206,36 +207,36 @@ export function ViewOptionsMenu({
     >
       {/* 展示方式：标题 + 两条互斥的可选项 */}
       <>
-        <div className="wg-view-group-label">{viewMode.label}</div>
+        <div className={styles.viewGroupLabel}>{viewMode.label}</div>
         {VIEW_MODES.map(({ mode: candidate, icon }) => {
           const selected = candidate === mode
           return (
             <button
               key={candidate}
               type="button"
-              className={`wg-view-option-row${selected ? ' wg-view-option-row-selected' : ''}`}
+              className={styles.viewOptionRow}
               aria-pressed={selected}
               onClick={() => onSelectMode(candidate)}
             >
-              <span className="wg-view-option-icon">{icon}</span>
-              <span className="wg-view-option-label">{modeLabel(candidate)}</span>
-              {selected ? <IconCheckOutlineRegular className="wg-view-option-check" /> : null}
+              <span className={styles.viewOptionIcon}>{icon}</span>
+              <span className={styles.viewOptionLabel}>{modeLabel(candidate)}</span>
+              {selected ? <IconCheckOutlineRegular className={styles.viewOptionCheck} /> : null}
             </button>
           )
         })}
       </>
-      <div className="wg-view-separator" role="separator" />
+      <div className={styles.viewSeparator} role="separator" />
       {/* 子工作区嵌套：行不可点——`Switch` 自己已是按钮，嵌进可点的行会叠两层控件 */}
-      <div className="wg-view-option">
-        <span className="wg-view-option-icon">
+      <div className={styles.viewOption}>
+        <span className={styles.viewOptionIcon}>
           {/* 官方在视图选项里就是用这个字形标「按工作区树分组」，而本条开关控制的正是子工作区的树形渲染 */}
           <IconWorkspaceTreeOutlineRegular />
         </span>
-        <span className="wg-view-option-label">{labels.nested.setting}</span>
+        <span className={styles.viewOptionLabel}>{labels.nested.setting}</span>
         <Switch
           checked={nesting.enabled}
           label={labels.nested.setting}
-          className="wg-view-option-switch"
+          className={styles.viewOptionSwitch}
           onChange={() => nesting.onToggle()}
         />
       </div>

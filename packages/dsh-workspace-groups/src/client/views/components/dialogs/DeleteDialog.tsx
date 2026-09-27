@@ -3,11 +3,12 @@
  *
  * 用普通 `Modal` 而不是 `RiskConfirmation`：后者带警告图标与勾选框
  * 而删除分组只解散分组、删除工作区只移除注册，都达不到需要勾选确认的破坏级别
- * 危险语义由确认按钮的 `wg-danger-action` 承载（错误色 token，同官方删除按钮做法）
+ * 危险语义由确认按钮的 `dangerAction` 承载（错误色 token，同官方删除按钮做法）
  */
 import type { ReactElement } from 'react'
 import { Button, Modal } from '../../../runtime.ts'
 import { useLocale } from '../../../useLocale.ts'
+import styles from './dialogs.module.css'
 
 export interface DeleteDialogProps {
   title: string
@@ -38,7 +39,7 @@ export function DeleteDialog({
           <Button variant="outline" onClick={onClose}>
             {t('cancel')}
           </Button>
-          <Button variant="outline" className="wg-danger-action" onClick={onConfirm}>
+          <Button variant="outline" className={styles.dangerAction} onClick={onConfirm}>
             {confirmLabel}
           </Button>
         </>

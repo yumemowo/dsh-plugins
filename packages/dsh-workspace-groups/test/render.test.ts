@@ -243,29 +243,29 @@ function render(
       return
     }
     // 行内按钮（如分组行的 `+`）、操作位容器与状态点槽位都是宿主元素，收集起来供断言
-    if (el.props['className'] === 'wg-row-actions') out.containers?.push(el)
+    if (el.props['className'] === 'rowActions') out.containers?.push(el)
     // 行了挂右键处理的行：据此断言右键入口确实接在了行本身上
     if (el.props['onContextMenu'] !== undefined) out.hosts?.push(el)
-    if (el.props['className'] === 'wg-slot') out.slots?.push(el)
-    if (el.props['className'] === 'wg-group-count') out.counts?.push(el)
-    if (el.props['className'] === 'wg-search-result-meta') out.metas?.push(el)
-    // 会话行与分组头都带淡入标记，这里只收会话行（带 data-wg-stagger 的 wg-row）
+    if (el.props['className'] === 'slot') out.slots?.push(el)
+    if (el.props['className'] === 'groupCount') out.counts?.push(el)
+    if (el.props['className'] === 'searchResultMeta') out.metas?.push(el)
+    // 会话行与分组头都带淡入标记，这里只收会话行（带 data-wg-stagger 的 row）
     if (
       typeof el.props['className'] === 'string' &&
-      (el.props['className'] as string).startsWith('wg-row') &&
+      (el.props['className'] as string).startsWith('row') &&
       el.props['data-wg-stagger'] === ''
     ) {
       out.rows?.push(el)
     }
     if (
-      el.props['className'] === 'wg-collapse' ||
-      el.props['className'] === 'wg-collapse wg-collapse-open'
+      el.props['className'] === 'collapse' ||
+      el.props['className'] === 'collapse collapseOpen'
     ) {
       out.collapses?.push(el)
     }
     // 按文档序记下行头各段，用来断言「会话数在标题右侧、操作位左侧」
     const section = el.props['className']
-    if (section === 'wg-group-label' || section === 'wg-group-count' || section === 'wg-row-actions') {
+    if (section === 'groupLabel' || section === 'groupCount' || section === 'rowActions') {
       out.order?.push(String(section))
     }
     if (el.type === 'button') out.buttons?.push(el)
@@ -539,7 +539,7 @@ function groupRowNode(onCreateSession?: () => void): unknown {
  * 收集容器行的行尾操作结构
  *
  * 「分组行与工作区行同形」是本包的核心承诺，因此断言落在结构上：
- * 两者都必须有 `...` 菜单锚点与 `+` 按钮，且都在 `.wg-row-actions` 容器里
+ * 两者都必须有 `...` 菜单锚点与 `+` 按钮，且都在 `.rowActions` 容器里
  */
 function rowActionShape(out: { menus: unknown[]; buttons?: unknown[]; containers?: unknown[] }): {
   menuAnchors: number
@@ -635,7 +635,7 @@ function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
       onDelete: () => {},
       onCreateSession: () => {},
     },
-    renderSession: (row) => React.createElement('span', { key: row.id, className: 'wg-row' }, row.title),
+    renderSession: (row) => React.createElement('span', { key: row.id, className: 'row' }, row.title),
     renderChildWorkspace: () => null,
   }
   const out = {
@@ -652,10 +652,10 @@ function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
   return out
 }
 
-/** 折叠体的展开态：类名里带 wg-collapse-open 即为展开 */
+/** 折叠体的展开态：类名里带 collapseOpen 即为展开 */
 function isOpen(collapse: unknown): boolean {
   const className = (collapse as { props: Record<string, unknown> }).props['className']
-  return typeof className === 'string' && className.includes('wg-collapse-open')
+  return typeof className === 'string' && className.includes('collapseOpen')
 }
 
 function props(
@@ -887,15 +887,15 @@ describe('WorkspaceGroupsRegion render', () => {
     const flat = await renderRoot([])
 
     // 没有用户分组时根节点不生成任何区段头，工作区行仍照常渲染一次
-    expect(hostRows(flat, 'wg-group-head wg-virtual-workspace-head')).toHaveLength(0)
-    expect(hostRows(flat, 'wg-workspace-head').length).toBeGreaterThan(0)
+    expect(hostRows(flat, 'groupHead virtualWorkspaceHead')).toHaveLength(0)
+    expect(hostRows(flat, 'workspaceHead').length).toBeGreaterThan(0)
   })
 
   it('keeps a workspace inside its group and lists the rest after it', async () => {
     const out = await renderRoot([{ id: 'wg1', name: '前端', workspaceIds: ['w1'] }])
 
     // 分组行在根节点上，缩进由一个专门的类承担而不是复用会话分组那档
-    expect(hostRows(out, 'wg-group-head wg-virtual-workspace-head')).toHaveLength(1)
+    expect(hostRows(out, 'groupHead virtualWorkspaceHead')).toHaveLength(1)
     expect(out.text).toContain('前端')
   })
 
@@ -1141,7 +1141,7 @@ describe('WorkspaceGroupsRegion render', () => {
     const count = (out.counts ?? [])[0] as { props: { children?: unknown } }
     expect(count.props.children).toBe(3)
     // 行头文档序：标题 → 会话数 → 操作位，即会话数落在行的右侧
-    expect(out.order).toEqual(['wg-group-label', 'wg-group-count', 'wg-row-actions'])
+    expect(out.order).toEqual(['groupLabel', 'groupCount', 'rowActions'])
   })
 
   it('omits the group session count for an empty group', () => {
@@ -1150,7 +1150,7 @@ describe('WorkspaceGroupsRegion render', () => {
 
     expect((out.counts ?? []).length).toBe(0)
     expect(out.text).not.toContain('0')
-    expect(out.order).toEqual(['wg-group-label', 'wg-row-actions'])
+    expect(out.order).toEqual(['groupLabel', 'rowActions'])
   })
 
   it('keeps the collapsed group sessions mounted so the body can shrink', () => {
@@ -1631,15 +1631,15 @@ describe('hover cards', () => {
 
     // 一条工作区行 + 一条工作区内的会话行 + 未分组桶里那条会话行
     expect(out.cards).toHaveLength(3)
-    expect(out.cards.map(anchorClass).filter((c) => c.startsWith('wg-workspace-head'))).toHaveLength(
+    expect(out.cards.map(anchorClass).filter((c) => c.startsWith('workspaceHead'))).toHaveLength(
       1,
     )
-    expect(out.cards.map(anchorClass).filter((c) => c.startsWith('wg-row'))).toHaveLength(2)
+    expect(out.cards.map(anchorClass).filter((c) => c.startsWith('row'))).toHaveLength(2)
   })
 
   it('reads the workspace card from name, directory path and creation instant', () => {
     const out = renderRegion()
-    const card = out.cards.find((c) => anchorClass(c).startsWith('wg-workspace-head'))
+    const card = out.cards.find((c) => anchorClass(c).startsWith('workspaceHead'))
 
     // 创建时刻按本地时区渲染（官方卡片用的就是 getHours/getMinutes）
     // 因此这里拿同一个 Date 现算一遍期望值，而不是写死一个只在某个时区成立的钟点
@@ -1653,7 +1653,7 @@ describe('hover cards', () => {
 
   it('abbreviates the home directory in the card path but copies the full one', () => {
     const out = renderRegion({ home: '/tmp' })
-    const card = out.cards.find((c) => anchorClass(c).startsWith('wg-workspace-head'))
+    const card = out.cards.find((c) => anchorClass(c).startsWith('workspaceHead'))
 
     // 卡片里显示缩写，复制出去的仍是完整路径：缩写只是排版
     expect(cardText(card)).toContain('~/w1')
@@ -1662,8 +1662,8 @@ describe('hover cards', () => {
 
   it('copies the workspace path and the session title through the official labels', () => {
     const out = renderRegion()
-    const workspaceCard = out.cards.find((c) => anchorClass(c).startsWith('wg-workspace-head'))
-    const sessionCard = out.cards.find((c) => anchorClass(c).startsWith('wg-row'))
+    const workspaceCard = out.cards.find((c) => anchorClass(c).startsWith('workspaceHead'))
+    const sessionCard = out.cards.find((c) => anchorClass(c).startsWith('row'))
 
     // 复制提示取官方 common 的通用词，成功反馈取官方 hover.copied
     for (const card of [workspaceCard, sessionCard]) {
@@ -1675,7 +1675,7 @@ describe('hover cards', () => {
 
   it('reads the session card from title, relative time and every status', () => {
     const out = renderRegion()
-    const card = out.cards.find((c) => anchorClass(c).startsWith('wg-row'))
+    const card = out.cards.find((c) => anchorClass(c).startsWith('row'))
 
     // 空闲会话在行上不画点，卡片里仍按官方列一条「空闲」
     expect(cardText(card)).toContain('A')
@@ -1692,7 +1692,7 @@ describe('hover cards', () => {
       ),
       out,
     )
-    const card = out.cards.find((c) => anchorClass(c).startsWith('wg-row'))
+    const card = out.cards.find((c) => anchorClass(c).startsWith('row'))
 
     expect(cardText(card)).toContain('5分钟前')
   })
@@ -1701,7 +1701,7 @@ describe('hover cards', () => {
     const pending = new Map([['orphan', { pendingInteraction: { kind: 'approval' } }]])
     const out = renderRegion({ pending })
     // 卡片按文档序发出，两条会话行里第二条是未分组桶里的 Orphan
-    const cards = out.cards.filter((c) => anchorClass(c).startsWith('wg-row'))
+    const cards = out.cards.filter((c) => anchorClass(c).startsWith('row'))
     const orphanCard = cards[cards.length - 1]
 
     // 在等审批的那条会话，卡片里要出现审批那一条
@@ -1726,7 +1726,7 @@ describe('hover cards', () => {
 
     // 未分组桶不是真实工作区（没有目录与创建时刻），官方在那里同样不给卡片：
     // 工作区行有两行（真实工作区 + 未分组桶），卡片却只有一张
-    const workspaceCards = out.cards.filter((c) => anchorClass(c).startsWith('wg-workspace-head'))
+    const workspaceCards = out.cards.filter((c) => anchorClass(c).startsWith('workspaceHead'))
     expect(workspaceCards).toHaveLength(1)
     // 那唯一一张挂在真实工作区上，它的正文是 W1 的路径，不是未分组桶
     expect(cardText(workspaceCards[0])).toContain('/tmp/w1')
@@ -1866,7 +1866,7 @@ describe('search', () => {
   function resultRows(out: { buttons?: unknown[] }): unknown[] {
     return (out.buttons ?? []).filter((b) =>
       String((b as { props: Record<string, unknown> }).props['className']).startsWith(
-        'wg-search-result',
+        'searchResult',
       ),
     )
   }
@@ -2051,8 +2051,8 @@ describe('search', () => {
     }
     walk(meta.props.children)
 
-    expect(classes).toContain('wg-search-result-workspace')
-    expect(classes).toContain('wg-search-result-group')
+    expect(classes).toContain('searchResultWorkspace')
+    expect(classes).toContain('searchResultGroup')
     // 分隔符不单独成类：它落在分组那一段里继承同一色阶，避免多出第三个层级
     expect(classes).not.toContain('wg-search-result-separator')
   })
@@ -2155,13 +2155,13 @@ describe('row context menu', () => {
   /**
    * 一行上显示的标题
    *
-   * 标题是行里的一个子节点（`.wg-row-title`），不是行元素自己的 prop
+   * 标题是行里的一个子节点（`.rowTitle`），不是行元素自己的 prop
    */
   function rowTitle(row: unknown): string | undefined {
     const children = (row as { props: { children?: unknown } }).props.children
     for (const child of Array.isArray(children) ? children : [children]) {
       const element = child as { props?: { className?: unknown; children?: unknown } } | null
-      if (element?.props?.className === 'wg-row-title') return String(element.props.children)
+      if (element?.props?.className === 'rowTitle') return String(element.props.children)
     }
     return undefined
   }
@@ -2207,17 +2207,17 @@ describe('row context menu', () => {
 
   it('attaches a right-click handler to every kind of row', () => {
     // 工作区行与会话行（未分组桶里那条）都有右键入口
-    const { before } = rightClick(region(), 'wg-workspace-head')
-    expect(rowsOf(before, 'wg-workspace-head').length).toBeGreaterThan(0)
-    expect(rowsOf(before, 'wg-row').length).toBeGreaterThan(0)
+    const { before } = rightClick(region(), 'workspaceHead')
+    expect(rowsOf(before, 'workspaceHead').length).toBeGreaterThan(0)
+    expect(rowsOf(before, 'row').length).toBeGreaterThan(0)
 
     // 分组行只在 loadGroups 落地后才出现，因此直接渲染一条
-    const group = rightClick(groupRowNode(() => {}), 'wg-group-head')
-    expect(rowsOf(group.before, 'wg-group-head')).toHaveLength(1)
+    const group = rightClick(groupRowNode(() => {}), 'groupHead')
+    expect(rowsOf(group.before, 'groupHead')).toHaveLength(1)
   })
 
   it('opens the menu at the pointer and keeps the browser menu suppressed', () => {
-    const { after, flags } = rightClick(region(), 'wg-workspace-head', {
+    const { after, flags } = rightClick(region(), 'workspaceHead', {
       clientX: 120,
       clientY: 240,
     })
@@ -2239,7 +2239,7 @@ describe('row context menu', () => {
   it('falls back to the row rect when the right click comes from the keyboard', () => {
     // 菜单键触发的 contextmenu 没有指针坐标（浏览器给 (0,0)）：那时菜单该落在行旁
     // 而不是被丢到窗口左上角
-    const { after } = rightClick(region(), 'wg-workspace-head')
+    const { after } = rightClick(region(), 'workspaceHead')
 
     expect(contextMenuAnchorRect({ contextMenus: [openMenu(after)] })).toEqual({
       left: 4,
@@ -2250,7 +2250,7 @@ describe('row context menu', () => {
   })
 
   it('keeps the row menu items and adds only the new-session entry', () => {
-    const { after } = rightClick(region(), 'wg-workspace-head')
+    const { after } = rightClick(region(), 'workspaceHead')
 
     // 右键菜单 = 行内 `...` 菜单 + 行内 `+` 那一项
     expect(menuIdsOf(openMenu(after))).toEqual([
@@ -2267,7 +2267,7 @@ describe('row context menu', () => {
   it('gives the session row the same items as its own menu', () => {
     // 没有归组上下文的会话行（「未分组」桶里的那种）只留官方三项
     // 且没有行内新建入口可补，右键菜单与它的 `...` 菜单条目集合因此完全相同
-    const { after } = rightClick(sessionRowNode(), 'wg-row')
+    const { after } = rightClick(sessionRowNode(), 'row')
 
     expect(menuIdsOf(openMenu(after))).toEqual(['rename', 'fork', 'archive'])
   })
@@ -2275,14 +2275,14 @@ describe('row context menu', () => {
   it('leaves a row without a create entry with the plain row menu', () => {
     // 没有新建入口的行（这里用不传 onCreateSession 的分组行）补一项「新建会话」就是点不动的死按钮
     // 因此右键菜单退化成 `...` 菜单本身
-    const { after } = rightClick(groupRowNode(), 'wg-group-head')
+    const { after } = rightClick(groupRowNode(), 'groupHead')
 
     expect(menuIdsOf(openMenu(after))).toEqual(['rename', 'delete'])
   })
 
   it('routes the new-session entry to the row own create handler', () => {
     const created: string[] = []
-    const { after } = rightClick(groupRowNode(() => created.push('g1')), 'wg-group-head')
+    const { after } = rightClick(groupRowNode(() => created.push('g1')), 'groupHead')
 
     // 选中「新建会话」必须落到该行自己的新建入口上，与行内 `+` 是同一件事
     const menu = openMenu(after) as { props: { onSelect: (id: string) => void } }
@@ -2301,6 +2301,6 @@ describe('row context menu', () => {
     expect(stray).toBeDefined()
     expect(propOf(stray, 'onContextMenu')).toBeUndefined()
     // 它确实是一条会话行，只是没有入口——不是因为整片列表都没渲染
-    expect(rowsOf(out, 'wg-row').length).toBeGreaterThan(0)
+    expect(rowsOf(out, 'row').length).toBeGreaterThan(0)
   })
 })

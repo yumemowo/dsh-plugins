@@ -13,7 +13,6 @@
  *
  * 左侧标题是上下两行：上行是「工作区」这一层级的名字，它自带一个下拉菜单入口（箭头紧跟文字其后）；下行是当前聚焦的工作区或工作区分组
  * 两行都由这一行的定高承担——36px 是官方给单行标题的量，两行各 20px 行高放不下，因此宽栏这一层把高度放开到内容
- * 见样式表里的 `.wg-header-title`
  *
  * 两张浮层面板（视图选项、选择器）也挂在 `RegionHeaderArea` 这一层，并分别在搜索展开时收起
  * 搜索会顶掉标题与入口组，面板若还开着就悬在一片与它无关的结果列表上
@@ -35,6 +34,8 @@ import type { SearchState } from './SearchControl.tsx'
 import { ViewOptionsMenu } from './ViewOptionsMenu.tsx'
 import { VirtualWorkspaceCreateControl } from './VirtualWorkspaceCreateControl.tsx'
 import { WorkspacePickerMenu } from './WorkspacePickerMenu.tsx'
+import styles from './header.module.css'
+import clsx from 'clsx'
 
 /** 顶部区消费的派生布局 */
 export interface RegionHeaderLayout {
@@ -108,35 +109,35 @@ export function RegionHeaderArea(props: RegionHeaderAreaProps): ReactElement {
   const viewOptionsOpen = props.overlays.viewOptions.open
   return (
     <>
-      <div className="wg-header wg-header-titled">
+      <div className={clsx(styles.header, styles.headerTitled)}>
         {/* 两行是同一个按钮：它们合起来表达一件事，即当前在看哪个工作区，点开可以换一个
             箭头因此也不是独立按钮，它就是这块按钮自己的开合指示 */}
         <button
           type="button"
           ref={props.overlays.picker.triggerRef}
-          className={`wg-header-title${hidden ? ' wg-header-title-hidden' : ''}`}
+          className={clsx(styles.headerTitle, hidden && styles.headerTitleHidden)}
           aria-label={labels.picker.change(props.layout.currentFocus)}
           aria-expanded={pickerOpen}
           onClick={props.overlays.picker.onToggle}
         >
-          <span className="wg-header-heading">
-            <span className="wg-header-label">{labels.title}</span>
+          <span className={styles.headerHeading}>
+            <span className={styles.headerLabel}>{labels.title}</span>
             <IconChevronDownOutlineRegular
-              className={`wg-header-caret${pickerOpen ? ' wg-header-caret-open' : ''}`}
+              className={clsx(styles.headerCaret, pickerOpen && styles.headerCaretOpen)}
             />
           </span>
           {/* 第二行是当前聚焦的对象
             * 字号比上行小一档、色阶高一档：它与上行是两个层级的信息（层级名 / 层级里的取值）
             * 靠字号与色阶一起区分 */}
-          <span className="wg-header-focus">{props.layout.currentFocus}</span>
+          <span className={styles.headerFocus}>{props.layout.currentFocus}</span>
         </button>
         <SearchEntry search={search} />
-        <div className={`wg-header-actions${expanded ? ' wg-header-actions-hidden' : ''}`}>
+        <div className={clsx(styles.headerActions, expanded && styles.headerActionsHidden)}>
           {/* 官方的位置与字形保留，但这里是一个真的入口，点开的是本包的视图选项面板 */}
           <button
             type="button"
             ref={props.overlays.viewOptions.triggerRef}
-            className="wg-header-action"
+            className={styles.headerAction}
             aria-label={labels.add.viewOptions}
             aria-expanded={viewOptionsOpen}
             onClick={props.overlays.viewOptions.onToggle}
@@ -198,7 +199,7 @@ export function RegionRailHeader({
     <>
       {/* header 行只在有建造型入口时出现，它为空时不留一行空高度 */}
       {!creates ? null : (
-        <div className="wg-header wg-header-rail">
+        <div className={clsx(styles.header, styles.headerRail)}>
           {newVirtualWorkspace === undefined ? null : (
             <VirtualWorkspaceCreateControl narrow onCreate={newVirtualWorkspace.onCreate} />
           )}

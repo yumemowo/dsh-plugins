@@ -1,0 +1,143 @@
+/* 工作区下拉菜单
+   本包自绘的面板（官方 Menu 原语没有可折叠分区头、也没有挂在条目行尾的第二个按钮）
+   外观逐条取官方菜单面板那一份规则的值
+
+   底色、描边、投影与背面模糊都必须用官方这一套 token，底下就是会话列表
+   引一个未定义的自定义属性会让整条声明失效，面板因此变成透明的。四者的来源：
+      - --dsw-specific-menu = 菜单专用底色，0.1.7-rc.1 起带 alpha（亮色 #f8f9fa94、暗色 #30313680）
+      - --dsw-elevation-prominent = 一圈 .5px 描边 + 两层柔和投影，由主题按暗色/亮色
+        各给一份
+      - --dsw-elevation-stroke-color 要先被面板这一层重设，投影里那圈描边才跟着面板
+        自己的圆角走
+      - --dsw-menu-backdrop-filter = blur(40px) saturate(150%)
+        官方 .list / .submenu 与 HoverCard 都用它把半透明底色后面的内容糊开
+
+   背面模糊这一条不能省，底色本身是半透明的，少了它后面的会话会清晰地穿过来，面板读起来就成了「没上底色」
+   官方菜单卡片是同一个组合，本包照抄
+
+   面板是 portal 到 body 的浮层，位置由组件量出来写成内联的 left/top */
+.pickerMenu {
+  position: fixed;
+  /* 与官方 .portal 面板同一个层级，官方菜单用 z-index 1100，落在浮层之上、弹窗之下 */
+  z-index: 1100;
+  box-sizing: border-box;
+  min-width: 218px;
+  max-width: 360px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  border: 0;
+  border-radius: 20px;
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-elevation-prominent);
+  /* 滚动条与官方菜单同一组变量，长列表滚动时不出系统默认样式 */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.pickerSection + .pickerSection {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: .5px solid var(--dsw-alias-border-l1);
+}
+
+.pickerSection:first-child { border-top: none; }
+
+/* 可折叠的两个分区各有一行标题 + 行尾箭头
+   「全部」那一个没有箭头也不可折叠（它是这个菜单的主体，收起来会让菜单看起来是空的） */
+.pickerSectionHead {
+  box-sizing: border-box;
+  cursor: pointer;
+  width: 100%;
+  height: 32px;
+  padding: 8px 10px;
+  color: var(--dsw-alias-label-tertiary);
+  background: 0 0;
+  border: none;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: left;
+}
+
+.pickerSectionHead:hover { background: var(--dsw-alias-interactive-bg-hover); }
+
+/* 「全部」那一个是纯标签，它不接受点击，因此不给指针与悬停底色 */
+.pickerSectionStatic { cursor: default; }
+
+.pickerSectionStatic:hover { background: 0 0; }
+
+.pickerSectionTitle {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pickerCaret { flex: none; transition: transform .15s var(--ds-ease-in-out, ease-in-out); }
+
+.pickerCaretOpen { transform: rotate(180deg); }
+
+.pickerSectionBody { display: flex; flex-direction: column; }
+
+/* 16px 宽、与标题同一行的行高
+   列表里的 .slot 是 20px 高，这里跟着菜单项的行高走 */
+.pickerIcon {
+  width: 16px;
+  height: 22px;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 标题吃掉余量，.rowTitle 在这里的对位，它的左右外边距归 0，间距由行的 gap 给
+   工作区行是 gap 加自带 margin 的混合，菜单项只留 gap 更整齐 */
+.pickerLabel {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pickerCheck { flex: none; color: var(--dsw-alias-label-secondary); }
+
+/* 「全部工作区」那一项
+   它是一个动作（退出聚焦）而不是菜单条目，因此没有行尾的操作位，也不需要被聚焦时那个选中标记
+   几何与条目行同一档，好让它读起来是同一组里的一行 */
+.pickerReset {
+  box-sizing: border-box;
+  cursor: pointer;
+  width: 100%;
+  min-height: 34px;
+  padding: 5px 10px;
+  color: inherit;
+  background: 0 0;
+  border: none;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 22px;
+  text-align: left;
+}
+
+.pickerReset:hover { background: var(--dsw-alias-interactive-bg-hover); }
+
+@media (prefers-reduced-motion: reduce) {
+  /* 两处箭头直接落位，翻转动画在 reduced-motion 下没有意义 */
+  .pickerCaret { transition: none; }
+}

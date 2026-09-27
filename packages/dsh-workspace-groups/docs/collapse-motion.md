@@ -31,7 +31,7 @@
 不透明必须作为元素的自然状态。透明只挂在一个结构条件上：
 
 ```css
-.wg-collapse:not(.wg-collapse-open) > .wg-collapse-clip [data-wg-stagger] { opacity: 0 }
+.collapse:not(.collapseOpen) > .collapseClip [data-wg-stagger] { opacity: 0 }
 ```
 
 展开态没有任何规则写 `opacity`，所以过渡没跑、被降频、或主线程被长任务占住时，元素只是「没淡入」，绝不会留在透明上。
@@ -46,13 +46,13 @@
 
 内层折叠体的元素不能被外层的展开态提前点亮——那样等它自己那层展开时已经是不透明的，淡入不会发生。
 
-这一点由选择器自己兜住：外层收着时，`.wg-collapse:not(.wg-collapse-open)` 作为祖先命中它裁剪区里的**所有**元素，含内层折叠体的。因此不必再往元素上挂显隐类，也就没有「React 重写 `className` 把类抹掉」这类问题，更没有「谁先跑」的时序问题。
+这一点由选择器自己兜住：外层收着时，`.collapse:not(.collapseOpen)` 作为祖先命中它裁剪区里的**所有**元素，含内层折叠体的。因此不必再往元素上挂显隐类，也就没有「React 重写 `className` 把类抹掉」这类问题，更没有「谁先跑」的时序问题。
 
 收起时那条更具体、且把延迟归零，所有元素同时淡出（包括嵌套体里展开着的元素，外层合拢时它们一并隐去）。`planStaggerUnits` 排期时跳过仍收着的嵌套体里的元素：它们本次不露面，给延迟等于把淡入提前用掉。
 
 ## 节奏参数
 
-节奏参数集中在 `src/client/utils/collapseMotion.ts` 的 `DEFAULT_COLLAPSE_MOTION` 一处，样式表的 CSS 回退值也直接取这里的值，不另行硬编码，因此两边不可能漂移。自定义属性名同样来自一处（`COLLAPSE_VARS`），名字写两遍一样会静默失配。
+节奏参数集中在 `src/client/utils/collapseMotion.ts` 的 `DEFAULT_COLLAPSE_MOTION` 一处，时长与缓动只由它一处定义，样式表只消费 `--wg-collapse-*` 变量、不再写一份回退值。自定义属性名同样来自一处（`COLLAPSE_VARS`），名字写两遍一样会静默失配。
 
 单独抽成一个模块而不是放进组件，是为了不让样式表依赖 React，也避免与组件互相 import 成环。
 

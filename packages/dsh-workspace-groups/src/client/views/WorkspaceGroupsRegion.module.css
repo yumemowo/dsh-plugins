@@ -1,0 +1,87 @@
+/* 区域根
+ * 官方 WorkspaceBrowser 的根节点自己带整块右留白
+ * 本区域必须有同一份，否则 header 的入口按钮与列表行都会贴到侧栏右缘
+ *
+ * 官方那份留白不走 shell 的 12px
+ * shell 的 regionArea 用 margin-right:-12px 把它抵掉了
+ * 之后再由 WorkspaceBrowser 的根节点重新加回来
+ * 因此这份留白由 .root 自己拥有
+ * 侧栏下 shell 只负责左侧 12px（regionArea 的 -4/+4），右侧由本节点给
+ * 对照模式下 .tab 给左侧、本节点给右侧，两种挂载点的右留白因此同源
+ *
+ * 官方把这三个量定义在自己的根节点上（--dsh-session-list-edge-inset 等）
+ * 而那些定义随官方组件一起被接替掉了，本包必须自己重新定义一遍 */
+.root {
+  --dsh-session-list-edge-inset: var(--dsh-sidebar-inline-padding, 12px);
+  --dsh-session-list-scrollbar-width: 8px;
+  --dsh-session-list-scrollbar-offset: 2px;
+  box-sizing: border-box;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  padding-right: var(--dsh-session-list-edge-inset);
+}
+
+/* 右侧栏对照 tab 的外壳，只给左侧水平内边距与顶部间距——侧栏下左侧来自 shell
+   对照模式下没有 shell，因此由这里补上
+   右侧一律由 .root 给，避免两层叠加 */
+.tab {
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0 0 12px;
+}
+
+/* 右侧折进官方 .listArea 与 .list 的两层偏移
+ *
+ * 官方把「留白」拆成两步：
+ *   1. .listArea 用 -edge-inset 抵掉根节点的右留白，让列表靠到栏缘
+ *   2. 由 .list 自己的 scrollbar-offset 与 padding-right 把内容推回到离栏缘 edge-inset 处
+ *     （scrollbar 沟槽 width + offset + padding-right）
+ * 本包没有 .listArea 那一层，因此把它的 -edge-inset 折进这里的 margin-right
+ *
+ * 面板整体淡入，官方给三种内容体（会话树 / 单列表 / 搜索结果）共用的 .treeBody 挂了 .2s 的 wide-in 动画
+ * 那三者在它的三元分支里是不同的元素，因此每次切换内容体都会重新挂载、动画重放
+ * 搜索态进出时整块面板各有一次淡入
+ * 本包的常规列表与搜索结果也各有自己的根节点（同一条三元分支）
+ * 因此同样套用这条规则，两处都挂 .list 之外的面板类，见 .panel */
+.list {
+  box-sizing: border-box;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  margin-right: calc(
+    var(--dsh-session-list-scrollbar-offset) - var(--dsh-session-list-edge-inset)
+  );
+  padding-right: calc(
+    var(--dsh-session-list-edge-inset) - var(--dsh-session-list-scrollbar-width) -
+      var(--dsh-session-list-scrollbar-offset)
+  );
+  padding-bottom: 16px;
+}
+
+/* 面板级淡入，与官方 .treeBody 的 wide-in 同一条动画（时长与缓动都取官方值）
+   它是「换了一块内容」的提示，与折叠体的逐行淡入是两回事
+   后者管的是展开折叠体时行逐个露面 */
+.panel {
+  animation: panelIn .2s var(--ds-ease-in-out, ease-in-out);
+}
+
+@keyframes panelIn {
+  0% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 面板淡入整条撤掉
+     它的初态是 opacity: 0，撤掉动画即落回自然的不透明
+     若只撤 transition 而留着动画，reduced-motion 下面板反而会一直不可见 */
+  .panel { animation: none; }
+}

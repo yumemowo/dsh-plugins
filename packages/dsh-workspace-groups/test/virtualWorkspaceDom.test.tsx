@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client'
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
-import { CSS } from '../src/client/styles.ts'
+import { readAllCss } from './readCss.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
 import { viewModeProps } from './viewMode-stub.ts'
@@ -15,7 +15,7 @@ import { viewModeProps } from './viewMode-stub.ts'
  * 工作区分组的真实 DOM 结构
  *
  * `render.test.ts` 用自制 dispatcher 直接调用函数组件，只能看到元素树
- * 层级缩进却是一组按真实 DOM 结构写的选择器（`.wg-virtual-workspace-body > .wg-workspace > .wg-collapse > ...`）
+ * 层级缩进却是一组按真实 DOM 结构写的选择器（`.virtualWorkspaceBody > .workspace > .collapse > ...`）
  * 选择器写错时界面只是「没有缩进」，不会有任何报错
  * 这里用真 `react-dom` 渲染一遍并断言那些选择器确实命中，守住这条静默失效的边界
  *
@@ -27,7 +27,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
   const created = new Date(2026, 0, 1, 0, 0).getTime()
   const byId: Record<string, unknown> = {
     a: { id: 'a', displayTitle: '修复登录超时', running: false, blank: false, retainedBy: {}, updatedAt: 1_000 },
-    // 未归组的会话：它的缩进走 `.wg-sessions > .wg-row` 那一档，与组内会话不同
+    // 未归组的会话：它的缩进走 `.sessions > .row` 那一档，与组内会话不同
     // 缺了它那条规则就无从验证
     b: { id: 'b', displayTitle: '散落会话', running: false, blank: false, retainedBy: {}, updatedAt: 1_000 },
     orphan: { id: 'orphan', displayTitle: 'Orphan', running: false, blank: false, retainedBy: {}, updatedAt: 1_000 },
@@ -134,11 +134,11 @@ async function mount(
 /**
  * 取样式表里那些按工作区分组结构写的缩进 / 引导线选择器
  *
- * 读的是 `styles.ts` 导出的源文本（也就是插件注入到页面的那一份）：
+ * 读的是各组件的 `.module.css` 源文本，类名取的是源文件里的原名
  * 本测试直接挂载组件、不走 `apply`，因此页面上并没有本包的 style 标签
  */
 function groupScopedRules(): { selectors: string[]; body: string }[] {
-  const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '')
+  const css = readAllCss().replace(/\/\*[\s\S]*?\*\//g, '')
   return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
     .map((match) => ({
       selectors: (match[1] ?? '')
@@ -146,25 +146,25 @@ function groupScopedRules(): { selectors: string[]; body: string }[] {
         .map((selector) => selector.trim().replace(/\s+/g, ' ')),
       body: (match[2] ?? '').trim(),
     }))
-    .filter((rule) => rule.selectors.some((selector) => selector.includes('wg-virtual-workspace-body')))
+    .filter((rule) => rule.selectors.some((selector) => selector.includes('virtualWorkspaceBody')))
 }
 
 describe('workspace group DOM structure', () => {
   it('nests each grouped workspace under the group body', async () => {
     const { container, root } = await mount()
 
-    const groupHead = container.querySelector('.wg-virtual-workspace-head')
-    const body = container.querySelector('.wg-virtual-workspace-body')
+    const groupHead = container.querySelector('.virtualWorkspaceHead')
+    const body = container.querySelector('.virtualWorkspaceBody')
     expect(groupHead?.textContent).toContain('工作区分组')
     expect(body).not.toBeNull()
 
     // 被归组的工作区落在组体里，未归组的那个留在根节点上
-    const grouped = body?.querySelector('.wg-workspace')
-    expect(grouped?.querySelector('.wg-workspace-title')?.textContent).toBe('W1')
-    const loose = Array.from(container.querySelectorAll('.wg-workspace')).find(
-      (section) => section.closest('.wg-virtual-workspace-body') === null,
+    const grouped = body?.querySelector('.workspace')
+    expect(grouped?.querySelector('.workspaceTitle')?.textContent).toBe('W1')
+    const loose = Array.from(container.querySelectorAll('.workspace')).find(
+      (section) => section.closest('.virtualWorkspaceBody') === null,
     )
-    expect(loose?.querySelector('.wg-workspace-title')?.textContent).toBe('W2')
+    expect(loose?.querySelector('.workspaceTitle')?.textContent).toBe('W2')
 
     await act(async () => root.unmount())
   })
@@ -195,9 +195,9 @@ describe('workspace group DOM structure', () => {
     // 这一层的缩进不再按固定层数写死选择器，子工作区可以是任意层
     // 整棵子树抬高多少，由各容器累加出来的 --wg-depth-offset 承担
     const all = rules.flatMap((rule) => rule.selectors)
-    expect(all).toContain('.wg-virtual-workspace-body')
+    expect(all).toContain('.virtualWorkspaceBody')
     // 组内工作区行不再单独写一条缩进规则，它读的是抬高后的 --wg-depth
-    expect(all).not.toContain('.wg-virtual-workspace-body > .wg-workspace > .wg-workspace-head')
+    expect(all).not.toContain('.virtualWorkspaceBody > .workspace > .workspaceHead')
 
     await act(async () => root.unmount())
   })
@@ -207,7 +207,7 @@ describe('workspace group DOM structure', () => {
     // 缩进与引导线静默消失、没有任何报错。这条测试把那批规则逐条拿去真实 DOM 里查
     const { container, root } = await mount()
 
-    const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '')
+    const css = readAllCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
       .map((match) => ({
         selectors: (match[1] ?? '')
@@ -247,9 +247,9 @@ describe('workspace group DOM structure', () => {
     const { container, root } = await mount()
 
     // 组内工作区里的会话分组与会话行都还在文档里（收起也是靠折叠体收轨道，不卸载）
-    const session = container.querySelector('.wg-virtual-workspace-body .wg-row')
-    expect(session?.querySelector('.wg-row-title')?.textContent).toBe('修复登录超时')
-    expect(container.querySelector('.wg-virtual-workspace-body .wg-group-label')?.textContent).toBe(
+    const session = container.querySelector('.virtualWorkspaceBody .row')
+    expect(session?.querySelector('.rowTitle')?.textContent).toBe('修复登录超时')
+    expect(container.querySelector('.virtualWorkspaceBody .groupLabel')?.textContent).toBe(
       '会话分组',
     )
 
@@ -264,10 +264,10 @@ describe('workspace group DOM structure', () => {
       loadGroups: async () => ({ byWorkspace: {} }) as never,
     })
 
-    expect(container.querySelector('.wg-virtual-workspace-head')).toBeNull()
+    expect(container.querySelector('.virtualWorkspaceHead')).toBeNull()
     // 工作区照常平铺，区域整体仍在渲染
-    expect(container.querySelectorAll('.wg-workspace').length).toBeGreaterThan(0)
-    expect(container.querySelector('.wg-root')).not.toBeNull()
+    expect(container.querySelectorAll('.workspace').length).toBeGreaterThan(0)
+    expect(container.querySelector('.root')).not.toBeNull()
 
     await act(async () => root.unmount())
   })
@@ -277,13 +277,13 @@ describe('workspace group DOM structure', () => {
 
     // 分组头的文件夹槽走虚线，工作区分组形状上像一个工作区
     // 但本身不是一个真实工作区（没有目录、没有会话）。实线文件夹留给真实的工作区行
-    const folder = container.querySelector('.wg-virtual-workspace-head .wg-folder')
+    const folder = container.querySelector('.virtualWorkspaceHead .folder')
     expect(folder?.innerHTML).toContain('stroke-dasharray')
     // 它也有独立的箭头槽，与工作区行同一套「悬停时文件夹换成箭头」
-    expect(container.querySelector('.wg-virtual-workspace-head .wg-chevron')).not.toBeNull()
+    expect(container.querySelector('.virtualWorkspaceHead .chevron')).not.toBeNull()
 
     // 组内真实工作区行仍然是实线文件夹
-    const realFolder = container.querySelector('.wg-workspace-head .wg-folder')
+    const realFolder = container.querySelector('.workspaceHead .folder')
     expect(realFolder?.innerHTML ?? '').not.toContain('stroke-dasharray')
 
     await act(async () => root.unmount())
@@ -295,8 +295,8 @@ describe('workspace group DOM structure', () => {
         snapshot({ workspaceGroups: [{ id: 'wg1', name: '空组', workspaceIds: [] }] }),
     })
 
-    const body = container.querySelector('.wg-virtual-workspace-body')
-    expect(body?.querySelector('.wg-empty')?.textContent).toBe('这个工作区分组里还没有工作区')
+    const body = container.querySelector('.virtualWorkspaceBody')
+    expect(body?.querySelector('.empty')?.textContent).toBe('这个工作区分组里还没有工作区')
 
     await act(async () => root.unmount())
   })

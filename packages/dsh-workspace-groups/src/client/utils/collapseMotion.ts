@@ -1,7 +1,7 @@
 /**
  * 折叠动画的节奏参数与自定义属性名
  *
- * 单独成一个模块，因为样式表与组件都要用：值在本模块只有一份，样式表把它插进 CSS 回退值，组件把它下发成内联自定义属性，两边因此不可能漂移
+ * 单独成一个模块，因为样式表与组件都要用这些自定义属性名：名字在本模块只有一份，写两遍会静默失配
  *
  * 不放进组件模块是为了不让样式表依赖 React——反过来组件日后若要引用样式表（例如取标签 id），直接互相 import 就成环了
  */
@@ -64,7 +64,7 @@ export const DEFAULT_COLLAPSE_MOTION: CollapseMotion = {
  *
  * 自定义属性会继承，内层 clip 与每个元素因此都读得到，不必逐层下发
  * 延迟不进这里——它逐元素不同，由折叠体量出来单独下发
- * @returns 可直接挂到 `.wg-collapse` 上的内联样式
+ * @returns 可直接挂到 `.collapse` 上的内联样式
  */
 export function collapseMotionVars(motion: CollapseMotion): CSSProperties {
   return {

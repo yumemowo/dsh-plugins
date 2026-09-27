@@ -13,6 +13,7 @@ import type { ReactElement } from 'react'
 import { Tooltip } from '../runtime.ts'
 import { IconVirtualWorkspace16 } from '../icons.tsx'
 import { useLocale } from '../useLocale.ts'
+import styles from './header.module.css'
 
 export interface VirtualWorkspaceCreateControlProps {
   /** 窄栏（rail）形态：按钮放大、色阶提亮，与官方一致 */
@@ -31,7 +32,7 @@ export function VirtualWorkspaceCreateControl({
     <Tooltip label={label} side="bottom" delayMs={500}>
       <button
         type="button"
-        className={`wg-header-action${narrow ? ' wg-header-action-rail' : ''}`}
+        className={styles.headerAction}
         aria-label={label}
         onClick={onCreate}
       >

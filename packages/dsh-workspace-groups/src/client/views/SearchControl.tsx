@@ -16,6 +16,10 @@ import { sanitizeSearchQuery, SEARCH_QUERY_MAX_CODE_UNITS } from '../data/search
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
 import type { SessionStatus } from '../data/status.ts'
 import { useLocale } from '../useLocale.ts'
+import searchStyles from './SearchControl.module.css'
+import regionStyles from './WorkspaceGroupsRegion.module.css'
+import rowsStyles from './components/rows.module.css'
+import clsx from 'clsx'
 
 /**
  * 侧栏列滑动的时长（官方 `--ds-transition-duration-slow`）
@@ -117,10 +121,10 @@ export function SearchEntry({ search }: SearchEntryProps): ReactElement {
   const labels = region.search
   const { expanded, query, inputRef, rootRef } = search
   return (
-    <div className={`wg-search-slot${expanded ? ' wg-search-slot-expanded' : ''}`}>
+    <div className={clsx(searchStyles.searchSlot, expanded && searchStyles.searchSlotExpanded)}>
       <div
         ref={rootRef}
-        className={`wg-search${expanded ? ' wg-search-expanded' : ''}`}
+        className={clsx(searchStyles.search, expanded && searchStyles.searchExpanded)}
         onClick={() => {
           search.expand()
           inputRef.current?.focus()
@@ -129,7 +133,7 @@ export function SearchEntry({ search }: SearchEntryProps): ReactElement {
         <Tooltip label={labels.hint} side="bottom" delayMs={500} disabled={expanded}>
           <button
             type="button"
-            className="wg-search-button"
+            className={searchStyles.searchButton}
             aria-label={labels.entry}
             aria-expanded={expanded}
             onClick={() => search.expand()}
@@ -139,7 +143,7 @@ export function SearchEntry({ search }: SearchEntryProps): ReactElement {
         </Tooltip>
         <input
           ref={inputRef}
-          className="wg-search-input"
+          className={searchStyles.searchInput}
           type="text"
           placeholder={labels.placeholder}
           maxLength={SEARCH_QUERY_MAX_CODE_UNITS}
@@ -154,7 +158,7 @@ export function SearchEntry({ search }: SearchEntryProps): ReactElement {
         {expanded ? (
           <button
             type="button"
-            className="wg-search-clear"
+            className={searchStyles.searchClear}
             aria-label={labels.clear}
             onClick={(event) => {
               event.stopPropagation()
@@ -174,11 +178,11 @@ export function SearchRailEntry({ search }: SearchEntryProps): ReactElement {
   const { labels: region } = useLocale()
   const labels = region.search
   return (
-    <div className="wg-search wg-search-rail">
+    <div className={clsx(searchStyles.search, searchStyles.searchRail)}>
       <Tooltip label={labels.hint}>
         <button
           type="button"
-          className="wg-search-button"
+          className={searchStyles.searchButton}
           aria-label={labels.entry}
           onClick={() => search.expandFromRail()}
         >
@@ -245,9 +249,9 @@ export function SearchResults({
   const { labels } = useLocale()
   const search = labels.search
   return (
-    // wg-panel 让整块结果面板淡入，与常规列表来回切换时各有一段淡入（官方三种内容体共用的 .treeBody 也是这么挂的）
-    <div className="wg-list wg-panel">
-      <div className="wg-search-results" role="tree" aria-label={search.results}>
+    // panel 让整块结果面板淡入，与常规列表来回切换时各有一段淡入（官方三种内容体共用的 .treeBody 也是这么挂的）
+    <div className={clsx(regionStyles.list, regionStyles.panel)}>
+      <div className={searchStyles.searchResults} role="tree" aria-label={search.results}>
         {result.matches.map((match) => {
           const selected = match.row.id === currentSessionId
           const status = statusOf(match)
@@ -256,35 +260,35 @@ export function SearchResults({
             <button
               key={match.row.id}
               type="button"
-              className={`wg-search-result${selected ? ' wg-search-result-selected' : ''}`}
+              className={clsx(searchStyles.searchResult, selected && searchStyles.searchResultSelected)}
               role="treeitem"
               aria-selected={selected}
               onClick={() => onOpen(match)}
             >
-              <span className="wg-search-result-heading">
+              <span className={searchStyles.searchResultHeading}>
                 {/* 状态位与常规会话行同一套：空闲时留空占位，标题的左缘因此
                     与列表里的行对齐 */}
                 {status === undefined ? (
-                  <span className="wg-slot" />
+                  <span className={rowsStyles.slot} />
                 ) : (
-                  <span className="wg-slot" role="img" aria-label={status.label}>
+                  <span className={rowsStyles.slot} role="img" aria-label={status.label}>
                     <StateDot state={status.state} />
                   </span>
                 )}
-                <span className="wg-search-result-title">{match.row.title}</span>
+                <span className={searchStyles.searchResultTitle}>{match.row.title}</span>
               </span>
               {/* 路径是一个整体：两段着色包在同一个元素里，靠外层那格 gap 隔开的是
                   「路径」与（本包没有的）摘录，绝不会落到这两段之间 */}
-              <span className="wg-search-result-meta">
-                <span className="wg-search-result-path">
+              <span className={searchStyles.searchResultMeta}>
+                <span className={searchStyles.searchResultPath}>
                   {path.ungrouped === undefined ? null : (
-                    <span className="wg-search-result-workspace">{path.ungrouped}</span>
+                    <span className={searchStyles.searchResultWorkspace}>{path.ungrouped}</span>
                   )}
                   {path.workspace === undefined ? null : (
-                    <span className="wg-search-result-workspace">{path.workspace}</span>
+                    <span className={searchStyles.searchResultWorkspace}>{path.workspace}</span>
                   )}
                   {path.group === undefined ? null : (
-                    <span className="wg-search-result-group">{`/${path.group}`}</span>
+                    <span className={searchStyles.searchResultGroup}>{`/${path.group}`}</span>
                   )}
                 </span>
               </span>
@@ -293,10 +297,10 @@ export function SearchResults({
         })}
       </div>
       {result.matches.length === 0 ? (
-        <div className="wg-empty">{search.noMatches}</div>
+        <div className={rowsStyles.empty}>{search.noMatches}</div>
       ) : null}
       {result.hasMore ? (
-        <div className="wg-search-status">{search.truncated(limit)}</div>
+        <div className={searchStyles.searchStatus}>{search.truncated(limit)}</div>
       ) : null}
     </div>
   )

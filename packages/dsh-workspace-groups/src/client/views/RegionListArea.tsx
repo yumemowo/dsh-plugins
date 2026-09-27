@@ -33,6 +33,9 @@ import { SessionRowView } from './SessionRowView.tsx'
 import { VirtualWorkspaceSection } from './VirtualWorkspaceSection.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
 import { WorkspaceSection } from './WorkspaceSection.tsx'
+import regionStyles from './WorkspaceGroupsRegion.module.css'
+import rowsStyles from './components/rows.module.css'
+import clsx from 'clsx'
 
 /**
  * 会话行工厂消费的那两格文案
@@ -167,11 +170,11 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
   if (props.viewMode === 'flat') {
     return (
       /* 平铺：全部可见会话在同一条列表里，与官方「单列表」（groupBy: 'flat'）一致 */
-      <div className="wg-list wg-panel">
-        <div className="wg-flat-list">
+      <div className={clsx(regionStyles.list, regionStyles.panel)}>
+        <div className={rowsStyles.flatList}>
           {props.flatRows.map((row) => sessionRowElement(row, session, rowLabels, undefined, true))}
         </div>
-        {props.flatRows.length === 0 ? <div className="wg-empty">{labels.empty}</div> : null}
+        {props.flatRows.length === 0 ? <div className={rowsStyles.empty}>{labels.empty}</div> : null}
         <RegionNotes nested={scope.snapshot.nested} />
       </div>
     )
@@ -179,7 +182,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
 
   return (
     /* 按工作区：工作区分组段 + 未归组工作区 + 末尾的「未分组」桶 */
-    <div className="wg-list wg-panel">
+    <div className={clsx(regionStyles.list, regionStyles.panel)}>
       {/* 工作区分组段排在前面，未归组的工作区平铺在其后、不带区段头
           没有建过分组时 rootLayout.groups 为空、全部工作区都在 loose 里
           这一层因此不改变任何行的位置 */}
@@ -204,7 +207,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
         * 空则整段不渲染
         * 聚焦时整段隐藏：这些会话不属于任何一个工作区，聚焦到某一片内容时与它们无关 */}
       {props.stray.length === 0 || scope.layout.focused ? null : (
-        <section className="wg-workspace">
+        <section className={rowsStyles.workspace}>
           <WorkspaceRow
             title={labels.ungrouped}
             collapsed={props.ungroupedCollapsed}
@@ -215,10 +218,10 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
             onToggle={props.onToggleUngrouped}
           />
           <CollapsibleBody open={!props.ungroupedCollapsed}>
-            <div className="wg-workspace-body">
+            <div className={rowsStyles.workspaceBody}>
               {/* 这些会话不属于任何工作区，没有分组可归，因此菜单里只有官方三项（归组项无处落）
                 * 宿主未提供官方服务时菜单会是空的，那时直接渲染无菜单的行，不留点不动的省略号 */}
-              <div className="wg-sessions">
+              <div className={rowsStyles.sessions}>
                 {props.stray.map((row) => ungroupedRowElement(row, session, rowLabels))}
               </div>
             </div>
@@ -511,11 +514,11 @@ function RegionNotes({ nested }: { nested: boolean }): ReactElement {
   return (
     <>
       {nested ? null : (
-        <div className="wg-note wg-note-nested" role="status">
+        <div className={clsx(rowsStyles.note, rowsStyles.noteNested)} role="status">
           {`${labels.nested.disabledNote} ${labels.nested.reEnableHint}`}
         </div>
       )}
-      <div className="wg-note">{labels.unimplemented}</div>
+      <div className={rowsStyles.note}>{labels.unimplemented}</div>
     </>
   )
 }

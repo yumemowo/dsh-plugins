@@ -64,6 +64,7 @@ README 只讲本包是什么、怎么用。设计论证、对齐依据与踩过�
 | [与官方实现的复用关系](docs/official-reuse.md) | 插槽接替规则、目录选择器复用官方的洞、官方原语与语言包的借用 |
 | [交互细节与官方对齐依据](docs/ui-details.md) | 行菜单 / 右键菜单 / 命名 / 时间 / 状态点 / 悬停卡片 / 搜索 / 添加工作区 / 工作区分组 / 工作区选择器 / 展示方式 |
 | [布局与样式对齐](docs/layout-and-styling.md) | 尺寸、留白、色阶与层级缩进的取值来源 |
+| [组件样式的模块划分](docs/component-styles.md) | 样式为什么按这条边界拆成 10 张表、类名哈希的硬约束、构建与测试的接法 |
 | [折叠动效](docs/collapse-motion.md) | 折叠轨道、两段式展开、节奏参数、显隐为何必须 fail-open 与嵌套行为 |
 | [渲染性能与行级缓存](docs/render-performance.md) | 行级 memo 要怎样才能命中、推导放在哪一层的取舍（含实测数据） |
 | [自绘图标](docs/custom-icons.md) | 工作区分组两个字形的构图依据，以及 0.1.7-rc.1 起改用官方图标的几处 |
@@ -108,7 +109,8 @@ src/client/
 ├── runtime.ts                  primitives 值导入的唯一出口（external）
 ├── icons.tsx                   自绘图标（官方没有的字形；规范见 [自绘图标](docs/custom-icons.md)）
 ├── menus.tsx                   菜单条目构造（工作区 / 分组 / 工作区分组行内菜单、右键菜单补全）
-├── styles.ts                   本包样式表
+├── menus.module.css            菜单条目样式（文字 + 行尾箭头）
+├── css-modules.d.ts            `.module.css` 的类名声明（由 scripts/gen-css-types.mjs 生成）
 ├── data/                       无 React 依赖的纯逻辑
 │   ├── types.ts                SessionRow / GroupSection / WorkspaceLayout / RootLayout / 草稿类型
 │   ├── layout.ts               分组元数据 → 渲染布局（会话那一层与根节点那一层）
@@ -142,16 +144,25 @@ src/client/
     ├── SessionRowView.tsx          会话行外壳（状态位列、标题、时间、操作位、悬停卡片）
     ├── SessionRowMenu.tsx          带会话操作菜单的会话行
     ├── WorkspaceRail.tsx           窄栏展开入口
+    ├── header.module.css           区域头部样式（宽栏两行标题 / 入口组 / 窄栏）
+    ├── SearchControl.module.css    搜索入口、输入框与结果列表样式
+    ├── WorkspacePickerMenu.module.css  工作区下拉面板样式
+    ├── ViewOptionsMenu.module.css  视图选项面板样式
+    ├── WorkspaceGroupsRegion.module.css  区域根、列表与 tab 外壳样式
+    ├── WorkspaceRail.module.css    窄栏入口样式
     └── components/                 无状态、无特定业务状态的 tsx
         ├── CollapsibleBody.tsx     折叠体（撑开/收回/行逐个淡入）
         ├── HoverCards.tsx          悬停卡片的正文（工作区那张与会话那张）
+        ├── HoverCards.module.css   悬停卡片正文样式
+        ├── rows.module.css         行结构共享样式（工作区/分组/会话/菜单条目行共用的一套）
         ├── RowContextMenu.tsx      行右键菜单（指针定位、与 `...` 菜单共用条目与分派）
         ├── IconButton.tsx          16px 行内图标按钮
         ├── rowKeyboard.ts          Enter/Space 行激活（忽略行内按钮冒泡）
         └── dialogs/
             ├── NameDialog.tsx      建组 / 改名 / 重命名工作区共用的单行输入框
             ├── DeleteDialog.tsx    破坏性操作确认框
-            └── ListDialog.tsx      带名单的确认框（关闭嵌套、放进父分组）
+            ├── ListDialog.tsx      带名单的确认框（关闭嵌套、放进父分组）
+            └── dialogs.module.css  三个对话框共用的样式
 ```
 
 状态的归属只有一处：折叠态（工作区 / 会话分组 / 工作区分组三份）、搜索状态（查询 / 展开 / 聚焦时机 / 揭示标记）、两张面板的开合都收在同文件内的 `useRegionUiState`，由主组件持有并把状态与读写入口向下传。八个互斥浮层（四个草稿框、四个确认框）收在一个 `RegionOverlay` 可辨识联合里，因此「任意时刻至多开一个」由类型保证，而不是靠 `Modal` 挡住第二个入口。菜单开合留在持有行组件内（行内 `...` 菜单与右键菜单各一份，都由 `useRowContextMenu` 与行自己的 `useState` 持有），行的外观组件保持无状态。搜索状态之所以不留在 header 内部：窄栏入口要触发宽栏输入框的聚焦，这一跨形态的联动需要一个共同宿主；选择器的开合同理——面板要读菜单的三个分区，而那些分区由区域组件从快照算出来。
@@ -177,6 +188,22 @@ src/client/
 | `lib/client.js` | 浏览器半边，包成 `window.__ModuleLoader__.load({ id, factory })` |
 
 客户端 bundle 由 `scripts/build-client.mjs` 用 esbuild 打出，React 等基线模块从工厂的 `require` 解析而不打进产物。`lib/client.js` 必须存在，否则 Web 客户端启动时会直接报缺产物。
+
+## 组件样式
+
+样式按官方 [Web 样式参考](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/web-styling.zh.md) 的规定走 CSS Modules：每张 `.module.css` 与它的组件放在一起，构建期编译成「类名映射 + 注入 `<style data-plugin-css=…>`」，样式随组件 import 一起生效，卸载时由客户端模块系统按 `data-plugin` 记账移除。
+
+```tsx
+import styles from './components/rows.module.css'
+
+<div className={clsx(styles.row, selected && styles.rowSelected)} />
+```
+
+命名：文件只 import 一个样式表时叫 `styles`，import 多个时各按来源加 `Styles` 后缀。类名与官方一致用 camelCase 且不带包前缀（`.rowSelected`）；`--wg-*` 自定义属性与 `data-wg-*` 标记保留前缀，因为它们不受 CSS Modules 哈希保护。**行结构共享样式在 `views/components/rows.module.css`**：工作区行、会话分组行、工作区分组行与菜单条目行共用同一套行语义，因此由那 13 个组件共同 import 同一个 module。
+
+`src/client/css-modules.d.ts`（由 `scripts/gen-css-types.mjs` 生成）逐条列出类名，类名写错会在编译期报出来。
+
+模块划分的依据、哈希带来的硬约束，以及构建与测试的接法见 [组件样式的模块划分](docs/component-styles.md)。
 
 ## 开发
 

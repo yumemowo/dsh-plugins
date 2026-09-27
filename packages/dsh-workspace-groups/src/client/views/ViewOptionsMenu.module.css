@@ -1,0 +1,105 @@
+/* 视图选项面板，header 里那个按钮打开的自绘浮层
+   与下拉菜单面板同一套外观（底色取 --dsw-specific-menu，描边、投影与背面模糊取官方菜单面板那一档）
+   底下就是会话列表，因此这几个 token 名写错时面板会变透明，而界面上不会有任何报错
+   test/styles.test.ts 直接断言这几个名字 */
+.viewMenu {
+  box-sizing: border-box;
+  position: fixed;
+  z-index: 1100;
+  min-width: 218px;
+  padding: 4px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-3));
+  /* 底色带 alpha，背面模糊必须跟着给，否则后面的会话清晰地穿过来 */
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  /* 投影里那圈描边跟着面板自己的圆角走，因此在这里重设一次 */
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  border-radius: 20px;
+  box-shadow: var(--dsw-elevation-prominent);
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* 面板里的一个开关条目，图标 + 设置名 + 官方的 Switch 原语
+   整行不可点，只有开关本身可交互（行若也做成按钮，一条会读出两个控件）
+   因此这里没有 cursor 与 hover 高亮，那两样都在承诺「点这一行会有效果」 */
+.viewOption {
+  box-sizing: border-box;
+  min-height: 34px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 分组标题，官方菜单的 label 条目同一角色，说明下面这一组选的是哪件事
+   字号与官方那一条同档（比条目小一档、tertiary 色阶），它不可点也不是停点 */
+.viewGroupLabel {
+  padding: 3px 10px 5px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+/* 与下面那条开关行相反，这一行整行可点，因此带指针与悬停底色 */
+.viewOptionRow {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.viewOptionRow:hover { background: var(--dsw-alias-interactive-bg-hover); }
+
+/* 选中态由行尾那个勾承担，行本身不再多加一层底色，与官方 selection: 'check' 同一取舍
+   焦点态也走同一条底色，官方菜单条目就是这么写的（outline: none） */
+.viewOptionRow:focus-visible { background: var(--dsw-alias-interactive-bg-hover); outline: none; }
+
+.viewOptionCheck {
+  flex: none;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 图标列与开关行共用同一个位置与宽度，两组的行文字因此落在同一条竖线上 */
+.viewOptionIcon {
+  width: 16px;
+  height: 22px;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewOptionLabel {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 分隔线取官方菜单 separator 同一档（0.5px、border-l2），两侧各留 3px
+   与条目之间那条 gap: 3px 同一节奏，四边缩进则与条目的内边距对齐 */
+.viewSeparator {
+  flex: none;
+  height: 0.5px;
+  margin: 3px 8px;
+  background: var(--dsw-alias-border-l2);
+}
+
+/* 开关排在行尾，不被设置名挤动 */
+.viewOptionSwitch { flex: none; }

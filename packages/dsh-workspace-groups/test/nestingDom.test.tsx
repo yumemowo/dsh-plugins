@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client'
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
-import { CSS } from '../src/client/styles.ts'
+import { readAllCss } from './readCss.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
 import { viewModeProps, viewModeStoreStub, storeViewModeProps } from './viewMode-stub.ts'
@@ -178,17 +178,17 @@ async function mount(
  * 污染后续用例的全局查询。每个用例收尾后统一清一次
  */
 afterEach(() => {
-  for (const node of Array.from(document.body.querySelectorAll('.wg-view-menu, [role="dialog"]'))) {
+  for (const node of Array.from(document.body.querySelectorAll('.viewMenu, [role="dialog"]'))) {
     node.remove()
   }
 })
 
 /** 取每个工作区块的标题与它下发的深度 */
 function sections(container: HTMLElement): { title: string; depth: string }[] {
-  return Array.from(container.querySelectorAll('.wg-workspace')).map((section) => {
+  return Array.from(container.querySelectorAll('.workspace')).map((section) => {
     const element = section as HTMLElement
     return {
-      title: section.querySelector('.wg-workspace-title')?.textContent ?? '',
+      title: section.querySelector('.workspaceTitle')?.textContent ?? '',
       depth: element.style.getPropertyValue('--wg-depth'),
     }
   })
@@ -207,11 +207,11 @@ describe('nested sub-workspaces in a real DOM', () => {
       { title: 'W4', depth: '0' },
     ])
     // 层级真的嵌在文档里：W2 在 W1 的折叠体内
-    const w1 = Array.from(container.querySelectorAll('.wg-workspace')).find(
-      (section) => section.querySelector('.wg-workspace-title')?.textContent === 'W1',
+    const w1 = Array.from(container.querySelectorAll('.workspace')).find(
+      (section) => section.querySelector('.workspaceTitle')?.textContent === 'W1',
     )
-    const w2 = w1?.querySelector('.wg-workspace-body .wg-nest > .wg-workspace')
-    expect(w2?.querySelector('.wg-workspace-title')?.textContent).toBe('W2')
+    const w2 = w1?.querySelector('.workspaceBody .nest > .workspace')
+    expect(w2?.querySelector('.workspaceTitle')?.textContent).toBe('W2')
 
     await act(async () => root.unmount())
   })
@@ -253,12 +253,12 @@ describe('nested sub-workspaces in a real DOM', () => {
       { title: 'dsh_plugins', depth: '1' },
       { title: 'dsh-workspace-groups', depth: '2' },
     ])
-    const repo = Array.from(container.querySelectorAll('.wg-workspace')).find(
-      (section) => section.querySelector('.wg-workspace-title')?.textContent === 'dsh_plugins',
+    const repo = Array.from(container.querySelectorAll('.workspace')).find(
+      (section) => section.querySelector('.workspaceTitle')?.textContent === 'dsh_plugins',
     )
     // 层级真的嵌在文档里，而不只是深度数值不同
     expect(
-      repo?.querySelector('.wg-workspace-body .wg-nest > .wg-workspace .wg-workspace-title')
+      repo?.querySelector('.workspaceBody .nest > .workspace .workspaceTitle')
         ?.textContent,
     ).toBe('dsh-workspace-groups')
 
@@ -271,19 +271,19 @@ describe('nested sub-workspaces in a real DOM', () => {
     const { container, root } = await mount()
 
     // W3 是最深的一层（/repo/a/b），它既没有会话也没有子工作区，因此由它显示空态
-    const empty = container.querySelector('.wg-workspace-body > .wg-empty')
+    const empty = container.querySelector('.workspaceBody > .empty')
     expect(empty?.textContent).toBe('暂无会话')
     // 空态属于它自己那一层，而不是跑回根节点那一列
-    const owner = empty?.closest('.wg-workspace')
-    expect(owner?.querySelector('.wg-workspace-title')?.textContent).toBe('W3')
+    const owner = empty?.closest('.workspace')
+    expect(owner?.querySelector('.workspaceTitle')?.textContent).toBe('W3')
     expect(owner?.getAttribute('style')).toContain('--wg-depth: 2')
     // 样式表里必须有一条按结构写的规则给它换算左边距，缺了它那 16px 内边距会盖住
     // 刚才那条对齐，空态停在根节点那一列而不会有任何报错
-    const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '')
+    const css = readAllCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rule = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((match) =>
-      (match[1] ?? '').includes('.wg-workspace-body > .wg-empty'),
+      (match[1] ?? '').includes('.workspaceBody > .empty'),
     )
-    expect(rule, 'no .wg-workspace-body > .wg-empty rule in the stylesheet').toBeDefined()
+    expect(rule, 'no .workspaceBody > .empty rule in the stylesheet').toBeDefined()
     expect(rule?.[2] ?? '').toContain('var(--wg-depth')
 
     await act(async () => root.unmount())
@@ -328,11 +328,11 @@ describe('nested sub-workspaces in a real DOM', () => {
     })
 
     // 打开子工作区那一行的 `...` 菜单
-    const pkg = Array.from(container.querySelectorAll('.wg-workspace')).find(
-      (section) => section.querySelector('.wg-workspace-title')?.textContent === 'dsh-workspace-groups',
+    const pkg = Array.from(container.querySelectorAll('.workspace')).find(
+      (section) => section.querySelector('.workspaceTitle')?.textContent === 'dsh-workspace-groups',
     )
     await act(async () => {
-      ;(pkg?.querySelector('.wg-row-action-slot button') as HTMLButtonElement | undefined)?.click()
+      ;(pkg?.querySelector('.rowActionSlot button') as HTMLButtonElement | undefined)?.click()
     })
 
     // 点一级项「移动到分组…」，再点它子菜单里那个分组
@@ -350,11 +350,11 @@ describe('nested sub-workspaces in a real DOM', () => {
     // 归属真的写下，它自己没有分组，父工作区的分组是 gm
     expect(writes).toEqual([['pkg', 'repo', 'gm']])
     // 宿主回的快照被写进本地状态，子工作区因此渲染在父体内那个分组里
-    const group = Array.from(container.querySelectorAll('.wg-group')).find(
-      (section) => section.querySelector('.wg-group-label')?.textContent === 'better-workspace',
+    const group = Array.from(container.querySelectorAll('.group')).find(
+      (section) => section.querySelector('.groupLabel')?.textContent === 'better-workspace',
     )
     expect(
-      group?.querySelector('.wg-nest .wg-workspace-title')?.textContent,
+      group?.querySelector('.nest .workspaceTitle')?.textContent,
     ).toBe('dsh-workspace-groups')
 
     await act(async () => root.unmount())
@@ -365,12 +365,12 @@ describe('nested sub-workspaces in a real DOM', () => {
 
     // 父体内分三段：子工作区 → 会话分组 → 平铺会话
     // 这里没有会话分组，因此是「子工作区在前、会话行在后」
-    const body = container.querySelector('.wg-workspace-body')
+    const body = container.querySelector('.workspaceBody')
     const order = Array.from(body?.children ?? []).map((child) => child.className)
-    expect(order[0]).toBe('wg-nest')
-    expect(order[1]).toBe('wg-sessions')
-    expect(body?.querySelector('.wg-nest .wg-workspace-title')?.textContent).toBe('W2')
-    expect(body?.querySelector('.wg-sessions .wg-row-title')?.textContent).toBe('修复登录超时')
+    expect(order[0]).toBe('nest')
+    expect(order[1]).toBe('sessions')
+    expect(body?.querySelector('.nest .workspaceTitle')?.textContent).toBe('W2')
+    expect(body?.querySelector('.sessions .rowTitle')?.textContent).toBe('修复登录超时')
 
     await act(async () => root.unmount())
   })
@@ -380,13 +380,13 @@ describe('nested sub-workspaces in a real DOM', () => {
     // 这时会话那一段要加一个小标题，否则读不出下面那几行是会话
     const { container, root } = await mount()
 
-    const body = container.querySelector('.wg-workspace-body')
-    expect(body?.querySelector('.wg-nest')).not.toBeNull()
-    expect(body?.querySelector('.wg-sessions-title')?.textContent).toBe('会话')
+    const body = container.querySelector('.workspaceBody')
+    expect(body?.querySelector('.nest')).not.toBeNull()
+    expect(body?.querySelector('.sessionsTitle')?.textContent).toBe('会话')
     // 标题排在会话行之前，不插进它们中间
-    const run = body?.querySelector('.wg-sessions')
-    expect(run?.firstElementChild?.className).toBe('wg-sessions-title')
-    expect(run?.querySelector('.wg-row-title')?.textContent).toBe('修复登录超时')
+    const run = body?.querySelector('.sessions')
+    expect(run?.firstElementChild?.className).toBe('sessionsTitle')
+    expect(run?.querySelector('.rowTitle')?.textContent).toBe('修复登录超时')
 
     await act(async () => root.unmount())
   })
@@ -398,11 +398,11 @@ describe('nested sub-workspaces in a real DOM', () => {
       loadGroups: async () => snapshot({ nested: false }),
     })
 
-    const body = container.querySelector('.wg-workspace-body')
-    expect(body?.querySelector('.wg-sessions')).not.toBeNull()
-    expect(body?.querySelector('.wg-nest')).toBeNull()
-    expect(body?.querySelector('.wg-group')).toBeNull()
-    expect(body?.querySelector('.wg-sessions-title')).toBeNull()
+    const body = container.querySelector('.workspaceBody')
+    expect(body?.querySelector('.sessions')).not.toBeNull()
+    expect(body?.querySelector('.nest')).toBeNull()
+    expect(body?.querySelector('.group')).toBeNull()
+    expect(body?.querySelector('.sessionsTitle')).toBeNull()
 
     await act(async () => root.unmount())
   })
@@ -418,9 +418,9 @@ describe('nested sub-workspaces in a real DOM', () => {
         }),
     })
 
-    const body = container.querySelector('.wg-workspace-body')
-    expect(body?.querySelector('.wg-group')).not.toBeNull()
-    expect(body?.querySelector('.wg-sessions-title')?.textContent).toBe('会话')
+    const body = container.querySelector('.workspaceBody')
+    expect(body?.querySelector('.group')).not.toBeNull()
+    expect(body?.querySelector('.sessionsTitle')?.textContent).toBe('会话')
 
     await act(async () => root.unmount())
   })
@@ -435,9 +435,9 @@ describe('nested sub-workspaces in a real DOM', () => {
         }),
     })
 
-    const groupBody = container.querySelector('.wg-group-body')
-    expect(groupBody?.querySelector('.wg-nest')).not.toBeNull()
-    expect(groupBody?.querySelector('.wg-sessions-title')?.textContent).toBe('会话')
+    const groupBody = container.querySelector('.groupBody')
+    expect(groupBody?.querySelector('.nest')).not.toBeNull()
+    expect(groupBody?.querySelector('.sessionsTitle')?.textContent).toBe('会话')
 
     await act(async () => root.unmount())
   })
@@ -449,9 +449,9 @@ describe('nested sub-workspaces in a real DOM', () => {
         snapshot({ byWorkspace: { w1: [{ id: 'g1', name: '前端', sessionIds: ['a'] }] } }),
     })
 
-    const groupBody = container.querySelector('.wg-group-body')
-    expect(groupBody?.querySelector('.wg-sessions')).not.toBeNull()
-    expect(groupBody?.querySelector('.wg-sessions-title')).toBeNull()
+    const groupBody = container.querySelector('.groupBody')
+    expect(groupBody?.querySelector('.sessions')).not.toBeNull()
+    expect(groupBody?.querySelector('.sessionsTitle')).toBeNull()
 
     await act(async () => root.unmount())
   })
@@ -466,20 +466,20 @@ describe('nested sub-workspaces in a real DOM', () => {
         }),
     })
 
-    const groupBody = container.querySelector('.wg-group-body')
-    expect(groupBody?.querySelector('.wg-workspace-title')?.textContent).toBe('W2')
+    const groupBody = container.querySelector('.groupBody')
+    expect(groupBody?.querySelector('.workspaceTitle')?.textContent).toBe('W2')
     // 未归组的会话仍在组外那一段
-    expect(container.querySelector('.wg-workspace-body > .wg-sessions')).not.toBeNull()
+    expect(container.querySelector('.workspaceBody > .sessions')).not.toBeNull()
     // 根节点上不再出现 W2
     expect(
-      Array.from(container.querySelectorAll('.wg-workspace-head')).length,
+      Array.from(container.querySelectorAll('.workspaceHead')).length,
     ).toBe(4)
 
     await act(async () => root.unmount())
   })
 
   it('nests a workspace placed in a group under that group body, one level past its head', async () => {
-    // 放进分组的子工作区与同组的会话行同处 .wg-group-body，因此两者缩进同档
+    // 放进分组的子工作区与同组的会话行同处 .groupBody，因此两者缩进同档
     // 少了这一层包裹，它会与分组头停在同一个缩进上，读起来像分组的兄弟而不是组内的内容
     const { container, root } = await mount({
       loadGroups: async () =>
@@ -489,16 +489,16 @@ describe('nested sub-workspaces in a real DOM', () => {
         }),
     })
 
-    const w2 = Array.from(container.querySelectorAll('.wg-workspace')).find(
-      (section) => section.querySelector('.wg-workspace-title')?.textContent === 'W2',
+    const w2 = Array.from(container.querySelectorAll('.workspace')).find(
+      (section) => section.querySelector('.workspaceTitle')?.textContent === 'W2',
     )
-    // 结构上确实落在那个分组的体内（.wg-group-body），因此会跟着它累加一格偏移
-    expect(w2?.closest('.wg-group-body')).not.toBeNull()
-    // 而按 cwd 嵌套、没被放进分组的那一个落在工作区体内的 .wg-nest 里
-    expect(w2?.closest('.wg-nest')).not.toBeNull()
+    // 结构上确实落在那个分组的体内（.groupBody），因此会跟着它累加一格偏移
+    expect(w2?.closest('.groupBody')).not.toBeNull()
+    // 而按 cwd 嵌套、没被放进分组的那一个落在工作区体内的 .nest 里
+    expect(w2?.closest('.nest')).not.toBeNull()
 
-    const w1Section = Array.from(container.querySelectorAll('.wg-workspace')).find(
-      (section) => section.querySelector('.wg-workspace-title')?.textContent === 'W1',
+    const w1Section = Array.from(container.querySelectorAll('.workspace')).find(
+      (section) => section.querySelector('.workspaceTitle')?.textContent === 'W1',
     )
     const depthOf = (workspace: Element | undefined): number =>
       Number((workspace as HTMLElement).style.getPropertyValue('--wg-depth'))
@@ -513,7 +513,7 @@ describe('nested sub-workspaces in a real DOM', () => {
 
     // CSS 里没有「容器偏移」那层变量：偏移靠自引用累加是循环引用，浏览器会整条丢掉
     // 层级因此全部由 JS 算好下发，样式表只把它当数值用
-    const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '')
+    const css = readAllCss().replace(/\/\*[\s\S]*?\*\//g, '')
     expect(css).not.toContain('--wg-depth-offset')
     expect(css).toMatch(/padding-left:\s*calc\(8px \+ 16px \* var\(--wg-depth, 0\)\)/)
 
@@ -538,7 +538,7 @@ describe('nested sub-workspaces in a real DOM', () => {
       { title: 'W4', depth: '0' },
     ])
     // 关掉时明确说一句，而不是让界面与「本来就没有这个特性」无从区分
-    expect(container.querySelector('.wg-note-nested')?.textContent).toContain('嵌套已关闭')
+    expect(container.querySelector('.noteNested')?.textContent).toContain('嵌套已关闭')
 
     await act(async () => root.unmount())
   })
@@ -549,7 +549,7 @@ describe('nested sub-workspaces in a real DOM', () => {
       loadGroups: async () => ({ byWorkspace: {} }) as never,
     })
 
-    expect(container.querySelector('.wg-root')).not.toBeNull()
+    expect(container.querySelector('.root')).not.toBeNull()
     expect(sections(container).length).toBeGreaterThan(0)
 
     await act(async () => root.unmount())
@@ -560,12 +560,12 @@ describe('nested sub-workspaces in a real DOM', () => {
 
     // 视图选项按钮不再是 disabled 占位
     const trigger = container.querySelector<HTMLButtonElement>(
-      '.wg-header-action[aria-label="视图选项"]',
+      '.headerAction[aria-label="视图选项"]',
     )
     expect(trigger?.disabled).toBe(false)
     await act(async () => trigger?.click())
 
-    const options = document.body.querySelectorAll('.wg-view-option')
+    const options = document.body.querySelectorAll('.viewOption')
     expect(options).toHaveLength(1)
     // 文案是设置名，不随开关状态变化，状态由控件自己的 aria-checked 表达
     expect(options[0]?.textContent).toContain('子工作区嵌套')
@@ -580,17 +580,17 @@ describe('nested sub-workspaces in a real DOM', () => {
 
     await act(async () => {
       container
-        .querySelector<HTMLButtonElement>('.wg-header-action[aria-label="视图选项"]')
+        .querySelector<HTMLButtonElement>('.headerAction[aria-label="视图选项"]')
         ?.click()
     })
 
     // 这一组的标题与两条可选行都在，标题说明它们选的是哪件事
-    expect(document.body.querySelector('.wg-view-group-label')?.textContent).toBe('展示方式')
+    expect(document.body.querySelector('.viewGroupLabel')?.textContent).toBe('展示方式')
     const rows = Array.from(
-      document.body.querySelectorAll<HTMLButtonElement>('.wg-view-option-row'),
+      document.body.querySelectorAll<HTMLButtonElement>('.viewOptionRow'),
     )
     // 图标的替身把字形名渲染成文本，因此文案取自行内那一格，不看整行的 textContent
-    expect(rows.map((element) => element.querySelector('.wg-view-option-label')?.textContent)).toEqual([
+    expect(rows.map((element) => element.querySelector('.viewOptionLabel')?.textContent)).toEqual([
       '按工作区',
       '平铺',
     ])
@@ -604,7 +604,7 @@ describe('nested sub-workspaces in a real DOM', () => {
     expect(rows[0]?.textContent).toContain('IconFolderCloseRegular')
     expect(rows[1]?.textContent).toContain('IconFlatListOutlineRegular')
     // 两组设置之间有一条分隔线
-    expect(document.body.querySelector('.wg-view-separator')).not.toBeNull()
+    expect(document.body.querySelector('.viewSeparator')).not.toBeNull()
 
     await act(async () => root.unmount())
   })
@@ -612,26 +612,26 @@ describe('nested sub-workspaces in a real DOM', () => {
   it('writes the picked display mode and re-renders the list as one flat column', async () => {
     const store = viewModeStoreStub()
     const { container, root } = await mount(storeViewModeProps(store))
-    const sectionsIn = (): number => container.querySelectorAll('.wg-workspace').length
+    const sectionsIn = (): number => container.querySelectorAll('.workspace').length
     expect(sectionsIn()).toBeGreaterThan(0)
-    expect(container.querySelector('.wg-flat-list')).toBeNull()
+    expect(container.querySelector('.flatList')).toBeNull()
 
     await act(async () => {
       container
-        .querySelector<HTMLButtonElement>('.wg-header-action[aria-label="视图选项"]')
+        .querySelector<HTMLButtonElement>('.headerAction[aria-label="视图选项"]')
         ?.click()
     })
     const flat = Array.from(
-      document.body.querySelectorAll<HTMLButtonElement>('.wg-view-option-row'),
-    ).find((element) => element.querySelector('.wg-view-option-label')?.textContent === '平铺')
+      document.body.querySelectorAll<HTMLButtonElement>('.viewOptionRow'),
+    ).find((element) => element.querySelector('.viewOptionLabel')?.textContent === '平铺')
     await act(async () => flat?.click())
 
     // 选中的方式真的写进了存储，界面也换成了那条平铺列表：工作区分组结构整个消失
     expect(store.getSnapshot().mode).toBe('flat')
-    expect(container.querySelector('.wg-flat-list')).not.toBeNull()
+    expect(container.querySelector('.flatList')).not.toBeNull()
     expect(sectionsIn()).toBe(0)
     // 会话仍在，只是不再按工作区分组
-    expect(container.querySelector('.wg-flat-list .wg-row-title')?.textContent).toBe(
+    expect(container.querySelector('.flatList .rowTitle')?.textContent).toBe(
       '修复登录超时',
     )
 
@@ -646,9 +646,9 @@ describe('nested sub-workspaces in a real DOM', () => {
     })
 
     // 聚焦在 w2 上，而 w2 名下没有会话，因此平铺列表是空的，w1 那条会话不再出现
-    expect(container.querySelector('.wg-flat-list')).not.toBeNull()
-    expect(container.querySelector('.wg-row-title')).toBeNull()
-    expect(container.querySelector('.wg-empty')?.textContent).toBe('暂无会话')
+    expect(container.querySelector('.flatList')).not.toBeNull()
+    expect(container.querySelector('.rowTitle')).toBeNull()
+    expect(container.querySelector('.empty')?.textContent).toBe('暂无会话')
 
     await act(async () => root.unmount())
   })
@@ -668,7 +668,7 @@ describe('nested sub-workspaces in a real DOM', () => {
     })
 
     const trigger = container.querySelector<HTMLButtonElement>(
-      '.wg-header-action[aria-label="视图选项"]',
+      '.headerAction[aria-label="视图选项"]',
     )
     await act(async () => trigger?.click())
     // 点的是开关本身，条目行不可点，否则一条里会有两个控件
@@ -741,7 +741,7 @@ describe('nested sub-workspaces in a real DOM', () => {
     })
 
     const trigger = container.querySelector<HTMLButtonElement>(
-      '.wg-header-action[aria-label="视图选项"]',
+      '.headerAction[aria-label="视图选项"]',
     )
     await act(async () => trigger?.click())
     await act(async () => {

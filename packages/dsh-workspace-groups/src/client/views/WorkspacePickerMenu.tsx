@@ -30,6 +30,9 @@ import { IconButton } from './components/IconButton.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import type { PickerEntry, PickerSections } from '../data/picker.ts'
 import { useLocale } from '../useLocale.ts'
+import pickerStyles from './WorkspacePickerMenu.module.css'
+import rowsStyles from './components/rows.module.css'
+import clsx from 'clsx'
 
 /** 面板与窗口边缘的最小距离，取官方 `Menu` 原语的同一个值 */
 const VIEWPORT_MARGIN = 12
@@ -75,7 +78,7 @@ export interface WorkspacePickerMenuProps {
  * 面板里的一行条目
  *
  * 结构与 `WorkspaceRow` 同形，行本身是 `role="button"` 的 div
- * 三枚 16px 操作按钮嵌在行内的操作位里（`.wg-row-actions`）
+ * 三枚 16px 操作按钮嵌在行内的操作位里（`.rowActions`）
  * 行的可点区不能做成与按钮并排的两个热区——那样行的可点范围会比看起来窄
  *
  * 行本体必须是 div 而不是 `<button>`，按钮不能嵌按钮，键盘激活因此由 `handleRowKeyDown` 承担
@@ -107,7 +110,7 @@ function PickerRow({
   const pinLabel = pinned ? picker.unpin(entry.label) : picker.pin(entry.label)
   return (
     <div
-      className="wg-row wg-picker-row"
+      className={clsx(rowsStyles.row, rowsStyles.pickerRow)}
       role="button"
       tabIndex={0}
       aria-current={focused ? 'true' : undefined}
@@ -116,14 +119,14 @@ function PickerRow({
       onClick={() => onSelect(entry.key)}
       onKeyDown={(event) => handleRowKeyDown(event, () => onSelect(entry.key))}
     >
-      <span className="wg-picker-icon">
+      <span className={pickerStyles.pickerIcon}>
         {entry.kind === 'virtual' ? <IconVirtualFolder16 /> : <IconFolderCloseRegular />}
       </span>
-      <span className="wg-picker-label">{entry.label}</span>
+      <span className={pickerStyles.pickerLabel}>{entry.label}</span>
       {/* 选中标记排在操作位之前：操作位是行尾那个只在该行悬停/聚焦时露出的格子
           标记若排在它之后就会被顶得左右移动 */}
-      {focused ? <IconCheckOutlineRegular className="wg-picker-check" /> : null}
-      <span className="wg-row-actions">
+      {focused ? <IconCheckOutlineRegular className={pickerStyles.pickerCheck} /> : null}
+      <span className={rowsStyles.rowActions}>
         <IconButton
           ariaLabel={picker.rename(entry.label)}
           icon={<IconEditOutlineRegular />}
@@ -163,21 +166,21 @@ function PickerGroup({
   children: ReactNode
 }): ReactElement {
   return (
-    <section className="wg-picker-section">
+    <section className={pickerStyles.pickerSection}>
       <button
         type="button"
-        className="wg-picker-section-head"
+        className={pickerStyles.pickerSectionHead}
         aria-expanded={expanded}
         onClick={onToggle}
       >
-        <span className="wg-picker-section-title">{title}</span>
+        <span className={pickerStyles.pickerSectionTitle}>{title}</span>
         <IconChevronDownOutlineRegular
-          className={`wg-picker-caret${expanded ? ' wg-picker-caret-open' : ''}`}
+          className={clsx(pickerStyles.pickerCaret, expanded && pickerStyles.pickerCaretOpen)}
         />
       </button>
       {/* 收起时整段不渲染，而不是留在文档里靠高度收拢：
           这一层没有折叠动画，内容留在文档里只会让键盘还能 Tab 进看不见的条目 */}
-      {expanded ? <div className="wg-picker-section-body">{children}</div> : null}
+      {expanded ? <div className={pickerStyles.pickerSectionBody}>{children}</div> : null}
     </section>
   )
 }
@@ -287,7 +290,7 @@ export function WorkspacePickerMenu({
       // 行尾的三枚操作按钮不参与方向键循环，否则按↓会逐枚停在按钮上
       const items = Array.from(
         panelRef.current?.querySelectorAll<HTMLElement>(
-          '.wg-picker-row, .wg-picker-reset',
+          `.${rowsStyles.pickerRow}, .${pickerStyles.pickerReset}`,
         ) ?? [],
       )
       if (items.length === 0) return
@@ -313,13 +316,13 @@ export function WorkspacePickerMenu({
 
   if (!open) return null
 
-  const recentCollapsed = collapsed['recent'] === true
-  const pinnedCollapsed = collapsed['pinned'] === true
+  const recentCollapsed = collapsed.recent === true
+  const pinnedCollapsed = collapsed.pinned === true
 
   return createPortal(
     <div
       ref={panelRef}
-      className="wg-picker-menu"
+      className={pickerStyles.pickerMenu}
       role="group"
       aria-label={picker.entry}
       // 首次渲染时还没量过，先藏起来，否则面板会先在窗口左上角露一帧再跳到落点
@@ -336,12 +339,12 @@ export function WorkspacePickerMenu({
         *
         * 它不是菜单条目而是一个动作（退出聚焦、回到全部），因此不带选中标记，也不带那三枚操作按钮：这里的「全部」没有可重命名或删除的对象 */}
       {focused === '' ? null : (
-        <div className="wg-picker-section">
-          <button type="button" className="wg-picker-reset" onClick={() => onSelect('')}>
-            <span className="wg-picker-icon">
+        <div className={pickerStyles.pickerSection}>
+          <button type="button" className={pickerStyles.pickerReset} onClick={() => onSelect('')}>
+            <span className={pickerStyles.pickerIcon}>
               <IconFolderCloseRegular />
             </span>
-            <span className="wg-picker-label">{picker.all}</span>
+            <span className={pickerStyles.pickerLabel}>{picker.all}</span>
           </button>
         </div>
       )}
@@ -388,8 +391,8 @@ export function WorkspacePickerMenu({
       {/* 「全部」是这一个菜单的主体，因此不做折叠、也不带标题
         * 它是没有标题时默认的那一栏，而上面两栏的标题正是因为要与它区分才需要
         * 分区之间的那条分隔线仍然画着，因此三栏的边界照旧读得出来 */}
-      <section className="wg-picker-section">
-        <div className="wg-picker-section-body">
+      <section className={pickerStyles.pickerSection}>
+        <div className={pickerStyles.pickerSectionBody}>
           {sections.all.map((entry) => (
             <PickerRow
               key={entry.key}

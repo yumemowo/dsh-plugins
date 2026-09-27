@@ -38,8 +38,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-client.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "build": "node scripts/gen-css-types.mjs && tsc -p tsconfig.json && node scripts/build-client.mjs",
+    "typecheck": "node scripts/gen-css-types.mjs && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\""
@@ -70,7 +70,9 @@
     "@deepseek-ai/dsh-storage-domain": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
+    "clsx": "catalog:",
     "esbuild": "catalog:",
+    "lightningcss": "catalog:",
     "react": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",

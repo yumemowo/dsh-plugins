@@ -20,6 +20,7 @@ import { hostInfoSource } from './hostInfo.ts'
 import { WorkspaceGroupsRegion } from './views/WorkspaceGroupsRegion.tsx'
 import { IconWorkspaceTreeOutlineRegular } from './runtime.ts'
 import type { ViewModeStoreHandle } from './store/viewMode.ts'
+import styles from './views/WorkspaceGroupsRegion.module.css'
 
 /** 注册进原生右侧栏的实现 id，同时是 tab 体座位的键 */
 export const COMPARE_TAB_ID = '@your-scope/dsh-workspace-groups/compare'
@@ -39,7 +40,7 @@ type RegionProps = Parameters<typeof WorkspaceGroupsRegion>[0]
  */
 function CompareTabBody(props: RegionProps): ReactElement {
   return (
-    <div className="wg-tab">
+    <div className={styles.tab}>
       <WorkspaceGroupsRegion {...props} />
     </div>
   )

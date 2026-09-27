@@ -1,11 +1,11 @@
 /**
  * 容器行行尾的操作位：`...` 管理菜单加可选的新建会话按钮
  *
- * 工作区行与分组行共用同一份布局与显隐语义（`.wg-row-actions` 的 12px 间距、`.wg-row-action` 的悬停显隐）
+ * 工作区行与分组行共用同一份布局与显隐语义（`.rowActions` 的 12px 间距、`.rowAction` 的悬停显隐）
  * 差异只在菜单条目与两个无障碍文案，因此收在这里而不是各写一遍
  *
- * 菜单开合状态由持有行的组件持有：行组件要给行加上 `wg-row-menu-open`
- * 该标记同时负责「菜单开着时锚点按钮不消失」（见 `styles.ts`）
+ * 菜单开合状态由持有行的组件持有：行组件要给行加上 `rowMenuOpen`
+ * 该标记同时负责「菜单开着时锚点按钮不消失」（见 `rows.module.css` 的 `.rowMenuOpen`）
  */
 import type { ReactElement } from 'react'
 import {
@@ -15,6 +15,8 @@ import {
 } from '../runtime.ts'
 import type { MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconButton } from './components/IconButton.tsx'
+import rowsStyles from './components/rows.module.css'
+import menusStyles from '../menus.module.css'
 
 export interface RowActionsProps {
   menuOpen: boolean
@@ -41,7 +43,7 @@ export function RowActions({
   if (menuItems === undefined && create === undefined) return null
 
   return (
-    <span className="wg-row-actions">
+    <span className={rowsStyles.rowActions}>
       {menuItems === undefined ? null : (
         <Menu
           open={menuOpen}
@@ -52,12 +54,12 @@ export function RowActions({
           portal
           closeOnPointerLeave
           // 面板被 portal 出去后不在本包的 DOM 子树里，官方为此留了这一个样式钩子
-          // 本包借它修二级面板的底色（见 styles.ts 的 .wg-menu-list）
-          listClassName="wg-menu-list"
+          // 本包借它修二级面板的底色（见 `menus.module.css` 的 `.menuList`）
+          listClassName={menusStyles.menuList}
           anchor={
             <button
               type="button"
-              className="wg-row-action"
+              className={rowsStyles.rowAction}
               aria-label={actionsLabel}
               onClick={(event) => {
                 event.stopPropagation()

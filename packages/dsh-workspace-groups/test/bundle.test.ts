@@ -8,7 +8,9 @@
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { resolve } from 'node:path'
+import { transform } from 'lightningcss'
 
 /** 产物里的 require 请求，宿主从基线模块表解析 */
 const BASELINE = new Set([
@@ -142,6 +144,52 @@ describe('lib/client.js bundle', () => {
 
     // 这些名字已不在官方导出表里，产物里留一个就会在运行期解析成 undefined 并让整棵挂载失败
     expect(retired.filter((name) => source.includes(name))).toEqual([])
+  })
+
+  it('ships every compiled class both in the map and as a selector', () => {
+    const source = readFileSync(resolve(import.meta.dirname, '../lib/client.js'), 'utf8')
+
+    // 组件样式经 CSS Modules 编译：类名带上 [hash]_ 前缀，样式由 import 时注入
+    // 用与构建脚本同样的参数把样式表重编译一遍，逐条确认产物里：
+    //   1) 有「局部名 → 哈希名」的映射，组件才取得到类名
+    //   2) 有该哈希名的选择器，样式才真的落到了页面上
+    // 少任何一半都只表现为「界面少了样式」，不会报错
+    const files = execSync("find src/client -name '*.module.css'").toString().trim().split('\n').sort()
+    const missingMap: string[] = []
+    const missingSelector: string[] = []
+    /** keyframes 名不是类名，选择器里不会出现，只在 animation 里引用 */
+    const keyframes = new Set<string>()
+    for (const file of files) {
+      const { exports } = transform({
+        filename: resolve(import.meta.dirname, '..', file),
+        code: readFileSync(resolve(import.meta.dirname, '..', file)),
+        cssModules: { pattern: '[hash]_[local]' },
+        minify: true,
+      })
+      const css = readFileSync(resolve(import.meta.dirname, '..', file), 'utf8')
+      for (const [local, exp] of Object.entries(exports ?? {})) {
+        const name = (exp as { name: string }).name
+        if (!source.includes(`${local}:"${name}"`)) missingMap.push(`${local}=${name}`)
+        // 尾部要卡标识符边界：`row` 是 `rowSelected` 哈希的前缀，宽松匹配会漏判
+        if (!source.includes(`.${name}`) || !new RegExp(`\\.${name}(?![\\w-])`).test(source)) {
+          if (css.includes(`@keyframes ${local}`)) keyframes.add(name)
+          else missingSelector.push(`${local}=${name}`)
+        }
+      }
+    }
+
+    expect(missingMap).toEqual([])
+    expect(missingSelector).toEqual([])
+    // 本包确实有一处 keyframes，否则上面的豁免等于白名单
+    expect(keyframes.size).toBe(1)
+
+    // 反向确认注入确实发生：每张样式表一个 data-plugin-css 标记
+    const tags = new Set(
+      [...source.matchAll(/"(@your-scope\/dsh-workspace-groups\/[^"]*\.module\.css)"/g)].map(
+        (m) => m[1],
+      ),
+    )
+    expect(tags.size).toBeGreaterThanOrEqual(10)
   })
 
   it('no longer references the third-party better-sidebar service', () => {

@@ -19,7 +19,7 @@ export function menuLabelText(label: unknown): string {
 /**
  * 取菜单项 label 里的行尾箭头元素
  *
- * 箭头按类名标记，因此这里找的是带 `wg-menu-arrow` 的那个元素——它同时守两件事：
+ * 箭头按类名标记，因此这里找的是带 `menuArrow` 的那个元素——它同时守两件事：
  * 箭头确实渲染进了 label，以及样式表的挂钩类名没被改名
  * @param label - 菜单项的 label
  * @returns 箭头元素，label 里没有箭头时返回 undefined
@@ -34,6 +34,6 @@ export function menuLabelArrow(label: unknown): { props: Record<string, unknown>
   }
   if (!React.isValidElement(label)) return undefined
   const el = label as React.ReactElement & { props: Record<string, unknown> }
-  if (el.props['className'] === 'wg-menu-arrow') return el
+  if (el.props['className'] === 'menuArrow') return el
   return menuLabelArrow(el.props['children'])
 }

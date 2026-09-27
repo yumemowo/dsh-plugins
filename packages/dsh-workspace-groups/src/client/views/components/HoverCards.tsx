@@ -14,6 +14,7 @@ import type { ReactElement } from 'react'
 import { StateDot } from '../../runtime.ts'
 import type { SessionStatus } from '../../data/status.ts'
 import { CARD_ATTRIBUTE } from '../../utils/flip.ts'
+import styles from './HoverCards.module.css'
 
 /**
  * 给外层那张卡片打标记
@@ -54,10 +55,10 @@ export function WorkspaceHoverContent({
   created,
 }: WorkspaceHoverContentProps): ReactElement {
   return (
-    <div className="wg-hover-content" ref={tagCard}>
-      <div className="wg-hover-title">{label}</div>
-      <div className="wg-hover-path">{path}</div>
-      <div className="wg-hover-time">{created}</div>
+    <div className={styles.hoverContent} ref={tagCard}>
+      <div className={styles.hoverTitle}>{label}</div>
+      <div className={styles.hoverPath}>{path}</div>
+      <div className={styles.hoverTime}>{created}</div>
     </div>
   )
 }
@@ -78,11 +79,11 @@ export function SessionHoverContent({
   statuses,
 }: SessionHoverContentProps): ReactElement {
   return (
-    <div className="wg-hover-content" ref={tagCard}>
-      <div className="wg-hover-title">{title}</div>
-      {time === undefined ? null : <div className="wg-hover-time">{time}</div>}
+    <div className={styles.hoverContent} ref={tagCard}>
+      <div className={styles.hoverTitle}>{title}</div>
+      {time === undefined ? null : <div className={styles.hoverTime}>{time}</div>}
       {statuses.map((status) => (
-        <div className="wg-hover-status" key={status.label}>
+        <div className={styles.hoverStatus} key={status.label}>
           <StateDot state={status.state} />
           <span>{status.label}</span>
         </div>

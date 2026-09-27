@@ -13,7 +13,7 @@
  * 衔接两段的是一段延迟：撑开那段等待（容器时长 × 起点比例）与逐个淡入的先后相加后一起写进元素的延迟
  * 等待走挂钟时间，主线程被长任务占住时只是晚一点淡入
  *
- * 透明只挂在「所在折叠体还没展开」这一条结构条件上（见 styles.ts），不透明是元素的自然状态
+ * 透明只挂在「所在折叠体还没展开」这一条结构条件上（见 `rows.module.css` 的 `.collapse`），不透明是元素的自然状态
  * 这里只写延迟、不写显隐，因此没有会过期的状态
  *
  * 淡入放在撑开之后还顺带解决了首帧问题：首次展开要付样式与布局的初始化代价
@@ -30,6 +30,8 @@ import {
   collapseMotionVars,
 } from '../../utils/collapseMotion.ts'
 import type { CollapseMotion } from '../../utils/collapseMotion.ts'
+import styles from './rows.module.css'
+import clsx from 'clsx'
 
 // 节奏参数与自定义属性名都定义在 utils/collapseMotion.ts（样式表要用同一份），这里转发给元素组件使用
 export { COLLAPSE_VARS, DEFAULT_COLLAPSE_MOTION, collapseMotionVars }
@@ -46,14 +48,14 @@ export interface StaggerTiming {
 /** 带此标记的元素参与逐个淡入，标记由元素组件打在自己根节点上 */
 const STAGGER_UNIT = '[data-wg-stagger]'
 
-/** 折叠体根节点的类名 */
-const BODY_CLASS = 'wg-collapse'
+/** 折叠体根节点的类名（编译后是哈希名，选择器必须由它拼） */
+const BODY_CLASS = styles.collapse
 
 /** 折叠体根节点的选择器 */
 const BODY_SELECTOR = `.${BODY_CLASS}`
 
 /** 仍收着的折叠体，落在它里面的元素本次展开不会露面 */
-const CLOSED_BODY = `${BODY_SELECTOR}:not(.wg-collapse-open)`
+const CLOSED_BODY = `${BODY_SELECTOR}:not(.${styles.collapseOpen})`
 
 /**
  * 祖先链上的节点
@@ -142,7 +144,7 @@ export function planStaggerUnits(root: StaggerRoot, timing: StaggerTiming, waitM
 export interface CollapsibleBodyProps {
   /** 展开态，收起时轨道收成 0 高 */
   open: boolean
-  /** 折叠体内容，通常是 `.wg-workspace-body` 或 `.wg-sessions` */
+  /** 折叠体内容，通常是 `.workspaceBody` 或 `.sessions` */
   children: ReactNode
   /**
    * 折叠动画的节奏，缺省用 {@link DEFAULT_COLLAPSE_MOTION}
@@ -185,8 +187,8 @@ export function CollapsibleBody({ open, children, motion }: CollapsibleBodyProps
   })
 
   return (
-    <div className={'wg-collapse' + (open ? ' wg-collapse-open' : '')} style={vars}>
-      <div className="wg-collapse-clip" ref={clip}>
+    <div className={clsx(styles.collapse, open && styles.collapseOpen)} style={vars}>
+      <div className={styles.collapseClip} ref={clip}>
         {children}
       </div>
     </div>
