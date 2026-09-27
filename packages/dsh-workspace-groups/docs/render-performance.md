@@ -24,7 +24,7 @@
 | `grouping` | 每次渲染新建，内含刚 `buildLayout` 出来的新 `sections` 数组 |
 | `status` | `sessionStatus()` 每次返回新对象 |
 | `official` | `officialActions()` 每次渲染返回新对象 |
-| `t` / `labels` | `regionLabels(t, tWorkspace, tSidebar)` 每次重建整张文案表 |
+| `t` / `labels` | 行作用域里的文案每次渲染都是新对象（`regionLabels(t, tWorkspace, tSidebar)` 重建整张文案表） |
 
 因此第一步不是加 `memo`，而是把身份稳定下来。
 
@@ -72,11 +72,14 @@ export function sameSessionStatus(a, b): boolean {
 | --- | --- | --- |
 | 官方动作对象 | 在 `index.ts` 里按服务缓存，`labels` 写成取值器 | 服务是单例，同一服务期间复用即可；`labels` 用 getter 才能既复用对象、又让切换语言后的下一次读取拿到新译文 |
 | 文案表 `labels` | `useMemo(() => regionLabels(t, tWorkspace, tSidebar), […])` | 缓存的是投影结果而不是译文；几个 `t` 都在调用时才读当前语言 |
+| 区域文案 `{ t, labels }` | 容器用一层 `useMemo` 合成 `RegionLocale` 交给 `RegionLocaleProvider` | 文案不再逐层传参，组件改从 `useLocale()` 取，Provider 的 value 因此成了唯一那格 prop |
 | 归组动作 | `useCallback(..., [apply, moveSession])` | 它会随归组上下文传到每一行 |
 | 行打开动作 | 传**未绑定**的 `openSession`，由行自己绑 id | 绑好的闭包每次渲染都是新引用 |
 | 归组上下文 | 动作传未绑定的版本，行自己在组件内绑 id | 同上；`onSelectGroup` 因此对所有行是同一个引用 |
 
 一个通用手法：把「传动作」换成「传动作 + 参数」。行级 `memo` 比对的是动作本身（稳定），参数在组件内部拼接，于是 `memo` 能命中。
+
+**Provider 的 value 必须 `useMemo`，不能写成行内对象字面量。** 文案改走 `useLocale()` 之后，组件接口里的 `t` / `labels` 两格消失，剩下 `RegionLocale` 的 value 一格，它的身份是否稳定直接决定行级比对成不成立。已用 real-React + jsdom 实测：value 身份稳定时，`React.memo` 包住的行组件在父组件重渲染时命中 0 次重渲染；value 每次新建时同样条件下是 2 次（两次父渲染各一次）。容器的两个渲染分支（宽栏与窄栏）都包同一层 Provider，因此窄栏那条分支也共用同一个 value。
 
 ## 推导放在哪一层
 

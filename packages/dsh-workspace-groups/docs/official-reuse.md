@@ -92,7 +92,7 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 | 交给组件 | 插槽注册项的 `store` 座位——渲染器绑出 `useStore` 选择器与已绑定的 `actions` |
 | 注册 | 生产形态挂在 `sidebar.workspaces`（root 作用域），对照 tab 挂在 `sidebar.right.pane.tab`（session 作用域） |
 
-**这两个座位的定义都写在源码树里**（`src/client/viewMode.ts` 的 `createViewModeStore`），但 `defineStore` 是值导入，因此打包脚本必须把 `@deepseek-ai/dsh-client-store` 标成 external 由宿主从基线模块表解析。漏标会让产物打进第二份引擎、出现第二个 store 实例。
+**这两个座位的定义都写在源码树里**（`src/client/store/viewMode.ts` 的 `createViewModeStore`），但 `defineStore` 是值导入，因此打包脚本必须把 `@deepseek-ai/dsh-client-store` 标成 external 由宿主从基线模块表解析。漏标会让产物打进第二份引擎、出现第二个 store 实例。
 
 **对照模式下必须共享同一个实例。** `sidebar.right.pane.tab` 是 session 作用域的座位，渲染器会按会话各调一次 `create`；直接用原句柄会让展示方式变成「每个会话各存一份」，切会话就变回「按工作区」。因此 `apply` 里建一次实例，用 `sharedViewModeStore` 把 `create` 收成恒返回它，两条注册路径读到的才是同一份设置、同一个持久化键。官方的视图状态存储也是这么做的（`{ ...viewHandle, create: () => viewInstance }`）。
 
@@ -133,7 +133,7 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 | 重命名分组对话框标题 | `renameGroup` | 本包自有 | 重命名分组 |
 | 重命名工作区分组对话框标题 | `renameVirtualWorkspace` | 本包自有 | 重命名工作区分组 |
 
-`RegionLabels` 因此暴露 `rename`（菜单项，三个容器行共用）、`renameWorkspace`、`renameGroup` 与 `renameVirtualWorkspace`（各自的对话框标题）四个字段。`groupActionLabels.rename`、工作区分组行的 `labels.rename` 与工作区行的 `labels.rename` 都取第一个；三处 `NameDialog` 的 `title` 取各自那个。
+`RegionLabels` 因此暴露 `rename`（菜单项，三个容器行共用）、`renameWorkspace`、`renameGroup` 与 `renameVirtualWorkspace`（各自的对话框标题）四个字段。三类容器行都取 `labels.rename`——它们各自用 `useLocale()` 取，不再经由派生的文案包；三处 `NameDialog` 的 `title` 取各自那个。
 
 顺带一个容易走错的点：`rename` 只在官方 `workspace` 命名空间里，**不在** `common` 里——`common` 收的是「确定 / 取消 / 复制 / 删除 / 编辑」这类跨功能标准词，其中并没有 `rename`。所以这一项必须走 `tw('rename')`；写成 `t('rename')` 会被 tsc 直接拒绝（本包自己的键域里没有它，`common` 也没兜住）。
 

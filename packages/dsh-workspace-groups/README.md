@@ -90,7 +90,7 @@ pnpm run build          # tsc（宿主）+ esbuild（浏览器 bundle）
 
 ## 客户端代码结构
 
-浏览器半边按「入口 / 契约 / 数据 / 渲染」分层，每个模块只做一件事；组件用 `.tsx` 写 JSX，纯逻辑留在 `.ts`（tsconfig 与 vitest 都已包含 `**/*.tsx`）。
+浏览器半边按「入口 / 契约 / 数据 / 状态 / 渲染」分层，每个模块只做一件事；组件用 `.tsx` 写 JSX，纯逻辑留在 `.ts`（tsconfig 与 vitest 都已包含 `**/*.tsx`）。`rootEntry.ts` 与 `pickerState.ts` 留在 `src/` 而不是 `src/client/`，因为宿主半边也要用同一份修剪与排序规则。
 
 ```
 src/client/
@@ -102,9 +102,7 @@ src/client/
 ├── hostInfo.ts                 宿主固定事实（home 目录）的读数（悬停卡片的路径缩写要用）
 ├── useFlipMarker.ts            量区域矩形、按需在 body 上挂浮层翻转标记
 ├── actions.ts                  RegionActions / RegionDataHooks（组件与宿主的接口）
-├── rootEntry.ts                根节点条目的键（工作区 / 工作区分组两类，含类别前缀）
-├── pickerState.ts              聚焦 / 最近使用 / 置顶三份记录的形状与纯变换（宿主与浏览器共用）
-├── viewMode.ts                 展示方式的存储（官方 defineStore + localStorage，插槽 store 座位的句柄）
+├── useLocale.ts                区域文案的唯一读取入口（RegionLocaleProvider + useLocale）
 ├── compare.tsx                 对照模式：挂进原生右侧栏 tab
 ├── remote.ts                   Remote 贡献声明与调用封装
 ├── runtime.ts                  primitives 值导入的唯一出口（external）
@@ -124,6 +122,8 @@ src/client/
 │   ├── collapseMotion.ts       折叠动画节奏常量（只 import React 类型，运行时无依赖）
 │   ├── flip.ts                 浮层翻转的几何判定与标记名（纯函数，无 React 依赖）
 │   └── pathUtils.ts             目录路径的 `~` 缩写（与官方同规则）
+├── store/                      浏览器内持久化状态
+│   └── viewMode.ts             展示方式的存储（官方 defineStore + localStorage，插槽 store 座位的句柄）
 └── views/                      渲染层：区域容器、三块渲染区与行组件
     ├── WorkspaceGroupsRegion.tsx   区域容器：数据源、派生布局、交互状态与命令八个 hook，按区域分派渲染
     ├── RegionHeaderArea.tsx        区域顶部（宽栏两行标题 + 入口组 + 两张浮层面板，窄栏入口）
@@ -156,9 +156,11 @@ src/client/
 
 状态的归属只有一处：折叠态（工作区 / 会话分组 / 工作区分组三份）、搜索状态（查询 / 展开 / 聚焦时机 / 揭示标记）、两张面板的开合都收在同文件内的 `useRegionUiState`，由主组件持有并把状态与读写入口向下传。八个互斥浮层（四个草稿框、四个确认框）收在一个 `RegionOverlay` 可辨识联合里，因此「任意时刻至多开一个」由类型保证，而不是靠 `Modal` 挡住第二个入口。菜单开合留在持有行组件内（行内 `...` 菜单与右键菜单各一份，都由 `useRowContextMenu` 与行自己的 `useState` 持有），行的外观组件保持无状态。搜索状态之所以不留在 header 内部：窄栏入口要触发宽栏输入框的聚焦，这一跨形态的联动需要一个共同宿主；选择器的开合同理——面板要读菜单的三个分区，而那些分区由区域组件从快照算出来。
 
-`WorkspaceGroupsRegion.tsx` 按「数据源 / 快照 / 派生布局 / 交互状态 / 命令 / 容器」分段，段间有 `// ── … ──` 分节标记。八个 hook 与容器同处一个文件，因为它们的消费方只有容器一处：`useRegionSources` 读全局数据源，`useSnapshotFeed` 管快照的加载与改动，`useRegionLayout` 把快照切成渲染布局，`useRegionUiState` 持有全部交互状态，命令再按对象分成 `useRegionSearch`、`useRegionGroupActions`、`useRegionNestActions`、`useRegionPickerActions` 四个。渲染按区域拆成 `RegionHeaderArea` / `RegionListArea` / `RegionDialogs` 三个模块，主组件只做装配与宽窄形态分派。
+文案不下传：容器把本包翻译函数与投影后的文案表合成一个 `RegionLocale` 交给 `useLocale.ts` 的 `RegionLocaleProvider`，需要文案的组件用 `useLocale()` 自取，因此组件接口里没有 `t` / `labels` 这两格。浏览器内持久化状态收在 `store/`——插槽的 `store` 座位只接受一个 `StoreDecl`，而 `persist` 整份序列化状态，后续新增的本地状态要并进同一个状态对象。
 
-每个渲染区只声明自己真正消费的那几格形状，而不是逐字段转发：`RegionListArea` 收 `RegionListLayout` / `RegionListUiState` / `RegionListEdits` / `RegionListCommands` 合成的 `WorkspaceNodeScope`，`RegionHeaderArea` 收布局、浮层与命令三格，`RegionDialogs` 只收当前那个 `RegionOverlay` 与提交入口。列表侧因此不接触任何状态 setter，浮层形状不出容器那一层。只有确实被多个调用点复用的纯逻辑才外提到 `data/` 与 `utils/`，其余留在原地，避免为了「能抽」而抽出一堆只有一个调用点的间接层。
+`WorkspaceGroupsRegion.tsx` 按「数据源 / 快照 / 派生布局 / 交互状态 / 命令 / 容器」分段，段间有 `// ── … ──` 分节标记。八个 hook 与容器同处一个文件，因为它们的消费方只有容器一处：`useRegionSources` 读全局数据源，`useSnapshotFeed` 管快照的加载与改动，`useRegionLayout` 把快照切成渲染布局，`useRegionUiState` 持有全部交互状态，命令再按对象分成 `useRegionSearch`、`useRegionGroupActions`、`useRegionNestActions`、`useRegionPickerActions` 四个。渲染按区域拆成 `RegionHeaderArea` / `RegionListArea` / `RegionDialogs` 三个模块，主组件只做装配与宽窄形态分派。Provider 的 value 由容器 `useMemo` 合成一次、宽窄两个渲染分支共用：这个身份不稳定会让行级缓存全部落空（见 [渲染性能与行级缓存](docs/render-performance.md)）。
+
+每个渲染区只声明自己真正消费的那几格形状，而不是逐字段转发：`RegionListArea` 收 `RegionListLayout` / `RegionListUiState` / `RegionListEdits` / `RegionListCommands` 合成的 `WorkspaceNodeScope`，`RegionHeaderArea` 收布局、浮层与命令三格，`RegionDialogs` 收当前那个 `RegionOverlay`、对话框布局、工作区视图与提交入口。列表侧因此不接触任何状态 setter，浮层形状不出容器那一层。只有确实被多个调用点复用的纯逻辑才外提到 `data/` 与 `utils/`，其余留在原地，避免为了「能抽」而抽出一堆只有一个调用点的间接层。
 
 聚焦 / 最近使用 / 置顶三份记录**只有一处变换逻辑**（`pickerState.ts`），宿主半边在变更时用它修剪、浏览器半边在渲染菜单时用它排序，两边因此不可能各写一份「最近使用怎么排」的判断。
 
