@@ -10,37 +10,25 @@ import type { ReactElement, ReactNode } from 'react'
 import { CollapsibleBody } from './components/CollapsibleBody.tsx'
 import { GroupSection } from './GroupSection.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
-import type { WorkspaceHoverData, WorkspaceRowLabels, WorkspaceRowProps } from './WorkspaceRow.tsx'
+import type { WorkspaceRowProps } from './WorkspaceRow.tsx'
 
-import type { OfficialHoverLabels } from '../official.ts'
 import { compareSessionRows } from '../data/sessions.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
 
+/** 本工作区块体内会话分组的操作，作用于哪个分组由参数指明 */
+export interface WorkspaceGroupActions {
+  onToggle: (groupId: string) => void
+  onRename: (section: { id: string; label: string }) => void
+  onDelete: (section: { id: string; label: string }) => void
+  onCreateSession: (section: { id: string; label: string }) => void
+}
+
 export interface WorkspaceSectionProps {
-  title: string
-  collapsed: boolean
-  folderActive: boolean
+  /** 工作区标题行的全部输入，整体交给 `WorkspaceRow`，折叠体的开合也读它的 `collapsed` */
+  row: WorkspaceRowProps
   layout: WorkspaceLayout
   /** 分组的折叠态查询，折叠键的构成由区域组件持有 */
   isGroupCollapsed: (groupId: string) => boolean
-  /** 分组头与工作区行共用的文案 */
-  labels: WorkspaceRowLabels
-  /**
-   * 该工作区行上的「移动工作区分组」选项集
-   *
-   * 与 `labels` 分开传，文案对所有行相同，归属却逐行不同
-   */
-  virtualWorkspace: WorkspaceRowProps['virtualWorkspace']
-  /** 该行「移动工作区分组」子菜单的选中分派 */
-  onSelectVirtualWorkspace: (id: string) => void
-  /**
-   * 该工作区行上的「移动到分组…」选项集
-   *
-   * 与 `virtualWorkspace` 平级但进的是不同层级的容器，这个进父工作区体内的会话分组
-   */
-  parentGroup?: WorkspaceRowProps['parentGroup'] | undefined
-  /** 该行「移动到分组」子菜单的选中分派 */
-  onSelectParentGroup: (id: string) => void
   emptyLabel: string
   /** 未归组会话那一段的小标题，只在需要与会话分组/子工作区区分时才渲染 */
   sessionsLabel: string
@@ -57,24 +45,9 @@ export interface WorkspaceSectionProps {
     /** `+` 按钮的无障碍标签，取分组名 */
     newSession: (name: string) => string
   }
-  /** 工作区行悬停卡片的正文，缺省表示不挂卡片 */
-  hover?: WorkspaceHoverData | undefined
-  /** 悬停卡片可复制的内容，取完整目录路径 */
-  hoverCopy?: string | undefined
-  /** 悬停卡片的文案，缺省表示官方文案不在场，卡片整体不挂 */
-  hoverLabels?: OfficialHoverLabels | undefined
   /** 该工作区块在层级里的深度，从 0 起，缩进由它换算 */
   depth: number
-  onToggle: () => void
-  onCreateSession: () => void
-  onNewGroup: () => void
-  onRenameWorkspace: () => void
-  onDeleteWorkspace: () => void
-  onToggleGroup: (groupId: string) => void
-  onRenameGroup: (section: { id: string; label: string }) => void
-  onDeleteGroup: (section: { id: string; label: string }) => void
-  /** 在该分组新建会话 */
-  onCreateSessionInGroup: (section: { id: string; label: string }) => void
+  groupActions: WorkspaceGroupActions
   /** 把一个会话行渲染成元素，渲染方式由区域组件决定（是否带归组菜单） */
   renderSession: (row: SessionRow) => ReactNode
   /** 把一个子工作区渲染成一个完整的工作区块，深度由区域组件自己算 */
@@ -82,32 +55,14 @@ export interface WorkspaceSectionProps {
 }
 
 export function WorkspaceSection({
-  title,
-  collapsed,
-  folderActive,
+  row,
   layout,
   isGroupCollapsed,
-  labels,
-  virtualWorkspace,
-  onSelectVirtualWorkspace,
-  parentGroup,
-  onSelectParentGroup,
   emptyLabel,
   sessionsLabel,
   groupActionLabels,
-  hover,
-  hoverCopy,
-  hoverLabels,
   depth,
-  onToggle,
-  onCreateSession,
-  onNewGroup,
-  onRenameWorkspace,
-  onDeleteWorkspace,
-  onToggleGroup,
-  onRenameGroup,
-  onDeleteGroup,
-  onCreateSessionInGroup,
+  groupActions,
   renderSession,
   renderChildWorkspace,
 }: WorkspaceSectionProps): ReactElement {
@@ -123,25 +78,8 @@ export function WorkspaceSection({
   const indent = { '--wg-depth': String(depth) } as Record<string, string>
   return (
     <section className="wg-workspace" style={indent}>
-      <WorkspaceRow
-        title={title}
-        collapsed={collapsed}
-        folderActive={folderActive}
-        onToggle={onToggle}
-        onCreateSession={onCreateSession}
-        onNewGroup={onNewGroup}
-        onRename={onRenameWorkspace}
-        onDelete={onDeleteWorkspace}
-        hover={hover}
-        hoverCopy={hoverCopy}
-        hoverLabels={hoverLabels}
-        labels={labels}
-        virtualWorkspace={virtualWorkspace}
-        onSelectVirtualWorkspace={onSelectVirtualWorkspace}
-        parentGroup={parentGroup}
-        onSelectParentGroup={onSelectParentGroup}
-      />
-      <CollapsibleBody open={!collapsed}>
+      <WorkspaceRow {...row} />
+      <CollapsibleBody open={!row.collapsed}>
         <div className="wg-workspace-body">
           {/* 子工作区排在会话分组之前，与分组内部同一顺序，文件夹在前 */}
           {childIds.length === 0 ? null : (
@@ -153,11 +91,11 @@ export function WorkspaceSection({
               key={section.id}
               section={section}
               collapsed={isGroupCollapsed(section.id)}
-              onToggle={() => onToggleGroup(section.id)}
-              onRename={() => onRenameGroup({ id: section.id, label: section.label })}
-              onDelete={() => onDeleteGroup({ id: section.id, label: section.label })}
+              onToggle={() => groupActions.onToggle(section.id)}
+              onRename={() => groupActions.onRename({ id: section.id, label: section.label })}
+              onDelete={() => groupActions.onDelete({ id: section.id, label: section.label })}
               onCreateSession={() =>
-                onCreateSessionInGroup({ id: section.id, label: section.label })
+                groupActions.onCreateSession({ id: section.id, label: section.label })
               }
               labels={groupActionLabels}
               renderChildWorkspace={renderChildWorkspace}

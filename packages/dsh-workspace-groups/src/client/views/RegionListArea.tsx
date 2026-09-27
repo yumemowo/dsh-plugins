@@ -307,29 +307,37 @@ function WorkspaceNode({
   return (
     <WorkspaceSection
       key={workspaceId}
-      title={workspace.title}
-      collapsed={collapsed}
-      // 官方只在「展开且含当前会话」时把文件夹染成强调色
-      folderActive={
-        !collapsed &&
-        containsSession(rowsByWorkspace.get(workspaceId) ?? [], scope.currentSessionId)
-      }
+      row={{
+        title: workspace.title,
+        collapsed,
+        // 官方只在「展开且含当前会话」时把文件夹染成强调色
+        folderActive:
+          !collapsed &&
+          containsSession(rowsByWorkspace.get(workspaceId) ?? [], scope.currentSessionId),
+        labels: scope.workspaceRowLabels,
+        virtualWorkspace: virtualWorkspaceMenu,
+        parentGroup: parentGroupMenu,
+        // 「移动工作区分组」入口：把该工作区放进某个根节点分组，或先建一个再放
+        onSelectVirtualWorkspace: (id) => commands.selectVirtualWorkspace(workspaceId, id),
+        onSelectParentGroup: (id) => commands.selectParentGroup(workspaceId, id),
+        hover: {
+          label: workspace.title,
+          path: abbreviateHomePath(workspace.path, scope.home),
+          created: labels.hover.created(Date.parse(workspace.createdAt)),
+        },
+        hoverCopy: workspace.path,
+        hoverLabels: scope.session.hoverLabels,
+        onToggle: () => ui.toggleWorkspace(workspaceId),
+        onCreateSession: () => commands.createSessionIn(workspaceId, ''),
+        onNewGroup: () => edits.onNewGroup(workspaceId),
+        onRename: () => edits.onRenameWorkspace(workspaceId, workspace.title),
+        onDelete: () => edits.onDeleteWorkspace(workspaceId, workspace.title),
+      }}
       layout={built}
       depth={layout.nesting.levelOf(workspaceId)}
       isGroupCollapsed={(groupId) => ui.collapsedGroups[`${workspaceId}:${groupId}`] === true}
-      labels={scope.workspaceRowLabels}
-      virtualWorkspace={virtualWorkspaceMenu}
-      parentGroup={parentGroupMenu}
-      onSelectParentGroup={(id) => commands.selectParentGroup(workspaceId, id)}
       emptyLabel={labels.empty}
       sessionsLabel={labels.sessions}
-      hover={{
-        label: workspace.title,
-        path: abbreviateHomePath(workspace.path, scope.home),
-        created: labels.hover.created(Date.parse(workspace.createdAt)),
-      }}
-      hoverCopy={workspace.path}
-      hoverLabels={scope.session.hoverLabels}
       groupActionLabels={{
         actions: labels.groupActions,
         newSessionItem: labels.newSessionItem,
@@ -337,20 +345,15 @@ function WorkspaceNode({
         delete: labels.deleteGroup,
         newSession: labels.newSessionInGroup,
       }}
-      onToggle={() => ui.toggleWorkspace(workspaceId)}
-      onCreateSession={() => commands.createSessionIn(workspaceId, '')}
-      onNewGroup={() => edits.onNewGroup(workspaceId)}
-      onRenameWorkspace={() => edits.onRenameWorkspace(workspaceId, workspace.title)}
-      onDeleteWorkspace={() => edits.onDeleteWorkspace(workspaceId, workspace.title)}
-      // 「移动工作区分组」入口：把该工作区放进某个根节点分组，或先建一个再放
-      onSelectVirtualWorkspace={(id) => commands.selectVirtualWorkspace(workspaceId, id)}
+      groupActions={{
+        onToggle: (groupId) => ui.toggleGroup(`${workspaceId}:${groupId}`),
+        onRename: (section) => edits.onRenameGroup(workspaceId, section.id, section.label),
+        onDelete: (section) => edits.onDeleteGroup(workspaceId, section.id, section.label),
+        onCreateSession: (section) => commands.createSessionIn(workspaceId, section.id),
+      }}
       renderChildWorkspace={(childId) => (
         <WorkspaceNode key={childId} workspaceId={childId} scope={scope} />
       )}
-      onToggleGroup={(groupId) => ui.toggleGroup(`${workspaceId}:${groupId}`)}
-      onRenameGroup={(section) => edits.onRenameGroup(workspaceId, section.id, section.label)}
-      onDeleteGroup={(section) => edits.onDeleteGroup(workspaceId, section.id, section.label)}
-      onCreateSessionInGroup={(section) => commands.createSessionIn(workspaceId, section.id)}
       renderSession={(row) =>
         sessionRowElement(row, scope.session, {
           workspaceId,
