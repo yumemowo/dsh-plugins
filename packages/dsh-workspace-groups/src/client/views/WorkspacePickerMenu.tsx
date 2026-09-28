@@ -179,7 +179,7 @@ function PickerGroup({
         />
       </button>
       {/* 收起时整段不渲染，而不是留在文档里靠高度收拢：
-          这一层没有折叠动画，内容留在文档里只会让键盘还能 Tab 进看不见的条目 */}
+          这一层没有撑开动画，内容留在文档里只会让键盘还能 Tab 进看不见的条目 */}
       {expanded ? <div className={pickerStyles.pickerSectionBody}>{children}</div> : null}
     </section>
   )
@@ -200,7 +200,7 @@ export function WorkspacePickerMenu({
   const picker = labels.picker
   const panelRef = useRef<HTMLDivElement>(null)
   const [rect, setRect] = useState<PanelRect | null>(null)
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const closeTimer = useRef<number | null>(null)
 
   /** 面板贴触发器下缘展开，放不下就翻到上方，并在两个方向上都夹进窗口 */
@@ -316,8 +316,8 @@ export function WorkspacePickerMenu({
 
   if (!open) return null
 
-  const recentCollapsed = collapsed.recent === true
-  const pinnedCollapsed = collapsed.pinned === true
+  const recentExpanded = expanded.recent !== false
+  const pinnedExpanded = expanded.pinned !== false
 
   return createPortal(
     <div
@@ -351,8 +351,8 @@ export function WorkspacePickerMenu({
       {sections.recent.length === 0 ? null : (
         <PickerGroup
           title={picker.recent}
-          expanded={!recentCollapsed}
-          onToggle={() => setCollapsed((prev) => ({ ...prev, recent: !recentCollapsed }))}
+          expanded={recentExpanded}
+          onToggle={() => setExpanded((prev) => ({ ...prev, recent: !recentExpanded }))}
         >
           {sections.recent.map((entry) => (
             <PickerRow
@@ -371,8 +371,8 @@ export function WorkspacePickerMenu({
       {sections.pinned.length === 0 ? null : (
         <PickerGroup
           title={picker.pinned}
-          expanded={!pinnedCollapsed}
-          onToggle={() => setCollapsed((prev) => ({ ...prev, pinned: !pinnedCollapsed }))}
+          expanded={pinnedExpanded}
+          onToggle={() => setExpanded((prev) => ({ ...prev, pinned: !pinnedExpanded }))}
         >
           {sections.pinned.map((entry) => (
             <PickerRow

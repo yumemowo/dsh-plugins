@@ -154,18 +154,18 @@ interface RegionUiState {
   viewOptionsOpen: boolean
   setViewOptionsOpen: (next: boolean | ((open: boolean) => boolean)) => void
   viewOptionsTrigger: RefObject<HTMLButtonElement>
-  collapsedWorkspaces: Record<string, boolean>
-  setCollapsedWorkspaces: (next: (prev: Record<string, boolean>) => Record<string, boolean>) => void
-  collapsedGroups: Record<string, boolean>
-  setCollapsedGroups: (next: (prev: Record<string, boolean>) => Record<string, boolean>) => void
-  collapsedVirtualWorkspaces: Record<string, boolean>
-  setCollapsedVirtualWorkspaces: (
+  expandedWorkspaces: Record<string, boolean>
+  setExpandedWorkspaces: (next: (prev: Record<string, boolean>) => Record<string, boolean>) => void
+  expandedGroups: Record<string, boolean>
+  setExpandedGroups: (next: (prev: Record<string, boolean>) => Record<string, boolean>) => void
+  expandedVirtualWorkspaces: Record<string, boolean>
+  setExpandedVirtualWorkspaces: (
     next: (prev: Record<string, boolean>) => Record<string, boolean>,
   ) => void
   /** 从搜索结果打开、等待滚进可视区的那一行，滚动完成后由行自己回报清除 */
   revealSessionId: string | undefined
   setRevealSessionId: (next: string | undefined | ((current: string | undefined) => string | undefined)) => void
-  /** 折叠状态取反，默认展开，因此只有显式 true 才算折叠 */
+  /** 折叠状态取反，默认展开，因此只有显式 false 才算折叠 */
   toggleWorkspace: (key: string) => void
   toggleGroup: (key: string) => void
   toggleVirtualWorkspace: (key: string) => void
@@ -480,23 +480,23 @@ function useRegionUiState(): RegionUiState {
   const pickerTrigger = useRef<HTMLButtonElement>(null)
   const [viewOptionsOpen, setViewOptionsOpen] = useState(false)
   const viewOptionsTrigger = useRef<HTMLButtonElement>(null)
-  const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Record<string, boolean>>({})
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
-  const [collapsedVirtualWorkspaces, setCollapsedVirtualWorkspaces] = useState<
+  const [expandedWorkspaces, setExpandedWorkspaces] = useState<Record<string, boolean>>({})
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  const [expandedVirtualWorkspaces, setExpandedVirtualWorkspaces] = useState<
     Record<string, boolean>
   >({})
   const [revealSessionId, setRevealSessionId] = useState<string | undefined>(undefined)
 
   const toggleWorkspace = useCallback((key: string) => {
-    setCollapsedWorkspaces((prev) => ({ ...prev, [key]: prev[key] !== true }))
+    setExpandedWorkspaces((prev) => ({ ...prev, [key]: prev[key] === false }))
   }, [])
 
   const toggleGroup = useCallback((key: string) => {
-    setCollapsedGroups((prev) => ({ ...prev, [key]: prev[key] !== true }))
+    setExpandedGroups((prev) => ({ ...prev, [key]: prev[key] === false }))
   }, [])
 
   const toggleVirtualWorkspace = useCallback((key: string) => {
-    setCollapsedVirtualWorkspaces((prev) => ({ ...prev, [key]: prev[key] !== true }))
+    setExpandedVirtualWorkspaces((prev) => ({ ...prev, [key]: prev[key] === false }))
   }, [])
 
   const acknowledgeReveal = useCallback((sessionId: string) => {
@@ -512,12 +512,12 @@ function useRegionUiState(): RegionUiState {
     viewOptionsOpen,
     setViewOptionsOpen,
     viewOptionsTrigger,
-    collapsedWorkspaces,
-    setCollapsedWorkspaces,
-    collapsedGroups,
-    setCollapsedGroups,
-    collapsedVirtualWorkspaces,
-    setCollapsedVirtualWorkspaces,
+    expandedWorkspaces,
+    setExpandedWorkspaces,
+    expandedGroups,
+    setExpandedGroups,
+    expandedVirtualWorkspaces,
+    setExpandedVirtualWorkspaces,
     revealSessionId,
     setRevealSessionId,
     toggleWorkspace,
@@ -628,31 +628,31 @@ function useRegionSearch(
     const workspaceId = match.workspace?.id
     if (workspaceId === undefined) {
       // 无所属工作区的会话落在末尾的隐式「未分组」区段里，同样要先展开
-      ui.setCollapsedWorkspaces((prev) =>
-        prev[UNGROUPED_KEY] === true ? { ...prev, [UNGROUPED_KEY]: false } : prev,
+      ui.setExpandedWorkspaces((prev) =>
+        prev[UNGROUPED_KEY] === false ? { ...prev, [UNGROUPED_KEY]: true } : prev,
       )
     } else {
       // 工作区本身可能还躺在一个收起的工作区分组里，与外层两层一样要先展开，否则揭示的那一行落在看不见的地方
       const rootGroupId = virtualWorkspaceIdOf(layout.rootLayout.groups, workspaceId)
       if (rootGroupId !== '') {
-        ui.setCollapsedVirtualWorkspaces((prev) =>
-          prev[rootGroupId] === true ? { ...prev, [rootGroupId]: false } : prev,
+        ui.setExpandedVirtualWorkspaces((prev) =>
+          prev[rootGroupId] === false ? { ...prev, [rootGroupId]: true } : prev,
         )
       }
       // 工作区自己可能是嵌在父工作区体内的子工作区，从根节点那一层起逐层展开它所有的祖先
-      // 只展开它自己会让那一行落在收起的父折叠体里，用户看不到它
+      // 只展开它自己会让那一行落在收起的父撑开体里，用户看不到它
       const lineage = [workspaceId, ...layout.nesting.ancestorsOf(workspaceId)]
-      ui.setCollapsedWorkspaces((prev) => {
+      ui.setExpandedWorkspaces((prev) => {
         let next = prev
         for (const id of lineage) {
-          if (next[id] !== true) continue
-          next = { ...next, [id]: false }
+          if (next[id] !== false) continue
+          next = { ...next, [id]: true }
         }
         return next
       })
       if (match.group !== undefined) {
         const key = `${workspaceId}:${match.group.id}`
-        ui.setCollapsedGroups((prev) => (prev[key] === true ? { ...prev, [key]: false } : prev))
+        ui.setExpandedGroups((prev) => (prev[key] === false ? { ...prev, [key]: true } : prev))
       }
     }
     ui.setRevealSessionId(match.row.id)
@@ -807,10 +807,10 @@ function useRegionGroupActions(
    * @param groupId - 新会话要归入的分组，空串表示归入未归组区
    */
   const createSessionIn = (workspaceId: string, groupId: string): void => {
-    ui.setCollapsedWorkspaces((prev) => ({ ...prev, [workspaceId]: false }))
+    ui.setExpandedWorkspaces((prev) => ({ ...prev, [workspaceId]: true }))
     // 展开而不是取反，分组本就展开时，切换会把它收起来，新会话反而看不见
     if (groupId !== '') {
-      ui.setCollapsedGroups((prev) => ({ ...prev, [`${workspaceId}:${groupId}`]: false }))
+      ui.setExpandedGroups((prev) => ({ ...prev, [`${workspaceId}:${groupId}`]: true }))
     }
     void startSession(workspaceId)
       .then((sessionId) => {
@@ -1290,7 +1290,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             scope={scope}
             flatRows={flatRows}
             stray={stray}
-            ungroupedCollapsed={ui.collapsedWorkspaces[UNGROUPED_KEY] === true}
+            ungroupedExpanded={ui.expandedWorkspaces[UNGROUPED_KEY] !== false}
             onToggleUngrouped={() => ui.toggleWorkspace(UNGROUPED_KEY)}
           />
           {/* 对话框挂在列表之外

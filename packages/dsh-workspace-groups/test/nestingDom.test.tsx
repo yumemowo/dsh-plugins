@@ -78,7 +78,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
  * 子工作区嵌套的真实 DOM
  *
  * 层级由 cwd 路径现推，落盘的归属只决定渲染在哪一段：这些取舍在元素树里看不出来
- * 递归嵌出来的结构、缩进用的自定义属性、放进分组的那个落在谁的折叠体里，都不行
+ * 递归嵌出来的结构、缩进用的自定义属性、放进分组的那个落在谁的撑开体里，都不行
  * 这里用真 `react-dom` 渲染一遍并断言结构
  */
 
@@ -202,12 +202,12 @@ describe('nested sub-workspaces in a real DOM', () => {
     // /repo/a 与 /repo/a/b 都是 /repo 的后代，因此只有 /repo 留在根节点
     expect(sections(container)).toEqual([
       { title: 'W1', depth: '0' },
-      // 子工作区是父折叠体里的一个完整工作区块，深度沿层级递增
+      // 子工作区是父撑开体里的一个完整工作区块，深度沿层级递增
       { title: 'W2', depth: '1' },
       { title: 'W3', depth: '2' },
       { title: 'W4', depth: '0' },
     ])
-    // 层级真的嵌在文档里：W2 在 W1 的折叠体内
+    // 层级真的嵌在文档里：W2 在 W1 的撑开体内
     const w1 = Array.from(container.querySelectorAll('.workspace')).find(
       (section) => section.querySelector('.workspaceTitle')?.textContent === 'W1',
     )

@@ -132,7 +132,7 @@ async function expandSearch(container: HTMLElement): Promise<void> {
 }
 
 describe('search in a real DOM', () => {
-  it('collapses the title and the header actions while the input expands', async () => {
+  it('folds the title and the header actions away while the input expands', async () => {
     const { container } = await mount()
 
     // 初始：标题与右侧入口都在，输入框收起
@@ -258,7 +258,7 @@ describe('search in a real DOM', () => {
     expect(container.querySelector('.search')?.className).not.toContain('searchExpanded')
   })
 
-  it('focuses the input once expanded, and takes it out of the tab order when collapsed', async () => {
+  it('focuses the input once expanded, and takes it out of the tab order when folded', async () => {
     const { container } = await mount()
 
     // 收起态不可聚焦，Tab 不该停在这里

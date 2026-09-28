@@ -49,7 +49,8 @@ export interface WorkspaceHoverData {
 
 export interface WorkspaceRowProps {
   title: string
-  collapsed: boolean
+  /** 展开态，收起时文件夹闭合、箭头不旋转 */
+  expanded: boolean
   /** 展开且含当前会话时，文件夹染成强调色（与官方一致） */
   folderActive: boolean
   onToggle: () => void
@@ -90,7 +91,7 @@ export interface WorkspaceRowProps {
 
 export function WorkspaceRow({
   title,
-  collapsed,
+  expanded,
   folderActive,
   onToggle,
   onCreateSession,
@@ -159,16 +160,17 @@ export function WorkspaceRow({
       className={clsx(styles.workspaceHead, menuOpen && styles.rowMenuOpen)}
       role="button"
       tabIndex={0}
+      aria-expanded={expanded}
       onClick={onToggle}
       onKeyDown={(event) => handleRowKeyDown(event, onToggle)}
       onContextMenu={contextMenu.onContextMenu}
     >
       {contextMenu.menu}
       <span className={clsx(styles.slot, styles.folder, folderActive && styles.folderActive)}>
-        {collapsed ? <IconFolderCloseRegular /> : <IconFolderOpenRegular />}
+        {expanded ? <IconFolderOpenRegular /> : <IconFolderCloseRegular />}
       </span>
       <span className={clsx(styles.slot, styles.chevron)}>
-        <IconTriangleRightFillRegular className={clsx(styles.arrow, !(collapsed) && styles.arrowOpen)} />
+        <IconTriangleRightFillRegular className={clsx(styles.arrow, expanded && styles.arrowOpen)} />
       </span>
       <span className={styles.workspaceTitle}>{title}</span>
       <RowActions

@@ -1,5 +1,5 @@
 /**
- * 一个工作区区块，标题行 + 折叠体（子工作区、会话分组、平铺的未归组会话、空态）
+ * 一个工作区区块，标题行 + 撑开体（子工作区、会话分组、平铺的未归组会话、空态）
  *
  * 折叠状态由区域组件按 key 持有，这里只消费布尔值，因此不同工作区、不同分组之间的开合互不影响
  *
@@ -7,7 +7,7 @@
  * 子工作区本身仍是一个完整的工作区块，由 `renderChildWorkspace` 交回，深度任意层都不必在这里知道层级
  */
 import type { ReactElement, ReactNode } from 'react'
-import { CollapsibleBody } from './components/CollapsibleBody.tsx'
+import { ExpandableBody } from './components/ExpandableBody.tsx'
 import { GroupSection } from './GroupSection.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
 import type { WorkspaceRowProps } from './WorkspaceRow.tsx'
@@ -26,11 +26,11 @@ export interface WorkspaceGroupActions {
 }
 
 export interface WorkspaceSectionProps {
-  /** 工作区标题行的全部输入，整体交给 `WorkspaceRow`，折叠体的开合也读它的 `collapsed` */
+  /** 工作区标题行的全部输入，整体交给 `WorkspaceRow`，撑开体的开合也读它的 `expanded` */
   row: WorkspaceRowProps
   layout: WorkspaceLayout
-  /** 分组的折叠态查询，折叠键的构成由区域组件持有 */
-  isGroupCollapsed: (groupId: string) => boolean
+  /** 分组的展开态查询，展开键的构成由区域组件持有 */
+  isGroupExpanded: (groupId: string) => boolean
   /** 该工作区块在层级里的深度，从 0 起，缩进由它换算 */
   depth: number
   groupActions: WorkspaceGroupActions
@@ -43,7 +43,7 @@ export interface WorkspaceSectionProps {
 export function WorkspaceSection({
   row,
   layout,
-  isGroupCollapsed,
+  isGroupExpanded,
   depth,
   groupActions,
   renderSession,
@@ -63,7 +63,7 @@ export function WorkspaceSection({
   return (
     <section className={styles.workspace} style={indent}>
       <WorkspaceRow {...row} />
-      <CollapsibleBody open={!row.collapsed}>
+      <ExpandableBody open={row.expanded}>
         <div className={styles.workspaceBody}>
           {/* 子工作区排在会话分组之前，与分组内部同一顺序，文件夹在前 */}
           {childIds.length === 0 ? null : (
@@ -74,7 +74,7 @@ export function WorkspaceSection({
             <GroupSection
               key={section.id}
               section={section}
-              collapsed={isGroupCollapsed(section.id)}
+              expanded={isGroupExpanded(section.id)}
               onToggle={() => groupActions.onToggle(section.id)}
               onRename={() => groupActions.onRename({ id: section.id, label: section.label })}
               onDelete={() => groupActions.onDelete({ id: section.id, label: section.label })}
@@ -94,13 +94,13 @@ export function WorkspaceSection({
             </div>
           )}
           {hasAnyRow ? null : (
-            // 空态也是折叠体里要露面的子元素，与行一样参与逐个淡入
+            // 空态也是撑开体里要露面的子元素，与行一样参与逐个淡入
             <div className={styles.empty} data-wg-stagger="">
               {labels.empty}
             </div>
           )}
         </div>
-      </CollapsibleBody>
+      </ExpandableBody>
     </section>
   )
 }

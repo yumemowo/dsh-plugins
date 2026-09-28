@@ -17,7 +17,7 @@ import {
   buildRowContextMenuItems,
   buildVirtualWorkspaceMenuItems,
 } from '../menus.tsx'
-import { CollapsibleBody } from './components/CollapsibleBody.tsx'
+import { ExpandableBody } from './components/ExpandableBody.tsx'
 import { RowActions } from './RowActions.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
@@ -28,7 +28,7 @@ import clsx from 'clsx'
 
 export interface VirtualWorkspaceSectionProps {
   section: VirtualWorkspaceSectionData
-  collapsed: boolean
+  expanded: boolean
   onToggle: () => void
   onRename: () => void
   onDelete: () => void
@@ -38,7 +38,7 @@ export interface VirtualWorkspaceSectionProps {
 
 export function VirtualWorkspaceSection({
   section,
-  collapsed,
+  expanded,
   onToggle,
   onRename,
   onDelete,
@@ -76,6 +76,7 @@ export function VirtualWorkspaceSection({
         className={clsx(styles.groupHead, styles.virtualWorkspaceHead, menuOpen && styles.rowMenuOpen)}
         role="button"
         tabIndex={0}
+        aria-expanded={expanded}
         onClick={onToggle}
         onKeyDown={(event) => handleRowKeyDown(event, onToggle)}
         onContextMenu={contextMenu.onContextMenu}
@@ -87,7 +88,7 @@ export function VirtualWorkspaceSection({
           <IconVirtualFolder16 />
         </span>
         <span className={clsx(styles.slot, styles.chevron)}>
-          <IconTriangleRightFillRegular className={clsx(styles.arrow, !(collapsed) && styles.arrowOpen)} />
+          <IconTriangleRightFillRegular className={clsx(styles.arrow, expanded && styles.arrowOpen)} />
         </span>
         <span className={styles.virtualWorkspaceLabel}>{section.label}</span>
         {/* 工作区数自己成格贴在行右，与会话分组的会话数、session 行的时间同格同形
@@ -106,9 +107,9 @@ export function VirtualWorkspaceSection({
           />
         </span>
       </div>
-      {/* 空分组照样有内容要露：占位文案落在折叠体里，因此「建完分组还没移入
+      {/* 空分组照样有内容要露：占位文案落在撑开体里，因此「建完分组还没移入
           工作区」时用户看得到它，而不是一个点下去什么都没发生的分组头 */}
-      <CollapsibleBody open={!collapsed}>
+      <ExpandableBody open={expanded}>
         <div className={styles.virtualWorkspaceBody}>
           {section.workspaceIds.length <= 0 ? (
             <div className={styles.empty} data-wg-stagger="">
@@ -118,7 +119,7 @@ export function VirtualWorkspaceSection({
             children
           )}
         </div>
-      </CollapsibleBody>
+      </ExpandableBody>
     </div>
   )
 }

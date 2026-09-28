@@ -216,7 +216,7 @@ describe('hover cards in a real DOM', () => {
     expect(head).not.toBeNull()
     expect(workspace.contains(head)).toBe(true)
     expect(head.parentElement).not.toBe(workspace)
-    // 折叠体仍在行之后：头一层包装 + 折叠体，顺序没有被打乱
+    // 撑开体仍在行之后：头一层包装 + 撑开体，顺序没有被打乱
     expect(workspace.children.length).toBe(2)
   })
 

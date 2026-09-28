@@ -1,6 +1,6 @@
-# 折叠动效
+# 撑开动效
 
-折叠体（`CollapsibleBody`）承担三处折叠：工作区、会话分组、工作区分组，以及隐式的「未分组」区段。它的高度来源、两段式展开的节奏设计、显隐为什么必须 fail-open，以及嵌套与降频下的行为如下。行级渲染缓存的取舍见[渲染性能与行级缓存](render-performance.md)。
+撑开体（`ExpandableBody`）承担三处收放：工作区、会话分组、工作区分组，以及隐式的「未分组」区段。它的高度来源、两段式撑开的节奏设计、显隐为什么必须 fail-open，以及嵌套与降频下的行为如下。行级渲染缓存的取舍见[渲染性能与行级缓存](render-performance.md)。
 
 ## 轨道与高度
 
@@ -10,7 +10,7 @@
 
 内容**常驻文档**，因为卸载掉就没有可收回的东西。收起后它仍在布局里，因此由 `visibility` 把内容移出焦点顺序与命中测试，并延后到收起动作结束才生效；展开时则立即可见。
 
-「上一行 → 折叠体」那一份 2px 间距也一并交给折叠体：它是内层容器的上内边距，落在裁剪区内，收起时随轨道一起被裁掉，行下不会残留空档。
+「上一行 → 撑开体」那一份 2px 间距也一并交给撑开体：它是内层容器的上内边距，落在裁剪区内，收起时随轨道一起被裁掉，行下不会残留空档。
 
 ## 展开的两段
 
@@ -22,16 +22,16 @@
 
 淡入不能挂在元素挂载上：内容常驻，挂载只发生一次，而每次展开都要重放。
 
-参与淡入的元素由元素组件自己打 `data-wg-stagger` 标记（会话行、分组头、空态），延迟逐元素不同、由折叠体在 layout effect 里逐个下发——延迟是元素自己没渲染过的内联属性，可以命令式写，因此元素有多少、分组嵌套多少层都不必预先知道。写在 layout effect 里而不是普通 effect，是因为延迟必须和展开态的样式变更落在同一次样式计算里，否则元素会先以「没有延迟」的状态亮一帧。
+参与淡入的元素由元素组件自己打 `data-wg-stagger` 标记（会话行、分组头、空态），延迟逐元素不同、由撑开体在 layout effect 里逐个下发——延迟是元素自己没渲染过的内联属性，可以命令式写，因此元素有多少、分组嵌套多少层都不必预先知道。写在 layout effect 里而不是普通 effect，是因为延迟必须和展开态的样式变更落在同一次样式计算里，否则元素会先以「没有延迟」的状态亮一帧。
 
 ## 显隐必须 fail-open
 
-衔接两段的是一段**延迟**，不是一个回调：撑开那段等待（`duration × lead`）与逐个淡入的先后相加后，一起写进元素的 `--wg-collapse-delay`。等待因此走挂钟时间，主线程被长任务占住时只是晚一点淡入。
+衔接两段的是一段**延迟**，不是一个回调：撑开那段等待（`duration × lead`）与逐个淡入的先后相加后，一起写进元素的 `--wg-expand-delay`。等待因此走挂钟时间，主线程被长任务占住时只是晚一点淡入。
 
 不透明必须作为元素的自然状态。透明只挂在一个结构条件上：
 
 ```css
-.collapse:not(.collapseOpen) > .collapseClip [data-wg-stagger] { opacity: 0 }
+.expand:not(.expandOpen) > .expandClip [data-wg-stagger] { opacity: 0 }
 ```
 
 展开态没有任何规则写 `opacity`，所以过渡没跑、被降频、或主线程被长任务占住时，元素只是「没淡入」，绝不会留在透明上。
@@ -40,19 +40,19 @@
 
 这里的关键不是「事件不可靠」，而是失败方向错了。
 
-改用结构选择器而不是 context + 类名，也是被同一个问题逼出来的。用 `RevealContext` 把「本子树此刻能不能亮」传到元素、由元素把一段类名后缀拼进自己的 `className` 时，`className` 归 React 所有：行内状态一变（例如点开 row action 菜单）React 会整体重写它，命令式挂上去的类当场被抹掉；而补挂的逻辑在折叠体的 effect 里，父组件并不会因子组件重渲染，于是补不回来。结构选择器不需要往元素上挂任何显隐类，这种可能也就不存在。
+改用结构选择器而不是 context + 类名，也是被同一个问题逼出来的。用 `RevealContext` 把「本子树此刻能不能亮」传到元素、由元素把一段类名后缀拼进自己的 `className` 时，`className` 归 React 所有：行内状态一变（例如点开 row action 菜单）React 会整体重写它，命令式挂上去的类当场被抹掉；而补挂的逻辑在撑开体的 effect 里，父组件并不会因子组件重渲染，于是补不回来。结构选择器不需要往元素上挂任何显隐类，这种可能也就不存在。
 
-## 嵌套折叠体
+## 嵌套撑开体
 
-内层折叠体的元素不能被外层的展开态提前点亮——那样等它自己那层展开时已经是不透明的，淡入不会发生。
+内层撑开体的元素不能被外层的展开态提前点亮——那样等它自己那层展开时已经是不透明的，淡入不会发生。
 
-这一点由选择器自己兜住：外层收着时，`.collapse:not(.collapseOpen)` 作为祖先命中它裁剪区里的**所有**元素，含内层折叠体的。因此不必再往元素上挂显隐类，也就没有「React 重写 `className` 把类抹掉」这类问题，更没有「谁先跑」的时序问题。
+这一点由选择器自己兜住：外层收着时，`.expand:not(.expandOpen)` 作为祖先命中它裁剪区里的**所有**元素，含内层撑开体的。因此不必再往元素上挂显隐类，也就没有「React 重写 `className` 把类抹掉」这类问题，更没有「谁先跑」的时序问题。
 
 收起时那条更具体、且把延迟归零，所有元素同时淡出（包括嵌套体里展开着的元素，外层合拢时它们一并隐去）。`planStaggerUnits` 排期时跳过仍收着的嵌套体里的元素：它们本次不露面，给延迟等于把淡入提前用掉。
 
 ## 节奏参数
 
-节奏参数集中在 `src/client/utils/collapseMotion.ts` 的 `DEFAULT_COLLAPSE_MOTION` 一处，时长与缓动只由它一处定义，样式表只消费 `--wg-collapse-*` 变量、不再写一份回退值。自定义属性名同样来自一处（`COLLAPSE_VARS`），名字写两遍一样会静默失配。
+节奏参数集中在 `src/client/utils/expandMotion.ts` 的 `DEFAULT_EXPAND_MOTION` 一处，时长与缓动只由它一处定义，样式表只消费 `--wg-expand-*` 变量、不再写一份回退值。自定义属性名同样来自一处（`EXPAND_VARS`），名字写两遍一样会静默失配。
 
 单独抽成一个模块而不是放进组件，是为了不让样式表依赖 React，也避免与组件互相 import 成环。
 
@@ -73,7 +73,7 @@
 | 不变量 | 测试 |
 | --- | --- |
 | 行上不得出现任何可能丢失的显隐类 | `never gates row visibility on a class the renderer could lose` |
-| 组件里不得再出现 `useState` / `transitionend` / `setTimeout` / `classList` 写显隐 | `collapsible.test.ts` 的 `fail-open reveal` 一组 |
+| 组件里不得再出现 `useState` / `transitionend` / `setTimeout` / `classList` 写显隐 | `expandable.test.ts` 的 `fail-open reveal` 一组 |
 | 基准规则里不得声明 `opacity` | `styles.test.ts` |
 | 延迟在 layout effect 里下发 | `schedules delays in a layout effect so the first frame is already correct` |
 

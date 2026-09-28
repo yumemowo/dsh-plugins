@@ -44,7 +44,7 @@
 
 **层级缩进是一组按真实 DOM 结构写的选择器，写错时界面只是「没有缩进」，不会报错。** `test/virtualWorkspaceDom.test.tsx` 因此用真 `react-dom` 渲染一遍，把样式表里所有带 `wg-virtual-workspace-body` 的规则逐条拿去 `querySelectorAll`，任一规则一个选择器都不命中就失败。这条测试已经抓到过一次真实缺陷：工作区行挂上悬停卡片后会被官方 `HoverCard` 的根节点包一层，`> .workspaceHead` 那一档因此不再命中，缩进整段失效——与既有会话行那条同理，必须把 `> * >` 一档也写上。
 
-上面那条缩进选择器的不变量也记在[渲染性能与行级缓存](render-performance.md#钉住不变量)，与折叠体为什么必须 fail-open、行级 memo 要怎样才能命中（含实测数据）并列。
+上面那条缩进选择器的不变量也记在[渲染性能与行级缓存](render-performance.md#钉住不变量)，与撑开体为什么必须 fail-open、行级 memo 要怎样才能命中（含实测数据）并列。
 
 ## 状态指示器
 

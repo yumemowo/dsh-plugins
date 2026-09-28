@@ -10,7 +10,7 @@ import { useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { IconTriangleRightFillRegular } from '../runtime.ts'
 import { GROUP_MENU, ROW_MENU, buildGroupMenuItems, buildRowContextMenuItems } from '../menus.tsx'
-import { CollapsibleBody } from './components/CollapsibleBody.tsx'
+import { ExpandableBody } from './components/ExpandableBody.tsx'
 import { RowActions } from './RowActions.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
@@ -21,7 +21,7 @@ import clsx from 'clsx'
 
 export interface GroupSectionProps {
   section: GroupSectionData
-  collapsed: boolean
+  expanded: boolean
   onToggle: () => void
   onRename: () => void
   onDelete: () => void
@@ -35,7 +35,7 @@ export interface GroupSectionProps {
 
 export function GroupSection({
   section,
-  collapsed,
+  expanded,
   onToggle,
   onRename,
   onDelete,
@@ -78,17 +78,18 @@ export function GroupSection({
     <div className={styles.group}>
       <div
         className={clsx(styles.groupHead, menuOpen && styles.rowMenuOpen)}
-        // 参与所在折叠体的逐个淡入，序号由折叠体按文档序下发
+        // 参与所在撑开体的逐个淡入，序号由撑开体按文档序下发
         data-wg-stagger=""
         role="button"
         tabIndex={0}
+        aria-expanded={expanded}
         onClick={onToggle}
         onKeyDown={(event) => handleRowKeyDown(event, onToggle)}
         onContextMenu={contextMenu.onContextMenu}
       >
         {contextMenu.menu}
         <span className={styles.slot}>
-          <IconTriangleRightFillRegular className={clsx(styles.arrow, !(collapsed) && styles.arrowOpen)} />
+          <IconTriangleRightFillRegular className={clsx(styles.arrow, expanded && styles.arrowOpen)} />
         </span>
         <span className={styles.groupLabel}>{section.label}</span>
         {/* 会话数自己成格贴在行右，与 session 行的 time 同格同形，空分组不显示
@@ -112,10 +113,10 @@ export function GroupSection({
           />
         </span>
       </div>
-      {/* 空分组既没有会话也没有子工作区，整块折叠体都不渲染 */}
+      {/* 空分组既没有会话也没有子工作区，整块撑开体都不渲染 */}
       {section.sessions.length <= 0 && childIds.length <= 0 ? null : (
         // 组内同样是「子工作区 → 会话」，先文件夹后文件，与父工作区体内同一顺序
-        <CollapsibleBody open={!collapsed}>
+        <ExpandableBody open={expanded}>
           <div className={styles.groupBody}>
             {childIds.length === 0 ? null : (
               <div className={styles.nest}>{childIds.map(renderChildWorkspace)}</div>
@@ -126,7 +127,7 @@ export function GroupSection({
               </div>
             )}
           </div>
-        </CollapsibleBody>
+        </ExpandableBody>
       )}
     </div>
   )

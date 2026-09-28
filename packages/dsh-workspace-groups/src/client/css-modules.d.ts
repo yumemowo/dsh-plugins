@@ -118,10 +118,10 @@ declare module '*/rows.module.css' {
     readonly "arrow": string
     readonly "arrowOpen": string
     readonly "chevron": string
-    readonly "collapse": string
-    readonly "collapseClip": string
-    readonly "collapseOpen": string
     readonly "empty": string
+    readonly "expand": string
+    readonly "expandClip": string
+    readonly "expandOpen": string
     readonly "flatList": string
     readonly "folder": string
     readonly "folderActive": string

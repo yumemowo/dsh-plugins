@@ -1,5 +1,5 @@
 /**
- * 折叠动画的节奏参数与自定义属性名
+ * 撑开动画的节奏参数与自定义属性名
  *
  * 单独成一个模块，因为样式表与组件都要用这些自定义属性名：名字在本模块只有一份，写两遍会静默失配
  *
@@ -8,23 +8,23 @@
 import type { CSSProperties } from 'react'
 
 /**
- * 折叠动画的自定义属性名
+ * 撑开动画的自定义属性名
  *
  * 样式表与组件共用同一份：名字也写两遍的话，改一处漏一处同样会静默失配
  */
-export const COLLAPSE_VARS = {
+export const EXPAND_VARS = {
   /** 容器撑开与收回的时长，也是「撑开后开始淡入」的等待时长 */
-  duration: '--wg-collapse-duration',
+  duration: '--wg-expand-duration',
   /** 缓动曲线，容器与淡入共用 */
-  easing: '--wg-collapse-easing',
+  easing: '--wg-expand-easing',
   /** 单个元素淡入淡出的时长 */
-  fade: '--wg-collapse-fade',
+  fade: '--wg-expand-fade',
   /** 逐元素不同的淡入延迟，由组件量出来单独下发，样式只消费 */
-  delay: '--wg-collapse-delay',
+  delay: '--wg-expand-delay',
 } as const
 
-/** 折叠动画的节奏参数，单位一律毫秒，缓动直接给 CSS 的 timing function */
-export interface CollapseMotion {
+/** 撑开动画的节奏参数，单位一律毫秒，缓动直接给 CSS 的 timing function */
+export interface ExpandMotion {
   /** 容器撑开与收回的时长 */
   duration: number
   /** 缓动曲线，容器与淡入共用 */
@@ -50,7 +50,7 @@ export interface CollapseMotion {
  *
  * 时长与缓动取官方侧边栏的值（官方 `.18s` 与 `--ds-ease-in-out`）
  */
-export const DEFAULT_COLLAPSE_MOTION: CollapseMotion = {
+export const DEFAULT_EXPAND_MOTION: ExpandMotion = {
   duration: 180,
   easing: 'var(--ds-ease-in-out, ease-in-out)',
   fade: 200,
@@ -63,13 +63,13 @@ export const DEFAULT_COLLAPSE_MOTION: CollapseMotion = {
  * 把节奏参数摊成根节点上的自定义属性
  *
  * 自定义属性会继承，内层 clip 与每个元素因此都读得到，不必逐层下发
- * 延迟不进这里——它逐元素不同，由折叠体量出来单独下发
- * @returns 可直接挂到 `.collapse` 上的内联样式
+ * 延迟不进这里——它逐元素不同，由撑开体量出来单独下发
+ * @returns 可直接挂到 `.expand` 上的内联样式
  */
-export function collapseMotionVars(motion: CollapseMotion): CSSProperties {
+export function expandMotionVars(motion: ExpandMotion): CSSProperties {
   return {
-    [COLLAPSE_VARS.duration]: `${motion.duration}ms`,
-    [COLLAPSE_VARS.easing]: motion.easing,
-    [COLLAPSE_VARS.fade]: `${motion.fade}ms`,
+    [EXPAND_VARS.duration]: `${motion.duration}ms`,
+    [EXPAND_VARS.easing]: motion.easing,
+    [EXPAND_VARS.fade]: `${motion.fade}ms`,
   } as CSSProperties
 }

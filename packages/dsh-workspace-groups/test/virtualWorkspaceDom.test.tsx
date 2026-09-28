@@ -15,7 +15,7 @@ import { viewModeProps } from './viewMode-stub.ts'
  * 工作区分组的真实 DOM 结构
  *
  * `render.test.ts` 用自制 dispatcher 直接调用函数组件，只能看到元素树
- * 层级缩进却是一组按真实 DOM 结构写的选择器（`.virtualWorkspaceBody > .workspace > .collapse > ...`）
+ * 层级缩进却是一组按真实 DOM 结构写的选择器（`.virtualWorkspaceBody > .workspace > .expand > ...`）
  * 选择器写错时界面只是「没有缩进」，不会有任何报错
  * 这里用真 `react-dom` 渲染一遍并断言那些选择器确实命中，守住这条静默失效的边界
  *
@@ -255,7 +255,7 @@ describe('workspace group DOM structure', () => {
   it('keeps the session rows of a grouped workspace mounted under their groups', async () => {
     const { container, root } = await mount()
 
-    // 组内工作区里的会话分组与会话行都还在文档里（收起也是靠折叠体收轨道，不卸载）
+    // 组内工作区里的会话分组与会话行都还在文档里（收起也是靠撑开体收轨道，不卸载）
     const session = container.querySelector('.virtualWorkspaceBody .row')
     expect(session?.querySelector('.rowTitle')?.textContent).toBe('修复登录超时')
     expect(container.querySelector('.virtualWorkspaceBody .groupLabel')?.textContent).toBe(

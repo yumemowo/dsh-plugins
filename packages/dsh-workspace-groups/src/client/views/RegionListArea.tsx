@@ -1,7 +1,7 @@
 /**
  * 列表区：搜索态、平铺态与按工作区分组态三条分支
  *
- * 工作区区块的递归由 `WorkspaceNode` 承担，子工作区仍是一个完整的工作区块，只是从父工作区的折叠体里长出来
+ * 工作区区块的递归由 `WorkspaceNode` 承担，子工作区仍是一个完整的工作区块，只是从父工作区的撑开体里长出来
  * 它自己属于哪个容器、往下又有哪些子工作区都问 `nesting`，深度因此不必沿递归手工累加
  * 行级 memo 的前提是 props 身份稳定，因此传下去的都是原语或内容稳定值
  *
@@ -26,7 +26,7 @@ import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { abbreviateHomePath } from '../utils/pathUtils.ts'
 import { useLocale } from '../useLocale.ts'
 import { useLocalViewOptions } from '../useLocalViewOptions.ts'
-import { CollapsibleBody } from './components/CollapsibleBody.tsx'
+import { ExpandableBody } from './components/ExpandableBody.tsx'
 import { SearchResults } from './SearchControl.tsx'
 import { SessionRowMenu } from './SessionRowMenu.tsx'
 import type { SessionGroupingContext } from './SessionRowMenu.tsx'
@@ -81,9 +81,9 @@ export interface RegionListLayout {
 
 /** 列表侧消费的折叠态与揭示标记 */
 export interface RegionListUiState {
-  collapsedWorkspaces: Record<string, boolean>
-  collapsedGroups: Record<string, boolean>
-  collapsedVirtualWorkspaces: Record<string, boolean>
+  expandedWorkspaces: Record<string, boolean>
+  expandedGroups: Record<string, boolean>
+  expandedVirtualWorkspaces: Record<string, boolean>
   /** 从搜索结果打开、等待滚进可视区的那一行 */
   revealSessionId: string | undefined
   /** 被打开的那一行滚进可视区后清掉标记 */
@@ -145,7 +145,7 @@ interface RegionListAreaProps {
   scope: WorkspaceNodeScope
   flatRows: readonly SessionRow[]
   stray: readonly SessionRow[]
-  ungroupedCollapsed: boolean
+  ungroupedExpanded: boolean
   onToggleUngrouped: () => void
 }
 
@@ -191,7 +191,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
         <VirtualWorkspaceSection
           key={section.id}
           section={section}
-          collapsed={scope.ui.collapsedVirtualWorkspaces[section.id] === true}
+          expanded={scope.ui.expandedVirtualWorkspaces[section.id] !== false}
           onToggle={() => scope.ui.toggleVirtualWorkspace(section.id)}
           onRename={() => scope.edits.onRenameVirtualWorkspace(section.id, section.label)}
           onDelete={() => scope.edits.onDeleteVirtualWorkspace(section.id, section.label)}
@@ -211,14 +211,14 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
         <section className={rowsStyles.workspace}>
           <WorkspaceRow
             title={labels.ungrouped}
-            collapsed={props.ungroupedCollapsed}
+            expanded={props.ungroupedExpanded}
             folderActive={
-              !props.ungroupedCollapsed &&
+              props.ungroupedExpanded &&
               containsSession(props.stray, currentSessionId)
             }
             onToggle={props.onToggleUngrouped}
           />
-          <CollapsibleBody open={!props.ungroupedCollapsed}>
+          <ExpandableBody open={props.ungroupedExpanded}>
             <div className={rowsStyles.workspaceBody}>
               {/* 这些会话不属于任何工作区，没有分组可归，因此菜单里只有官方三项（归组项无处落）
                 * 宿主未提供官方服务时菜单会是空的，那时直接渲染无菜单的行，不留点不动的省略号 */}
@@ -226,7 +226,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
                 {props.stray.map((row) => ungroupedRowElement(row, session, rowLabels))}
               </div>
             </div>
-          </CollapsibleBody>
+          </ExpandableBody>
         </section>
       )}
       <RegionNotes nested={scope.snapshot.nested} />
@@ -244,7 +244,7 @@ function sessionRowLabels(labels: RegionLabels): SessionRowLabels {
 /**
  * 一个工作区区块，以及它体内按 cwd 路径挂着的子工作区
  *
- * 递归由这一个组件承担，子工作区仍是一个完整的工作区块，只是从父工作区的折叠体里长出来
+ * 递归由这一个组件承担，子工作区仍是一个完整的工作区块，只是从父工作区的撑开体里长出来
  * 它自己属于哪个容器、往下又有哪些子工作区都问 `nesting`，深度因此不必沿递归手工累加
  *
  * 行级 memo 的前提是 props 身份稳定，因此这里传下去的都是原语或内容稳定值
@@ -261,7 +261,7 @@ function WorkspaceNode({
   const workspace = layout.workspaceById.get(workspaceId)
   // 布局只包含快照里存在的工作区，因此这里不会落空，防御一下避免类型断言
   if (workspace === undefined) return null
-  const collapsed = ui.collapsedWorkspaces[workspaceId] === true
+  const expanded = ui.expandedWorkspaces[workspaceId] !== false
   const built = buildLayout(
     rowsByWorkspace.get(workspaceId) ?? [],
     snapshot.byWorkspace[workspaceId] ?? [],
@@ -322,10 +322,10 @@ function WorkspaceNode({
       key={workspaceId}
       row={{
         title: workspace.title,
-        collapsed,
+        expanded,
         // 官方只在「展开且含当前会话」时把文件夹染成强调色
         folderActive:
-          !collapsed &&
+          expanded &&
           containsSession(rowsByWorkspace.get(workspaceId) ?? [], scope.currentSessionId),
         virtualWorkspace: virtualWorkspaceMenu,
         parentGroup: parentGroupMenu,
@@ -350,7 +350,7 @@ function WorkspaceNode({
       }}
       layout={built}
       depth={layout.nesting.levelOf(workspaceId)}
-      isGroupCollapsed={(groupId) => ui.collapsedGroups[`${workspaceId}:${groupId}`] === true}
+      isGroupExpanded={(groupId) => ui.expandedGroups[`${workspaceId}:${groupId}`] !== false}
       groupActions={{
         onToggle: (groupId) => ui.toggleGroup(`${workspaceId}:${groupId}`),
         onRename: (section) => edits.onRenameGroup(workspaceId, section.id, section.label),

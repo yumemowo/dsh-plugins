@@ -21,7 +21,7 @@
 | `views/components/HoverCards.module.css` | 40 | 1 个 |
 | `views/WorkspaceRail.module.css` | 19 | 1 个 |
 
-`rows.module.css` 是最大的一张，因为它承载的是**共享词汇表**而非某个组件的私产：工作区行、会话分组行、工作区分组行与菜单条目行刻意同形（同一套 `.row` 系列、`.slot`、`.collapse` 系列）。官方 `ui-workspace` 的 `Rows.module.css` 同样一张表服务 `projectRow` / `sessionRow` / `searchResultRow` 三种行。
+`rows.module.css` 是最大的一张，因为它承载的是**共享词汇表**而非某个组件的私产：工作区行、会话分组行、工作区分组行与菜单条目行刻意同形（同一套 `.row` 系列、`.slot`、`.expand` 系列）。官方 `ui-workspace` 的 `Rows.module.css` 同样一张表服务 `projectRow` / `sessionRow` / `searchResultRow` 三种行。
 
 **把共享词汇表拆给任意一个组件都不行**：其余组件就得跨 module 引用类名。官方 136 张组件级样式表里跨模块串类名 0 次，这条边界不能破。
 
@@ -32,7 +32,7 @@
 `scripts/build-client.mjs` 用 lightningcss 编译 `.module.css`：
 
 - 类名按 `[hash]_[local]` 重写，哈希把类名限定在各自模块内；
-- 只有类名被改写，**自定义属性名（`--wg-depth`、`--wg-collapse-*`）与 `:global()` 内容保持原样**；
+- 只有类名被改写，**自定义属性名（`--wg-depth`、`--wg-expand-*`）与 `:global()` 内容保持原样**；
 - 每张表编译成一个虚拟模块，产出「注入 `<style data-plugin-css=…>` + 导出类名映射」，样式随组件 import 一起求值。
 
 产物因此只有一个 `lib/client.js`。原先的构建脚本取 `outputFiles[0]`，加了样式表后会静默丢掉第二个 `.css` 产物；现在改为按路径查找入口产物，并断言没有多余产物。
@@ -42,11 +42,11 @@
 - tsc 只认通配形式的 ambient module（写死 `'./x.module.css'` 不生效），因此按**文件名**通配，各样式表文件名必须唯一，生成脚本对此有断言；
 - 逐条列出类名而不是用 `Record<string, string>`：本仓库开了 `noUncheckedIndexedAccess`，索引签名会取到 `string | undefined`，逐条列出后取值是 `string`，类名写错也变成编译错误。
 
-## 折叠动画的时长与缓动
+## 撑开动画的时长与缓动
 
-原先把 `DEFAULT_COLLAPSE_MOTION` 的取值插进 CSS 当回退值（`var(--wg-collapse-duration, 180ms)`）。拆分后改为样式表**只消费变量**，取值一律由 `CollapsibleBody` 内联下发。
+原先把 `DEFAULT_EXPAND_MOTION` 的取值插进 CSS 当回退值（`var(--wg-expand-duration, 180ms)`）。拆分后改为样式表**只消费变量**，取值一律由 `ExpandableBody` 内联下发。
 
-这是本次唯一超出纯搬迁的语义改动。理由是回退值是同一份节奏的第二个来源：`CollapsibleBody` 恒设这三个自定义属性（`collapseMotionVars` 的产物直接挂在根节点上），样式表里的那份数字永远读取不到，却会在改常量时被漏改。`--wg-collapse-delay` 是例外并保留 `0ms` 兜底：没有被排期的元素（收起态）没有任何内联值。`test/motion.test.ts` 守住这条不变量。
+这是本次唯一超出纯搬迁的语义改动。理由是回退值是同一份节奏的第二个来源：`ExpandableBody` 恒设这三个自定义属性（`expandMotionVars` 的产物直接挂在根节点上），样式表里的那份数字永远读取不到，却会在改常量时被漏改。`--wg-expand-delay` 是例外并保留 `0ms` 兜底：没有被排期的元素（收起态）没有任何内联值。`test/motion.test.ts` 守住这条不变量。
 
 ## 静默失效与对应的守护
 

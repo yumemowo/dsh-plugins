@@ -230,7 +230,7 @@ describe('client stylesheet', () => {
     // 每一层让出一个 16px 图标列，基准是官方工作区行的 8px
     // 子工作区可以嵌任意层，深度由行组件下发 --wg-depth，因此每档都写成「基准 + 16px × 深度」
     // 缩进经 --wg-row-start 下发：指示器的落点读同一个值，两者不会错位
-    // 分组的会话行多了折叠体两层包装，选择器要跟着写穿
+    // 分组的会话行多了撑开体两层包装，选择器要跟着写穿
     expect(declared('.workspaceHead', '--wg-row-start')).toBe(
       'calc(8px + 16px * var(--wg-depth, 0))',
     )
@@ -245,7 +245,7 @@ describe('client stylesheet', () => {
     )
     expect(
       declared(
-        '.group > .collapse > .collapseClip > .groupBody > .sessions > .row',
+        '.group > .expand > .expandClip > .groupBody > .sessions > .row',
         '--wg-row-start',
       ),
     ).toBe('calc(40px + 16px * var(--wg-depth, 0))')
@@ -536,7 +536,7 @@ describe('client stylesheet', () => {
     expect(slot).toMatch(/width:\s*0/)
   })
 
-  it('animates the collapse body by track height instead of a hard-coded size', () => {
+  it('animates the expand body by track height instead of a hard-coded size', () => {
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
       selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
@@ -547,12 +547,12 @@ describe('client stylesheet', () => {
 
     // 收起态与展开态只差轨道高度（0fr ↔ 1fr）：轨道高度由内容自身决定
     // 因此子元素有多少个、各自多高都不需要预先知道
-    expect(bodyOf('.collapse')).toMatch(/grid-template-rows:\s*0fr/)
-    expect(bodyOf('.collapseOpen')).toMatch(/grid-template-rows:\s*1fr/)
+    expect(bodyOf('.expand')).toMatch(/grid-template-rows:\s*0fr/)
+    expect(bodyOf('.expandOpen')).toMatch(/grid-template-rows:\s*1fr/)
 
     // 轨道高度可动画的前提是内层裁剪 + 自动最小尺寸归零：缺了任一条
     // 内容都会把 0fr 的轨道顶开，收不到底
-    const clip = bodyOf('.collapseClip')
+    const clip = bodyOf('.expandClip')
     expect(clip).toMatch(/overflow:\s*hidden/)
     expect(clip).toMatch(/min-height:\s*0/)
     // 收起后内容仍在文档里，必须自己让出焦点顺序
@@ -560,11 +560,11 @@ describe('client stylesheet', () => {
 
     // 这套做法不依赖任何写死的尺寸或序号。只查折叠相关的规则：
     // 样式表里别处出现 max-height（如下拉菜单的高度上限）与这条取舍无关
-    const collapseBodies = rules
-      .filter((rule) => rule.selectors.some((selector) => selector.includes('collapse')))
+    const expandBodies = rules
+      .filter((rule) => rule.selectors.some((selector) => selector.includes('expand')))
       .map((rule) => rule.body)
       .join('\n')
-    expect(collapseBodies).not.toMatch(/max-height/)
+    expect(expandBodies).not.toMatch(/max-height/)
     expect(css).not.toMatch(/nth-child/)
   })
 
@@ -579,16 +579,16 @@ describe('client stylesheet', () => {
 
     // 不透明是元素的自然状态：展开态不得有任何规则写 opacity
     // 否则过渡没跑或主线程被占住时元素会留在透明上
-    // 透明只挂在「所在折叠体还没展开」这条结构条件上
-    expect(bodyOf('.collapseClip [data-wg-stagger]')).not.toMatch(/opacity\s*:/)
+    // 透明只挂在「所在撑开体还没展开」这条结构条件上
+    expect(bodyOf('.expandClip [data-wg-stagger]')).not.toMatch(/opacity\s*:/)
     expect(
-      bodyOf('.collapse:not(.collapseOpen) > .collapseClip [data-wg-stagger]'),
+      bodyOf('.expand:not(.expandOpen) > .expandClip [data-wg-stagger]'),
     ).toMatch(/opacity:\s*0/)
 
-    const revealed = bodyOf('.collapseClip [data-wg-stagger]')
-    // 延迟逐元素不同（撑开那段等待 + 该元素的先后），由折叠体量几何后逐个下发
+    const revealed = bodyOf('.expandClip [data-wg-stagger]')
+    // 延迟逐元素不同（撑开那段等待 + 该元素的先后），由撑开体量几何后逐个下发
     // 样式只消费一个变量，因此没有任何逐元素写死的值或序号
-    expect(revealed).toMatch(/transition-delay:\s*var\(--wg-collapse-delay/)
+    expect(revealed).toMatch(/transition-delay:\s*var\(--wg-expand-delay/)
   })
 
   it('fades every row out together when the body closes', () => {
@@ -598,7 +598,7 @@ describe('client stylesheet', () => {
       body: m[2] ?? '',
     }))
     const closed = rules.find((rule) =>
-      rule.selectors.includes('.collapse:not(.collapseOpen) > .collapseClip [data-wg-stagger]'),
+      rule.selectors.includes('.expand:not(.expandOpen) > .expandClip [data-wg-stagger]'),
     )?.body
 
     // 收起时这条更具体，且把延迟归零，所有行同时淡出（步进的延迟只挂在展开态那条）
@@ -606,13 +606,13 @@ describe('client stylesheet', () => {
     expect(closed).toMatch(/transition-delay:\s*0ms/)
   })
 
-  it('drops the collapse animation under prefers-reduced-motion', () => {
+  it('drops the expand animation under prefers-reduced-motion', () => {
     const reduced = readReducedMotionCss()
 
     // 关掉动画还不够：visibility 的延时不跟着去掉
     // 收起后内容仍会多挡一个动画时长才交出焦点
-    expect(reduced).toMatch(/\.collapse\s*\{\s*transition:\s*none/)
-    expect(reduced).toMatch(/\.collapseClip\s*\{\s*transition:\s*visibility 0s linear/)
+    expect(reduced).toMatch(/\.expand\s*\{\s*transition:\s*none/)
+    expect(reduced).toMatch(/\.expandClip\s*\{\s*transition:\s*visibility 0s linear/)
     // 逐个淡入也要一并落位。延迟由组件逐个下发，因此那条展开态规则要一起清掉
     // 否则 reduced-motion 下行仍是逐个出现
     expect(reduced).toMatch(/\[data-wg-stagger\][\s\S]*?transition:\s*none/)
@@ -781,7 +781,7 @@ describe('client stylesheet', () => {
 
     const wrapped = '.workspaceBody > .sessions > * > .row'
     const groupedWrapped =
-      '.group > .collapse > .collapseClip > .groupBody > .sessions > * > .row'
+      '.group > .expand > .expandClip > .groupBody > .sessions > * > .row'
 
     expect(indentOf(wrapped)).toBe('calc(24px + 16px * var(--wg-depth, 0))')
     expect(indentOf(groupedWrapped)).toBe('calc(40px + 16px * var(--wg-depth, 0))')

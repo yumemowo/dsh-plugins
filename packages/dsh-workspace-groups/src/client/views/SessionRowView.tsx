@@ -149,7 +149,7 @@ function SessionRowViewImpl({
       className={clsx(styles.row, selected && styles.rowSelected, menuOpen && styles.rowMenuOpen)}
       // 状态色底与选中加深都由样式表按它选档，行组件不感知配色
       data-wg-state={status?.state ?? 'idle'}
-      // 参与所在折叠体的逐个淡入，序号由折叠体按文档序下发
+      // 参与所在撑开体的逐个淡入，序号由撑开体按文档序下发
       data-wg-stagger=""
       role="button"
       tabIndex={0}

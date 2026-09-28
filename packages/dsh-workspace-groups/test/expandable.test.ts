@@ -4,8 +4,8 @@ import {
   planStaggerUnits,
   resolveLead,
   staggerDelayMs,
-} from '../src/client/views/components/CollapsibleBody.tsx'
-import type { StaggerTiming } from '../src/client/views/components/CollapsibleBody.tsx'
+} from '../src/client/views/components/ExpandableBody.tsx'
+import type { StaggerTiming } from '../src/client/views/components/ExpandableBody.tsx'
 
 /**
  * 逐个淡入的排期与延迟
@@ -19,7 +19,7 @@ import type { StaggerTiming } from '../src/client/views/components/CollapsibleBo
  * 按类名判断一个选择器是否命中
  *
  * 只实现本包用到的形式：`.cls` 与 `.cls:not(.other)`。替身必须真的解释选择器：
- * 漏掉点的 `collapse` 是标签选择器，匹配不到 `<div class="collapse">`，那种错
+ * 漏掉点的 `expand` 是标签选择器，匹配不到 `<div class="expand">`，那种错
  * 只有真解释选择器才抓得到
  * @param classes - 节点拥有的类名
  * @param selector - 待判断的选择器
@@ -49,14 +49,14 @@ function fakeNode(classes: string[], parent: FakeNode | null): FakeNode {
   }
 }
 
-/** 仍收着的嵌套折叠体 */
+/** 仍收着的嵌套撑开体 */
 function closedBody(parent: FakeNode | null): FakeNode {
-  return fakeNode(['collapse'], parent)
+  return fakeNode(['expand'], parent)
 }
 
-/** 展开着的嵌套折叠体 */
+/** 展开着的嵌套撑开体 */
 function openBody(parent: FakeNode | null): FakeNode {
-  return fakeNode(['collapse', 'collapseOpen'], parent)
+  return fakeNode(['expand', 'expandOpen'], parent)
 }
 
 interface FakeUnit extends FakeNode {
@@ -72,17 +72,17 @@ function unit(parent: FakeNode | null = null): FakeUnit {
     delay: undefined,
     style: {
       setProperty: (name, value) => {
-        if (name === '--wg-collapse-delay') node.delay = value
+        if (name === '--wg-expand-delay') node.delay = value
       },
     },
   }
   return node
 }
 
-/** 造一个容器替身：折叠体本身，带展开态 */
+/** 造一个容器替身：撑开体本身，带展开态 */
 function root(
   units: FakeUnit[],
-  classes: string[] = ['collapse', 'collapseOpen'],
+  classes: string[] = ['expand', 'expandOpen'],
 ): { querySelectorAll(selectors: string): ArrayLike<FakeUnit> } & FakeNode {
   return {
     ...fakeNode(classes, null),
@@ -92,7 +92,7 @@ function root(
 
 /**
  * 造一个场景：本次展开的容器，以及挂在它下面的元素
- * @param hiddenIndexes - 这些下标的元素改挂到仍收着的嵌套折叠体下
+ * @param hiddenIndexes - 这些下标的元素改挂到仍收着的嵌套撑开体下
  */
 function scene(
   count: number,
@@ -220,15 +220,15 @@ describe('nested visibility', () => {
   })
 
   it('recognises a closed body by class rather than by tag name', () => {
-    // 选择器漏掉点会变成标签选择器，匹配不到 <div class="collapse">
+    // 选择器漏掉点会变成标签选择器，匹配不到 <div class="expand">
     // 「祖先仍收着」的判定因此整条失效
-    const outer = fakeNode(['collapse'], null)
+    const outer = fakeNode(['expand'], null)
     const inner = closedBody(outer)
     const inside = unit(inner)
 
-    expect(inside.matches('.collapse:not(.collapseOpen)')).toBe(false)
-    expect(inner.matches('.collapse:not(.collapseOpen)')).toBe(true)
-    expect(inner.matches('collapse')).toBe(false)
+    expect(inside.matches('.expand:not(.expandOpen)')).toBe(false)
+    expect(inner.matches('.expand:not(.expandOpen)')).toBe(true)
+    expect(inner.matches('expand')).toBe(false)
   })
 })
 
@@ -239,7 +239,7 @@ describe('fail-open reveal', () => {
    */
   function componentSource(): string {
     return readFileSync(
-      new URL('../src/client/views/components/CollapsibleBody.tsx', import.meta.url),
+      new URL('../src/client/views/components/ExpandableBody.tsx', import.meta.url),
       'utf8',
     ).replace(/\/\*[\s\S]*?\*\//g, '')
   }

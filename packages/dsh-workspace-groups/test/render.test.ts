@@ -139,8 +139,8 @@ function render(
     slots?: unknown[]
     counts?: unknown[]
     order?: string[]
-    /** 折叠体元素，按文档序 */
-    collapses?: unknown[]
+    /** 撑开体元素，按文档序 */
+    expandBodies?: unknown[]
     /** 会话行元素，按文档序 */
     rows?: unknown[]
     /** 行右键菜单元素，按文档序，与 `menus` 分开收，见下方识别条件 */
@@ -261,10 +261,10 @@ function render(
       out.rows?.push(el)
     }
     if (
-      el.props['className'] === 'collapse' ||
-      el.props['className'] === 'collapse collapseOpen'
+      el.props['className'] === 'expand' ||
+      el.props['className'] === 'expand expandOpen'
     ) {
-      out.collapses?.push(el)
+      out.expandBodies?.push(el)
     }
     // 按文档序记下行头各段，用来断言「会话数在标题右侧、操作位左侧」
     const section = el.props['className']
@@ -528,7 +528,7 @@ function sessionRowNode(options: {
 function groupRowNode(onCreateSession?: () => void): unknown {
   return withLocale(React.createElement(GroupSection, {
     section: { id: 'g1', label: '前端', sessions: [] },
-    collapsed: false,
+    expanded: false,
     onToggle: () => {},
     onRename: () => {},
     onDelete: () => {},
@@ -557,7 +557,7 @@ function rowActionShape(out: { menus: unknown[]; buttons?: unknown[]; containers
 }
 
 /** 渲染一个分组行并返回可断言的操作结构 */
-function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, collapsed = false) {
+function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, expanded = true) {
   const out = {
     menus: [] as unknown[],
     text: [] as string[],
@@ -565,7 +565,7 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, collapse
     containers: [] as unknown[],
     counts: [] as unknown[],
     order: [] as string[],
-    collapses: [] as unknown[],
+    expandBodies: [] as unknown[],
     contextMenus: [] as unknown[],
   }
   render(
@@ -584,7 +584,7 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, collapse
             updatedAt: 0,
           })),
         },
-        collapsed,
+        expanded,
         onToggle: () => {},
         onRename: () => {},
         onDelete: () => {},
@@ -598,8 +598,8 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, collapse
   return out
 }
 
-/** 渲染一个工作区区块并返回可断言的折叠结构 */
-function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
+/** 渲染一个工作区区块并返回可断言的撑开结构 */
+function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
   const loose = Array.from({ length: looseCount }, (_, index) => ({
     id: `s${index}`,
     title: `会话 ${index}`,
@@ -612,7 +612,7 @@ function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
   const props: WorkspaceSectionProps = {
     row: {
       title: 'W1',
-      collapsed,
+      expanded,
       folderActive: false,
       virtualWorkspace: {
         sections: [],
@@ -630,7 +630,7 @@ function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
       onDelete: () => {},
     },
     layout: { groups: [], loose, children: [] },
-    isGroupCollapsed: () => false,
+    isGroupExpanded: () => false,
     depth: 0,
     groupActions: {
       onToggle: () => {},
@@ -649,16 +649,16 @@ function renderWorkspaceSection(collapsed: boolean, looseCount = 1) {
     slots: [] as unknown[],
     counts: [] as unknown[],
     order: [] as string[],
-    collapses: [] as unknown[],
+    expandBodies: [] as unknown[],
   }
   render(withLocale(React.createElement(WorkspaceSection, props)), out)
   return out
 }
 
-/** 折叠体的展开态：类名里带 collapseOpen 即为展开 */
-function isOpen(collapse: unknown): boolean {
-  const className = (collapse as { props: Record<string, unknown> }).props['className']
-  return typeof className === 'string' && className.includes('collapseOpen')
+/** 撑开体的展开态：类名里带 expandOpen 即为展开 */
+function isOpen(body: unknown): boolean {
+  const className = (body as { props: Record<string, unknown> }).props['className']
+  return typeof className === 'string' && className.includes('expandOpen')
 }
 
 function props(
@@ -1156,34 +1156,34 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(out.order).toEqual(['groupLabel', 'rowActions'])
   })
 
-  it('keeps the collapsed group sessions mounted so the body can shrink', () => {
-    // 收起靠的是折叠体把轨道收成 0 高，而不是把组内会话卸载掉——
+  it('keeps the closed group sessions mounted so the body can shrink', () => {
+    // 收起靠的是撑开体把轨道收成 0 高，而不是把组内会话卸载掉——
     // 卸载了就没有可收回的内容，收缩动作也就无从播起
-    const collapsed = renderGroupRow(() => {}, 2, true)
-    const expanded = renderGroupRow(() => {}, 2, false)
+    const closed = renderGroupRow(() => {}, 2, false)
+    const opened = renderGroupRow(() => {}, 2, true)
 
-    expect((collapsed.collapses ?? []).length).toBe(1)
-    expect(isOpen((collapsed.collapses ?? [])[0])).toBe(false)
-    expect(isOpen((expanded.collapses ?? [])[0])).toBe(true)
+    expect((closed.expandBodies ?? []).length).toBe(1)
+    expect(isOpen((closed.expandBodies ?? [])[0])).toBe(false)
+    expect(isOpen((opened.expandBodies ?? [])[0])).toBe(true)
   })
 
-  it('renders no collapse body at all for an empty group', () => {
-    // 没有内容就没有可撑开的轨道，连折叠体都不渲染
-    const out = renderGroupRow(() => {}, 0, true)
+  it('renders no expandable body at all for an empty group', () => {
+    // 没有内容就没有可撑开的轨道，连撑开体都不渲染
+    const out = renderGroupRow(() => {}, 0, false)
 
-    expect((out.collapses ?? []).length).toBe(0)
+    expect((out.expandBodies ?? []).length).toBe(0)
   })
 
-  it('keeps the collapsed workspace sessions mounted so the body can shrink', () => {
-    const collapsed = renderWorkspaceSection(true)
-    const expanded = renderWorkspaceSection(false)
+  it('keeps the closed workspace sessions mounted so the body can shrink', () => {
+    const closed = renderWorkspaceSection(false)
+    const opened = renderWorkspaceSection(true)
 
-    expect((collapsed.collapses ?? []).length).toBe(1)
-    expect(isOpen((collapsed.collapses ?? [])[0])).toBe(false)
-    expect(isOpen((expanded.collapses ?? [])[0])).toBe(true)
+    expect((closed.expandBodies ?? []).length).toBe(1)
+    expect(isOpen((closed.expandBodies ?? [])[0])).toBe(false)
+    expect(isOpen((opened.expandBodies ?? [])[0])).toBe(true)
     // 会话行仍在文档里，收起时只是被轨道裁掉
-    expect(collapsed.text).toContain('会话 0')
-    expect(expanded.text).toContain('会话 0')
+    expect(closed.text).toContain('会话 0')
+    expect(opened.text).toContain('会话 0')
   })
 
   it('keeps the group row actions in the same shape as the workspace row', () => {
@@ -1408,7 +1408,7 @@ describe('WorkspaceGroupsRegion render', () => {
   })
 
   it('never gates row visibility on a class the renderer could lose', () => {
-    // 透明只由「所在折叠体还没展开」这一条结构条件决定，行上不得再出现别的显隐状态：
+    // 透明只由「所在撑开体还没展开」这一条结构条件决定，行上不得再出现别的显隐状态：
     // 靠回调补类的那种显隐会在主线程被长任务占住时丢失，且补不回来
     const out = { menus: [] as unknown[], text: [] as string[], rows: [] as unknown[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
@@ -1905,7 +1905,7 @@ describe('search', () => {
     expect(out.inputs).toHaveLength(1)
   })
 
-  it('starts with an empty collapsed input that is out of the tab order', () => {
+  it('starts with an empty folded input that is out of the tab order', () => {
     const out = { menus: [] as unknown[], text: [] as string[], buttons: [] as unknown[], inputs: [] as unknown[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 

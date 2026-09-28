@@ -2,60 +2,60 @@
 
 .workspace + .workspace { margin-top: 4px; }
 
-/* 折叠体，轨道高度走 0fr ↔ 1fr，高度因此完全由内容决定
+/* 撑开体，轨道高度走 0fr ↔ 1fr，高度因此完全由内容决定
    与子元素数量和各自高度都无关，样式里不需要任何写死的尺寸
  *
- * 时长与缓动走自定义属性，由 CollapsibleBody 恒设，因此这里不写回退值
+ * 时长与缓动走自定义属性，由 ExpandableBody 恒设，因此这里不写回退值
  *
  * clip 那一层负责裁剪，展开过程中轨道比内容矮，内容被自上而下「撑」出来
    min-height 必须归零，否则轨道会被内容的自动最小尺寸顶开，0fr 收不到底 */
-.collapse {
+.expand {
   display: grid;
   grid-template-rows: 0fr;
   /* 它同时是 .workspace / .group 的 flex 子项
      自动最小尺寸同样会让轨道收不到底，因此这里也要归零 */
   min-height: 0;
-  transition: grid-template-rows var(--wg-collapse-duration)
-    var(--wg-collapse-easing);
+  transition: grid-template-rows var(--wg-expand-duration)
+    var(--wg-expand-easing);
 }
 
-.collapseOpen { grid-template-rows: 1fr; }
+.expandOpen { grid-template-rows: 1fr; }
 
-.collapseClip {
+.expandClip {
   overflow: hidden;
   min-height: 0;
   /* 收起后内容仍在文档里（收缩动画要靠它），因此显式移出焦点顺序与命中测试
      等收起动作跑完再隐藏，展开时立即可见
      延时取容器同一份时长，两者不可能失配 */
   visibility: hidden;
-  transition: visibility 0s linear var(--wg-collapse-duration);
+  transition: visibility 0s linear var(--wg-expand-duration);
 }
 
-.collapseOpen > .collapseClip { visibility: visible; transition-delay: 0s; }
+.expandOpen > .expandClip { visibility: visible; transition-delay: 0s; }
 
-/* 折叠体里的元素逐个淡入
+/* 撑开体里的元素逐个淡入
  *
  * 不透明是元素的自然状态，展开态没有任何规则写 opacity
- * 透明只挂在「所在折叠体还没展开」这一条结构条件上
+ * 透明只挂在「所在撑开体还没展开」这一条结构条件上
  * 因此过渡没跑、被降频或主线程被长任务占住时，元素只会「晚一点淡入」，不会留在透明上
  *
  * 嵌套由选择器自己兜住，外层收着时，这条选择器会作为祖先命中裁剪区里的所有元素
- * 内层折叠体的元素也在其中，因此无需往元素上挂显隐类
+ * 内层撑开体的元素也在其中，因此无需往元素上挂显隐类
  *
  * 延迟是绝对值（撑开那段等待 + 该元素的先后），由组件量出来逐个下发，样式只消费
  * 收起那条更具体且把延迟归零，所有元素因此一起淡出 */
-.collapseClip [data-wg-stagger] {
-  transition: opacity var(--wg-collapse-fade)
-    var(--wg-collapse-easing);
-  transition-delay: var(--wg-collapse-delay, 0ms);
+.expandClip [data-wg-stagger] {
+  transition: opacity var(--wg-expand-fade)
+    var(--wg-expand-easing);
+  transition-delay: var(--wg-expand-delay, 0ms);
 }
 
-.collapse:not(.collapseOpen) > .collapseClip [data-wg-stagger] {
+.expand:not(.expandOpen) > .expandClip [data-wg-stagger] {
   opacity: 0;
   transition-delay: 0ms;
 }
 
-/* 工作区分组：根节点上的容器行 + 折叠体
+/* 工作区分组：根节点上的容器行 + 撑开体
  *
  * 行本身复用会话分组那一套（同一 .groupHead 基类、同一行尾操作位与可收放槽位）
  * 因此工作区数、悬停让位、操作位显隐都由既有规则承担，这里只覆盖两处
@@ -75,12 +75,12 @@
    那句占位文案是「这个分组里还没有东西」，浮在分组头左侧会读成根节点的内容 */
 .virtualWorkspaceBody > .empty { padding-left: 24px; }
 
-/* 折叠体自己承担「上一行与它之间」的那 2px，这段间距要连同内容一起收掉，否则收起后行下会留一条 2px 空档
+/* 撑开体自己承担「上一行与它之间」的那 2px，这段间距要连同内容一起收掉，否则收起后行下会留一条 2px 空档
    间距取内层容器的上内边距——它落在 clip 的裁剪区内，轨道合拢时随之被裁掉 */
-.collapseClip > .workspaceBody,
-.collapseClip > .virtualWorkspaceBody,
-.collapseClip > .groupBody,
-.collapseClip > .sessions { padding-top: 2px; }
+.expandClip > .workspaceBody,
+.expandClip > .virtualWorkspaceBody,
+.expandClip > .groupBody,
+.expandClip > .sessions { padding-top: 2px; }
 
 /* 图标列：工作区的文件夹/箭头、分组的箭头共用同一列宽
    会话行不再占这一列，它的状态指示器绝对定位在行左侧（见 .indicator 一节） */
@@ -146,8 +146,8 @@
   padding-left: var(--wg-row-start);
 }
 
-.group > .collapse > .collapseClip > .groupBody > .sessions > .row,
-.group > .collapse > .collapseClip > .groupBody > .sessions > * > .row {
+.group > .expand > .expandClip > .groupBody > .sessions > .row,
+.group > .expand > .expandClip > .groupBody > .sessions > * > .row {
   --wg-row-start: calc(40px + 16px * var(--wg-depth, 0));
   padding-left: var(--wg-row-start);
 }
@@ -251,11 +251,11 @@
 .nest > * + *,
 .sessions > * + * { margin-top: 2px; }
 
-/* 折叠体要抵消上一条规则给它写上的 margin-top，那段间距由 clip 内部的上内边距
-   承担（见折叠体规则处），这样它会落在裁剪区内，能随内容一起收掉 */
-.virtualWorkspace > .collapse,
-.workspace > .collapse,
-.group > .collapse { margin-top: 0; }
+/* 撑开体要抵消上一条规则给它写上的 margin-top，那段间距由 clip 内部的上内边距
+   承担（见撑开体规则处），这样它会落在裁剪区内，能随内容一起收掉 */
+.virtualWorkspace > .expand,
+.workspace > .expand,
+.group > .expand { margin-top: 0; }
 
 .row {
   box-sizing: border-box;
@@ -570,15 +570,15 @@ body[data-wg-flip] [data-wg-hover-card] {
 @media (prefers-reduced-motion: reduce) {
   .arrow { transition: none; }
 
-  /* 折叠体直接落位，不做撑开/收回动作
+  /* 撑开体直接落位，不做撑开/收回动作
        visibility 的延时也要一并去掉，否则收起后仍会多挡一个容器时长才交出焦点 */
-  .collapse { transition: none; }
+  .expand { transition: none; }
 
-  .collapseClip { transition: visibility 0s linear; }
+  .expandClip { transition: visibility 0s linear; }
 
   /* 子元素随容器一起落位。逐个淡入的延迟由组件逐个下发，这里把过渡整条撤掉
      不撤的话 reduced-motion 下行仍是逐个出现，撤掉后元素落回自然的不透明 */
-  .collapseClip [data-wg-stagger] {
+  .expandClip [data-wg-stagger] {
     transition: none;
     transition-delay: 0s;
   }

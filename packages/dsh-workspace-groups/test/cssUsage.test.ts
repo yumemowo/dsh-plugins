@@ -26,7 +26,7 @@ describe('class name usage', () => {
     // 判定的依据是「本包定义过哪些类」，这份集合若取空会让整条检查静默失效
     expect(OWN_CLASSES.size).toBeGreaterThan(100)
     expect(OWN_CLASSES.has('row')).toBe(true)
-    expect(OWN_CLASSES.has('collapseOpen')).toBe(true)
+    expect(OWN_CLASSES.has('expandOpen')).toBe(true)
     // 反向：普通单词不在集合里，避免把任何字符串都当成类名
     expect(OWN_CLASSES.has('workspaceGroup')).toBe(false)
   })
@@ -40,7 +40,7 @@ describe('class name usage', () => {
       "const c = { '--wg-depth': '1' }",
       'const d = `[data-wg-stagger]`',
       '// 注释里提到 row 不算',
-      'const e = `${styles.collapse}:not(.${styles.collapseOpen})`',
+      'const e = `${styles.expand}:not(.${styles.expandOpen})`',
       'const f = panel.querySelectorAll(`.${styles.viewOptionRow}`)',
     ].join('\n')
     const bad = [

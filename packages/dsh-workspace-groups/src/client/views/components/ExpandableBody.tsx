@@ -1,5 +1,5 @@
 /**
- * 折叠体：展开时向下撑开、收起时收回，内容始终留在文档里
+ * 撑开体：承载「向下撑开 / 收回」那层轨道的容器，内容始终留在文档里
  *
  * 高度走 grid 轨道的 `0fr` ↔ `1fr`：轨道高度由内容自身决定，因此不需要预先知道子元素数量或高度，样式里也不写死任何尺寸
  *
@@ -13,7 +13,7 @@
  * 衔接两段的是一段延迟：撑开那段等待（容器时长 × 起点比例）与逐个淡入的先后相加后一起写进元素的延迟
  * 等待走挂钟时间，主线程被长任务占住时只是晚一点淡入
  *
- * 透明只挂在「所在折叠体还没展开」这一条结构条件上（见 `rows.module.css` 的 `.collapse`），不透明是元素的自然状态
+ * 透明只挂在「所在撑开体还没展开」这一条结构条件上（见 `rows.module.css` 的 `.expand`），不透明是元素的自然状态
  * 这里只写延迟、不写显隐，因此没有会过期的状态
  *
  * 淡入放在撑开之后还顺带解决了首帧问题：首次展开要付样式与布局的初始化代价
@@ -25,17 +25,17 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import {
-  COLLAPSE_VARS,
-  DEFAULT_COLLAPSE_MOTION,
-  collapseMotionVars,
-} from '../../utils/collapseMotion.ts'
-import type { CollapseMotion } from '../../utils/collapseMotion.ts'
+  EXPAND_VARS,
+  DEFAULT_EXPAND_MOTION,
+  expandMotionVars,
+} from '../../utils/expandMotion.ts'
+import type { ExpandMotion } from '../../utils/expandMotion.ts'
 import styles from './rows.module.css'
 import clsx from 'clsx'
 
-// 节奏参数与自定义属性名都定义在 utils/collapseMotion.ts（样式表要用同一份），这里转发给元素组件使用
-export { COLLAPSE_VARS, DEFAULT_COLLAPSE_MOTION, collapseMotionVars }
-export type { CollapseMotion }
+// 节奏参数与自定义属性名都定义在 utils/expandMotion.ts（样式表要用同一份），这里转发给元素组件使用
+export { EXPAND_VARS, DEFAULT_EXPAND_MOTION, expandMotionVars }
+export type { ExpandMotion }
 
 /** 逐个淡入的节奏依据 */
 export interface StaggerTiming {
@@ -48,14 +48,14 @@ export interface StaggerTiming {
 /** 带此标记的元素参与逐个淡入，标记由元素组件打在自己根节点上 */
 const STAGGER_UNIT = '[data-wg-stagger]'
 
-/** 折叠体根节点的类名（编译后是哈希名，选择器必须由它拼） */
-const BODY_CLASS = styles.collapse
+/** 撑开体根节点的类名（编译后是哈希名，选择器必须由它拼） */
+const BODY_CLASS = styles.expand
 
-/** 折叠体根节点的选择器 */
+/** 撑开体根节点的选择器 */
 const BODY_SELECTOR = `.${BODY_CLASS}`
 
-/** 仍收着的折叠体，落在它里面的元素本次展开不会露面 */
-const CLOSED_BODY = `${BODY_SELECTOR}:not(.${styles.collapseOpen})`
+/** 仍收着的撑开体，落在它里面的元素本次展开不会露面 */
+const CLOSED_BODY = `${BODY_SELECTOR}:not(.${styles.expandOpen})`
 
 /**
  * 祖先链上的节点
@@ -82,7 +82,7 @@ export interface StaggerRoot extends StaggerAncestor {
 /**
  * 判断元素此刻是否可见
  *
- * 沿祖先链一路向上找仍收着的折叠体：收着的祖先里的元素根本看不见
+ * 沿祖先链一路向上找仍收着的撑开体：收着的祖先里的元素根本看不见
  * 给它排期等于把淡入提前用掉，等祖先真的展开时延迟已经过完，淡入不再发生
  * @returns 可见为 true
  */
@@ -137,29 +137,29 @@ export function staggerDelayMs(order: number, timing: StaggerTiming): number {
  */
 export function planStaggerUnits(root: StaggerRoot, timing: StaggerTiming, waitMs: number): void {
   visibleUnits(root).forEach((unit, order) => {
-    unit.style.setProperty(COLLAPSE_VARS.delay, `${waitMs + staggerDelayMs(order, timing)}ms`)
+    unit.style.setProperty(EXPAND_VARS.delay, `${waitMs + staggerDelayMs(order, timing)}ms`)
   })
 }
 
-export interface CollapsibleBodyProps {
+export interface ExpandableBodyProps {
   /** 展开态，收起时轨道收成 0 高 */
   open: boolean
-  /** 折叠体内容，通常是 `.workspaceBody` 或 `.sessions` */
+  /** 撑开体内容，通常是 `.workspaceBody` 或 `.sessions` */
   children: ReactNode
   /**
-   * 折叠动画的节奏，缺省用 {@link DEFAULT_COLLAPSE_MOTION}
+   * 撑开动画的节奏，缺省用 {@link DEFAULT_EXPAND_MOTION}
    *
    * 只覆盖传入的字段，未传的取默认值
    */
-  motion?: Partial<CollapseMotion> | undefined
+  motion?: Partial<ExpandMotion> | undefined
 }
 
-export function CollapsibleBody({ open, children, motion }: CollapsibleBodyProps): ReactElement {
+export function ExpandableBody({ open, children, motion }: ExpandableBodyProps): ReactElement {
   const clip = useRef<HTMLDivElement | null>(null)
   const wasOpen = useRef(open)
 
   // 节奏参数只用于换算与下发，不进依赖：中途改它不该让已经在跑的淡入换一套延迟
-  const resolved = { ...DEFAULT_COLLAPSE_MOTION, ...motion }
+  const resolved = { ...DEFAULT_EXPAND_MOTION, ...motion }
   const motionRef = useRef(resolved)
   motionRef.current = resolved
 
@@ -167,7 +167,7 @@ export function CollapsibleBody({ open, children, motion }: CollapsibleBodyProps
   // 依赖按字段列出，父组件每次重渲染传进来的新对象因此不会让内联样式每帧换一份
   const { duration, easing, fade, step, cap, lead } = resolved
   const vars = useMemo(
-    () => collapseMotionVars({ duration, easing, fade, step, cap, lead }),
+    () => expandMotionVars({ duration, easing, fade, step, cap, lead }),
     [duration, easing, fade, step, cap, lead],
   )
 
@@ -187,8 +187,8 @@ export function CollapsibleBody({ open, children, motion }: CollapsibleBodyProps
   })
 
   return (
-    <div className={clsx(styles.collapse, open && styles.collapseOpen)} style={vars}>
-      <div className={styles.collapseClip} ref={clip}>
+    <div className={clsx(styles.expand, open && styles.expandOpen)} style={vars}>
+      <div className={styles.expandClip} ref={clip}>
         {children}
       </div>
     </div>

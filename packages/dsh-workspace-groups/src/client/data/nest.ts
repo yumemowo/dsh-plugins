@@ -80,7 +80,7 @@ export interface Nesting {
   /**
    * 该工作区的祖先链，从近到远
    *
-   * 逐层展开折叠体、以及「移入父分组」的候选祖先都取自它
+   * 逐层展开撑开体、以及「移入父分组」的候选祖先都取自它
    */
   ancestorsOf: (workspaceId: string) => readonly string[]
   /**
@@ -335,7 +335,7 @@ export function deriveNesting(input: NestingInput): Nesting {
       if (directParentOf(workspaceId) === undefined) top.push(workspaceId)
     }
     for (const workspaceId of list) {
-      // 祖先链从近到远，供「展开到这一行」逐层打开折叠体
+      // 祖先链从近到远，供「展开到这一行」逐层打开撑开体
       // `seen` 兜住元数据自相矛盾时可能出现的环：链本身已经校验过父是真实祖先，这里只是不让一次坏记录把界面挂死
       const chain: string[] = []
       const seen = new Set<string>([workspaceId])

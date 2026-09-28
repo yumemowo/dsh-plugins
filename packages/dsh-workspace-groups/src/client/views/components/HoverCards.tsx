@@ -8,7 +8,7 @@
  * 会话标题在行上会被省略号截断，卡片因此用 `overflow-wrap` 让它整句折行显示
  * 目录路径同理，另加 `word-break` 照顾没有空格的长路径
  *
- * 入场前的 `data-wg-stagger` 标记不打在这里：卡片内容是 portal 到 body 的浮层，与折叠体的逐个淡入无关
+ * 入场前的 `data-wg-stagger` 标记不打在这里：卡片内容是 portal 到 body 的浮层，与撑开体的逐个淡入无关
  */
 import type { ReactElement } from 'react'
 import { StateDot } from '../../runtime.ts'
