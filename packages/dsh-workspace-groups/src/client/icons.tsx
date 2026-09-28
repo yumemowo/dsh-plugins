@@ -115,3 +115,31 @@ export function IconVirtualFolder16({ size = 16, className }: IconProps): ReactE
     </svg>
   )
 }
+
+/**
+ * 指示器选「图标」时的菜单字形：一枚实心圆点
+ *
+ * 就是官方 `StateDot` 在三态下画的那个核（`inset: 20%` 的实心圆），因此与列表里真正会出现的东西同形
+ * 官方 primitives 没有单画一枚点、不带状态色的字形（`StateDot` 带状态色，菜单里要的是中性描摹）
+ */
+export function IconDotIndicator16({ size = 16, className }: IconProps): ReactElement {
+  return (
+    <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="3" fill="currentColor" />
+    </svg>
+  )
+}
+
+/**
+ * 指示器选「色条」时的菜单字形：一根竖条
+ *
+ * 与列表里那根色条的形态对应（宽 3px、两端圆角）
+ * 高度取 10 而非画满整格：菜单字形与点同处一列，等宽等高才不显得偏重
+ */
+export function IconBarIndicator16({ size = 16, className }: IconProps): ReactElement {
+  return (
+    <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none">
+      <rect x="6.5" y="3" width="3" height="10" rx="1.5" fill="currentColor" />
+    </svg>
+  )
+}

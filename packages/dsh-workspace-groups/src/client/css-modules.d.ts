@@ -130,6 +130,8 @@ declare module '*/rows.module.css' {
     readonly "groupCount": string
     readonly "groupHead": string
     readonly "groupLabel": string
+    readonly "indicator": string
+    readonly "indicatorBar": string
     readonly "nest": string
     readonly "note": string
     readonly "noteNested": string
@@ -139,13 +141,11 @@ declare module '*/rows.module.css' {
     readonly "rowActionDanger": string
     readonly "rowActionSlot": string
     readonly "rowActions": string
-    readonly "rowFlat": string
     readonly "rowMenuOpen": string
     readonly "rowSelected": string
     readonly "rowTime": string
     readonly "rowTitle": string
     readonly "sessions": string
-    readonly "sessionsTitle": string
     readonly "slot": string
     readonly "virtualWorkspace": string
     readonly "virtualWorkspaceBody": string

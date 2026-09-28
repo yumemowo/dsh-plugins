@@ -11,6 +11,14 @@
  */
 export type ViewMode = 'workspace' | 'flat'
 
+/**
+ * 会话行的状态指示器样式
+ *
+ * `icon` 是官方那个 `StateDot`，`bar` 是一条色条
+ * 两者都不占行内流：绝对定位在行的左侧，标题因此不因状态出现与否而位移
+ */
+export type IndicatorStyle = 'icon' | 'bar'
+
 /** 一个会话在列表中的渲染行 */
 export interface SessionRow {
   id: string

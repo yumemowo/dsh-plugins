@@ -246,7 +246,10 @@ function render(
     if (el.props['className'] === 'rowActions') out.containers?.push(el)
     // 行了挂右键处理的行：据此断言右键入口确实接在了行本身上
     if (el.props['onContextMenu'] !== undefined) out.hosts?.push(el)
-    if (el.props['className'] === 'slot') out.slots?.push(el)
+    // 容器行的图标槽（.slot）与会话行的状态指示器（.indicator）都带 role="img" 与 aria-label
+    if (el.props['className'] === 'slot' || el.props['className'] === 'indicator') {
+      out.slots?.push(el)
+    }
     if (el.props['className'] === 'groupCount') out.counts?.push(el)
     if (el.props['className'] === 'searchResultMeta') out.metas?.push(el)
     // 会话行与分组头都带淡入标记，这里只收会话行（带 data-wg-stagger 的 row）
@@ -1384,12 +1387,15 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(actionLabels(out)).toContain('工作区“W1”的操作')
   })
 
-  it('renders no status dot for idle session rows', () => {
-    const out = { menus: [] as unknown[], text: [] as string[] }
+  it('renders no status indicator for idle session rows', () => {
+    const out = { menus: [] as unknown[], text: [] as string[], slots: [] as unknown[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
-    // 空闲行不画点，但槽位仍在，标题因此不位移
+    // 空闲行整枚指示器都不渲染：它绝对定位、不占行内流，因此不画也不会让标题位移
     expect(out.text.filter((t) => t.startsWith('StateDot:'))).toEqual([])
+    expect(
+      (out.slots as { props: Record<string, unknown> }[]).filter((s) => s.props['role'] === 'img'),
+    ).toEqual([])
   })
 
   it('renders a warning dot for a session awaiting user interaction', () => {
@@ -1763,7 +1769,7 @@ describe('hover cards', () => {
       },
       title: '会话一',
       selected: false,
-      statuses: [{ state: 'done', label: '空闲' }],
+        statuses: [{ state: 'done', label: '空闲' }],
       hoverTime: '5分钟前',
       onOpenSession: () => {},
       official: {
@@ -1809,7 +1815,7 @@ describe('hover cards', () => {
       },
       title: '会话一',
       selected: false,
-      hoverTime: '5分钟前',
+        hoverTime: '5分钟前',
       onOpenSession: () => {},
       official: {
         renameSession: async () => {},

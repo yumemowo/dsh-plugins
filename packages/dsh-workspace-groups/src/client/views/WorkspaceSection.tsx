@@ -87,15 +87,9 @@ export function WorkspaceSection({
             </GroupSection>
           ))}
           {/* 未归组的会话平铺在工作区下，不套任何分组头
-              同一段里还有子工作区或会话分组时，两者的行文字左缘处在同一条竖线上
-              这时给会话这一段加一个小标题并拉开间距，否则读不出哪几行是会话 */}
+              指示器不占行内流，会话行的标题因此落在同级容器的图标列上，与会话分组头、子工作区行都不重合 */}
           {layout.loose.length === 0 ? null : (
             <div className={styles.sessions}>
-              {childIds.length > 0 || layout.groups.length > 0 ? (
-                <div className={styles.sessionsTitle} data-wg-stagger="">
-                  {labels.sessions}
-                </div>
-              ) : null}
               {[...layout.loose].sort(compareSessionRows).map(renderSession)}
             </div>
           )}

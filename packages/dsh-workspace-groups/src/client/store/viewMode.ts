@@ -1,7 +1,7 @@
 /**
- * 会话列表展示方式的存储
+ * 会话列表展示方式与指示器样式的存储
  *
- * 这个选择是浏览器本地偏好而不是分组元数据，因此不进宿主的存储域，也不随快照往返
+ * 这两个选择都是浏览器本地偏好而不是分组元数据，因此不进宿主的存储域，也不随快照往返
  * 引擎用官方 `@deepseek-ai/dsh-client-store` 的 `defineStore`，与官方 ui-workspace 的 `groupBy` 同一套
  *
  * 存储键与官方 `dsh.workspace.view.*` 分开：两者是两套独立的界面状态，共用键会互相覆盖
@@ -10,14 +10,30 @@
  * 后续新增的浏览器本地状态因此要并进本文件的状态对象，不能各起一个键
  */
 import { defineStore } from '@deepseek-ai/dsh-client-store'
-import type { ViewMode } from '../data/types.ts'
+import type { IndicatorStyle, ViewMode } from '../data/types.ts'
 
-/** 展示方式的状态形状，同时是选择器读数的输入 */
+/**
+ * 展示方式与指示器样式的状态形状，同时是选择器读数的输入
+ *
+ * 两个可选格都是「加过的字段」：持久化引擎读盘时整份替换状态，早于该字段写入的那份 JSON 里没有它
+ * 引擎不给合并钩子，因此读取处一律走 {@link modeOf} 与 {@link indicatorOf}，不要直接读字段
+ */
 export interface ViewModeState {
-  mode: ViewMode
+  mode?: ViewMode | undefined
+  indicator?: IndicatorStyle | undefined
 }
 
-/** 引擎按这个键持久化，改名等于丢掉用户已经选过的展示方式 */
+/** 展示方式，旧数据缺这一格时按「按工作区」 */
+export function modeOf(state: ViewModeState): ViewMode {
+  return state.mode ?? 'workspace'
+}
+
+/** 指示器样式，旧数据缺这一格时按「图标」 */
+export function indicatorOf(state: ViewModeState): IndicatorStyle {
+  return state.indicator ?? 'icon'
+}
+
+/** 引擎按这个键持久化，改名等于丢掉用户已经选过的偏好 */
 export const VIEW_MODE_PERSIST_KEY = 'dsh.workspace-groups.view.v1'
 
 /**
@@ -27,11 +43,14 @@ export const VIEW_MODE_PERSIST_KEY = 'dsh.workspace-groups.view.v1'
  */
 export function createViewModeStore() {
   return defineStore({
-    init: (): ViewModeState => ({ mode: 'workspace' }),
+    init: (): ViewModeState => ({ mode: 'workspace', indicator: 'icon' }),
     persist: VIEW_MODE_PERSIST_KEY,
     actions: {
       setMode: (draft, mode: ViewMode) => {
         draft.mode = mode
+      },
+      setIndicator: (draft, indicator: IndicatorStyle) => {
+        draft.indicator = indicator
       },
     },
   })

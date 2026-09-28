@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   VIEW_MODE_PERSIST_KEY,
   createViewModeStore,
+  indicatorOf,
+  modeOf,
   sharedViewModeStore,
 } from '../src/client/store/viewMode.ts'
 
@@ -32,8 +34,11 @@ function installStorage(): Map<string, string> {
 }
 
 describe('view mode store', () => {
-  it('starts on the grouped view', () => {
-    expect(createViewModeStore().create().getSnapshot()).toEqual({ mode: 'workspace' })
+  it('starts on the grouped view with the icon indicator', () => {
+    expect(createViewModeStore().create().getSnapshot()).toEqual({
+      mode: 'workspace',
+      indicator: 'icon',
+    })
   })
 
   it('persists the picked mode under its own key', () => {
@@ -42,7 +47,9 @@ describe('view mode store', () => {
 
     instance.actions.setMode('flat')
 
-    expect(entries.get(VIEW_MODE_PERSIST_KEY)).toBe(JSON.stringify({ mode: 'flat' }))
+    expect(entries.get(VIEW_MODE_PERSIST_KEY)).toBe(
+      JSON.stringify({ mode: 'flat', indicator: 'icon' }),
+    )
   })
 
   it('reads the persisted mode back on the next instance', () => {
@@ -50,7 +57,22 @@ describe('view mode store', () => {
     installStorage()
     createViewModeStore().create().actions.setMode('flat')
 
-    expect(createViewModeStore().create().getSnapshot()).toEqual({ mode: 'flat' })
+    expect(createViewModeStore().create().getSnapshot()).toEqual({
+      mode: 'flat',
+      indicator: 'icon',
+    })
+  })
+
+  it('falls back per field when the stored payload predates the indicator', () => {
+    // 早于指示器那格写入的 JSON 里没有 indicator，引擎读盘时整份替换状态、不给合并钩子
+    // 读取处一律走 modeOf / indicatorOf，因此老数据只会让缺的那格落到默认值，不会变成 undefined
+    const entries = installStorage()
+    entries.set(VIEW_MODE_PERSIST_KEY, JSON.stringify({ mode: 'flat' }))
+
+    const state = createViewModeStore().create().getSnapshot()
+
+    expect(modeOf(state)).toBe('flat')
+    expect(indicatorOf(state)).toBe('icon')
   })
 
   it('keeps the stored key apart from the official workspace view store', () => {
@@ -68,7 +90,7 @@ describe('view mode store', () => {
 
     expect(second).toBe(first)
     first.actions.setMode('flat')
-    expect(second.getSnapshot()).toEqual({ mode: 'flat' })
+    expect(second.getSnapshot()).toEqual({ mode: 'flat', indicator: 'icon' })
   })
 
   it('scopes the persist key by session only when the handle allows it', () => {

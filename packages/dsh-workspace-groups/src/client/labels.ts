@@ -148,6 +148,8 @@ export interface RegionLabels {
   nested: NestedLabels
   /** 视图选项面板里「展示方式」那一组的文案 */
   viewMode: ViewModeLabels
+  /** 视图选项面板里「指示器」那一组的文案 */
+  indicatorStyle: IndicatorStyleLabels
 }
 
 /** 视图选项面板里「展示方式」那一组 */
@@ -162,6 +164,20 @@ export interface ViewModeLabels {
   workspace: string
   /** 「平铺」这一项：全部可见会话在同一条列表里，与官方「单列表」一致 */
   flat: string
+}
+
+/** 视图选项面板里「指示器」那一组 */
+export interface IndicatorStyleLabels {
+  /**
+   * 这一组的标题
+   *
+   * 与「展示方式」并列，都是「标题 + 两条互斥可选项」那一套
+   */
+  label: string
+  /** 「图标」这一项：官方 `StateDot` 字形 */
+  icon: string
+  /** 「色条」这一项：一条状态色条 */
+  bar: string
 }
 
 /** 子工作区嵌套相关的文案 */
@@ -341,6 +357,11 @@ export function regionLabels(
       label: t('viewMode.label'),
       workspace: t('viewMode.workspace'),
       flat: t('viewMode.flat'),
+    },
+    indicatorStyle: {
+      label: t('indicator.label'),
+      icon: t('indicator.icon'),
+      bar: t('indicator.bar'),
     },
   }
 }

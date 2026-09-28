@@ -40,7 +40,7 @@ import {
   mainSessionId,
   straySessions,
 } from '../data/sessions.ts'
-import type { RootLayout, SessionRow, ViewMode } from '../data/types.ts'
+import type { RootLayout, SessionRow } from '../data/types.ts'
 import type { HostInfo } from '../hostInfo.ts'
 import { regionLabels } from '../labels.ts'
 import type { RegionLabels } from '../labels.ts'
@@ -50,8 +50,11 @@ import { normalizeSnapshot } from '../remote.ts'
 import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { rootVirtualKey } from '../../rootEntry.ts'
 import { useFlipMarker } from '../useFlipMarker.ts'
+import { indicatorOf, modeOf } from '../store/viewMode.ts'
 import type { ViewModeStoreHandle } from '../store/viewMode.ts'
 import { RegionLocaleProvider } from '../useLocale.ts'
+import { LocalViewOptionsProvider } from '../useLocalViewOptions.ts'
+import type { LocalViewOptions } from '../useLocalViewOptions.ts'
 import type { RegionLocale } from '../useLocale.ts'
 import { RegionDialogs } from './RegionDialogs.tsx'
 import type { MergeDraft, RegionDialogActions, RegionOverlay } from './RegionDialogs.tsx'
@@ -86,8 +89,6 @@ export type WorkspaceGroupsProps = RegionDataHooks &
 /** 全局快照与宿主数据 hook 的读数，只随快照与座位变化 */
 interface RegionSources {
   labels: RegionLabels
-  viewMode: ViewMode
-  setViewMode: (mode: ViewMode) => void
   workspaces: readonly WorkspaceView[]
   archivedSessionIds: readonly string[]
   sessions: SessionListState
@@ -207,14 +208,9 @@ function useRegionSources(props: WorkspaceGroupsProps): RegionSources {
     useSessionStatus,
     useDirectoryFlow,
     useHostInfo,
-    useStore,
-    actions,
   } = props
 
   const labels = useMemo(() => regionLabels(t, tWorkspace, tSidebar), [t, tWorkspace, tSidebar])
-  // 展示方式读走选择器 hook、写走 actions，与官方 ui-workspace 的 groupBy 同一套
-  const viewMode = useStore((state) => state.mode)
-  const setViewMode = actions.setMode
 
   const workspaces = useWorkspaces((state) => state.items) as readonly WorkspaceView[]
   // 归档集是注册表全局的，归档会话仍留在工作区的 sessionIds 里，必须显式过滤，否则已归档的会话会继续出现在列表里
@@ -233,8 +229,6 @@ function useRegionSources(props: WorkspaceGroupsProps): RegionSources {
 
   return {
     labels,
-    viewMode,
-    setViewMode,
     workspaces,
     archivedSessionIds,
     sessions,
@@ -243,6 +237,28 @@ function useRegionSources(props: WorkspaceGroupsProps): RegionSources {
     official,
     flowOccupied,
   }
+}
+
+/**
+ * 把 store 座位投影成视图选项偏好
+ *
+ * 读走选择器 hook、写走 actions，与官方 ui-workspace 的 groupBy 同一套
+ * 两个字段是「加过的」可选格：持久化引擎读盘时整份替换状态，早于该字段写入的那份 JSON 里没有它
+ * 引擎不给合并钩子，因此一律经 {@link modeOf} / {@link indicatorOf} 归一，不直接读字段
+ * @param props - 区域 props，只用它的 store 座位两格
+ * @returns 当前值与两个写入口
+ */
+function useLocalViewOptionsValue(props: WorkspaceGroupsProps): LocalViewOptions {
+  const { useStore, actions } = props
+  const mode = modeOf(useStore((state) => state))
+  const indicator = indicatorOf(useStore((state) => state))
+  const setMode = actions.setMode
+  const setIndicator = actions.setIndicator
+  // value 身份要稳定：它经 context 交给每一行，每次渲染新建会让行级 memo 全部失效
+  return useMemo(
+    () => ({ mode, indicator, setMode, setIndicator }),
+    [mode, indicator, setMode, setIndicator],
+  )
 }
 
 // ── 快照 ──
@@ -1083,8 +1099,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const { wide, expandSidebar, openSession, searchResultLimit, t } = props
 
   const sources = useRegionSources(props)
-  const { labels, viewMode, setViewMode, workspaces, archivedSessionIds, sessions, statusSnapshot,
-    home, official } = sources
+  const { labels, workspaces, archivedSessionIds,
+    sessions, statusSnapshot, home, official } = sources
+  const localViewOptions = useLocalViewOptionsValue(props)
+  const { mode: viewMode, indicator } = localViewOptions
   const { snapshot, apply } = useSnapshotFeed(props.loadGroups, props.onReady)
   const layout = useRegionLayout(workspaces, snapshot, labels)
   const ui = useRegionUiState()
@@ -1250,44 +1268,44 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
 
   return (
     <RegionLocaleProvider value={locale}>
-      <div className={styles.root} ref={flipRef}>
-        <RegionHeaderArea
-          layout={layout}
-          overlays={headerOverlays}
-          commands={headerCommands}
-          searching={searching}
-          viewMode={viewMode}
-          onSelectMode={setViewMode}
-          nestingEnabled={snapshot.nested}
-          onToggleNested={nestActions.requestNestedToggle}
-          focusedKey={snapshot.picker.focused}
-          addWorkspace={addWorkspace}
-          search={search}
-        />
-        <RegionListArea
-          viewMode={viewMode}
-          searching={searching}
-          searchResult={searchResult}
-          searchResultLimit={searchResultLimit}
-          onOpenSearchResult={openSearchResult}
-          scope={scope}
-          flatRows={flatRows}
-          stray={stray}
-          ungroupedCollapsed={ui.collapsedWorkspaces[UNGROUPED_KEY] === true}
-          onToggleUngrouped={() => ui.toggleWorkspace(UNGROUPED_KEY)}
-        />
-        {/* 对话框挂在列表之外
-          * 它们都是 portal 到 body 的浮层，放进 overflow
-            容器只会多一层无用的裁剪上下文 */}
-        <RegionDialogs
-          overlay={ui.overlay}
-          setOverlay={ui.openOverlay}
-          layout={layout}
-          workspaces={workspaces}
-          official={official}
-          actions={dialogActions}
-        />
-      </div>
+      <LocalViewOptionsProvider value={localViewOptions}>
+        {/* 指示器样式挂在根节点上，列表里每一行读同一个值，不必逐行下发 */}
+        <div className={styles.root} ref={flipRef} data-wg-indicator={indicator}>
+          <RegionHeaderArea
+            layout={layout}
+            overlays={headerOverlays}
+            commands={headerCommands}
+            searching={searching}
+            nestingEnabled={snapshot.nested}
+            onToggleNested={nestActions.requestNestedToggle}
+            focusedKey={snapshot.picker.focused}
+            addWorkspace={addWorkspace}
+            search={search}
+          />
+          <RegionListArea
+            searching={searching}
+            searchResult={searchResult}
+            searchResultLimit={searchResultLimit}
+            onOpenSearchResult={openSearchResult}
+            scope={scope}
+            flatRows={flatRows}
+            stray={stray}
+            ungroupedCollapsed={ui.collapsedWorkspaces[UNGROUPED_KEY] === true}
+            onToggleUngrouped={() => ui.toggleWorkspace(UNGROUPED_KEY)}
+          />
+          {/* 对话框挂在列表之外
+            * 它们都是 portal 到 body 的浮层，放进 overflow
+              容器只会多一层无用的裁剪上下文 */}
+          <RegionDialogs
+            overlay={ui.overlay}
+            setOverlay={ui.openOverlay}
+            layout={layout}
+            workspaces={workspaces}
+            official={official}
+            actions={dialogActions}
+          />
+        </div>
+      </LocalViewOptionsProvider>
     </RegionLocaleProvider>
   )
 }

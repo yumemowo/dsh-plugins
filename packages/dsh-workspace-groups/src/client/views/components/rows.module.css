@@ -82,7 +82,8 @@
 .collapseClip > .groupBody,
 .collapseClip > .sessions { padding-top: 2px; }
 
-/* 图标列：工作区的文件夹/箭头、分组的箭头、会话的状态位共用同一列宽 */
+/* 图标列：工作区的文件夹/箭头、分组的箭头共用同一列宽
+   会话行不再占这一列，它的状态指示器绝对定位在行左侧（见 .indicator 一节） */
 .slot {
   width: 16px;
   height: 20px;
@@ -118,29 +119,37 @@
    行内各段按「深度 + 自己那一档」定位：
    - 工作区行：8 + 16d
    - 分组头：24 + 16d（比工作区行多让出 16px，因为它是工作区体内的一层）
-   - 会话行：未归组 24 + 16d，组内 40 + 16d
+   - 会话行：24 + 16d（未归组）、40 + 16d（组内）
+
+   会话行的文本缩进与会话分组头、子工作区行错开一格，因此「这几行是会话」由缩进自己读出来
+   状态指示器**不参与这套定位**：它绝对定位在行的左缘（容器最左侧），与深度无关，见 .indicator 一节
+   指示器盒宽 16px + 内缩量，因此会话行的缩进下限（24px）恰好让它不与标题相撞
 
    会话行多出「> *」那一档：挂了悬停卡片的行被官方 HoverCard 的根节点包了一层（那是个 display:block 的 span）
    行就不再是 .sessions 的直接子项。两条都写
    有没有卡片缩进都一致 */
-.workspaceHead { padding: 0 8px; padding-left: calc(8px + 16px * var(--wg-depth, 0)); }
-
-.groupHead {
+.workspaceHead {
+  --wg-row-start: calc(8px + 16px * var(--wg-depth, 0));
   padding: 0 8px;
-  padding-left: calc(24px + 16px * var(--wg-depth, 0));
+  padding-left: var(--wg-row-start);
 }
 
-/* 会话行与它上面那个小标题同档，标题正是用来标出这一段的起点，两者左缘必须对齐 */
+.groupHead {
+  --wg-row-start: calc(24px + 16px * var(--wg-depth, 0));
+  padding: 0 8px;
+  padding-left: var(--wg-row-start);
+}
+
 .workspaceBody > .sessions > .row,
-.workspaceBody > .sessions > .sessionsTitle,
 .workspaceBody > .sessions > * > .row {
-  padding-left: calc(24px + 16px * var(--wg-depth, 0));
+  --wg-row-start: calc(24px + 16px * var(--wg-depth, 0));
+  padding-left: var(--wg-row-start);
 }
 
 .group > .collapse > .collapseClip > .groupBody > .sessions > .row,
-.group > .collapse > .collapseClip > .groupBody > .sessions > .sessionsTitle,
 .group > .collapse > .collapseClip > .groupBody > .sessions > * > .row {
-  padding-left: calc(40px + 16px * var(--wg-depth, 0));
+  --wg-row-start: calc(40px + 16px * var(--wg-depth, 0));
+  padding-left: var(--wg-row-start);
 }
 
 /* 子工作区这一段本身不再让出缩进，它的每个成员都是一个完整的工作区块
@@ -148,18 +157,6 @@
 .nest { display: flex; flex-direction: column; }
 
 .nest > * + * { margin-top: 2px; }
-
-/* 会话那一段的小标题，只在这一段与子工作区/会话分组同处一个折叠体时渲染
-   两段的行文字左缘落在同一条竖线上（缩进公式相同），光靠 2px 的行距读不出分界
-   小标题比行文字小一档、取 caption 色阶，与行尾时间同一档灰
-   上外边距就是与上一段之间的那段距离，它只在这个标题存在时生效
-   因此「没有东西要区分」时不占位 */
-.sessionsTitle {
-  color: var(--dsw-alias-label-caption, var(--dsw-alias-label-tertiary));
-  font-size: 12px;
-  line-height: 20px;
-  margin-top: 12px;
-}
 
 /* 竖向引导线，落在父级图标列的中心（工作区 8 + 16/2 = 16，分组 24 + 16/2 = 32）
    把「这组行属于上一行」画出来。行本身是 position: relative 的定位元素
@@ -275,8 +272,96 @@
   position: relative;
 }
 
-.row:hover,
-.rowSelected { background: var(--dsw-alias-interactive-bg-hover); }
+/* ── 状态指示器 ───────────────────────────────────────────
+   绝对定位在行的最左侧（容器栏的左缘），与层级深度无关
+   它不参与行内流，因此标题位置与状态无关，同一段里所有会话行的标题落在同一条竖线上
+   落点只读字形自己的内缩量（见文件头那两档变量）
+   内缩那几像素让它读成「浮在行里」而不是行的左边界 */
+.indicator {
+  position: absolute;
+  top: 50%;
+  left: var(--wg-indicator-inset);
+  margin-top: -8px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  /* 悬停/选中底色的绘制顺序：指示器排在行的底色之后，因此浮在上面而不是被盖住 */
+  z-index: 1;
+}
+
+/* 「图标」字形是 16px 方块，比色条多缩 2px 才不读成行的左边界 */
+[data-wg-indicator='icon'] .indicator { left: var(--wg-indicator-inset-icon); }
+
+/* 「色条」样式的字形：一根两端圆角的竖条，颜色由行的 data-wg-state 给出
+   它不居中：这个 16px 的盒是给官方那枚 16px 图标用的，色条只有 3px 宽，
+   居中会让它的左缘落到 内缩 + 6.5px 上，比设计稿的落点右移 6.5px
+   靠左对齐，左缘因此正好压在 --wg-indicator-inset 上 */
+[data-wg-indicator='bar'] .indicator { justify-content: flex-start; }
+
+.indicatorBar {
+  width: 3px;
+  height: 20px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+/* 指示器的颜色按状态取语义词。完成与空闲共用中性色（空闲根本不渲染指示器）
+   运行取强调蓝、待交互取琥珀，与官方 StateDot 的两个状态色同一组 token */
+.row > .indicator[data-wg-state='ongoing'] { color: var(--dsw-alias-state-business-primary); }
+
+.row > .indicator[data-wg-state='warning'] { color: var(--dsw-alias-state-warn-primary); }
+
+.row > .indicator[data-wg-state='done'] { color: var(--dsw-alias-state-success-primary); }
+
+/* ── 行的状态底色与悬停 / 选中 ─────────────────────────────
+   运行与待交互各上一层浅色底，颜色取上面的状态语义词
+   完成与空闲不设底色，完成那次提醒已经由指示器的绿色表达，再铺一层底会让整段长期泛色
+
+   悬停与选中分两条路：
+   - 没有强调色的行（空闲、完成）与官方完全一致
+     悬停与选中都是同一档浅灰，官方那套本来就是这个值（官方的 sessionRow.selected 与 :hover 是同一条声明），不另加深
+   - 有强调色的行才走加深，在同一色相上把浓度提上去，悬停比选中浅一档
+     于是色相仍说明是哪种状态，深浅说明「指针在上面」还是「这是当前会话」
+     叠灰的做法会把这层色相稀释掉，因此强调色行不叠灰 */
+.row[data-wg-state='ongoing'] {
+  background-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent);
+}
+
+.row[data-wg-state='warning'] {
+  background-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 10%, transparent);
+}
+
+/* 无强调色的行，悬停与选中同为官方那档浅灰 */
+.row:not([data-wg-state='ongoing']):not([data-wg-state='warning']):hover,
+.row:not([data-wg-state='ongoing']):not([data-wg-state='warning']).rowSelected {
+  background-color: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 强调色行的悬停，较浅的加深 */
+.row[data-wg-state='ongoing']:hover {
+  background-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, transparent);
+}
+
+.row[data-wg-state='warning']:hover {
+  background-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 18%, transparent);
+}
+
+/* 强调色行的选中，更深的加深
+   多带一档 :hover 是为了权重
+   .row[data-wg-state]:hover 是 (0,3,0)，比单写 .rowSelected[data-wg-state] 的 (0,2,0) 高
+   选中行被悬停时会被上面那条 18% 盖回去，反而变浅 */
+.rowSelected[data-wg-state='ongoing'],
+.rowSelected[data-wg-state='ongoing']:hover {
+  background-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 26%, transparent);
+}
+
+.rowSelected[data-wg-state='warning'],
+.rowSelected[data-wg-state='warning']:hover {
+  background-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 26%, transparent);
+}
 
 .rowTitle {
   min-width: 0;
@@ -284,6 +369,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* 左外边距取官方 .title 的 4px，行的缩进下限是 24px，指示器占 4~20px，两者因此不会相撞 */
   margin: 0 6px 0 4px;
   font-size: 14px;
   line-height: 20px;
@@ -459,14 +545,17 @@ body[data-wg-flip] [data-wg-hover-card] {
 }
 
 /* 平铺列表，全部可见会话排在一条列里，没有工作区分组头
-   行距取官方 .flatList 的同一档（相邻行 2px），与工作区体内那几段一致 */
+   行距取官方 .flatList 的同一档（相邻行 2px），与工作区体内那几段一致
+   缩进取会话行的下限 24px：平铺没有层级，但指示器仍占行左缘那 4~20px，标题要让开它 */
 .flatList { display: flex; flex-direction: column; }
 
 .flatList > * + * { margin-top: 2px; }
 
-/* 平铺行且没有状态位时行首那格不占位——平铺列表里没有要对齐的邻居
-   官方 .flatSessionRowWithoutStatus 的 title margin-left: 0 是同一取舍 */
-.rowFlat .rowTitle { margin-left: 0; }
+.flatList > .row,
+.flatList > * > .row {
+  --wg-row-start: 24px;
+  padding-left: var(--wg-row-start);
+}
 
 /* 嵌套关着时那条说明，与底部那条实验性说明同形，但要在视觉上先被读到 */
 .noteNested { color: var(--dsw-alias-label-secondary); padding-top: 12px; }

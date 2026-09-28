@@ -25,7 +25,6 @@ import type { ReactElement, RefObject } from 'react'
 import type { AddWorkspaceActions } from '../actions.ts'
 import { pickerSections } from '../data/picker.ts'
 import type { PickerEntry } from '../data/picker.ts'
-import type { ViewMode } from '../data/types.ts'
 import { useLocale } from '../useLocale.ts'
 import { IconChevronDownOutlineRegular, IconSlidersTwoOutlineRegular } from '../runtime.ts'
 import { AddWorkspaceControl } from './AddWorkspaceControl.tsx'
@@ -82,8 +81,6 @@ interface RegionHeaderAreaProps {
   commands: RegionHeaderCommands
   /** 两行标题是否被搜索顶掉 */
   searching: boolean
-  viewMode: ViewMode
-  onSelectMode: (mode: ViewMode) => void
   nestingEnabled: boolean
   onToggleNested: () => void
   /** 当前聚焦条目的键，菜单按它标出选中项 */
@@ -157,8 +154,6 @@ export function RegionHeaderArea(props: RegionHeaderAreaProps): ReactElement {
         open={viewOptionsOpen && !props.searching}
         triggerRef={props.overlays.viewOptions.triggerRef}
         nesting={{ enabled: props.nestingEnabled, onToggle: props.onToggleNested }}
-        mode={props.viewMode}
-        onSelectMode={props.onSelectMode}
         onClose={props.overlays.viewOptions.onClose}
       />
       <WorkspacePickerMenu

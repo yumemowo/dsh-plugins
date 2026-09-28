@@ -122,13 +122,6 @@ export function GroupSection({
             )}
             {section.sessions.length <= 0 ? null : (
               <div className={styles.sessions}>
-                {/* 组里同时有子工作区时，两者的行文字左缘落在同一条竖线上
-                    加一个小标题并拉开间距，否则读不出哪几行是会话 */}
-                {childIds.length > 0 ? (
-                  <div className={styles.sessionsTitle} data-wg-stagger="">
-                    {labels.sessions}
-                  </div>
-                ) : null}
                 {children}
               </div>
             )}

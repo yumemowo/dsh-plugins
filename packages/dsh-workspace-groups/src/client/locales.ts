@@ -63,6 +63,9 @@ export const zh = {
   'viewMode.label': '展示方式',
   'viewMode.workspace': '按工作区',
   'viewMode.flat': '平铺',
+  'indicator.label': '指示器',
+  'indicator.icon': '图标',
+  'indicator.bar': '色条',
 }
 
 /** 英文字典，键集与 {@link zh} 完全一致 */
@@ -119,6 +122,9 @@ export const en = {
   'viewMode.label': 'Layout',
   'viewMode.workspace': 'By workspace',
   'viewMode.flat': 'In one list',
+  'indicator.label': 'Indicator',
+  'indicator.icon': 'Icon',
+  'indicator.bar': 'Bar',
 } as const
 
 /** 本命名空间的键域，同时是 {@link zh} 的键集 */

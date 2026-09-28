@@ -15,6 +15,13 @@
   --dsh-session-list-edge-inset: var(--dsh-sidebar-inline-padding, 12px);
   --dsh-session-list-scrollbar-width: 8px;
   --dsh-session-list-scrollbar-offset: 2px;
+  /* 状态指示器相对行左缘的内缩量
+     定在区域根上而不是逐个工作区：平铺列表里的行不在任何 .workspace 之内，变量落在那儿会让它取不到值
+     两种字形各一档：
+       - 色条只有 3px 宽，贴内侧即可读
+       - 图标是 16px 方块，完全贴边会读成「行的左边界」，多缩 2px 才有浮在行上的观感 */
+  --wg-indicator-inset: 4px;
+  --wg-indicator-inset-icon: 6px;
   box-sizing: border-box;
   min-height: 0;
   flex: 1;

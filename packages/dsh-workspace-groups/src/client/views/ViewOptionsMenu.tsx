@@ -14,14 +14,19 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom'
 import type { ReactElement, RefObject } from 'react'
 import {
+  IconBarIndicator16,
+  IconDotIndicator16,
+} from '../icons.tsx'
+import {
   IconCheckOutlineRegular,
   IconFlatListOutlineRegular,
   IconFolderCloseRegular,
   IconWorkspaceTreeOutlineRegular,
   Switch,
 } from '../runtime.ts'
-import type { ViewMode } from '../data/types.ts'
+import type { IndicatorStyle, ViewMode } from '../data/types.ts'
 import { useLocale } from '../useLocale.ts'
+import { useLocalViewOptions } from '../useLocalViewOptions.ts'
 import styles from './ViewOptionsMenu.module.css'
 
 /** 面板与窗口边缘的最小距离，取官方 `Menu` 原语的同一个值 */
@@ -52,34 +57,43 @@ const VIEW_MODES: readonly {
   { mode: 'flat', icon: <IconFlatListOutlineRegular /> },
 ]
 
+/**
+ * 指示器样式的两个取值，按面板里的先后
+ *
+ * 与展示方式那一组同形：标题 + 两条互斥可选项，行尾以勾标记当前值
+ */
+const INDICATOR_STYLES: readonly {
+  style: IndicatorStyle
+  icon: ReactElement
+}[] = [
+  { style: 'icon', icon: <IconDotIndicator16 /> },
+  { style: 'bar', icon: <IconBarIndicator16 /> },
+]
+
 export interface ViewOptionsMenuProps {
   /** 菜单是否打开，开合状态由持有触发器的 header 持有 */
   open: boolean
   /** 触发器元素，面板贴它的下缘展开 */
   triggerRef: RefObject<HTMLElement>
-  /** 当前选中的展示方式 */
-  mode: ViewMode
-  /** 另一组设置：子工作区嵌套开关 */
+  /** 另一组设置：子工作区嵌套开关。它是分组元数据，随快照往返，因此仍由区域容器下发 */
   nesting: {
     /** 当前是否开启 */
     enabled: boolean
     onToggle: () => void
   }
-  /** 选中一个展示方式 */
-  onSelectMode: (mode: ViewMode) => void
   onClose: () => void
 }
 
 export function ViewOptionsMenu({
   open,
   triggerRef,
-  mode,
   nesting,
-  onSelectMode,
   onClose,
 }: ViewOptionsMenuProps): ReactElement | null {
   const { labels } = useLocale()
+  const { mode, indicator, setMode, setIndicator } = useLocalViewOptions()
   const viewMode = labels.viewMode
+  const indicatorLabels = labels.indicatorStyle
   const panelRef = useRef<HTMLDivElement>(null)
   const [rect, setRect] = useState<PanelRect | null>(null)
   const closeTimer = useRef<number | null>(null)
@@ -192,6 +206,9 @@ export function ViewOptionsMenu({
   const modeLabel = (candidate: ViewMode): string =>
     candidate === 'flat' ? viewMode.flat : viewMode.workspace
 
+  const styleLabel = (candidate: IndicatorStyle): string =>
+    candidate === 'bar' ? indicatorLabels.bar : indicatorLabels.icon
+
   return createPortal(
     <div
       ref={panelRef}
@@ -216,10 +233,31 @@ export function ViewOptionsMenu({
               type="button"
               className={styles.viewOptionRow}
               aria-pressed={selected}
-              onClick={() => onSelectMode(candidate)}
+              onClick={() => setMode(candidate)}
             >
               <span className={styles.viewOptionIcon}>{icon}</span>
               <span className={styles.viewOptionLabel}>{modeLabel(candidate)}</span>
+              {selected ? <IconCheckOutlineRegular className={styles.viewOptionCheck} /> : null}
+            </button>
+          )
+        })}
+      </>
+      <div className={styles.viewSeparator} role="separator" />
+      {/* 指示器：与展示方式同形，两条互斥的可选项 */}
+      <>
+        <div className={styles.viewGroupLabel}>{indicatorLabels.label}</div>
+        {INDICATOR_STYLES.map(({ style: candidate, icon }) => {
+          const selected = candidate === indicator
+          return (
+            <button
+              key={candidate}
+              type="button"
+              className={styles.viewOptionRow}
+              aria-pressed={selected}
+              onClick={() => setIndicator(candidate)}
+            >
+              <span className={styles.viewOptionIcon}>{icon}</span>
+              <span className={styles.viewOptionLabel}>{styleLabel(candidate)}</span>
               {selected ? <IconCheckOutlineRegular className={styles.viewOptionCheck} /> : null}
             </button>
           )

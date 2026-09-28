@@ -1,5 +1,6 @@
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { readAllCss, readReducedMotionCss } from './readCss.ts'
+import { readAllCss, readModuleCss, readReducedMotionCss } from './readCss.ts'
 
 /**
  * 取样式表文本
@@ -50,7 +51,7 @@ describe('client stylesheet', () => {
     }
   })
 
-  it('sets the session run title a step smaller and in the caption colour', () => {
+  it('floats the indicator out of the row flow so titles never shift', () => {
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
       selectors: (m[1] ?? '').split(',').map((s) => s.trim().replace(/\s+/g, ' ')),
@@ -59,28 +60,134 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    const title = bodyOf('.sessionsTitle')
-    // 比行文字（14px）小一档，与行尾时间同一档灰
-    expect(title).toMatch(/font-size:\s*12px/)
-    expect(title).toMatch(/color:\s*var\(--dsw-alias-label-caption/)
-    // 与上一段之间的间距，它是 .sessions 的首个子项
-    // 因此「X > * + *」那组 2px 行距碰不到它，这个 margin 是两段之间唯一的距离
-    expect(title).toMatch(/margin-top:\s*12px/)
+    // 指示器不参与行内流：它是绝对定位，因此状态出现与否都不推动标题
+    const indicator = bodyOf('.indicator')
+    expect(indicator).toMatch(/position:\s*absolute/)
+    // 落点只读内缩量：指示器恒在行的最左侧（容器栏左缘），与层级深度无关
+    expect(indicator).toMatch(/left:\s*var\(--wg-indicator-inset\)/)
+    expect(indicator).not.toMatch(/--wg-row-start/)
 
-    // 标题与它下面的会话行同档缩进，否则标出那一段起点反而会错位
-    const indentOf = (selector: string): string | undefined =>
+    // 两种字形各一档内缩：图标是 16px 方块，比 3px 宽的色条多缩 2px 才不读成行的左边界
+    // 变量必须落在两个布局都覆盖得到的层级上：平铺列表的行不在任何 .workspace 里
+    const regionRoot = readModuleCss(join('views', 'WorkspaceGroupsRegion.module.css'))
+    expect(regionRoot).toMatch(/--wg-indicator-inset:\s*4px/)
+    expect(regionRoot).toMatch(/--wg-indicator-inset-icon:\s*6px/)
+    // 行样式表里只许读变量，不许定义它——定义在这儿平铺列表就取不到
+    const rowCss = readModuleCss(join('views', 'components', 'rows.module.css'))
+    expect(rowCss).not.toMatch(/--wg-indicator-inset(-icon)?:\s*\d/)
+    expect(bodyOf("[data-wg-indicator='icon'] .indicator")).toMatch(
+      /left:\s*var\(--wg-indicator-inset-icon\)/,
+    )
+    // 它要浮在行的悬停/选中底色之上，否则底色会盖住指示器
+    expect(indicator).toMatch(/z-index:\s*1/)
+
+    // 标题左边距取官方 .title 那 4px：行的缩进下限（24px）本就大于指示器占的 4~20px
+    const title = bodyOf('.rowTitle')
+    expect(title).toMatch(/margin:\s*0 6px 0 4px/)
+
+    // 「色条」样式的字形自己就是那条色，颜色继承指示器按状态取到的语义词
+    const bar = bodyOf('.indicatorBar')
+    expect(bar).toMatch(/background:\s*currentColor/)
+
+    // 色条不能在那 16px 的指示器盒里居中：那个盒是给官方 16px 图标用的，
+    // 3px 宽的色条居中会让左缘落到 内缩 + 6.5px 上，比设计稿右移 6.5px
+    // 靠左对齐后左缘正好压在 --wg-indicator-inset 上，与设计稿的 ::before 落点一致
+    expect(bodyOf("[data-wg-indicator='bar'] .indicator")).toMatch(/justify-content:\s*flex-start/)
+    // 高度取设计稿那条色条（行高 32、上下各留 6）
+    expect(bar).toMatch(/height:\s*20px/)
+  })
+
+  it('paints the status fill and deepens it only where there is an accent colour', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim().replace(/\s+/g, ' ')),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+    const declarations = (selector: string, property: string): string[] =>
       rules
         .filter((rule) => rule.selectors.includes(selector))
-        .map((rule) => /padding-left:\s*([^;]+)/.exec(rule.body)?.[1]?.trim())
-        .find((value) => value !== undefined)
+        .map((rule) => new RegExp(`${property}:\\s*([^;]+)`).exec(rule.body)?.[1]?.trim() ?? '')
 
-    const groups = [
-      '.workspaceBody > .sessions > .sessionsTitle',
-      '.group > .collapse > .collapseClip > .groupBody > .sessions > .sessionsTitle',
-    ]
-    for (const selector of groups) {
-      expect(indentOf(selector)).toMatch(/calc\(\d+px \+ 16px \* var\(--wg-depth/)
+    // 运行与待交互各上一层浅色底；完成与空闲不设底色，否则整段长期泛色
+    expect(bodyOf(".row[data-wg-state='ongoing']")).toMatch(/background-color:\s*color-mix\(/)
+    expect(bodyOf(".row[data-wg-state='warning']")).toMatch(/background-color:\s*color-mix\(/)
+    expect(bodyOf(".row[data-wg-state='done']")).toBe('')
+
+    // 没有强调色的行与官方完全一致：悬停与选中同为那一档浅灰，不另加深
+    const neutralHover = bodyOf(
+      ".row:not([data-wg-state='ongoing']):not([data-wg-state='warning']):hover",
+    )
+    const neutralSelected = bodyOf(
+      ".row:not([data-wg-state='ongoing']):not([data-wg-state='warning']).rowSelected",
+    )
+    expect(neutralHover).toMatch(/background-color:\s*var\(--dsw-alias-interactive-bg-hover\)/)
+    expect(neutralSelected).toMatch(/background-color:\s*var\(--dsw-alias-interactive-bg-hover\)/)
+    // 两者同值，这正是官方那一套的取值
+    expect(neutralHover.replace(/\s/g, '')).toBe(neutralSelected.replace(/\s/g, ''))
+
+    // 有强调色的行才走加深，且悬停比选中浅一档
+    const pct = (selector: string): number => {
+      const value = declarations(selector, 'background-color').find((v) => v.includes('color-mix'))
+      return Number(/ (\d+)%/.exec(value ?? '')?.[1] ?? Number.NaN)
     }
+    const ongoingHover = pct(".row[data-wg-state='ongoing']:hover")
+    const ongoingSelected = pct(".rowSelected[data-wg-state='ongoing']")
+    expect(Number.isNaN(ongoingHover)).toBe(false)
+    expect(Number.isNaN(ongoingSelected)).toBe(false)
+    expect(ongoingHover).toBeLessThan(ongoingSelected)
+
+    const warningHover = pct(".row[data-wg-state='warning']:hover")
+    const warningSelected = pct(".rowSelected[data-wg-state='warning']")
+    expect(warningHover).toBeLessThan(warningSelected)
+
+    // 选中那档必须同时覆盖 `:hover`：`.row[data-wg-state]:hover` 的权重更高
+    // 少了这一档，选中行被悬停时会被悬停那条盖回更浅的值
+    expect(
+      declarations(".rowSelected[data-wg-state='ongoing']", 'background-color').length,
+    ).toBeGreaterThan(0)
+    for (const state of ['ongoing', 'warning']) {
+      const selectors = rules
+        .filter((rule) =>
+          rule.selectors.includes(`.rowSelected[data-wg-state='${state}']:hover`),
+        )
+        .map((rule) => rule.body)
+      expect(selectors.length, `.rowSelected[data-wg-state='${state}']:hover is missing`).toBeGreaterThan(0)
+      expect(selectors.some((body) => /26%/.test(body))).toBe(true)
+    }
+
+    // 强调色行全程用 background-color：叠一层中性灰会把色相稀释掉
+    for (const selector of [
+      ".row[data-wg-state='ongoing']:hover",
+      ".rowSelected[data-wg-state='ongoing']",
+    ]) {
+      for (const body of declarations(selector, 'background-image')) {
+        expect(body).toBe('')
+      }
+    }
+    // 选中只有底色一条通道：官方 active / selected 都不带边框，加描边会与设计不一致
+    const selectedRules = rules.filter((rule) =>
+      rule.selectors.some((s) => s.includes('.rowSelected')),
+    )
+    for (const rule of selectedRules) {
+      expect(rule.body, `selected row must not draw a border: ${rule.selectors.join(', ')}`)
+        .not.toMatch(/box-shadow|outline/)
+    }
+    expect(css).not.toMatch(/data-wg-indicator='bar'\]\s*\.rowSelected/)
+
+    // 底色一律不用 background 简写：简写会把同一元素上另一条声明一起清掉
+    // 只看那些真的在设底色的行规则（`:hover` / `.rowSelected` / `[data-wg-state]`），
+    // 行内按钮的 `background: 0 0` 之类与底色无关
+    const shorthand = rules.filter(
+      (rule) =>
+        rule.selectors.some(
+          (s) =>
+            s.includes('.row') &&
+            (s.includes(':hover') || s.includes('.rowSelected') || s.includes('[data-wg-state')),
+        ) && /(^|;)\s*background:/.test(rule.body),
+    )
+    expect(shorthand).toEqual([])
   })
 
   it('reveals row actions on hover, menu-open, or keyboard focus only', () => {
@@ -122,21 +229,24 @@ describe('client stylesheet', () => {
 
     // 每一层让出一个 16px 图标列，基准是官方工作区行的 8px
     // 子工作区可以嵌任意层，深度由行组件下发 --wg-depth，因此每档都写成「基准 + 16px × 深度」
-    // padding 简写按「上 右 下 左」读，左内边距即该层的缩进量
+    // 缩进经 --wg-row-start 下发：指示器的落点读同一个值，两者不会错位
     // 分组的会话行多了折叠体两层包装，选择器要跟着写穿
-    expect(declared('.workspaceHead', 'padding-left')).toBe(
+    expect(declared('.workspaceHead', '--wg-row-start')).toBe(
       'calc(8px + 16px * var(--wg-depth, 0))',
     )
-    expect(declared('.groupHead', 'padding-left')).toBe(
+    expect(declared('.workspaceHead', 'padding-left')).toBe('var(--wg-row-start)')
+    expect(declared('.groupHead', '--wg-row-start')).toBe(
       'calc(24px + 16px * var(--wg-depth, 0))',
     )
-    expect(declared('.workspaceBody > .sessions > .row', 'padding-left')).toBe(
+    expect(declared('.groupHead', 'padding-left')).toBe('var(--wg-row-start)')
+    // 会话行仍比同级容器多让一格：指示器不参与这套定位（它钉在行左缘），缩进才是「这几行是会话」的依据
+    expect(declared('.workspaceBody > .sessions > .row', '--wg-row-start')).toBe(
       'calc(24px + 16px * var(--wg-depth, 0))',
     )
     expect(
       declared(
         '.group > .collapse > .collapseClip > .groupBody > .sessions > .row',
-        'padding-left',
+        '--wg-row-start',
       ),
     ).toBe('calc(40px + 16px * var(--wg-depth, 0))')
   })
@@ -525,7 +635,8 @@ describe('client stylesheet', () => {
     // 层级改由 JS 算好（nesting.levelOf）经 --wg-depth 下发，样式表只做一次重命名
     expect(css).not.toContain('--wg-depth-offset')
     // 每档缩进都直接读这一个变量，它由组件下发，样式表不再二次加工
-    expect(hasRule('.workspaceHead', /padding-left:\s*calc\(8px \+ 16px \* var\(--wg-depth, 0\)\)/)).toBe(true)
+    // 缩进经 --wg-row-start 中转一次，好让指示器的落点与标题读同一个值
+    expect(hasRule('.workspaceHead', /--wg-row-start:\s*calc\(8px \+ 16px \* var\(--wg-depth, 0\)\)/)).toBe(true)
   })
 
   it('fades the whole panel in like the official tree body', () => {
@@ -661,11 +772,11 @@ describe('client stylesheet', () => {
       selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
       body: m[2] ?? '',
     }))
-    /** 某条选择器声明的 padding-left */
+    /** 某条选择器声明的 --wg-row-start 缩进 */
     const indentOf = (selector: string): string | undefined =>
       rules
         .filter((rule) => rule.selectors.includes(selector))
-        .map((rule) => /padding-left:\s*([^;]+)/.exec(rule.body)?.[1]?.trim())
+        .map((rule) => /--wg-row-start:\s*([^;]+)/.exec(rule.body)?.[1]?.trim())
         .find((value) => value !== undefined)
 
     const wrapped = '.workspaceBody > .sessions > * > .row'
@@ -991,8 +1102,15 @@ describe('client stylesheet', () => {
     // 一条列表的成员排成一列，行距与工作区体内那几段同值（2px）
     expect(bodyOf('.flatList')).toMatch(/flex-direction:\s*column/)
     expect(bodyOf('.flatList > * + *')).toMatch(/margin-top:\s*2px/)
-    // 平铺行没有状态位时标题回到行左缘，与官方同名类的取舍一致
-    expect(bodyOf('.rowFlat .rowTitle')).toMatch(/margin-left:\s*0/)
+    // 平铺没有层级，但指示器仍占行左缘那 4~20px，缩进取会话行的下限 24px 让开它
+    // 它那两条选择器写在同一个逗号列表里，命中其一即可
+    const flatIndent = rules
+      .filter((rule) => rule.selectors.includes('.flatList > .row'))
+      .map((rule) => /--wg-row-start:\s*([^;]+)/.exec(rule.body)?.[1]?.trim())
+      .find((value) => value !== undefined)
+    expect(flatIndent).toBe('24px')
+    // 平铺行也要拿得到内缩量，否则指示器退化成 left:auto 压到标题上
+    expect(rules.some((rule) => rule.selectors.includes('.flatList'))).toBe(true)
   })
 
   it('paints the submenu card opaque so it does not show the list through', () => {

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { ViewMode } from '../src/client/data/types.ts'
+import type { IndicatorStyle, ViewMode } from '../src/client/data/types.ts'
 import type { ViewModeActions, ViewModeState } from '../src/client/store/viewMode.ts'
 
 /**
@@ -15,17 +15,21 @@ import type { ViewModeActions, ViewModeState } from '../src/client/store/viewMod
 export function viewModeProps(
   mode: ViewMode = 'workspace',
   onChange?: (mode: ViewMode) => void,
+  indicator: IndicatorStyle = 'icon',
 ): {
   useStore: <S>(selector: (state: ViewModeState) => S) => S
   actions: ViewModeActions
 } {
-  let state: ViewModeState = { mode }
+  let state: ViewModeState = { mode, indicator }
   return {
     useStore: (selector) => selector(state),
     actions: {
       setMode: (next: ViewMode) => {
-        state = { mode: next }
+        state = { ...state, mode: next }
         onChange?.(next)
+      },
+      setIndicator: (next: IndicatorStyle) => {
+        state = { ...state, indicator: next }
       },
     } as ViewModeActions,
   }
@@ -36,11 +40,15 @@ export interface ViewModeStoreStub {
   getSnapshot: () => ViewModeState
   subscribe: (listener: () => void) => () => void
   set: (mode: ViewMode) => void
+  setIndicator: (style: IndicatorStyle) => void
 }
 
 /** 造一个可订阅的存储，用于验证「写入之后界面真的换了」 */
-export function viewModeStoreStub(mode: ViewMode = 'workspace'): ViewModeStoreStub {
-  let state: ViewModeState = { mode }
+export function viewModeStoreStub(
+  mode: ViewMode = 'workspace',
+  indicator: IndicatorStyle = 'icon',
+): ViewModeStoreStub {
+  let state: ViewModeState = { mode, indicator }
   const listeners = new Set<() => void>()
   return {
     getSnapshot: () => state,
@@ -51,7 +59,11 @@ export function viewModeStoreStub(mode: ViewMode = 'workspace'): ViewModeStoreSt
       }
     },
     set: (next) => {
-      state = { mode: next }
+      state = { ...state, mode: next }
+      for (const listener of [...listeners]) listener()
+    },
+    setIndicator: (next) => {
+      state = { ...state, indicator: next }
       for (const listener of [...listeners]) listener()
     },
   }
@@ -77,6 +89,7 @@ export function storeViewModeProps(store: ViewModeStoreStub): {
     },
     actions: {
       setMode: (next: ViewMode) => store.set(next),
+      setIndicator: (next: IndicatorStyle) => store.setIndicator(next),
     } as ViewModeActions,
   }
 }

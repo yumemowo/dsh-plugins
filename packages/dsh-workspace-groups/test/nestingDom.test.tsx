@@ -86,7 +86,8 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
 function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsProps {
   const created = new Date(2026, 0, 1, 0, 0).toISOString()
   const byId: Record<string, unknown> = {
-    a: { id: 'a', displayTitle: '修复登录超时', running: false, blank: false, retainedBy: {}, updatedAt: 1_000 },
+    // `a` 设成运行中：状态指示器只在有状态时渲染，这次要断言它的字形与落点
+    a: { id: 'a', displayTitle: '修复登录超时', running: true, blank: false, retainedBy: {}, updatedAt: 1_000 },
   }
   const view = (workspaceId: string, path: string, title: string) => ({
     workspaceId,
@@ -375,41 +376,23 @@ describe('nested sub-workspaces in a real DOM', () => {
     await act(async () => root.unmount())
   })
 
-  it('labels the session run only when folders share the same body', async () => {
-    // 子工作区与会话行的缩进公式相同，两段的行文字左缘落在同一条竖线上
-    // 这时会话那一段要加一个小标题，否则读不出下面那几行是会话
+  it('leaves the session run unlabelled even when folders share the same body', async () => {
+    // 会话行不再靠小标题与容器段区分：指示器不占行内流，它的标题因此落在容器的图标列上
+    // 与子工作区行、会话分组头的名字列都不重合，那行小标题整个去掉了
     const { container, root } = await mount()
 
     const body = container.querySelector('.workspaceBody')
     expect(body?.querySelector('.nest')).not.toBeNull()
-    expect(body?.querySelector('.sessionsTitle')?.textContent).toBe('会话')
-    // 标题排在会话行之前，不插进它们中间
+    expect(body?.querySelector('.sessionsTitle')).toBeNull()
+    // 会话那一段仍然渲染，只是没有标题
     const run = body?.querySelector('.sessions')
-    expect(run?.firstElementChild?.className).toBe('sessionsTitle')
     expect(run?.querySelector('.rowTitle')?.textContent).toBe('修复登录超时')
 
     await act(async () => root.unmount())
   })
 
-  it('leaves the session run unlabelled when it is alone in its body', async () => {
-    // 关掉嵌套、W1 也没有会话分组：体内只有会话行，没有任何东西需要与它区分
-    // 这时不该多出一个标题：它既没有可区分的对象，又占掉一行高度
-    const { container, root } = await mount({
-      loadGroups: async () => snapshot({ nested: false }),
-    })
-
-    const body = container.querySelector('.workspaceBody')
-    expect(body?.querySelector('.sessions')).not.toBeNull()
-    expect(body?.querySelector('.nest')).toBeNull()
-    expect(body?.querySelector('.group')).toBeNull()
-    expect(body?.querySelector('.sessionsTitle')).toBeNull()
-
-    await act(async () => root.unmount())
-  })
-
-  it('labels the session run when only a session group shares its body', async () => {
-    // 会话分组的头与未归组的会话行缩进同档（都是 24 + 16d），左缘同样落在一条竖线上
-    // 因此即使体内没有子工作区，这个标题也要在
+  it('leaves the session run unlabelled even when only a session group shares its body', async () => {
+    // 会话分组与未归组会话行现在缩进同一档，但指示器把两者的标题错开了，因此标题仍不需要
     const { container, root } = await mount({
       loadGroups: async () =>
         snapshot({
@@ -420,13 +403,12 @@ describe('nested sub-workspaces in a real DOM', () => {
 
     const body = container.querySelector('.workspaceBody')
     expect(body?.querySelector('.group')).not.toBeNull()
-    expect(body?.querySelector('.sessionsTitle')?.textContent).toBe('会话')
+    expect(body?.querySelector('.sessionsTitle')).toBeNull()
 
     await act(async () => root.unmount())
   })
 
-  it('labels the session run inside a group that also holds a child workspace', async () => {
-    // 组体内同样是「子工作区 → 会话」，缩进同档，因此这一层也要标出来
+  it('renders no session run title inside a group that also holds a child workspace', async () => {
     const { container, root } = await mount({
       loadGroups: async () =>
         snapshot({
@@ -437,20 +419,6 @@ describe('nested sub-workspaces in a real DOM', () => {
 
     const groupBody = container.querySelector('.groupBody')
     expect(groupBody?.querySelector('.nest')).not.toBeNull()
-    expect(groupBody?.querySelector('.sessionsTitle')?.textContent).toBe('会话')
-
-    await act(async () => root.unmount())
-  })
-
-  it('leaves a group session run unlabelled when the group holds no child workspace', async () => {
-    // 组里只有会话时，分组头已经说明这一段是什么，再加标题是同义反复
-    const { container, root } = await mount({
-      loadGroups: async () =>
-        snapshot({ byWorkspace: { w1: [{ id: 'g1', name: '前端', sessionIds: ['a'] }] } }),
-    })
-
-    const groupBody = container.querySelector('.groupBody')
-    expect(groupBody?.querySelector('.sessions')).not.toBeNull()
     expect(groupBody?.querySelector('.sessionsTitle')).toBeNull()
 
     await act(async () => root.unmount())
@@ -504,18 +472,17 @@ describe('nested sub-workspaces in a real DOM', () => {
       Number((workspace as HTMLElement).style.getPropertyValue('--wg-depth'))
     const placed = depthOf(w2)
     const host = depthOf(w1Section)
-    // 各行的基准不同（工作区行 8px、分组头 24px、组内会话行 40px），因此不能直接比 depth 数值
-    // 要比的是最终内边距：它必须落在分组头之下，且与同组会话行同档
+    // 各行的基准不同（工作区行 8px、分组头 24px），因此不能直接比 depth 数值
+    // 要比的是最终内边距：放进分组的子工作区是 levelOf 多算的一格（+2 而非 +1），它必须落在分组头之下
     const placedIndent = 8 + 16 * placed
     const groupHeadIndent = 24 + 16 * host
     expect(placedIndent).toBeGreaterThan(groupHeadIndent)
-    expect(placedIndent).toBe(40 + 16 * host)
 
     // CSS 里没有「容器偏移」那层变量：偏移靠自引用累加是循环引用，浏览器会整条丢掉
     // 层级因此全部由 JS 算好下发，样式表只把它当数值用
     const css = readAllCss().replace(/\/\*[\s\S]*?\*\//g, '')
     expect(css).not.toContain('--wg-depth-offset')
-    expect(css).toMatch(/padding-left:\s*calc\(8px \+ 16px \* var\(--wg-depth, 0\)\)/)
+    expect(css).toMatch(/--wg-row-start:\s*calc\(8px \+ 16px \* var\(--wg-depth, 0\)\)/)
 
     await act(async () => root.unmount())
   })
@@ -575,7 +542,7 @@ describe('nested sub-workspaces in a real DOM', () => {
     await act(async () => root.unmount())
   })
 
-  it('offers both display modes above the nesting switch', async () => {
+  it('offers both display modes and both indicator styles above the nesting switch', async () => {
     const { container, root } = await mount()
 
     await act(async () => {
@@ -584,8 +551,10 @@ describe('nested sub-workspaces in a real DOM', () => {
         ?.click()
     })
 
-    // 这一组的标题与两条可选行都在，标题说明它们选的是哪件事
-    expect(document.body.querySelector('.viewGroupLabel')?.textContent).toBe('展示方式')
+    // 两组「标题 + 两条互斥可选项」，标题说明各自选的是哪件事
+    expect(
+      Array.from(document.body.querySelectorAll('.viewGroupLabel')).map((el) => el.textContent),
+    ).toEqual(['展示方式', '指示器'])
     const rows = Array.from(
       document.body.querySelectorAll<HTMLButtonElement>('.viewOptionRow'),
     )
@@ -593,18 +562,52 @@ describe('nested sub-workspaces in a real DOM', () => {
     expect(rows.map((element) => element.querySelector('.viewOptionLabel')?.textContent)).toEqual([
       '按工作区',
       '平铺',
+      '图标',
+      '色条',
     ])
     // 当前值由 aria-pressed 与行尾那个勾表达，两者不会各说一套
-    expect(rows[0]?.getAttribute('aria-pressed')).toBe('true')
-    expect(rows[1]?.getAttribute('aria-pressed')).toBe('false')
+    expect(rows.map((row) => row.getAttribute('aria-pressed'))).toEqual([
+      'true',
+      'false',
+      'true',
+      'false',
+    ])
     // 勾与字形都取官方图标，替身把字形名渲染成文本；替身不吃 className，因此按文本来认
     expect(rows[0]?.textContent).toContain('IconCheckOutlineRegular')
     expect(rows[1]?.textContent).not.toContain('IconCheckOutlineRegular')
-    // 两条各取自己的字形：文件夹 / 单列表，与官方那组「分组方式」同字形
+    expect(rows[2]?.textContent).toContain('IconCheckOutlineRegular')
+    expect(rows[3]?.textContent).not.toContain('IconCheckOutlineRegular')
+    // 展示方式那两条各取自己的字形：文件夹 / 单列表，与官方那组「分组方式」同字形
     expect(rows[0]?.textContent).toContain('IconFolderCloseRegular')
     expect(rows[1]?.textContent).toContain('IconFlatListOutlineRegular')
-    // 两组设置之间有一条分隔线
-    expect(document.body.querySelector('.viewSeparator')).not.toBeNull()
+    // 指示器那两条取本包自绘的点与条：自绘字形渲染成真 SVG（不像官方替身那样把名字变成文本）
+    // 因此按图元认——一枚圆 vs 一根圆角矩形
+    expect(rows[2]?.querySelector('.viewOptionIcon circle')).not.toBeNull()
+    expect(rows[3]?.querySelector('.viewOptionIcon rect')).not.toBeNull()
+    // 三组设置之间各有一条分隔线
+    expect(document.body.querySelectorAll('.viewSeparator').length).toBe(2)
+
+    await act(async () => root.unmount())
+  })
+
+  it('switches the indicator style on the list root', async () => {
+    const store = viewModeStoreStub()
+    const { container, root } = await mount(storeViewModeProps(store))
+
+    // 样式挂在区域根节点上，列表里每一行读同一个值，不必逐行下发
+    expect(container.querySelector('.root')?.getAttribute('data-wg-indicator')).toBe('icon')
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.headerAction[aria-label="视图选项"]')
+        ?.click()
+    })
+    await act(async () => {
+      // 第二组的第二项（色条）
+      document.body.querySelectorAll<HTMLButtonElement>('.viewOptionRow')[3]?.click()
+    })
+
+    expect(container.querySelector('.root')?.getAttribute('data-wg-indicator')).toBe('bar')
 
     await act(async () => root.unmount())
   })
@@ -634,6 +637,38 @@ describe('nested sub-workspaces in a real DOM', () => {
     expect(container.querySelector('.flatList .rowTitle')?.textContent).toBe(
       '修复登录超时',
     )
+    // 平铺行也读同一档缩进，指示器同样出流：那条按结构写的落点规则在平铺态也要命中
+    expect(container.querySelector('.flatList .row')?.getAttribute('data-wg-state')).toBe('ongoing')
+    expect(container.querySelector('.flatList .indicator')).not.toBeNull()
+
+    await act(async () => root.unmount())
+  })
+
+  it('switches the indicator glyph without moving the title', async () => {
+    // 两种样式只换字形，几何完全一致：都锚在行的 --wg-row-start 上
+    // 用可订阅的存储替身：切换要真的触发重渲染，一次性读数那份替身做不到
+    const store = viewModeStoreStub()
+    const { container, root } = await mount(storeViewModeProps(store))
+
+    const rowWithStatus = (): Element | null =>
+      container.querySelector(".sessions .row[data-wg-state='ongoing']")
+    expect(rowWithStatus()?.querySelector('.indicator')).not.toBeNull()
+    expect(rowWithStatus()?.querySelector('.indicatorBar')).toBeNull()
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.headerAction[aria-label="视图选项"]')
+        ?.click()
+    })
+    await act(async () => {
+      document.body.querySelectorAll<HTMLButtonElement>('.viewOptionRow')[3]?.click()
+    })
+
+    // 换成色条：根部属性与字形都跟着换，仍是同一枚指示器
+    expect(container.querySelector('.root')?.getAttribute('data-wg-indicator')).toBe('bar')
+    const row = rowWithStatus()
+    expect(row?.querySelector('.indicator')).not.toBeNull()
+    expect(row?.querySelector('.indicatorBar')).not.toBeNull()
 
     await act(async () => root.unmount())
   })

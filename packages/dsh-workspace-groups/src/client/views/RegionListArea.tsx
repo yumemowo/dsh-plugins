@@ -19,12 +19,13 @@ import { buildLayout, containsSession, groupIdOfSession, virtualWorkspaceIdOf } 
 import type { Nesting } from '../data/nest.ts'
 import { relativeTimeOfRow, statusViewOfRow } from '../data/rows.ts'
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
-import type { RootLayout, SessionRow, ViewMode } from '../data/types.ts'
+import type { RootLayout, SessionRow } from '../data/types.ts'
 import type { RegionLabels } from '../labels.ts'
 import type { ParentGroupMenuInput, VirtualWorkspaceMenuInput } from '../menus.tsx'
 import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { abbreviateHomePath } from '../utils/pathUtils.ts'
 import { useLocale } from '../useLocale.ts'
+import { useLocalViewOptions } from '../useLocalViewOptions.ts'
 import { CollapsibleBody } from './components/CollapsibleBody.tsx'
 import { SearchResults } from './SearchControl.tsx'
 import { SessionRowMenu } from './SessionRowMenu.tsx'
@@ -136,7 +137,6 @@ export interface WorkspaceNodeScope {
 }
 
 interface RegionListAreaProps {
-  viewMode: ViewMode
   searching: boolean
   searchResult: SessionSearchResult
   searchResultLimit: number
@@ -151,6 +151,7 @@ interface RegionListAreaProps {
 
 export function RegionListArea(props: RegionListAreaProps): ReactElement {
   const { labels } = useLocale()
+  const { mode: viewMode } = useLocalViewOptions()
   const { scope } = props
   const { session, currentSessionId } = scope
   const rowLabels = sessionRowLabels(labels)
@@ -167,12 +168,12 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
     )
   }
 
-  if (props.viewMode === 'flat') {
+  if (viewMode === 'flat') {
     return (
       /* 平铺：全部可见会话在同一条列表里，与官方「单列表」（groupBy: 'flat'）一致 */
       <div className={clsx(regionStyles.list, regionStyles.panel)}>
         <div className={rowsStyles.flatList}>
-          {props.flatRows.map((row) => sessionRowElement(row, session, rowLabels, undefined, true))}
+          {props.flatRows.map((row) => sessionRowElement(row, session, rowLabels))}
         </div>
         {props.flatRows.length === 0 ? <div className={rowsStyles.empty}>{labels.empty}</div> : null}
         <RegionNotes nested={scope.snapshot.nested} />
@@ -400,14 +401,12 @@ function rowTimes(
  * `grouping` 缺省表示该行没有分组可归（平铺列表）
  *
  * 传下去的字段都是原语或稳定引用，动作传的是未绑定的函数本身，行级 memo 要按字段比对，任何一处每渲染新建都会让它整片失效
- * @param flat - 平铺列表里的行，行首没有状态位时整格不占位
  */
 export function sessionRowElement(
   row: SessionRow,
   context: SessionRowScope,
   labels: SessionRowLabels,
   grouping?: SessionGroupingContext,
-  flat = false,
 ): ReactElement {
   // 只有被打开的那一行带揭示请求，它的闭包每渲染新建一份，因此每次重渲染会让这一行重渲染一次——行滚进可视区并回报后标记即被清掉
   // 这个代价只落在该行上
@@ -428,7 +427,6 @@ export function sessionRowElement(
         statuses={view.statuses}
         hoverTime={hoverTime}
         hover={context.official !== undefined}
-        flat={flat}
         onOpenSession={context.openSession}
         onReveal={reveal}
       />
@@ -446,7 +444,6 @@ export function sessionRowElement(
       hoverTime={hoverTime}
       grouping={grouping}
       official={context.official}
-      flat={flat}
       onOpenSession={context.openSession}
       onReveal={reveal}
     />

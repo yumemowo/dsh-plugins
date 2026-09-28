@@ -73,8 +73,6 @@ export interface SessionRowMenuProps {
    * 传动作本身而不是绑好 id 的闭包：绑好的闭包每次渲染都是新引用，行级 memo 因此永远判定为变过
    */
   onOpenSession: (sessionId: string) => void
-  /** 该行是否平铺列表里的行，行首没有状态位时不占那一格 */
-  flat?: boolean | undefined
   /** 请求把这一行滚进可视区，只在从搜索结果打开时下发 */
   onReveal?: (() => void) | undefined
 }
@@ -117,7 +115,6 @@ function sameRowMenuProps(prev: SessionRowMenuProps, next: SessionRowMenuProps):
     sameSessionStatuses(prevStatuses, nextStatuses) &&
     prev.official === next.official &&
     prev.onOpenSession === next.onOpenSession &&
-    prev.flat === next.flat &&
     prev.onReveal === next.onReveal &&
     sameGrouping(prev.grouping, next.grouping)
   )
@@ -134,7 +131,6 @@ function SessionRowMenuView({
   grouping,
   official,
   onOpenSession,
-  flat = false,
   onReveal,
 }: SessionRowMenuProps): ReactElement {
   const { labels } = useLocale()
@@ -196,7 +192,6 @@ function SessionRowMenuView({
         menuOpen={menuOpen}
         // 卡片要在两种面板开着时都让位：行内 `...` 菜单与行右键菜单
         hoverDisabled={menuOpen || contextMenu.open}
-        flat={flat}
         onOpenSession={onOpenSession}
         onReveal={onReveal}
         onContextMenu={contextMenu.onContextMenu}

@@ -1,0 +1,976 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>会话行指示器与树形可读性 · 对照稿</title>
+<style>
+  :root{
+    --fg-primary:#0f1115; --fg-secondary:#61666b; --fg-tertiary:#81858c; --fg-caption:#adb2b8;
+    --hover:#2631480f; --line:#0000000a;
+    /* --hover 就是官方那一个值：悬停与选中同色（官方 `projectRow:hover, sessionRow:hover, sessionRow.selected`）
+       下面几个 --sel* 只给「换一条通道」的那几档备用
+       --sel-light 是给「加字重」那一档用的更淡版本，避免叠层压过状态色 */
+    --sel:#26314824; --sel-light:#26314814; --sel-ring:#26314847;
+    --st-ongoing:#4176e6; --st-done:#22c55e; --st-warn:#f59e0b; --st-idle:#d4d4d4;
+    --sidebar:#f9fafb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:#e9ebee;color:var(--fg-primary);
+       font:14px/1.5 -apple-system,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+  h1{margin:0 0 6px;font-size:17px;font-weight:600}
+  .intro{margin:0 0 14px;color:var(--fg-secondary);font-size:13px;max-width:1180px}
+  .intro code,footer code{background:#0000000d;padding:1px 4px;border-radius:4px;font-size:12px}
+  .controls{display:flex;gap:16px;align-items:center;flex-wrap:wrap;
+            background:#fff;border:1px solid #00000012;border-radius:10px;padding:9px 14px;margin-bottom:10px;font-size:13px}
+  .controls label{display:inline-flex;gap:6px;align-items:center;cursor:pointer;user-select:none}
+  .controls button{font:inherit;font-size:12.5px;padding:3px 10px;border-radius:7px;cursor:pointer;
+                   border:1px solid #0000001f;background:#fff}
+  .controls button:hover{background:#0000000a}
+  .sep{width:1px;height:18px;background:#00000014}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:12px;color:var(--fg-secondary)}
+  .legend span{display:inline-flex;gap:6px;align-items:center}
+  /* 六张卡片排成一行，横向滚动：卡片本身不换行，比对时不用上下找
+     滚动条必须常驻，因此**只写 ::-webkit-scrollbar 伪元素，不写 scrollbar-width / scrollbar-color**：
+     那两个标准属性一旦出现，Chrome 就丢弃下面这套自绘样式、退回平台那套叠加式滚动条
+     （不占布局高度、悬停才画），于是鼠标移过去看不到滑块、也没法拖——只剩触控板能滑
+     自绘这条是常驻的，会实打实占掉一条高度，鼠标能直接拖 */
+  #panelsScroll{overflow-x:auto;overflow-y:hidden;padding-bottom:12px}
+  #panelsScroll::-webkit-scrollbar{height:11px}
+  #panelsScroll::-webkit-scrollbar-track{background:#0000000a;border-radius:6px}
+  #panelsScroll::-webkit-scrollbar-thumb{background:#0000003d;border-radius:6px;
+    border:2px solid transparent;background-clip:content-box}
+  #panelsScroll::-webkit-scrollbar-thumb:hover{background:#00000066;background-clip:content-box}
+  #panels{display:flex;gap:16px;align-items:flex-start;flex-wrap:nowrap;width:max-content}
+  /* 指示器相对行左缘的内缩量定义在卡片上，因此每张卡片各调一份互不影响
+     制造"悬浮在行里"而不是"行的边界"的观感：色条窄，贴内侧就够；
+     图标是 16px 方块，贴边会读成边界线，因此缩得更多 */
+  .panel{width:392px;flex:none;background:var(--sidebar);border:1px solid #00000012;border-radius:12px;
+         padding:12px 0 16px;box-shadow:0 1px 2px #0000000a;position:relative;
+         --ind-inset:4px; --ind-inset-icon:6px}
+  .phead{padding:0 14px 10px;border-bottom:1px solid #00000010;margin-bottom:8px}
+  .pname{font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:10px}
+  .pname .spacer{flex:1}
+  .pcollapse{font-size:11px;font-weight:400;color:var(--fg-caption)}
+  .ptoggle{font-size:11.5px;color:var(--fg-secondary);display:inline-flex;gap:5px;
+           align-items:center;cursor:pointer;user-select:none;font-weight:400}
+  .prow{display:flex;align-items:center;gap:8px;margin-top:7px;flex-wrap:wrap}
+  .prow button{font:inherit;font-size:11.5px;padding:2px 8px;border-radius:6px;cursor:pointer;
+               border:1px solid #0000001f;background:#fff;color:var(--fg-secondary)}
+  .prow button:hover{background:#0000000a;color:var(--fg-primary)}
+  .plabel{font-size:11.5px;color:var(--fg-secondary)}
+  .phint{font-size:11px;color:var(--fg-caption)}
+  .prow select{font:inherit;font-size:11.5px;padding:2px 6px;border-radius:6px;cursor:pointer;
+               border:1px solid #0000001f;background:#fff;color:var(--fg-primary)}
+  .slider{display:inline-flex;gap:7px;align-items:center;font-size:11.5px;color:var(--fg-secondary)}
+  .slider input[type=range]{width:76px;accent-color:#4176e6}
+  .slider span{font-variant-numeric:tabular-nums;color:var(--fg-caption);min-width:30px}
+  /* 选中态那几个档名较长，合并行里让它自己收窄，别把内缩挤到第二行 */
+  .prow select{max-width:118px}
+  .pdesc{margin-top:3px;font-size:12px;color:var(--fg-secondary)}
+  .pnote{margin-top:5px;font-size:11.5px;color:var(--fg-caption);line-height:1.45}
+  .tree{padding-bottom:4px}
+  .hintbar{padding:0 14px 6px;font-size:11.5px;color:#ec1313;display:none}
+  .panel.showEdge .hintbar{display:block}
+
+  /* ── 容器行 ─────────────────────────────────────────── */
+  .head{display:flex;align-items:center;gap:6px;height:34px;padding:0 8px;border-radius:8px;
+        position:relative;color:var(--fg-primary);cursor:pointer;user-select:none}
+  .workspaceHead{padding-left:calc(8px + 16px * var(--wg-depth,0))}
+  .groupHead{padding-left:calc(24px + 16px * var(--wg-depth,0))}
+  .vwHead{padding:0 8px}
+  .slot{flex:none;width:16px;height:20px;display:inline-flex;align-items:center;justify-content:center;color:var(--fg-tertiary)}
+  .chev{transition:transform .15s ease-in-out}
+  .chev.open{transform:rotate(90deg)}
+  .folderActive{color:var(--st-ongoing)}
+  .wtitle,.glabel{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:20px}
+  .wtitle{color:var(--fg-primary)}
+  .glabel{color:var(--fg-tertiary)}
+  .count{flex:none;color:var(--fg-tertiary);font-size:12px;line-height:20px;margin-right:-6px}
+  .count.inside{color:var(--fg-caption)}
+  .workspaceHead:hover .chev{display:inline-flex}
+  .workspaceHead .chev{display:none}
+  .workspaceHead:hover .folder{display:none}
+
+  /* ── 会话行 ─────────────────────────────────────────── */
+  .row{position:relative;display:flex;align-items:center;gap:0;height:32px;padding:0 8px;
+       border-radius:8px;color:var(--fg-primary);cursor:pointer}
+  .rowTitle{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+            margin:0 6px 0 4px;font-size:14px;line-height:20px}
+  .rowTime{flex:none;color:var(--fg-tertiary);font-size:12px;line-height:20px}
+
+  /* ── 体 / 段 ────────────────────────────────────────── */
+  .wsBody,.groupBody,.vwBody,.nest,.sessions{display:flex;flex-direction:column;position:relative}
+  .wsBody,.groupBody{padding-top:2px}
+  .wsBody>*+*,.groupBody>*+*,.vwBody>*+*,.nest>*+*,.sessions>*+*{margin-top:2px}
+  .wsBody::before,.groupBody::before{content:'';position:absolute;top:4px;bottom:4px;width:1px;
+                                     background:var(--line);pointer-events:none}
+  .wsBody::before{left:calc(16px + 16px * var(--wg-depth,0))}
+  .groupBody::before{left:calc(32px + 16px * var(--wg-depth,0))}
+  .wsBody>.sessions>.row{padding-left:calc(24px + 16px * var(--wg-depth,0))}
+  .groupBody>.sessions>.row{padding-left:calc(40px + 16px * var(--wg-depth,0))}
+  .wsBody>.sessions>.sessionsTitle{padding-left:calc(24px + 16px * var(--wg-depth,0))}
+  .groupBody>.sessions>.sessionsTitle{padding-left:calc(40px + 16px * var(--wg-depth,0))}
+  .sessionsTitle{color:var(--fg-caption);font-size:12px;line-height:20px;margin-top:12px}
+  .emptyState{color:var(--fg-tertiary);padding:10px 12px 10px calc(24px + 16px * var(--wg-depth,0));font-size:12px}
+  .fixTitle .sessionsTitle{padding-left:calc(44px + 16px * var(--wg-depth,0)) !important}
+  .fixTitle .groupBody>.sessions>.sessionsTitle{padding-left:calc(60px + 16px * var(--wg-depth,0)) !important}
+
+  /* ── 状态字形 ───────────────────────────────────────── */
+  .dot{position:relative;display:inline-block;flex:none;width:10px;height:10px;color:var(--st-idle)}
+  .dot::after{content:'';position:absolute;inset:20%;border-radius:50%;background:currentColor}
+  .dot[data-state="done"]{color:var(--st-done)}
+  .dot[data-state="warning"]{color:var(--st-warn)}
+  .spinner{flex:none;color:var(--fg-tertiary)}
+  .spinner .spin{transform-origin:center;animation:dsh-spin 1.5s linear infinite}
+  .spinner .track,.spinner .arc{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+  .spinner .track{opacity:.25}
+  .spinner .arc{stroke-dasharray:12 150;animation:dsh-dash 1.5s ease-in-out infinite}
+  @keyframes dsh-spin{to{transform:rotate(360deg)}}
+  @keyframes dsh-dash{0%{stroke-dasharray:12 150;stroke-dashoffset:0}
+                     50%{stroke-dasharray:24 150;stroke-dashoffset:-6}
+                     100%{stroke-dasharray:12 150;stroke-dashoffset:0}}
+  .bar{display:inline-block;flex:none;width:3px;height:14px;border-radius:2px;background:var(--st-idle)}
+  .bar[data-state="ongoing"]{background:var(--st-ongoing)}
+  .bar[data-state="warning"]{background:var(--st-warn)}
+  .bar[data-state="done"]{background:color-mix(in srgb,var(--st-done) 60%,transparent)}
+
+  /* ── ② 不常驻：闲置整格移出文档流 ───────────────────── */
+  [data-variant="conditional"] .slot.empty{display:none}
+
+  /* ── ⑤⑥：去掉会话行的图标列（容器行的照旧），文本因此左移一格 ── */
+  [data-variant="surface"] .row>.slot,
+  [data-variant="dot"] .row>.slot{display:none}
+
+  /* ⑤ 左缘色条：贴在行左缘内侧，不占任何布局宽度
+     内缩那一段（--ind-inset）让它离开行的左边框，从而读成"浮在行里"而不是"行的边界"
+     两端都圆角：贴边时只需右侧圆角，内缩之后四个角都是自由的，只圆一侧会显得被切断 */
+  [data-variant="surface"] .row::before{content:'';position:absolute;
+                                        left:var(--ind-inset);top:6px;bottom:6px;width:3px;
+                                        border-radius:2px;background:transparent}
+
+  /* ⑤⑥ 状态底色：只对非闲置行上色，闲置保持透明
+     写 background-color（不是 background 简写）——选中态用的是 background-image
+     两者是不同的 CSS 属性，因此状态色与选中可以同时生效，而不会互相覆盖 */
+  [data-variant="surface"] .row[data-state="ongoing"],
+  [data-variant="dot"] .row[data-state="ongoing"]{background-color:#4176e61a}
+  [data-variant="surface"] .row[data-state="warning"],
+  [data-variant="dot"] .row[data-state="warning"]{background-color:#f59e0b1a}
+  [data-variant="surface"] .row[data-state="ongoing"]::before{background:var(--st-ongoing)}
+  [data-variant="surface"] .row[data-state="warning"]::before{background:var(--st-warn)}
+  [data-variant="surface"] .row[data-state="done"]::before{background:color-mix(in srgb,var(--st-done) 55%,transparent)}
+
+  /* ── ⑥ 官方状态图标，绝对定位在行的左侧，不参与布局 ──
+     位置比 ⑤ 那根色条再往右一点：色条只有 3px 宽、贴内侧即可读
+     图标是一个 16px 的方块，完全贴边会读成"行的左边界"，内缩之后才像浮在行上
+     图标不占布局宽度，因此 ⑥ 的每一处文字位置与 ⑤ 完全一致 */
+  .absDot{display:none}
+  [data-variant="dot"] .absDot{position:absolute;left:var(--ind-inset-icon);top:50%;margin-top:-8px;
+                               width:16px;height:16px;display:inline-flex;
+                               align-items:center;justify-content:center;
+                               pointer-events:none;z-index:1}
+
+  /* ── 悬停与选中 ──
+     官方那条规则是【一条声明、一个值】：
+       .projectRow:hover, .sessionRow:hover, .sessionRow.selected { background: var(--dsw-alias-interactive-bg-hover) }
+     也就是 hover、active(selected)、hover+active 三者同色，不存在"再叠一层"这回事
+     因此这里写成同一个属性同一个值，绝不叠两次——叠两次会造出官方没有的颜色
+     （下面各档要另找通道时，才由 .sel-<id> 覆盖） */
+  .row:hover,.head:hover,
+  .row.hovering,.head.hovering,
+  .row.selected,.head.selected{
+    background-image:none;
+    background-color:var(--hover);
+  }
+  /* 选中态：逐档显式定义，不依赖"无类即默认"
+     每档都写成 .sel-<id>，卡片切换选择器就是换一个类 */
+  /*
+   * 加深（正式版采用的这一档）：不叠任何东西，只在有强调色时把色相压深
+   * 出发点是「没有强调色就与官方完全一致」——空闲/完成与官方同为那一档浅灰，
+   * 悬停与选中同值（官方 sessionRow.selected 与 :hover 本来就是同一条声明）
+   * 只有带强调色的行（运行中 / 待交互）才加深，且悬停比选中浅一档：
+   * 色相仍说明是哪种状态，深浅说明「指针在上面」还是「这是当前会话」
+   * 叠一层中性灰会把这层色相稀释成浑浊的灰蓝，因此强调色行不叠灰
+   */
+  .panel.sel-deepen .row.selected{
+    background-image:none;box-shadow:none;
+  }
+  .panel.sel-deepen .row.selected[data-state="ongoing"]{
+    background-color:color-mix(in srgb,var(--st-ongoing) 26%,transparent);
+  }
+  .panel.sel-deepen .row.selected[data-state="warning"]{
+    background-color:color-mix(in srgb,var(--st-warn) 26%,transparent);
+  }
+  /* 完成与空闲都没有强调色，与官方一致：选中即官方那档浅灰，不另行加深
+     完成态尤其不能给绿——它本身不带底色，一抹绿会让整段长期泛色 */
+  .panel.sel-deepen .row.selected[data-state="done"],
+  .panel.sel-deepen .row.selected[data-state="idle"]{
+    background-color:var(--hover);
+  }
+  /* 强调色行的悬停：比选中浅一档的加深 */
+  .panel.sel-deepen .row[data-state="ongoing"]:hover,
+  .panel.sel-deepen .row[data-state="ongoing"].hovering,
+  .panel.sel-deepen .row[data-state="ongoing"]:hover{
+    background-image:none;
+    background-color:color-mix(in srgb,var(--st-ongoing) 18%,transparent);
+  }
+  .panel.sel-deepen .row[data-state="warning"]:hover,
+  .panel.sel-deepen .row[data-state="warning"].hovering{
+    background-image:none;
+    background-color:color-mix(in srgb,var(--st-warn) 18%,transparent);
+  }
+  /* 选中且悬停：留在选中那一档（权重问题同正式版，这里用两条选择器写死） */
+  .panel.sel-deepen .row.selected[data-state="ongoing"]:hover,
+  .panel.sel-deepen .row.selected[data-state="ongoing"].hovering,
+  .panel.sel-deepen .row.selected[data-state="ongoing"]:hover{
+    background-image:none;
+    background-color:color-mix(in srgb,var(--st-ongoing) 26%,transparent);
+  }
+  .panel.sel-deepen .row.selected[data-state="warning"]:hover,
+  .panel.sel-deepen .row.selected[data-state="warning"].hovering{
+    background-image:none;
+    background-color:color-mix(in srgb,var(--st-warn) 26%,transparent);
+  }
+  .panel.sel-overlay .row.selected{
+    background-image:linear-gradient(var(--sel),var(--sel));
+    box-shadow:inset 0 0 0 1px var(--sel-ring);
+  }
+  /* 只内描边：完全不碰背景，状态色原样可见 */
+  .panel.sel-ring .row.selected{
+    background-image:none;
+    box-shadow:inset 0 0 0 1px var(--sel-ring);
+  }
+  /* 淡叠层 + 加字重 */
+  .panel.sel-bold .row.selected{
+    background-image:linear-gradient(var(--sel-light),var(--sel-light));
+    box-shadow:none;
+  }
+  .panel.sel-bold .row.selected .rowTitle{font-weight:600}
+  /* 还原现状：选中与悬停同值，且被状态底色盖掉 —— 供对照"问题长什么样" */
+  .panel.sel-broken .row.selected{
+    background-image:none;box-shadow:none;background-color:var(--hover);
+  }
+  .panel.sel-broken .row[data-state="ongoing"],
+  .panel.sel-broken .row[data-state="warning"]{background-color:var(--hover)}
+
+  /* 选中且悬停
+     叠层/加字重那两档：悬停那层叠在选中之上，两者相加而不是互相顶掉
+     官方那一档不写：它悬停与选中本来就同值，上面通用规则已经是官方原样
+     加深那两档各自写死了自己的悬停取色，这里也不插手 */
+  .panel.sel-overlay .row.selected:hover,
+  .panel.sel-overlay .row.selected.hovering{
+    background-image:linear-gradient(var(--hover),var(--hover)),linear-gradient(var(--sel),var(--sel));
+  }
+  .panel.sel-bold .row.selected:hover,
+  .panel.sel-bold .row.selected.hovering{
+    background-image:linear-gradient(var(--hover),var(--hover)),linear-gradient(var(--sel-light),var(--sel-light));
+  }
+  .panel.sel-ring .row.selected:hover,
+  .panel.sel-ring .row.selected.hovering{
+    background-image:linear-gradient(var(--hover),var(--hover));
+  }
+  .panel.sel-broken .row.selected:hover,
+  .panel.sel-broken .row.selected.hovering{
+    background-image:none;background-color:var(--hover);
+  }
+
+  /* ── 参考线 / 边界标记 ──────────────────────────────── */
+  .panel.showGuides .row::after,
+  .panel.showGuides .head::after{
+    content:'';position:absolute;top:0;bottom:0;width:1px;pointer-events:none;z-index:2}
+  .panel.showGuides .wsBody>.sessions>.row::after{background:#ec1313cc;left:calc(44px + 16px * var(--wg-depth,0))}
+  .panel.showGuides .groupBody>.sessions>.row::after{background:#ec1313cc;left:calc(60px + 16px * var(--wg-depth,0))}
+  .panel.showGuides .workspaceHead::after{background:#3b82f6cc;left:calc(30px + 16px * var(--wg-depth,0))}
+  .panel.showGuides .groupHead::after{background:#3b82f6cc;left:calc(46px + 16px * var(--wg-depth,0))}
+  [data-variant="conditional"].showGuides .wsBody>.sessions>.row:not([data-state="idle"])::after{left:calc(60px + 16px * var(--wg-depth,0))}
+  [data-variant="conditional"].showGuides .groupBody>.sessions>.row:not([data-state="idle"])::after{left:calc(76px + 16px * var(--wg-depth,0))}
+  [data-variant="surface"].showGuides .wsBody>.sessions>.row::after,
+  [data-variant="dot"].showGuides .wsBody>.sessions>.row::after{left:calc(28px + 16px * var(--wg-depth,0))}
+  [data-variant="surface"].showGuides .groupBody>.sessions>.row::after,
+  [data-variant="dot"].showGuides .groupBody>.sessions>.row::after{left:calc(44px + 16px * var(--wg-depth,0))}
+
+  /* 平铺列表：全部可见会话一条列，行距与工作区体内那几段同值（2px）
+     缩进按指示器在不在行内流分两档，但两种都让标题落在同一条线上：
+     ①–④ 的指示器就在行内那一列里，照官方那套从 8px 起（槽位 8–24，标题 28）
+     ⑤⑥ 的指示器出流钉在行左缘，占掉 4~20px，标题必须让开它，因此多缩一格（24，标题同样 28） */
+  .flatList{display:flex;flex-direction:column}
+  .flatList>*+*{margin-top:2px}
+  .flatList>.row,.flatList>*>.row{--wg-row-start:8px;padding-left:var(--wg-row-start)}
+  [data-variant="surface"] .flatList>.row,
+  [data-variant="surface"] .flatList>*>.row,
+  [data-variant="dot"] .flatList>.row,
+  [data-variant="dot"] .flatList>*>.row{--wg-row-start:24px}
+
+  .edgeTag{display:none}
+  .panel.showEdge .row.edge{outline:1.5px dashed #ec1313;outline-offset:-1.5px}
+  .panel.showEdge .row.edge .edgeTag{display:inline-block;flex:none;margin-left:6px;font-size:10.5px;
+        color:#ec1313;background:#fff;padding:0 4px;border-radius:4px;line-height:16px}
+
+  footer{margin-top:22px;max-width:1180px;font-size:12.5px;color:var(--fg-secondary);line-height:1.7}
+  footer h2{font-size:13.5px;margin:0 0 6px;color:var(--fg-primary)}
+  footer ul{margin:0;padding-left:18px}
+  footer table{border-collapse:collapse;margin:8px 0 10px;font-size:12px}
+  footer th,footer td{border:1px solid #00000018;padding:3px 9px;text-align:left}
+  footer th{background:#ffffff8c;font-weight:600;color:var(--fg-secondary)}
+  footer td.hl{background:#ec13130d;font-weight:600}
+  footer td.ic{color:var(--fg-caption)}
+  footer td.cn{color:#2563eb}
+  footer td.ok{color:#1a7f37}
+  footer td.no{color:#ec1313}
+</style>
+</head>
+<body>
+
+<h1>会话行指示器与树形可读性 · 对照稿</h1>
+<p class="intro">
+  同一棵树，六个方案，<b>可点击收缩</b>。层级是
+  <code>工作区分组 → 工作区 → 工作区下的子工作区 → 放进会话分组的子工作区</code>，再各带一段未归组会话。
+  缩进、行高、图标列、引导线、色阶都照 <code>rows.module.css</code> 复刻，只有指示器与「会话」小标题随方案变化。
+  <b>六张卡片并排一行、横向滚动</b>，卡片本身不换行。
+  <b>功能基线一致靠结构相同拿到</b>：六张卡片的头部行数、控件种类与文案行数都一样，因此六棵树天然从同一条线开始，
+  不需要上半部分留白去凑。卡片里的按钮只作用于本卡片，想横向比对同一档收起态时用顶部那排按钮一次推平六张。
+</p>
+<div class="controls">
+  <button id="collapseInner">收起内层（留 W1 与它的分组）</button>
+  <button id="collapseAll">全部收起</button>
+  <button id="expandAll">全部展开</button>
+  <div class="sep"></div>
+  <label><input type="checkbox" id="flatMode"> 平铺展示方式（全局）</label>
+  <div class="sep"></div>
+  <label><input type="checkbox" id="edge"> 圈出未归组会话段的第一行</label>
+  <label><input type="checkbox" id="hover"> 给未选中的行加悬停态（比较悬停 vs 选中）</label>
+  <label><input type="checkbox" id="guides"> 文字左缘参考线</label>
+  <label><input type="checkbox" id="fixTitle"> 会话小标题对齐会话标题</label>
+  <label><input type="checkbox" id="countInside"> 收起时显示后代数量</label>
+  <div class="sep"></div>
+  <span class="phint">指示器内缩只在⑤⑥ 的卡片里（那两档才读这个量）</span>
+</div>
+
+<div class="legend">
+  <span><span class="dot" data-state="ongoing"></span>运行中（官方为 14px 旋转弧）</span>
+  <span><span class="dot" data-state="warning"></span>待交互</span>
+  <span><span class="dot" data-state="done"></span>完成未打开</span>
+  <span><span class="dot" data-state="idle"></span>空闲（仅③画；①④⑤⑥ 这一格为空）</span>
+</div>
+
+<div id="panelsScroll"><div id="panels"></div></div>
+
+<footer>
+  <h2>实测的文本左缘（相对树左缘，d=1）</h2>
+  <p>下表是按本页样式实测出来的，<b>与插件产物里的样式表取同一套公式</b>（会话行 24 + 16d、组内 40 + 16d；
+     指示器钉在行左缘，色条内缩 4px、图标 6px）。</p>
+  <table>
+    <tr><th>方案</th><th>未归组会话</th><th>组内会话</th><th>指示器 x</th><th>闲置 / 活跃 是否同列</th></tr>
+    <tr><td>① 现状</td><td>60</td><td>76</td><td class="ic">—（占位 40–56）</td><td class="ok">同列</td></tr>
+    <tr><td>② 不常驻指示器</td><td><b>60 / 44</b></td><td>76 / 60</td><td class="ic">—（活跃时 40–56）</td><td class="no">差 16px，活跃时右推一格</td></tr>
+    <tr><td>③ 常驻中性点</td><td>60</td><td>76</td><td class="ic">—（占位 40–56）</td><td class="ok">同列</td></tr>
+    <tr><td>④ 列内色条</td><td>60</td><td>76</td><td class="ic">47</td><td class="ok">同列</td></tr>
+    <tr><td><b>⑤ 表面表达</b></td><td><b>44</b></td><td><b>60</b></td><td class="ic">4（色条）</td><td class="ok">同列</td></tr>
+    <tr><td><b>⑥ 官方状态图标</b></td><td><b>44</b></td><td><b>60</b></td><td class="ic">6（图标）</td><td class="ok">同列</td></tr>
+  </table>
+  <p>①②③④ 把指示器放在<b>行内那一列</b>里，因此会话文本让出了一整格；⑤⑥ 把指示器改为<b>绝对定位、钉在行的最左缘</b>，
+     文本因此左移一格（60 → 44），与容器的图标列并齐。⑥ 与 ⑤ 的文字位置完全一致，只有字形不同（色条 vs 官方图标）。</p>
+  <h3>平铺展示方式下的缩进（勾上顶部那个全局开关）</h3>
+  <p>平铺按「指示器在不在行内流」分两档缩进，<b>但两种都让标题落在同一条线上（28）</b>：</p>
+  <table>
+    <tr><th>方案</th><th>行左内边距</th><th>图标列 / 字形</th><th>标题左缘</th></tr>
+    <tr><td>官方 <code>sessionRow</code>（平铺）</td><td>8</td><td>槽位 8–24，圆点 11</td><td><b>28</b></td></tr>
+    <tr><td>①–④（指示器在行内那一列）</td><td>8</td><td>槽位 8–24</td><td><b>28</b></td></tr>
+    <tr><td>⑤⑥（指示器钉在行左缘）</td><td>24</td><td>字形 4 / 6</td><td><b>28</b></td></tr>
+  </table>
+  <p>官方的平铺行与树形行<b>共用同一个 <code>sessionRow</code></b>，缩进照旧从 8px 起（平铺不设 <code>--dsh-workspace-indent</code>），
+     所以①–④ 在平铺下就该是 8px。⑤⑥ 的指示器出了行内流、占掉行左缘那 4~20px，标题必须让开它，才多缩一格。
+     这一节早先把①–④ 也写成 24px，等于凭空留出 16px 空档，与官方不符。</p>
+
+  <p>② 的闲置态落进容器的图标列（44 对图标列 40–56），活跃时右推整整一格（44 → 60）——
+     这就是它「不常驻」的代价：同一段里标题会随状态左右跳。</p>
+
+  <h2>同类容器名的位置（不随方案变化）</h2>
+  <table>
+    <tr><th>行</th><th>自身 x</th><th>直属会话标题 x</th><th>说明</th></tr>
+    <tr><td>工作区（d=1）</td><td>8</td><td>44</td><td>会话比工作区名多缩一格</td></tr>
+    <tr><td>会话分组（d=2）</td><td>40</td><td>60</td><td>同理</td></tr>
+    <tr><td>子工作区（d=4）</td><td>88</td><td>92</td><td class="no">只差 4px，收起后几乎同列</td></tr>
+  </table>
+  <p><b>表里最后一行是收起态的隐患</b>：深层的子工作区名（88）与它自己直属会话的标题（92）只差 4px。
+     收起之后那一行只剩名字，而它下面的会话跟它几乎同列，层级读不出来——这正是下面「收起态」一节要说的事。</p>
+
+  <h2>「选中态」通道（每张卡片各有一个下拉）</h2>
+  <p>底色被状态占用之后，「当前会话被选中」就失去了表达位置。现状的选中样式是
+     <code>background: var(--dsw-alias-interactive-bg-hover)</code>，与悬停<b>同属性同值</b>——
+     在①–④ 里靠整行变灰够用（官方就是这么写的），而 ⑤⑥ 的状态底色写的是同一个属性，
+     于是<b>带状态的会话完全显示不出选中</b>。下面几档给的是"改用哪条通道"的不同答案。</p>
+  <table>
+    <tr><th>档位</th><th>占用的通道</th><th>状态色是否保留</th><th>实测</th></tr>
+    <tr><td><b>官方（同色）· ①–④ 的默认</b></td><td><code>background-color</code></td>
+      <td>①–④ 无状态底色，不受影响</td>
+      <td>官方原样：<code>hover, selected { background: interactive-bg-hover }</code>——<b>三者同色</b>，<b>无边框</b>。在⑤⑥ 上读不出选中</td></tr>
+    <tr><td><b>加深一档 · ⑤⑥ 的默认</b></td><td><code>background-color</code></td>
+      <td class="ok">色相保留，深浅变化</td>
+      <td>运行行 10% → 26%（悬停 18%）；<b>无强调色的行与官方一致，不加不减</b>；<b>无边框</b></td></tr>
+    <tr><td>叠层 + 内描边</td><td><code>background-image</code> + <code>box-shadow</code></td>
+      <td>保留，但蓝底被灰叠成糊色</td><td>亮度不变，靠描边读</td></tr>
+    <tr><td>只内描边</td><td><code>box-shadow</code></td><td class="ok">完整保留</td><td>不碰背景，最干净</td></tr>
+    <tr><td>淡叠层 + 加字重</td><td><code>background-image</code> + 字重</td>
+      <td>保留，稍被压淡</td><td>叠层很淡，主要靠字重</td></tr>
+    <tr><td>还原现状</td><td>—</td><td class="no">被状态色盖掉</td><td>选中与常态完全一致，供对照"问题长什么样"</td></tr>
+    <tr><td colspan="4" class="no">中间三档（叠层 + 内描边 / 只内描边 / 淡叠层 + 加字重）只作对照：
+      <b>落地的插件版本一条描边都不加</b>。官方 active / selected 只有底色，加描边会与设计不一致。</td></tr>
+  </table>
+  <p><b>默认值随样式而定，但这一行控件六张卡片都有</b>——能调整的基础功能一致，差的是默认取哪一档：
+     ①–④ 的底色本来透明，选中就用官方那层浅灰，没有要解决的问题；⑤⑥ 的底色被状态占用，才需要「加深」这条新通道。
+     「加深」也只对有强调色的行生效：运行中 / 待交互有自己的色相，把浓度提上去即可——<b>色相说明是哪种状态，深浅说明是否选中</b>；
+     空闲与完成本来就没有强调色，与官方完全一致，不另加深（完成若给一抹绿，整段会长期泛色）。</p>
+  <p>顺带一处权重坑：<code>.row[data-state]:hover</code> 比 <code>.rowSelected[data-state]</code> 权重高，
+     选中那档因此必须自己再带一档 <code>:hover</code>，否则选中的运行行一悬停就被较浅的悬停值盖回去。<b>插件里两处都写了。</b></p>
+
+  <h2>收起态该看什么</h2>
+  <ul>
+    <li><b>收起后唯一还在表达层级的只有缩进与引导线。</b>展开时「会话」小标题、状态图标、段间 12px 间距
+        都在帮忙；一收起，每个容器只剩一行「图标 + 名字 + 计数」，层级全靠 <code>padding-left</code>。</li>
+    <li><b>会话文本比容器名多缩一格（44 对 8、60 对 40），间隔够读</b>；真正的问题是深层子工作区：
+        它的名字 x=88，而它自己直属会话的标题 x=92——只差 4px，收起后两者几乎同列。</li>
+    <li><b>收起态的「里面有东西」这件事，本包目前只有分组头在表达</b>（会话数），
+        工作区行没有任何计数；一个收起的工作区里如果只有子工作区、没有直属会话，界面上看不出它非空。
+        勾上「收起时显示后代数量」可以看到补上这一格之后的样子。</li>
+    <li><b>工作区行的文件夹图标随开合换成开/闭两态</b>（照官方），这是收起态里除缩进外唯一的层级信息；
+        ⑥ 的绝对定位状态图标<b>不妨碍</b>它，因为容器行根本没有状态。</li>
+  </ul>
+</footer>
+
+<script>
+const VARIANTS = [
+  { id:'current', name:'① 现状', subtitle:false,
+    desc:'状态点常驻占位、闲置留空；靠「会话」小标题区分三段',
+    note:'闲置那一格空着 →「这几行是会话」只能由小标题讲' },
+  { id:'conditional', name:'② 不常驻指示器', subtitle:false,
+    desc:'闲置时整格移出文档流，只在真的有指示器时把标题右推',
+    note:'闲置标题落进容器的图标列，活跃时右推整整一格（16px）' },
+  { id:'alwaysDot', name:'③ 常驻中性点', subtitle:false,
+    desc:'占位不变，闲置也画一枚中性点',
+    note:'列不再可空，几何零改动' },
+  { id:'bar', name:'④ 列内色条', subtitle:false,
+    desc:'占位不变，字形换成状态色条',
+    note:'文本左缘不动，状态改用形状与颜色' },
+  { id:'surface', name:'⑤ 表面表达', subtitle:false,
+    desc:'去掉整列，状态落在行的底色与左边框上',
+    note:'文本左缘永久落进容器的图标列' },
+  { id:'dot', name:'⑥ 表面表达 + 官方图标', subtitle:false,
+    desc:'保留⑤的底色，色条换成官方状态图标',
+    note:'图标不占布局宽度；空闲行不画（同②）' },
+]
+
+/* ── 树 ────────────────────────────────────────────────── */
+const TREE = { kind:'vg', id:'vg1', label:'dsh plugins',
+  children:[
+    { kind:'ws', id:'w1', label:'dsh_plugins', depth:1,
+      nest:[
+        { kind:'ws', id:'w2', label:'packages', depth:2,
+          nest:[],
+          groups:[
+            { kind:'group', id:'g2', label:'记忆与存储', depth:2,
+              nest:[
+                { kind:'ws', id:'w3', label:'dsh-mnemon', depth:4,
+                  sessions:[
+                    { title:'记忆分层与 docs 提炼', time:'昨天', state:'idle' },
+                    { title:'写入 Mnemon 记忆空间', time:'2天前', state:'done' },
+                  ] }
+              ],
+              sessions:[
+                { title:'接入 Mnemon 记忆空间', time:'5分钟前', state:'ongoing', current:true },
+                { title:'整理运行时记忆条目', time:'4小时前', state:'idle' },
+              ] }
+          ],
+          sessions:[
+            { title:'拆分 client view 结构', time:'前天', state:'idle' },
+            { title:'替换全局 CSS 为 module', time:'前天', state:'idle' },
+          ] }
+      ],
+      groups:[
+        { kind:'group', id:'g1', label:'工作区侧栏', depth:1, nest:[],
+          sessions:[
+            { title:'会话分组可折叠', time:'2小时前', state:'warning' },
+            { title:'平铺展示模式', time:'昨天', state:'idle' },
+            { title:'行级 memo 与状态位', time:'昨天', state:'idle' },
+          ] }
+      ],
+      sessions:[
+        { title:'对齐官方 0.1.7-rc', time:'刚刚', state:'ongoing', edge:true },
+        { title:'更新 README 设计论证', time:'1小时前', state:'idle' },
+        { title:'补齐包级构建脚本', time:'3小时前', state:'idle' },
+      ] }
+  ] }
+
+/* ── 状态 ──────────────────────────────────────────────── */
+/*
+ * 功能基线一致靠**结构相同**拿到，不靠共享一份状态
+ *
+ * 六张卡片的头部行数、控件种类与初始取值全都一样，因此六棵树天然从同一条线开始，
+ * 不需要再补一段空白去凑高度。卡片里的按钮只作用于本卡片：想横向比对时用顶部那排按钮
+ * 一次推平六张，而不是让所有卡片被迫联动。
+ * 「平铺」是个例外——它换的是整个列表的形态，按早先的要求做成全局选项。
+ */
+const STATE = {
+  /** 变体 id → 该卡片收起的容器 id 集合 */
+  collapsedByPanel: new Map(),
+  /** 变体 id → 该卡片里选中的会话标题；null 表示没有选中 */
+  selectedByPanel: new Map(),
+  /** 变体 id → 该卡片是否渲染「会话」小标题 */
+  subtitleByPanel: new Map(),
+  /** 展示方式：换的是整个列表的形态，全局一致 */
+  flat: false,
+  /** 变体 id → 该卡片选中态的表达通道 */
+  selModeByPanel: new Map(),
+  fixTitle: false,
+  countInside: false,
+}
+
+/** 取某张卡片的收起集合，没有就建一个空的 */
+function collapsedOf(variantId){
+  let set = STATE.collapsedByPanel.get(variantId)
+  if (set === undefined) { set = new Set(); STATE.collapsedByPanel.set(variantId, set) }
+  return set
+}
+
+/** 该卡片是否渲染「会话」小标题，缺省按变体自己的初值 */
+function subtitleOf(variantId){
+  let on = STATE.subtitleByPanel.get(variantId)
+  if (on === undefined) {
+    const v = VARIANTS.find(x => x.id === variantId)
+    on = v ? v.subtitle : false
+  }
+  return on
+}
+
+/** 该卡片此刻选中的会话标题 */
+function selectedOf(variantId){
+  return STATE.selectedByPanel.get(variantId) ?? null
+}
+
+/* ── 字形 ──────────────────────────────────────────────── */
+const FOLDER_OPEN = '<svg class="folder" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">'
+  + '<path d="M1.5 4.3c0-.7.6-1.3 1.3-1.3h2.9l1.3 1.6h6.2c.7 0 1.3.6 1.3 1.3v6c0 .7-.6 1.3-1.3 1.3H2.8c-.7 0-1.3-.6-1.3-1.3V4.3z" fill="currentColor"/></svg>'
+const FOLDER_CLOSE = '<svg class="folder" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">'
+  + '<path d="M1.5 4.3c0-.7.6-1.3 1.3-1.3h2.6l1.2 1.5h4.9c.7 0 1.3.6 1.3 1.3v5.3c0 .7-.6 1.3-1.3 1.3H2.8c-.7 0-1.3-.6-1.3-1.3V4.3z" fill="currentColor"/></svg>'
+const chev = (open) => '<svg class="chev' + (open ? ' open' : '') + '" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">'
+  + '<path d="M6 3.6l5.2 4.4L6 12.4z" fill="currentColor"/></svg>'
+
+function dotMarkup(state){
+  if (state === 'ongoing') {
+    return '<svg class="spinner" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">'
+      + '<g class="spin"><circle class="track" cx="12" cy="12" r="9.5"/>'
+      + '<circle class="arc" cx="12" cy="12" r="9.5"/></g></svg>'
+  }
+  return '<span class="dot" data-state="' + state + '"></span>'
+}
+
+/* ── 计数 ──────────────────────────────────────────────── */
+function subtree(node){
+  let s = (node.sessions || []).length, w = 0
+  for (const c of node.nest || []) { const r = subtree(c); s += r.s; w += r.w + 1 }
+  for (const g of node.groups || []) { const r = subtree(g); s += r.s; w += r.w }
+  return { s, w }
+}
+
+function countMarkup(node, collapsed, variant){
+  if (node.kind === 'vg') return '<span class="count">' + (node.children || []).length + '</span>'
+  if (node.kind === 'group') {
+    const n = (node.sessions || []).length
+    return n > 0 ? '<span class="count">' + n + '</span>' : ''
+  }
+  // 工作区行：本包原本没有任何计数，收起时补一个后代总数（可开关）
+  if (!STATE.countInside || !collapsed) return ''
+  const t = subtree(node)
+  const n = t.s + t.w
+  return n > 0 ? '<span class="count inside">' + n + '</span>' : ''
+}
+
+/* ── 会话行 ────────────────────────────────────────────── */
+function slotMarkup(state, variant){
+  if (variant === 'surface' || variant === 'dot') return ''
+  const empty = state === 'idle'
+  if (variant === 'bar') return '<span class="slot"><span class="bar" data-state="' + state + '"></span></span>'
+  const inner = variant === 'alwaysDot' ? dotMarkup(state) : (empty ? '' : dotMarkup(state))
+  const off = (variant === 'conditional' && empty) ? ' empty' : ''
+  return '<span class="slot' + off + '">' + inner + '</span>'
+}
+
+function sessionRow(s, variant, selectedTitle){
+  // ⑥ 只给真的有指示器的行画图标：空闲行留空，与②同一取舍
+  // 灰色的 idle 点属于③「常驻中性点」，不是⑥的一部分
+  const absDot = (variant === 'dot' && s.state !== 'idle')
+    ? '<span class="absDot">' + dotMarkup(s.state) + '</span>'
+    : ''
+  const selected = selectedTitle !== null && selectedTitle === s.title
+  return '<div class="row' + (s.edge ? ' edge' : '') + (selected ? ' selected' : '')
+    + '" data-state="' + s.state + '" data-title="' + s.title + '">'
+    + absDot + slotMarkup(s.state, variant)
+    + '<span class="rowTitle">' + s.title + '</span>'
+    + (s.edge ? '<span class="edgeTag">← 第一行</span>' : '')
+    + '<span class="rowTime">' + s.time + '</span>'
+    + '</div>'
+}
+
+function sessionsRun(node, variant, inGroup, selectedTitle, subtitleOn){
+  const items = node.sessions || []
+  if (items.length === 0) return ''
+  const kids = (node.nest || []).length + (node.groups || []).length
+  const needsTitle = inGroup ? (node.nest || []).length > 0 : kids > 0
+  const title = (needsTitle && subtitleOn)
+    ? '<div class="sessionsTitle">会话</div>' : ''
+  return '<div class="sessions">' + title
+    + items.map(s => sessionRow(s, variant, selectedTitle)).join('')
+    + '</div>'
+}
+
+/* ── 容器 ──────────────────────────────────────────────── */
+function workspaceNode(n, variant, collapsedSet, selectedTitle, subtitleOn){
+  const collapsed = collapsedSet.has(n.id)
+  const body = []
+  if ((n.nest || []).length) {
+    body.push('<div class="nest">'
+      + n.nest.map(c => workspaceNode(c, variant, collapsedSet, selectedTitle, subtitleOn)).join('') + '</div>')
+  }
+  for (const g of (n.groups || [])) body.push(groupNode(g, variant, collapsedSet, selectedTitle, subtitleOn))
+  const run = sessionsRun(n, variant, false, selectedTitle, subtitleOn)
+  if (run) body.push(run)
+  if (body.length === 0) body.push('<div class="emptyState">暂无会话</div>')
+
+  return '<section class="workspace" style="--wg-depth:' + n.depth + '">'
+    + '<div class="head workspaceHead" data-toggle="' + n.id + '">'
+    + '<span class="slot">' + (collapsed ? FOLDER_CLOSE : FOLDER_OPEN) + chev(!collapsed) + '</span>'
+    + '<span class="wtitle">' + n.label + '</span>'
+    + countMarkup(n, collapsed, variant)
+    + '</div>'
+    + (collapsed ? '' : '<div class="wsBody">' + body.join('') + '</div>')
+    + '</section>'
+}
+
+function groupNode(g, variant, collapsedSet, selectedTitle, subtitleOn){
+  const collapsed = collapsedSet.has(g.id)
+  const body = []
+  if ((g.nest || []).length) {
+    body.push('<div class="nest">'
+      + g.nest.map(c => workspaceNode(c, variant, collapsedSet, selectedTitle, subtitleOn)).join('') + '</div>')
+  }
+  const run = sessionsRun(g, variant, true, selectedTitle, subtitleOn)
+  if (run) body.push(run)
+  const empty = (g.sessions || []).length === 0 && (g.nest || []).length === 0
+
+  return '<div class="group">'
+    + '<div class="head groupHead" data-toggle="' + g.id + '">'
+    + '<span class="slot">' + chev(!collapsed) + '</span>'
+    + '<span class="glabel">' + g.label + '</span>'
+    + countMarkup(g, collapsed, variant)
+    + '</div>'
+    + (collapsed || empty ? '' : '<div class="groupBody">' + body.join('') + '</div>')
+    + '</div>'
+}
+
+function vgNode(v, variant, collapsedSet, selectedTitle, subtitleOn){
+  const collapsed = collapsedSet.has(v.id)
+  return '<div class="virtualWorkspace">'
+    + '<div class="head vwHead" data-toggle="' + v.id + '">'
+    + '<span class="slot">' + chev(!collapsed) + '</span>'
+    + '<span class="glabel">' + v.label + '</span>'
+    + countMarkup(v, collapsed, variant)
+    + '</div>'
+    + (collapsed ? '' : '<div class="vwBody">'
+        + v.children.map(c => workspaceNode(c, variant, collapsedSet, selectedTitle, subtitleOn)).join('') + '</div>')
+    + '</div>'
+}
+
+/** 用某张卡片自己的开合状态渲染它的树，并接上行点击 */
+function paintTree(panel, variantId){
+  const tree = panel.querySelector('.tree')
+  const folded = collapsedOf(variantId)
+  const selectedTitle = selectedOf(variantId)
+  // 平铺：不渲染任何容器，全部可见会话排成一条列表
+  tree.innerHTML = STATE.flat
+    ? flatList(variantId, selectedTitle)
+    : vgNode(TREE, variantId, folded, selectedTitle, subtitleOf(variantId))
+  for (const head of tree.querySelectorAll('[data-toggle]')) {
+    head.addEventListener('click', () => {
+      const id = head.dataset.toggle
+      if (folded.has(id)) folded.delete(id)
+      else folded.add(id)
+      paintTree(panel, variantId)
+      updatePanelHint(panel, variantId)
+    })
+  }
+  // 点会话行即选中，用于看「选中 + 状态底色」在同一行上长什么样
+  for (const row of tree.querySelectorAll('.row')) {
+    row.addEventListener('click', () => {
+      const title = row.dataset.title
+      STATE.selectedByPanel.set(variantId, selectedTitle === title ? null : title)
+      paintTree(panel, variantId)
+    })
+  }
+  updatePanelHint(panel, variantId)
+}
+
+/**
+ * 平铺列表：全部可见会话排成一条，没有任何容器
+ *
+ * 与正式版同一个语义（官方的「单列表」）：成员集合与工作区组织方式无关
+ * 用于对比「指示器出流之后，平铺下标题是否仍与工作区视图同档」
+ */
+function flatList(variantId, selectedTitle){
+  const all = []
+  walk(TREE, (n) => { for (const s of n.sessions || []) all.push(s) })
+  return '<div class="flatList">'
+    + all.map(s => sessionRow(s, variantId, selectedTitle)).join('')
+    + '</div>'
+}
+
+/** 功能状态是全局的，改一处就要重绘所有卡片，六张始终看着同一屏 */
+function paintAllTrees(){
+  for (const p of panelsEl.children) paintTree(p, p.dataset.variant)
+}
+
+/** 卡片头那行小字，回报这张卡片当前收起了几个容器 */
+function updatePanelHint(panel, variantId){
+  const hint = panel.querySelector('[data-collapse-hint]')
+  if (!hint) return
+  const n = collapsedOf(variantId).size
+  hint.textContent = n === 0 ? '全部展开' : '已收起 ' + n + ' 个容器'
+}
+
+/* ── 组装 ──────────────────────────────────────────────── */
+const panelsEl = document.getElementById('panels')
+
+/**
+ * 选中态的表达通道，⑤⑥ 卡片上可以逐张切换
+ *
+ * 这几档用来回答同一个问题：状态底色已经占掉 background-color 之后，
+ * 「当前会话被选中」还能靠哪条通道读出来
+ */
+const SEL_MODES = [
+  { id:'official', name:'官方（同色）' },
+  { id:'deepen', name:'加深一档' },
+  { id:'overlay', name:'叠层 + 内描边' },
+  { id:'ring', name:'只内描边' },
+  { id:'bold', name:'淡叠层 + 加字重' },
+  { id:'broken', name:'还原现状（被盖掉）' },
+]
+
+/**
+ * 该卡片的选中态档位
+ *
+ * ⑤⑥ 默认「加深」——它们的底色被状态占用，选中必须另找一条通道
+ * ①–④ 默认「官方」——那边底色本来透明，选中就是官方那层浅灰，没有要解决的问题
+ * 两档都保持「能调整的基础功能一致」：六张卡片的这一行控件相同，只是默认值随样式而定
+ */
+function selModeOf(variantId){
+  let m = STATE.selModeByPanel.get(variantId)
+  if (m === undefined) {
+    m = (variantId === 'surface' || variantId === 'dot') ? 'deepen' : 'official'
+    STATE.selModeByPanel.set(variantId, m)
+  }
+  return m
+}
+
+/** 把选中态档位写成面板上的类，样式表按类切换 */
+function applySelMode(panel, variantId){
+  for (const m of SEL_MODES) panel.classList.toggle('sel-' + m.id, selModeOf(variantId) === m.id)
+}
+
+function buildPanel(v){
+  const panel = document.createElement('div')
+  panel.className = 'panel showGuides'
+  panel.dataset.variant = v.id
+
+  // 只有⑤⑥ 需要选通道：①–④ 的底色是透明的，不存在与状态争通道的问题
+  // 内缩量只有⑤⑥ 有得调：①–④ 的指示器在行内那一列里，不读这个变量
+  // 每张卡片实际只读一个值——⑤ 那根色条读 --ind-inset，⑥ 那枚图标读 --ind-inset-icon，
+  // 因此滑块只管本卡片真正消费的那一个，显示也只有一个数，不写成 "a/b" 那种含义不明的格式
+  // 它跟「选中态」并作一行，六张卡片的控件行数因此仍然相同，头部高度不会因此错开
+  const insetVar = v.id === 'surface' ? '--ind-inset' : '--ind-inset-icon'
+  const insetControl = (v.id === 'surface' || v.id === 'dot')
+    ? '<span class="plabel">内缩</span>'
+      + '<label class="slider"><input type="range" data-inset data-var="' + insetVar + '"'
+      + ' min="0" max="10" step="1" value="' + (v.id === 'surface' ? 4 : 6) + '">'
+      + '<span data-inset-val>' + (v.id === 'surface' ? 4 : 6) + 'px</span></label>'
+    : ''
+
+  // 六张卡片的控件行数与文案行数全都相同，头部高度因此天然一致，不需要补空白
+  // 通道这一档对①–④ 同样有意义：那边底色是透明的，选中本来就只靠那一层灰
+  const selControl = '<div class="prow"><span class="plabel">选中态</span>'
+    + '<select data-selmode>'
+    + SEL_MODES.map(m => '<option value="' + m.id + '">' + m.name + '</option>').join('')
+    + '</select>'
+    + insetControl
+    + '</div>'
+
+  panel.innerHTML =
+    '<div class="phead">'
+    + '<div class="pname">' + v.name
+    + '<span class="spacer"></span>'
+    + '<span class="pcollapse" data-collapse-hint></span>'
+    + '</div>'
+    + '<div class="pdesc">' + v.desc + '</div>'
+    + '<div class="pnote">' + v.note + '</div>'
+    + '<div class="prow">'
+    + '<label class="ptoggle"><input type="checkbox" data-subtitle '
+    + (subtitleOf(v.id) ? 'checked' : '') + '>「会话」小标题</label>'
+    + '<button type="button" data-collapse-all>全部收起</button>'
+    + '<button type="button" data-expand-all>展开</button>'
+    + '</div>'
+    + selControl
+    + '<div class="hintbar">虚线框 = 未归组会话段的第一行</div>'
+    + '</div>'
+    + '<div class="tree"></div>'
+
+  paintTree(panel, v.id)
+
+  // 真实侧边栏任何时刻都有一条当前会话，每张卡片初始就选中它
+  // 六张卡片选的是同一条，因此"状态底色 + 选中"一打开就能看到
+  if (!STATE.selectedByPanel.has(v.id)) {
+    STATE.selectedByPanel.set(v.id, currentSessionTitle())
+    paintTree(panel, v.id)
+  }
+
+  const sub = panel.querySelector('[data-subtitle]')
+  sub.addEventListener('change', (e) => {
+    STATE.subtitleByPanel.set(v.id, e.target.checked)
+    paintTree(panel, v.id)
+  })
+
+  // 只收起本卡片：开合按卡片分开存，比完这一张再动下一张
+  panel.querySelector('[data-collapse-all]').addEventListener('click', () => {
+    const set = collapsedOf(v.id)
+    set.clear()
+    walk(TREE, (n) => { if (n.id !== undefined) set.add(n.id) })
+    set.delete(TREE.id)
+    paintTree(panel, v.id)
+    updatePanelHint(panel, v.id)
+  })
+
+  panel.querySelector('[data-expand-all]').addEventListener('click', () => {
+    collapsedOf(v.id).clear()
+    paintTree(panel, v.id)
+    updatePanelHint(panel, v.id)
+  })
+
+  // 选中态通道：六张卡片各有一个下拉，互不影响
+  const selSelect = panel.querySelector('[data-selmode]')
+  if (selSelect) {
+    selSelect.value = selModeOf(v.id)
+    applySelMode(panel, v.id)
+    selSelect.addEventListener('change', (e) => {
+      STATE.selModeByPanel.set(v.id, e.target.value)
+      applySelMode(panel, v.id)
+    })
+  }
+
+  // 指示器内缩：滑块只写本卡片真正消费的那一个变量
+  const insetRange = panel.querySelector('[data-inset]')
+  const insetVal = panel.querySelector('[data-inset-val]')
+  if (insetRange !== null) {
+    insetRange.addEventListener('input', (e) => {
+      const v = Number(e.target.value)
+      panel.style.setProperty(insetRange.dataset.var, v + 'px')
+      insetVal.textContent = v + 'px'
+    })
+  }
+
+  // 全局开关的类挂在面板上，重绘树不影响它们
+  panel.classList.toggle('showGuides', document.getElementById('guides').checked)
+  panel.classList.toggle('showEdge', document.getElementById('edge').checked)
+  panel.classList.toggle('fixTitle', document.getElementById('fixTitle').checked)
+  return panel
+}
+
+function renderAll(){
+  panelsEl.innerHTML = ''
+  for (const v of VARIANTS) panelsEl.append(buildPanel(v))
+}
+
+function walk(node, fn){
+  fn(node)
+  for (const c of node.children || []) walk(c, fn)
+  for (const c of node.nest || []) walk(c, fn)
+  for (const g of node.groups || []) walk(g, fn)
+}
+
+/** 顶部按钮把所有卡片一次推平，方便横向比对同一档收起态 */
+document.getElementById('collapseAll').addEventListener('click', () => {
+  for (const p of panelsEl.children) {
+    const set = collapsedOf(p.dataset.variant)
+    set.clear()
+    walk(TREE, (n) => { if (n.id !== undefined) set.add(n.id) })
+    set.delete(TREE.id)
+    paintTree(p, p.dataset.variant)
+    updatePanelHint(p, p.dataset.variant)
+  }
+})
+
+document.getElementById('expandAll').addEventListener('click', () => {
+  for (const p of panelsEl.children) {
+    collapsedOf(p.dataset.variant).clear()
+    paintTree(p, p.dataset.variant)
+    updatePanelHint(p, p.dataset.variant)
+  }
+})
+
+// 收起内层、保留最外两层：收起态的可读性对比主要看这一档
+document.getElementById('collapseInner').addEventListener('click', () => {
+  for (const p of panelsEl.children) {
+    const set = collapsedOf(p.dataset.variant)
+    set.clear()
+    walk(TREE, (n) => { if (n.id !== undefined) set.add(n.id) })
+    set.delete(TREE.id)
+    set.delete('w1')
+    set.delete('g1')
+    paintTree(p, p.dataset.variant)
+    updatePanelHint(p, p.dataset.variant)
+  }
+})
+
+document.getElementById('edge').addEventListener('change', (e) => {
+  for (const p of panelsEl.children) p.classList.toggle('showEdge', e.target.checked)
+})
+document.getElementById('guides').addEventListener('change', (e) => {
+  for (const p of panelsEl.children) p.classList.toggle('showGuides', e.target.checked)
+})
+document.getElementById('fixTitle').addEventListener('change', (e) => {
+  for (const p of panelsEl.children) p.classList.toggle('fixTitle', e.target.checked)
+})
+document.getElementById('countInside').addEventListener('change', (e) => {
+  STATE.countInside = e.target.checked
+  paintAllTrees()
+})
+// 平铺换的是整个列表的形态，按早先的要求做成全局选项：六张一起换
+document.getElementById('flatMode').addEventListener('change', (e) => {
+  STATE.flat = e.target.checked
+  paintAllTrees()
+})
+/** 树里标了 current 的那条会话：初始全局就选中它，与真实侧边栏一致 */
+function currentSessionTitle(){
+  let found = null
+  walk(TREE, (n) => {
+    for (const s of n.sessions || []) if (s.current === true) found = s.title
+  })
+  return found
+}
+
+document.getElementById('hover').addEventListener('change', (e) => {
+  // 模拟悬停：真实悬停走 :hover，这里用一个类来同时看"悬停 vs 选中"两种叠层
+  for (const p of panelsEl.children) {
+    for (const r of p.querySelectorAll('.row, .head')) {
+      if (!r.classList.contains('selected')) r.classList.toggle('hovering', e.target.checked)
+    }
+  }
+})
+
+
+/*
+ * 六棵树的基线靠结构一致拿到，不再补空白
+ *
+ * 六张卡片的头部行数、控件种类与文案行数都相同，因此各树的起始 y 天然一致
+ * 早先用 JS 量出最高那个头再写 min-height 补平，那会在矮卡片上半部分留出空白，
+ * 是拿布局去掩盖内容差异——真正的差异该由"把控件补齐"解决
+ */
+renderAll()
+</script>
+</body>
+</html>

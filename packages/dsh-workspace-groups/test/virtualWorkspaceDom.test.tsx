@@ -26,7 +26,8 @@ import { viewModeProps } from './viewMode-stub.ts'
 function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsProps {
   const created = new Date(2026, 0, 1, 0, 0).getTime()
   const byId: Record<string, unknown> = {
-    a: { id: 'a', displayTitle: '修复登录超时', running: false, blank: false, retainedBy: {}, updatedAt: 1_000 },
+    // `a` 设成运行中：状态指示器只在有状态时渲染，缺一条就无从验证它那条按结构写的落点规则
+    a: { id: 'a', displayTitle: '修复登录超时', running: true, blank: false, retainedBy: {}, updatedAt: 1_000 },
     // 未归组的会话：它的缩进走 `.sessions > .row` 那一档，与组内会话不同
     // 缺了它那条规则就无从验证
     b: { id: 'b', displayTitle: '散落会话', running: false, blank: false, retainedBy: {}, updatedAt: 1_000 },
@@ -217,17 +218,25 @@ describe('workspace group DOM structure', () => {
         body: (match[2] ?? '').trim(),
       }))
       // 只看那些按结构链写出来、且真的决定缩进位置的规则：
-      // 值里带 `--wg-depth` 换算的 padding-left / left，或按层级写穿的长选择器
-      .filter(
-        (rule) =>
-          /--wg-depth/.test(rule.body) &&
-          (/padding-left:/.test(rule.body) || /left:\s*calc\(/.test(rule.body)),
-      )
+      // - 值里带 `--wg-depth` 换算的 padding-left / left（各层缩进与引导线）
+      // - 或落点读 `--wg-row-start` 的 left（状态指示器，它跟着缩进走）
+      // 两类都会因容器多一层包装而整组失配，且失配时界面只是「位置不对」，没有任何报错
+      .filter((rule) => {
+        const positions = /padding-left:/.test(rule.body) || /left:\s*calc\(/.test(rule.body)
+        if (!positions) return false
+        return /--wg-depth/.test(rule.body) || /--wg-row-start/.test(rule.body)
+      })
 
     // 这批规则确实读到了，否则下面的断言会在空列表上假通过
     expect(rules.length).toBeGreaterThan(0)
+    // 平铺列表那两条只在平铺态渲染，这里挂的是按工作区的树，查不到它们
+    // 它们是固定值（8px），不含 --wg-depth 换算，由平铺那条用例另行覆盖
+    const grouped = rules.filter(
+      (rule) => !rule.selectors.some((selector) => selector.startsWith('.flatList')),
+    )
+    expect(grouped.length).toBeGreaterThan(0)
 
-    for (const rule of rules) {
+    for (const rule of grouped) {
       // 伪元素本身没有可查询的节点，但宿主元素有，剥掉 ::before 后照样能验证引导线挂在谁身上
       const queryable = rule.selectors.map((selector) => selector.split('::')[0] ?? selector)
       const matched = queryable.filter((selector) => {

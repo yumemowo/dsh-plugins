@@ -1,7 +1,11 @@
 /**
- * 会话行：状态点位列、标题、最近更新时间与可选的行尾操作位
+ * 会话行：状态指示器、标题、最近更新时间与可选的行尾操作位
  *
- * 行首列放官方 `StateDot`：待交互、运行、完成未打开时显示，空闲时留空占位，因此标题与工作区标题的横向关系始终与官方一致
+ * 行首的状态指示器不占行内流，它绝对定位在行的左侧，空闲时不渲染
+ * 因此标题的位置与状态无关，不会因为出现一个点而位移
+ * 两种样式由 `indicator` 选定，一个是官方 `StateDot`，一个是一条色条，两者占同一处、同一尺寸域
+ * 行上的 `data-wg-state` 供样式表给「运行中 / 待交互」两态上底色，完成与空闲共用默认背景
+ *
  * 行尾在操作位之前放官方风格的相对时间，悬停时让位给操作位（与官方同为 CSS 切换）
  * `action` 缺省时不渲染行尾操作位——未分组桶里的会话不属于任何工作区，没有可用的归组操作
  *
@@ -21,6 +25,7 @@ import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { SessionHoverContent } from './components/HoverCards.tsx'
 import { sameSessionStatuses } from '../data/status.ts'
 import { useLocale } from '../useLocale.ts'
+import { useLocalViewOptions } from '../useLocalViewOptions.ts'
 import type { RowContextMenuEvent } from './components/RowContextMenu.tsx'
 import type { SessionStatus } from '../data/status.ts'
 import styles from './components/rows.module.css'
@@ -36,14 +41,14 @@ export interface SessionRowViewProps {
    */
   title: string | null
   selected: boolean
-  /** 该行要显示的状态位，空闲时为 undefined，槽位仍占位 */
+  /** 该行要显示的状态，空闲时为 undefined，那时整枚指示器都不渲染 */
   status?: SessionStatus | undefined
   /** 行尾相对时间文案，缺省表示不显示（新建中的空白行与「未分组」桶） */
   time?: string | undefined
   /**
    * 悬停卡片里逐条列出的状态，缺省回退成只有 {@link status} 一条
    *
-   * 与行首那个点分开传：行上空闲不画点，卡片里却要像官方一样把「空闲」也列出来
+   * 与行首那枚指示器分开传，行上空闲不画指示器，卡片里却要像官方一样把「空闲」也列出来
    */
   statuses?: readonly SessionStatus[] | undefined
   /** 悬停卡片里的相对时间文案（`5分钟前`），缺省时卡片里不显示这一行 */
@@ -70,12 +75,6 @@ export interface SessionRowViewProps {
   /** 行尾操作位，缺省表示该行没有任何可用操作（如未分组桶里的会话） */
   action?: ReactNode
   /**
-   * 平铺列表里的行
-   *
-   * 行首没有状态位时整格不占位，与官方 `.flatSessionRowWithoutStatus` 同一取舍
-   */
-  flat?: boolean | undefined
-  /**
    * 行右键处理，缺省表示该行没有右键菜单，右键保持浏览器默认行为
    *
    * 通过 props 下发而不是在行内自建：菜单条目与分派都属于「这一行有哪些操作」，由持有菜单的组件决定
@@ -96,6 +95,25 @@ export interface SessionRowViewProps {
   onReveal?: (() => void) | undefined
 }
 
+/**
+ * 一组状态对应的颜色色阶
+ *
+ * 运行与待交互各有自己的语义词，完成与空闲共用同一个中性色
+ * 完成那次提醒已经由指示器的绿色表达
+ */
+function StatusIndicator({ status }: { status: SessionStatus }): ReactElement {
+  const { indicator } = useLocalViewOptions()
+  return (
+    <span className={styles.indicator} data-wg-state={status.state} role="img" aria-label={status.label}>
+      {indicator === 'bar' ? (
+        <span className={styles.indicatorBar} />
+      ) : (
+        <StateDot state={status.state} />
+      )}
+    </span>
+  )
+}
+
 function SessionRowViewImpl({
   sessionId,
   title,
@@ -109,7 +127,6 @@ function SessionRowViewImpl({
   hoverCopy,
   menuOpen = false,
   action,
-  flat = false,
   onContextMenu,
   onOpenSession,
   onReveal,
@@ -129,12 +146,9 @@ function SessionRowViewImpl({
   const row = (
     <div
       ref={rowRef}
-      className={clsx(
-        styles.row,
-        selected && styles.rowSelected,
-        menuOpen && styles.rowMenuOpen,
-        flat && status === undefined && styles.rowFlat,
-      )}
+      className={clsx(styles.row, selected && styles.rowSelected, menuOpen && styles.rowMenuOpen)}
+      // 状态色底与选中加深都由样式表按它选档，行组件不感知配色
+      data-wg-state={status?.state ?? 'idle'}
       // 参与所在折叠体的逐个淡入，序号由折叠体按文档序下发
       data-wg-stagger=""
       role="button"
@@ -143,13 +157,7 @@ function SessionRowViewImpl({
       onKeyDown={(event) => handleRowKeyDown(event, open)}
       onContextMenu={onContextMenu}
     >
-      {status === undefined && flat ? null : status === undefined ? (
-        <span className={styles.slot} />
-      ) : (
-        <span className={styles.slot} role="img" aria-label={status.label}>
-          <StateDot state={status.state} />
-        </span>
-      )}
+      {status === undefined ? null : <StatusIndicator status={status} />}
       <span className={styles.rowTitle}>{shownTitle}</span>
       {time === undefined ? null : <span className={styles.rowTime}>{time}</span>}
       {action === undefined ? null : (
@@ -201,7 +209,6 @@ function sameRowViewProps(prev: SessionRowViewProps, next: SessionRowViewProps):
     prev.hoverDisabled === next.hoverDisabled &&
     prev.hoverCopy === next.hoverCopy &&
     prev.menuOpen === next.menuOpen &&
-    prev.flat === next.flat &&
     prev.action === next.action &&
     prev.onContextMenu === next.onContextMenu &&
     prev.onOpenSession === next.onOpenSession &&

@@ -39,6 +39,16 @@ export function readAllCss(): string {
 }
 
 /**
+ * 单份组件样式表的文本
+ *
+ * 有些断言关心「这条声明落在哪一层」，合并文本看不出来——例如内缩量必须定义在
+ * 区域根上（平铺列表的行不在任何工作区之内），定义在行样式表里就会漏掉平铺
+ */
+export function readModuleCss(relative: string): string {
+  return readFileSync(join(CLIENT_DIR, relative), 'utf8')
+}
+
+/**
  * 全部 `@media (prefers-reduced-motion: reduce)` 块的内容（不含包裹层）
  *
  * 样式表拆开后每个文件各带一份 reduced-motion 块，只看第一条会漏掉其余
