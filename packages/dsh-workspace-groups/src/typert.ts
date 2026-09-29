@@ -54,12 +54,23 @@ const entryKeyCodec = codec('RootEntryKey', () => z.string())
 const PACKAGE = '@your-scope/dsh-workspace-groups'
 const SERVICE = 'workspaceGroups'
 
-/** 构造一条 direct 调用的描述，减少重复 */
+/**
+ * 构造一条 direct 调用的描述，减少重复
+ *
+ * 参数上 `name` 与 `wire` 的分工见官方文档
+ * https://deepseek-harness.github.io/deepseek-harness/reference/subsystems/typert.html
+ *
+ * 本包参数全是 `source: 'json'`，这类参数的 `wire` 恒等于源码形参名，因此缺省回退到 `name`
+ * 将来引入 lookup 参数时必须逐条显式写出 `wire`
+ * @param method - 宿主服务上的方法名，同时是 endpoint 的方法段
+ * @param parameters - 按宿主签名顺序排列的形参
+ */
 function direct(
   method: string,
   parameters: readonly {
     name: string
-    wire: string
+    /** 线上键名，缺省时回退 `name` */
+    wire?: string | undefined
     codec: unknown
   }[],
 ) {
@@ -71,7 +82,7 @@ function direct(
     invocation: { kind: 'direct' as const },
     parameters: parameters.map((parameter) => ({
       name: parameter.name,
-      wire: parameter.wire,
+      wire: parameter.wire ?? parameter.name,
       source: 'json' as const,
       codec: parameter.codec,
     })),
@@ -86,49 +97,49 @@ export const TYPERT = {
   invocations: [
     direct('list', []),
     direct('createGroup', [
-      { name: 'workspaceId', wire: 'workspaceId', codec: workspaceIdCodec },
-      { name: 'name', wire: 'name', codec: nameCodec },
+      { name: 'workspaceId', codec: workspaceIdCodec },
+      { name: 'name', codec: nameCodec },
     ]),
     direct('renameGroup', [
-      { name: 'workspaceId', wire: 'workspaceId', codec: workspaceIdCodec },
-      { name: 'groupId', wire: 'groupId', codec: groupIdCodec },
-      { name: 'name', wire: 'name', codec: nameCodec },
+      { name: 'workspaceId', codec: workspaceIdCodec },
+      { name: 'groupId', codec: groupIdCodec },
+      { name: 'name', codec: nameCodec },
     ]),
     direct('deleteGroup', [
-      { name: 'workspaceId', wire: 'workspaceId', codec: workspaceIdCodec },
-      { name: 'groupId', wire: 'groupId', codec: groupIdCodec },
+      { name: 'workspaceId', codec: workspaceIdCodec },
+      { name: 'groupId', codec: groupIdCodec },
     ]),
     direct('moveSession', [
-      { name: 'workspaceId', wire: 'workspaceId', codec: workspaceIdCodec },
-      { name: 'sessionId', wire: 'sessionId', codec: sessionIdCodec },
-      { name: 'groupId', wire: 'groupId', codec: nullableGroupIdCodec },
+      { name: 'workspaceId', codec: workspaceIdCodec },
+      { name: 'sessionId', codec: sessionIdCodec },
+      { name: 'groupId', codec: nullableGroupIdCodec },
     ]),
-    direct('createVirtualWorkspace', [{ name: 'name', wire: 'name', codec: nameCodec }]),
+    direct('createVirtualWorkspace', [{ name: 'name', codec: nameCodec }]),
     direct('renameVirtualWorkspace', [
-      { name: 'groupId', wire: 'groupId', codec: virtualWorkspaceIdCodec },
-      { name: 'name', wire: 'name', codec: nameCodec },
+      { name: 'groupId', codec: virtualWorkspaceIdCodec },
+      { name: 'name', codec: nameCodec },
     ]),
     direct('deleteVirtualWorkspace', [
-      { name: 'groupId', wire: 'groupId', codec: virtualWorkspaceIdCodec },
+      { name: 'groupId', codec: virtualWorkspaceIdCodec },
     ]),
     direct('moveWorkspace', [
-      { name: 'workspaceId', wire: 'workspaceId', codec: workspaceIdCodec },
-      { name: 'groupId', wire: 'groupId', codec: nullableGroupIdCodec },
+      { name: 'workspaceId', codec: workspaceIdCodec },
+      { name: 'groupId', codec: nullableGroupIdCodec },
     ]),
     direct('nestWorkspaces', [
-      { name: 'workspaceIds', wire: 'workspaceIds', codec: workspaceIdsCodec },
-      { name: 'parentWorkspaceId', wire: 'parentWorkspaceId', codec: workspaceIdCodec },
-      { name: 'groupId', wire: 'groupId', codec: groupIdCodec },
+      { name: 'workspaceIds', codec: workspaceIdsCodec },
+      { name: 'parentWorkspaceId', codec: workspaceIdCodec },
+      { name: 'groupId', codec: groupIdCodec },
     ]),
     direct('unnestWorkspaces', [
-      { name: 'workspaceIds', wire: 'workspaceIds', codec: workspaceIdsCodec },
+      { name: 'workspaceIds', codec: workspaceIdsCodec },
     ]),
-    direct('setNested', [{ name: 'enabled', wire: 'enabled', codec: nestedEnabledCodec }]),
+    direct('setNested', [{ name: 'enabled', codec: nestedEnabledCodec }]),
     direct('forgetWorkspace', [
-      { name: 'workspaceId', wire: 'workspaceId', codec: workspaceIdCodec },
+      { name: 'workspaceId', codec: workspaceIdCodec },
     ]),
-    direct('focusEntry', [{ name: 'key', wire: 'key', codec: entryKeyCodec }]),
-    direct('togglePinned', [{ name: 'key', wire: 'key', codec: entryKeyCodec }]),
+    direct('focusEntry', [{ name: 'key', codec: entryKeyCodec }]),
+    direct('togglePinned', [{ name: 'key', codec: entryKeyCodec }]),
   ],
   model: {
     services: [

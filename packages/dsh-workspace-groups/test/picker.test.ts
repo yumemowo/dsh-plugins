@@ -50,7 +50,7 @@ describe('rootPickerEntries', () => {
     ])
   })
 
-  it('never lists a workspace that is inside a group', () => {
+  it('omits a workspace that is inside a group', () => {
     // 组内的 W1 / W2 不单独列出：聚焦它们与聚焦所属分组是同一片内容
     const keys = rootPickerEntries(LAYOUT, VIEWS).map((entry) => entry.key)
 

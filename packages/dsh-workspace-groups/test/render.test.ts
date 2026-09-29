@@ -1434,7 +1434,7 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(out.text).toContain('StateDot:warning')
   })
 
-  it('never gates row visibility on a class the renderer could lose', () => {
+  it('keeps row visibility off any class the renderer could lose', () => {
     // 透明只由「所在撑开体还没展开」这一条结构条件决定，行上不得再出现别的显隐状态：
     // 靠回调补类的那种显隐会在主线程被长任务占住时丢失，且补不回来
     const out = { menus: [] as unknown[], text: [] as string[], rows: [] as unknown[] }

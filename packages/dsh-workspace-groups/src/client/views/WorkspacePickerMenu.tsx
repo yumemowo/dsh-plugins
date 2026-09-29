@@ -13,7 +13,7 @@
  * 面板 portal 到 `document.body`：header 自己带 `overflow: hidden`（搜索展开时整行要收拢淡出）
  * 就近渲染的面板会被它整个裁掉
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ReactElement, ReactNode, RefObject } from 'react'
 import {
@@ -27,6 +27,7 @@ import {
 } from '../runtime.ts'
 import { IconVirtualFolder16 } from '../icons.tsx'
 import { IconButton } from './components/IconButton.tsx'
+import { useFloatingPanel } from './components/useFloatingPanel.ts'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import type { PickerEntry, PickerSections } from '../data/picker.ts'
 import { useLocale } from '../useLocale.ts'
@@ -34,25 +35,13 @@ import pickerStyles from './WorkspacePickerMenu.module.css'
 import rowsStyles from './components/rows.module.css'
 import clsx from 'clsx'
 
-/** 面板与窗口边缘的最小距离，取官方 `Menu` 原语的同一个值 */
-const VIEWPORT_MARGIN = 12
-
-/** 面板与触发器之间的缝隙，同上 */
-const ANCHOR_GAP = 4
-
 /**
- * 指针离开后延迟多久关闭
+ * 方向键循环认的键
  *
- * 触发器与面板之间隔着 {@link ANCHOR_GAP}，指针从前者移向后者时会先离开触发器
- * 不留这段延迟的话，用户还没点到条目菜单就没了。取官方 `Menu` 原语那套的 200ms
+ * 分区头与置顶让这张面板比视图选项那张长，因此多认 Home / End
+ * 模块级单例：每次渲染换一份新数组会让挂监听的 effect 每帧重跑
  */
-const CLOSE_DELAY_MS = 200
-
-/** 面板落点 */
-interface PanelRect {
-  left: number
-  top: number
-}
+const NAVIGATION_KEYS = ['ArrowDown', 'ArrowUp', 'Home', 'End'] as const
 
 export interface WorkspacePickerMenuProps {
   /** 菜单是否打开，开合状态由持有触发器的 header 持有 */
@@ -198,121 +187,17 @@ export function WorkspacePickerMenu({
 }: WorkspacePickerMenuProps): ReactElement | null {
   const { labels } = useLocale()
   const picker = labels.picker
-  const panelRef = useRef<HTMLDivElement>(null)
-  const [rect, setRect] = useState<PanelRect | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-  const closeTimer = useRef<number | null>(null)
-
-  /** 面板贴触发器下缘展开，放不下就翻到上方，并在两个方向上都夹进窗口 */
-  const measure = useCallback(() => {
-    const trigger = triggerRef.current
-    const panel = panelRef.current
-    if (trigger === null || panel === null) return
-    const anchor = trigger.getBoundingClientRect()
-    const width = panel.offsetWidth
-    const height = panel.offsetHeight
-    // 量的是布局视口（documentElement.clientWidth）而不是 window.innerWidth
-    // 二者差一个经典滚动条宽度，而实测矩形以布局视口为参照
-    const viewportWidth = document.documentElement.clientWidth
-    const viewportHeight = document.documentElement.clientHeight
-    let left = anchor.left
-    let top = anchor.bottom + ANCHOR_GAP
-    if (height > 0 && top + height > viewportHeight - VIEWPORT_MARGIN) {
-      top = anchor.top - height - ANCHOR_GAP
-    }
-    if (width > 0) {
-      left = Math.min(Math.max(left, VIEWPORT_MARGIN), viewportWidth - width - VIEWPORT_MARGIN)
-    }
-    if (height > 0) {
-      top = Math.min(Math.max(top, VIEWPORT_MARGIN), viewportHeight - height - VIEWPORT_MARGIN)
-    }
-    // 相等时保留上一次的对象：滚动与改尺寸都会重测
-    // 每次换一个新对象会让面板每帧都重渲染一遍
-    setRect((prev) =>
-      prev !== null && prev.left === left && prev.top === top ? prev : { left, top },
-    )
-  }, [triggerRef])
-
-  useLayoutEffect(() => {
-    if (!open) {
-      setRect(null)
-      return
-    }
-    measure()
-    window.addEventListener('scroll', measure, true)
-    window.addEventListener('resize', measure)
-    // 分区展开、置顶项改名都会改变面板高度，落点要跟着重算
-    // jsdom 没有 ResizeObserver，它只影响即时性，缺了不影响正确性
-    const observer =
-      typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
-    if (panelRef.current !== null) observer?.observe(panelRef.current)
-    return () => {
-      window.removeEventListener('scroll', measure, true)
-      window.removeEventListener('resize', measure)
-      observer?.disconnect()
-    }
-  }, [open, measure])
-
-  /** 取消一次待关闭：指针回到触发器或面板上 */
-  const cancelClose = useCallback(() => {
-    if (closeTimer.current === null) return
-    window.clearTimeout(closeTimer.current)
-    closeTimer.current = null
-  }, [])
-
-  const armClose = useCallback(() => {
-    cancelClose()
-    closeTimer.current = window.setTimeout(() => {
-      closeTimer.current = null
-      onClose()
-    }, CLOSE_DELAY_MS)
-  }, [cancelClose, onClose])
-
-  useEffect(() => () => cancelClose(), [cancelClose])
-
-  // 点面板与触发器之外关闭，Escape 关闭并把焦点还给触发器
-  useEffect(() => {
-    if (!open) return
-    const onPointerDown = (event: PointerEvent): void => {
-      if (!(event.target instanceof Node)) return
-      if (panelRef.current?.contains(event.target) === true) return
-      if (triggerRef.current?.contains(event.target) === true) return
-      onClose()
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        onClose()
-        triggerRef.current?.focus()
-        return
-      }
-      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
-      // 可聚焦的条目是行本身（`role="button"` 的 div）与那一个「全部工作区」：
-      // 行尾的三枚操作按钮不参与方向键循环，否则按↓会逐枚停在按钮上
-      const items = Array.from(
-        panelRef.current?.querySelectorAll<HTMLElement>(
-          `.${rowsStyles.pickerRow}, .${pickerStyles.pickerReset}`,
-        ) ?? [],
-      )
-      if (items.length === 0) return
-      const at = items.indexOf(document.activeElement as HTMLElement)
-      const next =
-        event.key === 'Home'
-          ? 0
-          : event.key === 'End'
-            ? items.length - 1
-            : at < 0
-              ? 0
-              : (at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
-      event.preventDefault()
-      items[next]?.focus()
-    }
-    document.addEventListener('pointerdown', onPointerDown, true)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown, true)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [open, onClose, triggerRef])
+  const { panelRef, rect, cancelClose, armClose } = useFloatingPanel({
+    open,
+    triggerRef,
+    onClose,
+    align: 'start',
+    // 可聚焦的条目是行本身（`role="button"` 的 div）与那一个「全部工作区」
+    // 行尾的三枚操作按钮不参与方向键循环，否则按↓会逐枚停在按钮上
+    focusable: `.${rowsStyles.pickerRow}, .${pickerStyles.pickerReset}`,
+    navigationKeys: NAVIGATION_KEYS,
+  })
 
   if (!open) return null
 
@@ -326,11 +211,7 @@ export function WorkspacePickerMenu({
       role="group"
       aria-label={picker.entry}
       // 首次渲染时还没量过，先藏起来，否则面板会先在窗口左上角露一帧再跳到落点
-      style={
-        rect === null
-          ? { visibility: 'hidden', left: 0, top: 0 }
-          : { left: rect.left, top: rect.top }
-      }
+      style={rect ?? { visibility: 'hidden', left: 0, top: 0 }}
       onPointerEnter={cancelClose}
       onPointerLeave={armClose}
     >

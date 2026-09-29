@@ -163,6 +163,7 @@ src/client/
         ├── HoverCards.module.css   悬停卡片正文样式
         ├── rows.module.css         行结构共享样式（工作区/分组/会话/菜单条目行共用的一套）
         ├── RowContextMenu.tsx      行右键菜单（指针定位、与 `...` 菜单共用条目与分派）
+        ├── useFloatingPanel.ts    两张自绘面板共用的定位与开合（夹进窗口、延迟关闭、键盘导航）
         ├── IconButton.tsx          16px 行内图标按钮
         ├── rowKeyboard.ts          Enter/Space 行激活（忽略行内按钮冒泡）
         └── dialogs/

@@ -107,9 +107,6 @@ interface RegionSources {
 /** 分组快照与它的读写路径 */
 interface SnapshotFeed {
   snapshot: WorkspaceGroupsSnapshot
-  setSnapshot: (next: WorkspaceGroupsSnapshot) => void
-  /** 重拉一次快照 */
-  reload: () => () => void
   /** 执行一次「宿主回整份快照」的改动 */
   apply: (action: Promise<WorkspaceGroupsSnapshot>) => void
 }
@@ -126,16 +123,13 @@ interface RegionLayout {
   rootLayout: RootLayout
   pickerEntries: PickerEntry[]
   picker: ReturnType<typeof pickerSections>
-  resolvedFocus: PickerEntry | undefined
   /** 第二行显示的文案，没有聚焦时是「全部工作区」 */
   currentFocus: string
   /** 聚焦生效后的根节点布局 */
   listLayout: RootLayout
   /** 真的聚焦在某一片内容上时，「未分组」区段整段隐藏 */
   focused: boolean
-  /** 当前被放进某个分组的子工作区，按列表里的顺序 */
-  groupedChildIds: readonly string[]
-  /** 上面那批的显示名，工作区已被删掉时退回 id，名单因此不会出现空行 */
+  /** 会被解除嵌套的子工作区显示名，工作区已被删掉时退回 id，名单因此不会出现空行 */
   groupedChildLabels: readonly string[]
 }
 
@@ -279,6 +273,19 @@ function useLocalViewOptionsValue(props: WorkspaceGroupsProps): LocalViewOptions
 // ── 快照 ──
 
 /**
+ * 元数据不可用时的空快照
+ *
+ * 拉取失败与首帧之前都退化成它：全部分组消失，会话仍按未归组平铺，界面可用
+ */
+const EMPTY_SNAPSHOT: WorkspaceGroupsSnapshot = {
+  byWorkspace: {},
+  nesting: {},
+  workspaceGroups: [],
+  picker: EMPTY_PICKER_STATE,
+  nested: true,
+}
+
+/**
  * 分组快照的加载与改动
  *
  * 宿主每个变更方法都回整份快照（见宿主 `service.ts`），直接采用它就不必再拉一次
@@ -289,13 +296,7 @@ function useSnapshotFeed(
   loadGroups: RegionActions['loadGroups'],
   onReady: RegionActions['onReady'],
 ): SnapshotFeed {
-  const [snapshot, setSnapshot] = useState<WorkspaceGroupsSnapshot>({
-    byWorkspace: {},
-    nesting: {},
-    workspaceGroups: [],
-    picker: EMPTY_PICKER_STATE,
-    nested: true,
-  })
+  const [snapshot, setSnapshot] = useState<WorkspaceGroupsSnapshot>(EMPTY_SNAPSHOT)
 
   const reload = useCallback(() => {
     let cancelled = false
@@ -304,17 +305,7 @@ function useSnapshotFeed(
         if (!cancelled) setSnapshot(normalizeSnapshot(next))
       })
       .catch(() => {
-        // 元数据不可用时退化为「全部分组消失」，会话仍按未归组平铺
-        // 工作区仍平铺在根节点上，界面可用
-        if (!cancelled) {
-          setSnapshot({
-            byWorkspace: {},
-            nesting: {},
-            workspaceGroups: [],
-            picker: EMPTY_PICKER_STATE,
-            nested: true,
-          })
-        }
+        if (!cancelled) setSnapshot(EMPTY_SNAPSHOT)
       })
     return () => {
       cancelled = true
@@ -340,7 +331,7 @@ function useSnapshotFeed(
     [reload],
   )
 
-  return { snapshot, setSnapshot, reload, apply }
+  return { snapshot, apply }
 }
 
 // ── 派生布局 ──
@@ -478,11 +469,9 @@ function useRegionLayout(
     rootLayout,
     pickerEntries,
     picker,
-    resolvedFocus,
     currentFocus,
     listLayout,
     focused,
-    groupedChildIds,
     groupedChildLabels,
   }
 }
@@ -1309,12 +1298,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
       ui.openOverlay({ kind: 'virtual-workspace-delete', groupId, label }),
   }
 
-  const commands: RegionListCommands = {
-    selectSessionGroup: groupActions.selectSessionGroup,
-    selectVirtualWorkspace: nestActions.selectVirtualWorkspace,
-    selectParentGroup: nestActions.selectParentGroup,
-    createSessionIn: groupActions.createSessionIn,
-  }
+  // 两袋动作的字段名与 `RegionListCommands` 逐格同名，直接合并后按消费方的窄形状读
+  const commands: RegionListCommands = { ...groupActions, ...nestActions }
 
   // 递归层需要的布局与交互状态是整份 `layout` / `ui` 的子集，靠结构类型直接交给它们
   const scope: WorkspaceNodeScope = {
@@ -1351,16 +1336,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     startVirtualWorkspaceCreate: nestActions.startVirtualWorkspaceCreate,
   }
 
-  const dialogActions: RegionDialogActions = {
-    commitGroupNameDraft: groupActions.commitGroupNameDraft,
-    commitGroupDelete: groupActions.commitGroupDelete,
-    commitVirtualWorkspaceNameDraft: groupActions.commitVirtualWorkspaceNameDraft,
-    commitVirtualWorkspaceDelete: groupActions.commitVirtualWorkspaceDelete,
-    commitWorkspaceRename: groupActions.commitWorkspaceRename,
-    commitWorkspaceDelete: groupActions.commitWorkspaceDelete,
-    commitNestedOff: nestActions.commitNestedOff,
-    commitMerge: nestActions.commitMerge,
-  }
+  // 同上：八个提交入口的字段名与这两个动作袋逐格同名
+  const dialogActions: RegionDialogActions = { ...groupActions, ...nestActions }
 
   return (
     <RegionLocaleProvider value={locale}>

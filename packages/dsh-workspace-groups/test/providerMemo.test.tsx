@@ -74,7 +74,7 @@ function countRerenders(build: () => LocalViewOptions): number {
   return rowRenders
 }
 
-describe('provider value 的身份', () => {
+describe('provider value identity', () => {
   afterEach(() => {
     rowRenders = 0
     document.body.replaceChildren()

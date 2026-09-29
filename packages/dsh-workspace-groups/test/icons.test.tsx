@@ -130,7 +130,7 @@ describe('IconVirtualFolder16', () => {
     )
   }
 
-  it('is dashed, which is the whole point of the silhouette', () => {
+  it('draws the silhouette dashed', () => {
     const svg = markup()
 
     // 虚线是 DSH 表达「尚未真实存在 / 占位」的既有语言，待办未开始的圆圈用 2.4/2.4，composer 的工作区占位框用 4/4
@@ -157,7 +157,7 @@ describe('IconVirtualFolder16', () => {
     expect(svg).toContain('1.5 11.9127')
   })
 
-  it('has exactly one closed contour so the shape never looks unfinished', () => {
+  it('closes the shape with a single contour', () => {
     const svg = markup()
 
     // 单条闭合路径（末尾 Z）：多段路径的虚线会在接缝处出现意外的长断口

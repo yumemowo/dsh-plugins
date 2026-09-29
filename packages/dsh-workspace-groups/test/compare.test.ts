@@ -226,7 +226,7 @@ describe('registerCompareTab', () => {
     expect(sidebar.types).toEqual([])
   })
 
-  it('still registers the body when the type registry is absent', () => {
+  it('registers the body even when the type registry is absent', () => {
     // 座位与类型注册是两条独立的 effect，类型缺失只让 tab 打不开
     // 体仍按声明注册着，等 registry 到位时不必重来一遍
     const sidebar = fakeSidebarRight({ present: false })

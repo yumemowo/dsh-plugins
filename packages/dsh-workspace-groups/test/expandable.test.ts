@@ -118,7 +118,7 @@ describe('staggerDelayMs', () => {
     expect(staggerDelayMs(100, TIMING)).toBe(160)
   })
 
-  it('never returns a negative delay', () => {
+  it('keeps the first delay at zero', () => {
     expect(staggerDelayMs(0, TIMING)).toBe(0)
   })
 })
@@ -244,7 +244,7 @@ describe('fail-open reveal', () => {
     ).replace(/\/\*[\s\S]*?\*\//g, '')
   }
 
-  it('never leaves an element hidden behind a callback that may not wake up', () => {
+  it('drives visibility from structure rather than a wake-up callback', () => {
     // 透明一旦写进基准规则，就得靠某个回调在正确时刻把类补回去
     // 那次唤醒在主线程被长任务占住时会被挤掉且补不回来——元素会一直白着，这正是卡死的现象
     // 因此这里不得有任何会过期的显隐状态，也不得靠定时器或过渡事件驱动显隐

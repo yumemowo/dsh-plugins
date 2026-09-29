@@ -34,7 +34,7 @@
 
 | 约束 | 说明 |
 | --- | --- |
-| 用例名用小写、以第三人称动词开头的行为描述串 | `it('nests a child workspace inside its parent')`。全仓 686 条一律这个形态：小写起首、`keeps` / `reports` / `leaves` 这类动词打头、不用 `should`。写新用例时照同一形态，不要换成 `Should_...` 之类 |
+| 用例名用小写、以第三人称动词开头的行为描述串 | `it('nests a child workspace inside its parent')`。全仓 638 条一律这个形态：小写起首、`keeps` / `reports` / `leaves` 这类动词打头、不用 `should`。写新用例时照同一形态，不要换成 `Should_...` 之类 |
 | 断言 DOM 结构、样式选择器、交互路径的用例用真 `react-dom` | 文件头加 `// @vitest-environment jsdom`，照 `test/nestingDom.test.tsx` 的驱动方式 |
 | 单测 import 的是基线替身，有盲区 | 替身看不到真包导出表；那条链由 `test/bundle.test.ts` 补（按宿主的方式装载产物） |
 | 测试里 CSS 类名不哈希 | `vitest.config.ts` 的 `classNameStrategy: 'non-scoped'`，断言的是「哪个元素带哪条规则」 |

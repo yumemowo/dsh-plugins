@@ -10,7 +10,6 @@
  * 内容分两组：上面是展示方式（两条互斥的可选项，行尾以勾标记当前值），下面是子工作区嵌套开关
  * 两组之间用一条分隔线隔开，与官方把「分组方式」和「排序方式」分成两段的做法一致
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ReactElement, RefObject } from 'react'
 import {
@@ -27,22 +26,8 @@ import {
 import type { IndicatorStyle, ViewMode } from '../data/types.ts'
 import { useLocale } from '../useLocale.ts'
 import { useLocalViewOptions } from '../useLocalViewOptions.ts'
+import { useFloatingPanel } from './components/useFloatingPanel.ts'
 import styles from './ViewOptionsMenu.module.css'
-
-/** 面板与窗口边缘的最小距离，取官方 `Menu` 原语的同一个值 */
-const VIEWPORT_MARGIN = 12
-
-/** 面板与触发器之间的缝隙，同上 */
-const ANCHOR_GAP = 4
-
-/** 指针离开后延迟多久关闭，同上 */
-const CLOSE_DELAY_MS = 200
-
-/** 面板落点 */
-interface PanelRect {
-  left: number
-  top: number
-}
 
 /**
  * 展示方式的两个取值，按面板里的先后
@@ -94,111 +79,13 @@ export function ViewOptionsMenu({
   const { mode, indicator, setMode, setIndicator } = useLocalViewOptions()
   const viewMode = labels.viewMode
   const indicatorLabels = labels.indicatorStyle
-  const panelRef = useRef<HTMLDivElement>(null)
-  const [rect, setRect] = useState<PanelRect | null>(null)
-  const closeTimer = useRef<number | null>(null)
-
-  /** 面板贴触发器下缘展开，放不下就翻到上方，并在两个方向上都夹进窗口 */
-  const measure = useCallback(() => {
-    const trigger = triggerRef.current
-    const panel = panelRef.current
-    if (trigger === null || panel === null) return
-    const anchor = trigger.getBoundingClientRect()
-    const width = panel.offsetWidth
-    const height = panel.offsetHeight
-    // 量的是布局视口（documentElement.clientWidth）而不是 window.innerWidth
-    // 二者差一个经典滚动条宽度，而实测矩形以布局视口为参照
-    const viewportWidth = document.documentElement.clientWidth
-    const viewportHeight = document.documentElement.clientHeight
-    let left = anchor.right - width
-    let top = anchor.bottom + ANCHOR_GAP
-    if (height > 0 && top + height > viewportHeight - VIEWPORT_MARGIN) {
-      top = anchor.top - height - ANCHOR_GAP
-    }
-    if (width > 0) {
-      left = Math.min(Math.max(left, VIEWPORT_MARGIN), viewportWidth - width - VIEWPORT_MARGIN)
-    }
-    if (height > 0) {
-      top = Math.min(Math.max(top, VIEWPORT_MARGIN), viewportHeight - height - VIEWPORT_MARGIN)
-    }
-    // 相等时保留上一次的对象：滚动与改尺寸都会重测，每次换新对象会让面板每帧重渲染
-    setRect((prev) =>
-      prev !== null && prev.left === left && prev.top === top ? prev : { left, top },
-    )
-  }, [triggerRef])
-
-  useLayoutEffect(() => {
-    if (!open) {
-      setRect(null)
-      return
-    }
-    measure()
-    window.addEventListener('scroll', measure, true)
-    window.addEventListener('resize', measure)
-    // 面板高度会随语言与文案变化，落点要跟着重算
-    // jsdom 没有 ResizeObserver，它只影响即时性，缺了不影响正确性
-    const observer =
-      typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
-    if (panelRef.current !== null) observer?.observe(panelRef.current)
-    return () => {
-      window.removeEventListener('scroll', measure, true)
-      window.removeEventListener('resize', measure)
-      observer?.disconnect()
-    }
-  }, [open, measure])
-
-  /** 取消一次待关闭：指针回到触发器或面板上 */
-  const cancelClose = useCallback(() => {
-    if (closeTimer.current === null) return
-    window.clearTimeout(closeTimer.current)
-    closeTimer.current = null
-  }, [])
-
-  const armClose = useCallback(() => {
-    cancelClose()
-    closeTimer.current = window.setTimeout(() => {
-      closeTimer.current = null
-      onClose()
-    }, CLOSE_DELAY_MS)
-  }, [cancelClose, onClose])
-
-  useEffect(() => () => cancelClose(), [cancelClose])
-
-  // 点面板与触发器之外关闭，Escape 关闭并把焦点还给触发器
-  useEffect(() => {
-    if (!open) return
-    const onPointerDown = (event: PointerEvent): void => {
-      if (!(event.target instanceof Node)) return
-      if (panelRef.current?.contains(event.target) === true) return
-      if (triggerRef.current?.contains(event.target) === true) return
-      onClose()
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        onClose()
-        triggerRef.current?.focus()
-        return
-      }
-      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-      // 可选行与开关自己都是可聚焦控件，这一列就是全部可停点
-      const items = Array.from(
-        panelRef.current?.querySelectorAll<HTMLElement>(
-          `.${styles.viewOptionRow}, .${styles.viewOptionSwitch}`,
-        ) ?? [],
-      )
-      if (items.length === 0) return
-      const at = items.indexOf(document.activeElement as HTMLElement)
-      const next = at < 0 ? 0 : (at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
-      event.preventDefault()
-      items[next]?.focus()
-    }
-    document.addEventListener('pointerdown', onPointerDown, true)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown, true)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [open, onClose, triggerRef])
+  const { panelRef, rect, cancelClose, armClose } = useFloatingPanel({
+    open,
+    triggerRef,
+    onClose,
+    align: 'end',
+    focusable: `.${styles.viewOptionRow}, .${styles.viewOptionSwitch}`,
+  })
 
   if (!open) return null
 
@@ -209,6 +96,33 @@ export function ViewOptionsMenu({
   const styleLabel = (candidate: IndicatorStyle): string =>
     candidate === 'bar' ? indicatorLabels.bar : indicatorLabels.icon
 
+  /** 分组标题 + 该组的互斥可选项，当前值由 `aria-pressed` 与行尾那个勾共同表达 */
+  const optionGroup = <T extends string>(
+    label: string,
+    options: readonly { value: T; icon: ReactElement; text: string }[],
+    selected: T,
+    onSelect: (value: T) => void,
+  ): ReactElement => (
+    <>
+      <div className={styles.viewGroupLabel}>{label}</div>
+      {options.map(({ value, icon, text }) => (
+        <button
+          key={value}
+          type="button"
+          className={styles.viewOptionRow}
+          aria-pressed={value === selected}
+          onClick={() => onSelect(value)}
+        >
+          <span className={styles.viewOptionIcon}>{icon}</span>
+          <span className={styles.viewOptionLabel}>{text}</span>
+          {value === selected ? (
+            <IconCheckOutlineRegular className={styles.viewOptionCheck} />
+          ) : null}
+        </button>
+      ))}
+    </>
+  )
+
   return createPortal(
     <div
       ref={panelRef}
@@ -216,53 +130,29 @@ export function ViewOptionsMenu({
       role="group"
       aria-label={labels.add.viewOptions}
       // 首次渲染时还没量过，先藏起来，否则面板会先在窗口左上角露一帧再跳到落点
-      style={
-        rect === null ? { visibility: 'hidden', left: 0, top: 0 } : { left: rect.left, top: rect.top }
-      }
+      style={rect ?? { visibility: 'hidden', left: 0, top: 0 }}
       onPointerEnter={cancelClose}
       onPointerLeave={armClose}
     >
-      {/* 展示方式：标题 + 两条互斥的可选项 */}
-      <>
-        <div className={styles.viewGroupLabel}>{viewMode.label}</div>
-        {VIEW_MODES.map(({ mode: candidate, icon }) => {
-          const selected = candidate === mode
-          return (
-            <button
-              key={candidate}
-              type="button"
-              className={styles.viewOptionRow}
-              aria-pressed={selected}
-              onClick={() => setMode(candidate)}
-            >
-              <span className={styles.viewOptionIcon}>{icon}</span>
-              <span className={styles.viewOptionLabel}>{modeLabel(candidate)}</span>
-              {selected ? <IconCheckOutlineRegular className={styles.viewOptionCheck} /> : null}
-            </button>
-          )
-        })}
-      </>
+      {/* 展示方式 */}
+      {optionGroup(
+        viewMode.label,
+        VIEW_MODES.map(({ mode: value, icon }) => ({ value, icon, text: modeLabel(value) })),
+        mode,
+        setMode,
+      )}
       <div className={styles.viewSeparator} role="separator" />
-      {/* 指示器：与展示方式同形，两条互斥的可选项 */}
-      <>
-        <div className={styles.viewGroupLabel}>{indicatorLabels.label}</div>
-        {INDICATOR_STYLES.map(({ style: candidate, icon }) => {
-          const selected = candidate === indicator
-          return (
-            <button
-              key={candidate}
-              type="button"
-              className={styles.viewOptionRow}
-              aria-pressed={selected}
-              onClick={() => setIndicator(candidate)}
-            >
-              <span className={styles.viewOptionIcon}>{icon}</span>
-              <span className={styles.viewOptionLabel}>{styleLabel(candidate)}</span>
-              {selected ? <IconCheckOutlineRegular className={styles.viewOptionCheck} /> : null}
-            </button>
-          )
-        })}
-      </>
+      {/* 指示器：与展示方式同形 */}
+      {optionGroup(
+        indicatorLabels.label,
+        INDICATOR_STYLES.map(({ style: value, icon }) => ({
+          value,
+          icon,
+          text: styleLabel(value),
+        })),
+        indicator,
+        setIndicator,
+      )}
       <div className={styles.viewSeparator} role="separator" />
       {/* 子工作区嵌套：行不可点——`Switch` 自己已是按钮，嵌进可点的行会叠两层控件 */}
       <div className={styles.viewOption}>

@@ -142,17 +142,30 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
   }
 
   /**
+   * 写一份工作区的分组记录
+   *
+   * 会话分组与嵌套归属同写一份记录（主键都是这个工作区自己），两者都为空时删掉整条，不留死数据
+   */
+  async function saveRecord(
+    workspaceId: string,
+    groups: Group[],
+    nesting: WorkspaceNesting | null,
+  ): Promise<void> {
+    if (groups.length === 0 && nesting === null) await table.delete(workspaceId)
+    else await table.put(workspaceId, { groups, nesting })
+  }
+
+  /**
    * 写回某工作区的分组记录
    *
-   * 两份内容同写一份记录，因为主键都是这个工作区自己，两者都为空时删掉整条记录，不留死数据
+   * 不传 `nesting` 时沿用已落盘的那一份
    */
   async function save(
     workspaceId: string,
     groups: Group[],
     nesting: WorkspaceNesting | null = nestingOf(workspaceId),
   ): Promise<WorkspaceGroupsSnapshot> {
-    if (groups.length === 0 && nesting === null) await table.delete(workspaceId)
-    else await table.put(workspaceId, { groups, nesting })
+    await saveRecord(workspaceId, groups, nesting)
     return snapshot()
   }
 
@@ -166,22 +179,32 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
     updates: readonly { workspaceId: string; groups: Group[]; nesting: WorkspaceNesting | null }[],
   ): Promise<WorkspaceGroupsSnapshot> {
     for (const update of updates) {
-      if (update.groups.length === 0 && update.nesting === null) await table.delete(update.workspaceId)
-      else
-        await table.put(update.workspaceId, { groups: update.groups, nesting: update.nesting })
+      await saveRecord(update.workspaceId, update.groups, update.nesting)
     }
     return snapshot()
   }
 
-  /** 写回根节点上的工作区分组列表，菜单状态与嵌套开关原样保留 */
-  async function saveTree(groups: VirtualWorkspace[]): Promise<WorkspaceGroupsSnapshot> {
+  /**
+   * 写回根节点那份单例状态
+   *
+   * 未指名的几格沿用当前值，`picker` 那一格走一次归一：global 记录可能来自没有这几格的旧版本，缺格时下游会读到 undefined
+   * @param patch - 要改的格，其余原样保留
+   */
+  async function writeTree(
+    patch: Partial<{ virtualWorkspaces: VirtualWorkspace[]; picker: PickerSnapshot; nested: boolean }>,
+  ): Promise<WorkspaceGroupsSnapshot> {
     const global = tree.get()
     await tree.set({
-      virtualWorkspaces: groups,
-      picker: normalizePickerState(global.picker),
-      nested: global.nested !== false,
+      virtualWorkspaces: patch.virtualWorkspaces ?? global.virtualWorkspaces,
+      picker: patch.picker ?? normalizePickerState(global.picker),
+      nested: patch.nested ?? global.nested !== false,
     })
     return snapshot()
+  }
+
+  /** 写回根节点上的工作区分组列表，菜单状态与嵌套开关原样保留 */
+  function saveTree(groups: VirtualWorkspace[]): Promise<WorkspaceGroupsSnapshot> {
+    return writeTree({ virtualWorkspaces: groups })
   }
 
   /**
@@ -189,14 +212,8 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
    *
    * 三份记录都可能提到现已不存在的对象（记录比列表活得久），因此这里不做修剪，唯一知道「哪些对象还在」的是渲染菜单的那一侧，宿主只管落盘
    */
-  async function savePicker(picker: PickerSnapshot): Promise<WorkspaceGroupsSnapshot> {
-    const global = tree.get()
-    await tree.set({
-      virtualWorkspaces: global.virtualWorkspaces,
-      picker,
-      nested: global.nested !== false,
-    })
-    return snapshot()
+  function savePicker(picker: PickerSnapshot): Promise<WorkspaceGroupsSnapshot> {
+    return writeTree({ picker })
   }
 
   /**
@@ -207,17 +224,12 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
    * @param groups - 删除后的分组列表
    * @returns 变更后的快照
    */
-  async function dropEntry(
+  function dropEntry(
     key: string,
     groups: VirtualWorkspace[],
   ): Promise<WorkspaceGroupsSnapshot> {
     const picker = withoutEntry(normalizePickerState(tree.get().picker), key)
-    await tree.set({
-      virtualWorkspaces: groups,
-      picker,
-      nested: tree.get().nested !== false,
-    })
-    return snapshot()
+    return writeTree({ virtualWorkspaces: groups, picker })
   }
 
   /**
@@ -230,8 +242,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
   async function releaseNestingIn(workspaceId: string, groupId: string): Promise<void> {
     for (const [childId, record] of [...table.entries()]) {
       if (record.nesting?.workspaceId === workspaceId && record.nesting.groupId === groupId) {
-        if (record.groups.length === 0) await table.delete(childId)
-        else await table.put(childId, { groups: record.groups, nesting: null })
+        await saveRecord(childId, record.groups, null)
       }
     }
   }
@@ -357,8 +368,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
         nested: enabled,
       })
       for (const entry of cleared) {
-        if (entry.groups.length === 0) await table.delete(entry.childId)
-        else await table.put(entry.childId, { groups: entry.groups, nesting: null })
+        await saveRecord(entry.childId, entry.groups, null)
       }
       return snapshot()
     },
@@ -381,6 +391,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
       )
       const next = await dropEntry(rootWorkspaceKey(workspaceId), changed ? pruned : groups)
       for (const [childId, record] of orphaned) {
+        // 无条件写回，不共用 `saveRecord`：后者会把两份内容都空的记录整条删掉
         await table.put(childId, { groups: record.groups, nesting: null })
       }
       return orphaned.length === 0 ? next : snapshot()

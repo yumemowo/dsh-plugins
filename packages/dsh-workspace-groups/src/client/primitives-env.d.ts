@@ -215,9 +215,8 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const IconSlidersTwoOutlineRegular: IconComponent
   /** 官方会话菜单「分叉」项用的图标 */
   export const IconBranchOutlineRegular: IconComponent
-  /** 官方会话菜单「归档 / 取消归档」项用的图标 */
+  /** 官方会话菜单「归档」项用的图标 */
   export const IconArchiveOutlineRegular: IconComponent
-  export const IconUnarchiveOutlineRegular: IconComponent
   /** 置顶按钮两态：钉身描边 / 填实 */
   export const IconPinOutlineRegular: IconComponent
   export const IconPinFillRegular: IconComponent

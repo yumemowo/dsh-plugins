@@ -56,7 +56,6 @@ export const IconTrashOutlineRegular = icon('IconTrashOutlineRegular')
 export const IconPanelLeftOutlineRegular = icon('IconPanelLeftOutlineRegular')
 export const IconBranchOutlineRegular = icon('IconBranchOutlineRegular')
 export const IconArchiveOutlineRegular = icon('IconArchiveOutlineRegular')
-export const IconUnarchiveOutlineRegular = icon('IconUnarchiveOutlineRegular')
 export const IconChevronRightOutlineRegular = icon('IconChevronRightOutlineRegular')
 export const IconChevronDownOutlineRegular = icon('IconChevronDownOutlineRegular')
 export const IconCheckOutlineRegular = icon('IconCheckOutlineRegular')
@@ -121,7 +120,6 @@ export default {
   IconPanelLeftOutlineRegular,
   IconBranchOutlineRegular,
   IconArchiveOutlineRegular,
-  IconUnarchiveOutlineRegular,
   IconChevronRightOutlineRegular,
   IconChevronDownOutlineRegular,
   IconCheckOutlineRegular,

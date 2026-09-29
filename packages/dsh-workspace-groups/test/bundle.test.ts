@@ -49,7 +49,6 @@ function baselineModule(name: string): unknown {
       IconPanelLeftOutlineRegular: icon('panel-left'),
       IconBranchOutlineRegular: icon('branch'),
       IconArchiveOutlineRegular: icon('archive'),
-      IconUnarchiveOutlineRegular: icon('unarchive'),
       IconChevronRightOutlineRegular: icon('chevron-right'),
       IconChevronDownOutlineRegular: icon('chevron-down'),
       IconCheckOutlineRegular: icon('check'),
@@ -192,7 +191,7 @@ describe('lib/client.js bundle', () => {
     expect(tags.size).toBeGreaterThanOrEqual(10)
   })
 
-  it('no longer references the third-party better-sidebar service', () => {
+  it('drops the third-party better-sidebar service reference', () => {
     const source = readFileSync(resolve(import.meta.dirname, '../lib/client.js'), 'utf8')
 
     expect(source).not.toContain('betterSidebar')

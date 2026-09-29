@@ -115,7 +115,7 @@ describe('deriveNesting', () => {
     expect(nesting.rootsOf(virtualContainer('vg1'))).toEqual(['repo'])
   })
 
-  it('never links workspaces that sit in different virtual workspaces', () => {
+  it('leaves workspaces in different virtual workspaces unlinked', () => {
     // 两个虚拟分组里的工作区在列表上视为没有连接关系，即便路径上确实是父子
     const nesting = deriveNesting(
       input({

@@ -32,7 +32,6 @@ export {
   IconSlidersTwoOutlineRegular,
   IconTrashOutlineRegular,
   IconTriangleRightFillRegular,
-  IconUnarchiveOutlineRegular,
   IconWorkspaceTreeOutlineRegular,
   Input,
   Menu,
