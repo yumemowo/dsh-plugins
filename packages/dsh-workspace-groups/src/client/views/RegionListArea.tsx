@@ -21,6 +21,8 @@ import { relativeTimeOfRow, statusViewOfRow } from '../data/rows.ts'
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
 import type { RootLayout, SessionRow } from '../data/types.ts'
 import type { RegionLabels } from '../labels.ts'
+import { UNGROUPED_KEY } from '../store/viewMode.ts'
+import { useExpansion } from '../useExpansion.ts'
 import type { ParentGroupMenuInput, VirtualWorkspaceMenuInput } from '../menus.tsx'
 import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { abbreviateHomePath } from '../utils/pathUtils.ts'
@@ -79,21 +81,6 @@ export interface RegionListLayout {
   focused: boolean
 }
 
-/** 列表侧消费的折叠态与揭示标记 */
-export interface RegionListUiState {
-  expandedWorkspaces: Record<string, boolean>
-  expandedGroups: Record<string, boolean>
-  expandedVirtualWorkspaces: Record<string, boolean>
-  /** 从搜索结果打开、等待滚进可视区的那一行 */
-  revealSessionId: string | undefined
-  /** 被打开的那一行滚进可视区后清掉标记 */
-  acknowledgeReveal: (sessionId: string) => void
-  /** 折叠状态取反，默认展开，因此只有显式 true 才算折叠 */
-  toggleWorkspace: (key: string) => void
-  toggleGroup: (key: string) => void
-  toggleVirtualWorkspace: (key: string) => void
-}
-
 /**
  * 列表侧能打开的编辑入口
  *
@@ -126,7 +113,6 @@ export interface RegionListCommands {
 export interface WorkspaceNodeScope {
   snapshot: WorkspaceGroupsSnapshot
   layout: RegionListLayout
-  ui: RegionListUiState
   edits: RegionListEdits
   commands: RegionListCommands
   /** 会话 id → 该工作区的会话行，只随会话快照重建 */
@@ -145,13 +131,12 @@ interface RegionListAreaProps {
   scope: WorkspaceNodeScope
   flatRows: readonly SessionRow[]
   stray: readonly SessionRow[]
-  ungroupedExpanded: boolean
-  onToggleUngrouped: () => void
 }
 
 export function RegionListArea(props: RegionListAreaProps): ReactElement {
   const { labels } = useLocale()
   const { mode: viewMode } = useLocalViewOptions()
+  const expansion = useExpansion()
   const { scope } = props
   const { session, currentSessionId } = scope
   const rowLabels = sessionRowLabels(labels)
@@ -191,8 +176,8 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
         <VirtualWorkspaceSection
           key={section.id}
           section={section}
-          expanded={scope.ui.expandedVirtualWorkspaces[section.id] !== false}
-          onToggle={() => scope.ui.toggleVirtualWorkspace(section.id)}
+          expanded={expansion.isVirtualWorkspaceExpanded(section.id)}
+          onToggle={() => expansion.toggleVirtualWorkspace(section.id)}
           onRename={() => scope.edits.onRenameVirtualWorkspace(section.id, section.label)}
           onDelete={() => scope.edits.onDeleteVirtualWorkspace(section.id, section.label)}
         >
@@ -211,14 +196,14 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
         <section className={rowsStyles.workspace}>
           <WorkspaceRow
             title={labels.ungrouped}
-            expanded={props.ungroupedExpanded}
+            expanded={expansion.isWorkspaceExpanded(UNGROUPED_KEY)}
             folderActive={
-              props.ungroupedExpanded &&
+              expansion.isWorkspaceExpanded(UNGROUPED_KEY) &&
               containsSession(props.stray, currentSessionId)
             }
-            onToggle={props.onToggleUngrouped}
+            onToggle={() => expansion.toggleWorkspace(UNGROUPED_KEY)}
           />
-          <ExpandableBody open={props.ungroupedExpanded}>
+          <ExpandableBody open={expansion.isWorkspaceExpanded(UNGROUPED_KEY)}>
             <div className={rowsStyles.workspaceBody}>
               {/* 这些会话不属于任何工作区，没有分组可归，因此菜单里只有官方三项（归组项无处落）
                 * 宿主未提供官方服务时菜单会是空的，那时直接渲染无菜单的行，不留点不动的省略号 */}
@@ -257,11 +242,12 @@ function WorkspaceNode({
   scope: WorkspaceNodeScope
 }): ReactElement | null {
   const { labels } = useLocale()
-  const { snapshot, layout, ui, edits, commands, rowsByWorkspace } = scope
+  const { snapshot, layout, edits, commands, rowsByWorkspace } = scope
+  const expansion = useExpansion()
   const workspace = layout.workspaceById.get(workspaceId)
   // 布局只包含快照里存在的工作区，因此这里不会落空，防御一下避免类型断言
   if (workspace === undefined) return null
-  const expanded = ui.expandedWorkspaces[workspaceId] !== false
+  const expanded = expansion.isWorkspaceExpanded(workspaceId)
   const built = buildLayout(
     rowsByWorkspace.get(workspaceId) ?? [],
     snapshot.byWorkspace[workspaceId] ?? [],
@@ -320,6 +306,7 @@ function WorkspaceNode({
   return (
     <WorkspaceSection
       key={workspaceId}
+      workspaceId={workspaceId}
       row={{
         title: workspace.title,
         expanded,
@@ -342,7 +329,7 @@ function WorkspaceNode({
                 created: labels.hover.created(Date.parse(workspace.createdAt)),
               },
         hoverCopy: workspace.path,
-        onToggle: () => ui.toggleWorkspace(workspaceId),
+        onToggle: () => expansion.toggleWorkspace(workspaceId),
         onCreateSession: () => commands.createSessionIn(workspaceId, ''),
         onNewGroup: () => edits.onNewGroup(workspaceId),
         onRename: () => edits.onRenameWorkspace(workspaceId, workspace.title),
@@ -350,9 +337,7 @@ function WorkspaceNode({
       }}
       layout={built}
       depth={layout.nesting.levelOf(workspaceId)}
-      isGroupExpanded={(groupId) => ui.expandedGroups[`${workspaceId}:${groupId}`] !== false}
       groupActions={{
-        onToggle: (groupId) => ui.toggleGroup(`${workspaceId}:${groupId}`),
         onRename: (section) => edits.onRenameGroup(workspaceId, section.id, section.label),
         onDelete: (section) => edits.onDeleteGroup(workspaceId, section.id, section.label),
         onCreateSession: (section) => commands.createSessionIn(workspaceId, section.id),

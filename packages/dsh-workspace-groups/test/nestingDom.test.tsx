@@ -107,7 +107,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     wide: true,
     expandSidebar: () => {},
     useWorkspaces: ((select: (s: unknown) => unknown) =>
-      select({ items: workspaces, archivedSessionIds: [] })) as never,
+      select({ items: workspaces, archivedSessionIds: [], phase: 'ready' })) as never,
     useSessions: ((select: (s: unknown) => unknown) =>
       select({ ids: ['a'], byId, phase: 'ready' })) as never,
     useSessionStatus: ((select: (s: unknown) => unknown) => select(new Map())) as never,
@@ -236,7 +236,7 @@ describe('nested sub-workspaces in a real DOM', () => {
     ]
     const { container, root } = await mount({
       useWorkspaces: ((select: (s: unknown) => unknown) =>
-        select({ items: workspaces, archivedSessionIds: [] })) as never,
+        select({ items: workspaces, archivedSessionIds: [], phase: 'ready' })) as never,
       useSessions: ((select: (s: unknown) => unknown) =>
         select({ ids: [], byId: {}, phase: 'ready' })) as never,
       loadGroups: async () =>
@@ -309,7 +309,7 @@ describe('nested sub-workspaces in a real DOM', () => {
     ]
     const { container, root } = await mount({
       useWorkspaces: ((select: (s: unknown) => unknown) =>
-        select({ items: workspaces, archivedSessionIds: [] })) as never,
+        select({ items: workspaces, archivedSessionIds: [], phase: 'ready' })) as never,
       useSessions: ((select: (s: unknown) => unknown) =>
         select({ ids: [], byId: {}, phase: 'ready' })) as never,
       loadGroups: async () =>
@@ -765,6 +765,90 @@ describe('nested sub-workspaces in a real DOM', () => {
     await act(async () => root.unmount())
   })
 
+  it('expands a newly added workspace together with its parent chain', async () => {
+    // 采纳之后紧接着会在新工作区里开一个新会话，展开是那一步的副作用
+    // 新工作区自己有父、默认折叠，不写记录的话新会话会落在看不见的撑开体里
+    const store = viewModeStoreStub()
+    let adopted: ((workspaceId: string, path: string) => void) | undefined
+    const { root } = await mount({
+      ...storeViewModeProps(store),
+      addWorkspace: (onAdopted) => {
+        adopted = onAdopted
+        return {
+          createWorkspace: async () => ({ workspaceId: 'w-new' }),
+          startSession: () => {},
+          occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
+          labels: officialAddLabels(workspaceTranslate()),
+        }
+      },
+    })
+
+    // /repo/a/b 之下的新工作区：父是 w3，它自己的父链是 w3 → w2 → w1
+    await act(async () => adopted?.('w-new', '/repo/a/b/c'))
+
+    // 新工作区自己与整条父链都被显式写成展开；父链顶层 w1 本就是默认展开，这里也记一条（判据看记录、不看生效值）
+    expect(store.getSnapshot().expansion?.workspace).toEqual({
+      'w-new': true,
+      w3: true,
+      w2: true,
+      w1: true,
+    })
+    // 与它无关的那一个没被碰过
+    expect(store.getSnapshot().expansion?.workspace?.['w4']).toBeUndefined()
+
+    await act(async () => root.unmount())
+  })
+
+  it('writes no folding record when the new workspace cannot land under any parent', async () => {
+    // /other 之下没有任何现存工作区，新工作区落成自己那个容器的顶层，本来就默认展开
+    // 这时不该写任何记录：写了就等于把「用户没碰过」变成「用户选了展开」
+    const store = viewModeStoreStub()
+    let adopted: ((workspaceId: string, path: string) => void) | undefined
+    const { root } = await mount({
+      ...storeViewModeProps(store),
+      addWorkspace: (onAdopted) => {
+        adopted = onAdopted
+        return {
+          createWorkspace: async () => ({ workspaceId: 'w-new' }),
+          startSession: () => {},
+          occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
+          labels: officialAddLabels(workspaceTranslate()),
+        }
+      },
+    })
+
+    await act(async () => adopted?.('w-new', '/tmp/elsewhere'))
+
+    expect(store.getSnapshot().expansion?.workspace ?? {}).toEqual({})
+
+    await act(async () => root.unmount())
+  })
+
+  it('writes no folding record when nesting is off', async () => {
+    // 关掉嵌套时每个工作区都是自己那个容器的顶层，父链在渲染上不存在，展开是白送的
+    const store = viewModeStoreStub()
+    let adopted: ((workspaceId: string, path: string) => void) | undefined
+    const { root } = await mount({
+      ...storeViewModeProps(store),
+      loadGroups: async () => snapshot({ nested: false }),
+      addWorkspace: (onAdopted) => {
+        adopted = onAdopted
+        return {
+          createWorkspace: async () => ({ workspaceId: 'w-new' }),
+          startSession: () => {},
+          occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
+          labels: officialAddLabels(workspaceTranslate()),
+        }
+      },
+    })
+
+    await act(async () => adopted?.('w-new', '/repo/a/b/c'))
+
+    expect(store.getSnapshot().expansion?.workspace ?? {}).toEqual({})
+
+    await act(async () => root.unmount())
+  })
+
   it('turns nesting on without asking, since nothing is released', async () => {
     const calls: boolean[] = []
     const { container, root } = await mount({
@@ -784,6 +868,158 @@ describe('nested sub-workspaces in a real DOM', () => {
     })
 
     expect(calls).toEqual([true])
+
+    await act(async () => root.unmount())
+  })
+
+  /**
+   * 一层的撑开体是否展开
+   *
+   * 展开态挂在撑开体根节点的类名上，与实现同一份判据（`rows.module.css` 的 `.expandOpen`）
+   */
+  function isExpanded(section: Element): boolean {
+    return section.querySelector(':scope > .expand')?.classList.contains('expandOpen') ?? false
+  }
+
+  /** 按标题取一个工作区块 */
+  function sectionNamed(container: HTMLElement, title: string): Element {
+    const found = Array.from(container.querySelectorAll('.workspace')).find(
+      (section) => section.querySelector('.workspaceTitle')?.textContent === title,
+    )
+    if (found === undefined) throw new Error(`no workspace section titled ${title}`)
+    return found
+  }
+
+  it('expands a top-level workspace but collapses a child one by default', async () => {
+    // 三态的默认按结构分层：没有父工作区的展开，子工作区折叠
+    // 这与官方「有孩子就展开、叶子折叠」不是同一条规则，反例是「有父且自己还有子节点」的那种
+    const { container, root } = await mount()
+
+    expect(isExpanded(sectionNamed(container, 'W1'))).toBe(true)
+    expect(isExpanded(sectionNamed(container, 'W2'))).toBe(false)
+    expect(isExpanded(sectionNamed(container, 'W4'))).toBe(true)
+
+    await act(async () => root.unmount())
+  })
+
+  it('collapses a session group by default and opens it on click', async () => {
+    const store = viewModeStoreStub()
+    const { container, root } = await mount({
+      ...storeViewModeProps(store),
+      loadGroups: async () =>
+        snapshot({ byWorkspace: { w1: [{ id: 'g1', name: '前端', sessionIds: ['a'] }] } }),
+    })
+
+    const group = container.querySelector('.group')
+    if (group === null) throw new Error('no session group rendered')
+    expect(isExpanded(group)).toBe(false)
+
+    await act(async () => {
+      group.querySelector<HTMLElement>('.groupHead')?.click()
+    })
+
+    // 点开之后写盘的是「这一层显式展开」，而界面上也跟着展开
+    expect(store.getSnapshot().expansion?.group).toEqual({ 'w1:g1': true })
+    expect(isExpanded(container.querySelector('.group') ?? document.body)).toBe(true)
+
+    await act(async () => root.unmount())
+  })
+
+  it('collapses a top-level workspace on click and remembers the choice', async () => {
+    // 第一下点击的语义由默认值决定：顶层默认展开，因此它是折叠
+    const store = viewModeStoreStub()
+    const { container, root } = await mount(storeViewModeProps(store))
+
+    await act(async () => {
+      sectionNamed(container, 'W4').querySelector<HTMLElement>('.workspaceHead')?.click()
+    })
+
+    expect(store.getSnapshot().expansion?.workspace).toEqual({ w4: false })
+    expect(isExpanded(sectionNamed(container, 'W4'))).toBe(false)
+
+    await act(async () => root.unmount())
+  })
+
+  it('keeps the picked folding state across a remount', async () => {
+    // 刷新后要停在上次的开合上：这是本次改动与原先组件内 state 的核心差别
+    const store = viewModeStoreStub()
+    const first = await mount(storeViewModeProps(store))
+    await act(async () => {
+      sectionNamed(first.container, 'W1').querySelector<HTMLElement>('.workspaceHead')?.click()
+    })
+    expect(isExpanded(sectionNamed(first.container, 'W1'))).toBe(false)
+    await act(async () => first.root.unmount())
+
+    const second = await mount(storeViewModeProps(store))
+
+    expect(isExpanded(sectionNamed(second.container, 'W1'))).toBe(false)
+    // 没碰过的那一层仍按结构默认：W4 无父，照常展开
+    expect(isExpanded(sectionNamed(second.container, 'W4'))).toBe(true)
+
+    await act(async () => second.root.unmount())
+  })
+
+  it('swaps the structure default for the recorded choice on a child workspace', async () => {
+    // 子工作区默认折叠，显式写了 true 之后要按记录展开——三态的两边都要走通
+    const store = viewModeStoreStub()
+    store.setWorkspaceExpanded('w2', true)
+    const { container, root } = await mount(storeViewModeProps(store))
+
+    expect(isExpanded(sectionNamed(container, 'W2'))).toBe(true)
+
+    await act(async () => root.unmount())
+  })
+
+  it('shows the ungrouped bucket expanded by default', async () => {
+    // 「未分组」桶的键是哨兵空串，它按「无父」那一档默认展开
+    // 桶只在真有无所属工作区的会话时才渲染，因此这里补一条挂在不存在的工作区上的会话
+    const store = viewModeStoreStub()
+    const byId = {
+      orphan: { id: 'orphan', displayTitle: '无主会话', blank: false, retainedBy: {}, updatedAt: 1_000 },
+    }
+    const { container, root } = await mount({
+      ...storeViewModeProps(store),
+      useSessions: ((select: (s: unknown) => unknown) =>
+        select({ ids: ['orphan'], byId, phase: 'ready' })) as never,
+    })
+
+    const ungrouped = Array.from(container.querySelectorAll('.workspace')).find(
+      (section) => section.querySelector('.workspaceTitle')?.textContent === '未分组',
+    )
+    expect(ungrouped).toBeDefined()
+    expect(isExpanded(ungrouped ?? document.body)).toBe(true)
+
+    // 点一下它的行是「折叠」，写下的键是哨兵空串——与工作区层共用同一份记录
+    await act(async () => {
+      ungrouped?.querySelector<HTMLElement>('.workspaceHead')?.click()
+    })
+    expect(store.getSnapshot().expansion?.workspace).toEqual({ '': false })
+
+    await act(async () => root.unmount())
+  })
+
+  it('does not clean up the folding records while the workspace list is still pending', async () => {
+    // `pending` 期间 items 是空的，据它清理会把用户的记录清光——官方那条守卫防的就是这个
+    const store = viewModeStoreStub()
+    store.setWorkspaceExpanded('gone', false)
+    const { root } = await mount({
+      ...storeViewModeProps(store),
+      useWorkspaces: ((select: (s: unknown) => unknown) =>
+        select({ items: [], archivedSessionIds: [], phase: 'pending' })) as never,
+    })
+
+    expect(store.getSnapshot().expansion?.workspace).toEqual({ gone: false })
+
+    await act(async () => root.unmount())
+  })
+
+  it('drops the folding records of workspaces that no longer exist once the list is ready', async () => {
+    const store = viewModeStoreStub()
+    store.setWorkspaceExpanded('gone', false)
+    store.setWorkspaceExpanded('w1', false)
+    const { root } = await mount(storeViewModeProps(store))
+
+    expect(store.getSnapshot().expansion?.workspace).toEqual({ w1: false })
 
     await act(async () => root.unmount())
   })

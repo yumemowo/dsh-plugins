@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { IndicatorStyle, ViewMode } from '../src/client/data/types.ts'
-import type { ViewModeActions, ViewModeState } from '../src/client/store/viewMode.ts'
+import { sessionGroupKey } from '../src/client/store/viewMode.ts'
+import type { SessionGroupRef, ViewModeActions, ViewModeState } from '../src/client/store/viewMode.ts'
 
 /**
  * 区域组件所需要的那份 store 座位替身
@@ -20,7 +21,7 @@ export function viewModeProps(
   useStore: <S>(selector: (state: ViewModeState) => S) => S
   actions: ViewModeActions
 } {
-  let state: ViewModeState = { mode, indicator }
+  let state: ViewModeState = { mode, indicator, expansion: {} }
   return {
     useStore: (selector) => selector(state),
     actions: {
@@ -30,6 +31,32 @@ export function viewModeProps(
       },
       setIndicator: (next: IndicatorStyle) => {
         state = { ...state, indicator: next }
+      },
+      setWorkspaceExpanded: (key: string, expanded: boolean) => {
+        state = { ...state, expansion: { ...state.expansion, workspace: { ...state.expansion?.workspace, [key]: expanded } } }
+      },
+      setVirtualWorkspaceExpanded: (key: string, expanded: boolean) => {
+        state = {
+          ...state,
+          expansion: { ...state.expansion, virtualWorkspace: { ...state.expansion?.virtualWorkspace, [key]: expanded } },
+        }
+      },
+      setSessionGroupExpanded: (ref: SessionGroupRef, expanded: boolean) => {
+        const key = sessionGroupKey(ref)
+        state = { ...state, expansion: { ...state.expansion, group: { ...state.expansion?.group, [key]: expanded } } }
+      },
+      retainWorkspaceKeys: (keys: readonly string[]) => {
+        const current = state.expansion?.workspace ?? {}
+        const retained = new Set(keys)
+        state = {
+          ...state,
+          expansion: {
+            ...state.expansion,
+            workspace: Object.fromEntries(
+              Object.entries(current).filter(([key]) => retained.has(key)),
+            ),
+          },
+        }
       },
     } as ViewModeActions,
   }
@@ -41,6 +68,12 @@ export interface ViewModeStoreStub {
   subscribe: (listener: () => void) => () => void
   set: (mode: ViewMode) => void
   setIndicator: (style: IndicatorStyle) => void
+  /** 写入某一层的显式展开选择，用于验证「点开之后写盘」 */
+  setWorkspaceExpanded: (key: string, expanded: boolean) => void
+  setVirtualWorkspaceExpanded: (key: string, expanded: boolean) => void
+  setSessionGroupExpanded: (ref: SessionGroupRef, expanded: boolean) => void
+  /** 摘掉工作区层里失效的键，用于验证清理 */
+  retainWorkspaceKeys: (keys: readonly string[]) => void
 }
 
 /** 造一个可订阅的存储，用于验证「写入之后界面真的换了」 */
@@ -48,8 +81,13 @@ export function viewModeStoreStub(
   mode: ViewMode = 'workspace',
   indicator: IndicatorStyle = 'icon',
 ): ViewModeStoreStub {
-  let state: ViewModeState = { mode, indicator }
+  let state: ViewModeState = { mode, indicator, expansion: {} }
   const listeners = new Set<() => void>()
+  /** 换一份状态并通知订阅者，与真引擎的写入同形 */
+  const commit = (next: ViewModeState): void => {
+    state = next
+    for (const listener of [...listeners]) listener()
+  }
   return {
     getSnapshot: () => state,
     subscribe: (listener) => {
@@ -58,13 +96,40 @@ export function viewModeStoreStub(
         listeners.delete(listener)
       }
     },
-    set: (next) => {
-      state = { ...state, mode: next }
-      for (const listener of [...listeners]) listener()
+    set: (next) => commit({ ...state, mode: next }),
+    setIndicator: (next) => commit({ ...state, indicator: next }),
+    setWorkspaceExpanded: (key, expanded) =>
+      commit({
+        ...state,
+        expansion: { ...state.expansion, workspace: { ...state.expansion?.workspace, [key]: expanded } },
+      }),
+    setVirtualWorkspaceExpanded: (key, expanded) =>
+      commit({
+        ...state,
+        expansion: {
+          ...state.expansion,
+          virtualWorkspace: { ...state.expansion?.virtualWorkspace, [key]: expanded },
+        },
+      }),
+    setSessionGroupExpanded: (ref, expanded) => {
+      const key = sessionGroupKey(ref)
+      commit({
+        ...state,
+        expansion: { ...state.expansion, group: { ...state.expansion?.group, [key]: expanded } },
+      })
     },
-    setIndicator: (next) => {
-      state = { ...state, indicator: next }
-      for (const listener of [...listeners]) listener()
+    retainWorkspaceKeys: (keys) => {
+      const current = state.expansion?.workspace ?? {}
+      const retained = new Set(keys)
+      commit({
+        ...state,
+        expansion: {
+          ...state.expansion,
+          workspace: Object.fromEntries(
+            Object.entries(current).filter(([key]) => retained.has(key)),
+          ),
+        },
+      })
     },
   }
 }
@@ -90,6 +155,13 @@ export function storeViewModeProps(store: ViewModeStoreStub): {
     actions: {
       setMode: (next: ViewMode) => store.set(next),
       setIndicator: (next: IndicatorStyle) => store.setIndicator(next),
+      setWorkspaceExpanded: (key: string, expanded: boolean) =>
+        store.setWorkspaceExpanded(key, expanded),
+      setVirtualWorkspaceExpanded: (key: string, expanded: boolean) =>
+        store.setVirtualWorkspaceExpanded(key, expanded),
+      setSessionGroupExpanded: (ref: SessionGroupRef, expanded: boolean) =>
+        store.setSessionGroupExpanded(ref, expanded),
+      retainWorkspaceKeys: (keys: readonly string[]) => store.retainWorkspaceKeys(keys),
     } as ViewModeActions,
   }
 }

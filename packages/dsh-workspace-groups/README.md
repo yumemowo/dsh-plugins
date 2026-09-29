@@ -31,7 +31,7 @@
 - **展示方式**：同一个视图选项面板里的第一条设置，两条互斥的可选项——「按工作区」渲染分组结构（默认），「平铺」把全部可见会话收进一条列表，与官方「单列表」一致。选择存在浏览器本地，刷新后保留；工作区选择器的聚焦在平铺下照常收窄这条列表。
 - **状态指示器**：会话行的运行 / 待交互 / 完成三态，两种样式在同一面板里互斥切换——「图标」用官方状态点（默认），「色条」用一根圆角竖条。指示器绝对定位在行的左侧、不占行内流，因此标题位置与状态无关；运行与待交互各带一层同色系浅底，完成与空闲不带底色。选择存在浏览器本地。
 - **会话数**：分组行行尾显示组内会话数，与 session 行的相对时间同格同形。空分组不显示，悬停/菜单展开时与会话行的时间一样隐去。
-- **展开折叠**：工作区行与分组行都可折叠，两者状态互不影响，展开/收起带过渡动作。
+- **展开折叠**：工作区行与分组行都可折叠，两者状态互不影响，展开/收起带过渡动作。**默认值按结构分层**：顶层工作区与工作区分组展开，子工作区与会话分组折叠。用户点过的开合会存进浏览器本地，刷新后保留；没点过的那些跟着结构走。**新建的工作区会连同父链一起展开**，那是紧接着聚焦新会话的副作用——只在新工作区真的落在某个父下面时才写。
 - **新建会话**：工作区行与分组行右侧的新建会话按钮（与官方工作区行同一枚字形）。分组行那枚会把新会话建在该分组所属工作区，并自动把它归入这个分组。建会话走官方导航服务，因此与官方组件一样复用同工作区已有的空白会话，连点两次不会攒出两条空会话。
 - **会话可见性**：与官方组件一致 —— 已归档、子代理来源的会话不显示；空白会话只保留当前选中的那一条。
 - **会话命名**：新建中的会话行显示官方的固定名「新会话」；会话正式启用后显示标题服务投影出的摘要名。
@@ -60,8 +60,11 @@
 
 README 只讲本包是什么、怎么用。设计论证、对齐依据与踩过的坑按主题记在 `docs/`：
 
+**动手改代码前先读[开发约定](docs/conventions.md)**——改这个包时要守的硬约束（构建产物、基线模块、测试、注释、性能结论的实测要求）都收在那里，多数违反后不会报错。
+
 | 文档 | 内容 |
 | --- | --- |
+| [开发约定](docs/conventions.md) | 改这个包要守的硬约束：性能结论必须有实测支撑、构建与产物、测试、代码组织、性能优化 |
 | [与官方实现的复用关系](docs/official-reuse.md) | 插槽接替规则、目录选择器复用官方的洞、官方原语与语言包的借用 |
 | [交互细节与官方对齐依据](docs/ui-details.md) | 行菜单 / 右键菜单 / 命名 / 时间 / 状态点 / 悬停卡片 / 搜索 / 添加工作区 / 工作区分组 / 工作区选择器 / 展示方式 |
 | [布局与样式对齐](docs/layout-and-styling.md) | 尺寸、留白、色阶与层级缩进的取值来源 |
@@ -70,7 +73,7 @@ README 只讲本包是什么、怎么用。设计论证、对齐依据与踩过�
 | [渲染性能与行级缓存](docs/render-performance.md) | 行级 memo 要怎样才能命中、推导放在哪一层的取舍（含实测数据） |
 | [自绘图标](docs/custom-icons.md) | 工作区分组两个字形的构图依据，以及 0.1.7-rc.1 起改用官方图标的几处 |
 | [子工作区嵌套](docs/sub-workspace-nesting.md) | 父子关系怎么判定、渲染位置与段序、开关与确认框、放进分组时子工作区怎么跟随、缩进模型 |
-| [数据存储](docs/data-storage.md) | 存储位置、记录结构（含嵌套归属 / 聚焦 / 最近使用 / 置顶）、版本策略与变更回快照；展示方式与折叠态为何不在这里 |
+| [数据存储](docs/data-storage.md) | 存储位置、记录结构（含嵌套归属 / 聚焦 / 最近使用 / 置顶）、版本策略与变更回快照；展示方式与折叠态为何不在这里、折叠三态的分层默认与清理策略 |
 | [客户端集成](docs/client-integration.md) | cordis 代理语义、对照模式（`COMPARE_MODE`）、热重载与 `$mount` 配平、基线模块与 node 测试替身 |
 | [会话行指示器的备选方案](docs/session-row-indicator/README.md) | 状态指示器为何要不占行内流、六种解法的实测几何与最终取舍，以及收起态为什么是指示器解决不了的问题（附[对照稿](docs/session-row-indicator/indicator-mockups.html)） |
 
@@ -106,6 +109,8 @@ src/client/
 ├── useFlipMarker.ts            量区域矩形、按需在 body 上挂浮层翻转标记
 ├── actions.ts                  RegionActions / RegionDataHooks（组件与宿主的接口）
 ├── useLocale.ts                区域文案的唯一读取入口（RegionLocaleProvider + useLocale）
+├── useLocalViewOptions.ts      浏览器 store 里展示方式 / 指示器样式的读取入口（同上）
+├── useExpansion.ts             浏览器 store 里三层折叠态的读取入口（同上）
 ├── compare.tsx                 对照模式：挂进原生右侧栏 tab
 ├── remote.ts                   Remote 贡献声明与调用封装
 ├── runtime.ts                  primitives 值导入的唯一出口（external）
@@ -127,9 +132,9 @@ src/client/
 │   ├── flip.ts                 浮层翻转的几何判定与标记名（纯函数，无 React 依赖）
 │   └── pathUtils.ts             目录路径的 `~` 缩写（与官方同规则）
 ├── store/                      浏览器内持久化状态
-│   └── viewMode.ts             展示方式的存储（官方 defineStore + localStorage，插槽 store 座位的句柄）
+│   └── viewMode.ts             展示方式 / 指示器 / 三层折叠态的存储（官方 defineStore + localStorage，插槽 store 座位的句柄）
 └── views/                      渲染层：区域容器、三块渲染区与行组件
-    ├── WorkspaceGroupsRegion.tsx   区域容器：数据源、派生布局、交互状态与命令八个 hook，按区域分派渲染
+    ├── WorkspaceGroupsRegion.tsx   区域容器：数据源、派生布局、交互状态与命令各一 hook，按区域分派渲染
     ├── RegionHeaderArea.tsx        区域顶部（宽栏两行标题 + 入口组 + 两张浮层面板，窄栏入口）
     ├── RegionListArea.tsx          列表区三条分支，含 WorkspaceNode 递归与会话行元素构造
     ├── RegionDialogs.tsx           全部对话框（RegionOverlay 可辨识联合，任意时刻至多开一个）
@@ -167,13 +172,13 @@ src/client/
             └── dialogs.module.css  三个对话框共用的样式
 ```
 
-状态的归属只有一处：折叠态（工作区 / 会话分组 / 工作区分组三份）、搜索状态（查询 / 展开 / 聚焦时机 / 揭示标记）、两张面板的开合都收在同文件内的 `useRegionUiState`，由主组件持有并把状态与读写入口向下传。八个互斥浮层（四个草稿框、四个确认框）收在一个 `RegionOverlay` 可辨识联合里，因此「任意时刻至多开一个」由类型保证，而不是靠 `Modal` 挡住第二个入口。菜单开合留在持有行组件内（行内 `...` 菜单与右键菜单各一份，都由 `useRowContextMenu` 与行自己的 `useState` 持有），行的外观组件保持无状态。搜索状态之所以不留在 header 内部：窄栏入口要触发宽栏输入框的聚焦，这一跨形态的联动需要一个共同宿主；选择器的开合同理——面板要读菜单的三个分区，而那些分区由区域组件从快照算出来。
+状态的归属只有一处：搜索状态（查询 / 展开 / 聚焦时机 / 揭示标记）与两张面板的开合都收在同文件内的 `useRegionUiState`，由主组件持有并把状态与读写入口向下传。折叠态（工作区 / 会话分组 / 工作区分组三份）不逐层传：它是浏览器本地 store 里的值，由容器合成一次后放进 `useExpansion.ts` 的 provider，用到的地方自己 `useExpansion()` 取——与 `useLocalViewOptions.ts` 同一套做法。八个互斥浮层（四个草稿框、四个确认框）收在一个 `RegionOverlay` 可辨识联合里，因此「任意时刻至多开一个」由类型保证，而不是靠 `Modal` 挡住第二个入口。菜单开合留在持有行组件内（行内 `...` 菜单与右键菜单各一份，都由 `useRowContextMenu` 与行自己的 `useState` 持有），行的外观组件保持无状态。搜索状态之所以不留在 header 内部：窄栏入口要触发宽栏输入框的聚焦，这一跨形态的联动需要一个共同宿主；选择器的开合同理——面板要读菜单的三个分区，而那些分区由区域组件从快照算出来。
 
-文案不下传：容器把本包翻译函数与投影后的文案表合成一个 `RegionLocale` 交给 `useLocale.ts` 的 `RegionLocaleProvider`，需要文案的组件用 `useLocale()` 自取，因此组件接口里没有 `t` / `labels` 这两格。浏览器内持久化状态收在 `store/`——插槽的 `store` 座位只接受一个 `StoreDecl`，而 `persist` 整份序列化状态，后续新增的本地状态要并进同一个状态对象。
+文案不下传：容器把本包翻译函数与投影后的文案表合成一个 `RegionLocale` 交给 `useLocale.ts` 的 `RegionLocaleProvider`，需要文案的组件用 `useLocale()` 自取，因此组件接口里没有 `t` / `labels` 这两格。浏览器内持久化状态收在 `store/`——插槽的 `store` 座位只接受一个 `StoreDecl`，而 `persist` 整份序列化状态，后续新增的本地状态要并进同一个状态对象（展示方式、指示器样式与三层折叠态现在共用它）。**这类状态一律不逐层传 props，统一经 provider + 具名 hook 取**：`useLocalViewOptions.ts` 装展示方式与指示器样式，`useExpansion.ts` 装三层折叠态。store 之外的状态仍按各渲染区实际消费的形状下发。
 
-`WorkspaceGroupsRegion.tsx` 按「数据源 / 快照 / 派生布局 / 交互状态 / 命令 / 容器」分段，段间有 `// ── … ──` 分节标记。八个 hook 与容器同处一个文件，因为它们的消费方只有容器一处：`useRegionSources` 读全局数据源，`useSnapshotFeed` 管快照的加载与改动，`useRegionLayout` 把快照切成渲染布局，`useRegionUiState` 持有全部交互状态，命令再按对象分成 `useRegionSearch`、`useRegionGroupActions`、`useRegionNestActions`、`useRegionPickerActions` 四个。渲染按区域拆成 `RegionHeaderArea` / `RegionListArea` / `RegionDialogs` 三个模块，主组件只做装配与宽窄形态分派。Provider 的 value 由容器 `useMemo` 合成一次、宽窄两个渲染分支共用：这个身份不稳定会让行级缓存全部落空（见 [渲染性能与行级缓存](docs/render-performance.md)）。
+`WorkspaceGroupsRegion.tsx` 按「数据源 / 快照 / 派生布局 / 交互状态 / 命令 / 容器」分段，段间有 `// ── … ──` 分节标记。这些 hook 与容器同处一个文件，因为它们的消费方只有容器一处：`useRegionSources` 读全局数据源，`useSnapshotFeed` 管快照的加载与改动，`useRegionLayout` 把快照切成渲染布局，`useRegionUiState` 持有除折叠态外的全部交互状态，`useExpansionValue` 把 store 座位的三份折叠记录与层级推导演成读 / 取反 / 写入口（并摘掉失效键），与 `useLocalViewOptionsValue` 同构，命令再按对象分成 `useRegionSearch`、`useRegionGroupActions`、`useRegionNestActions`、`useRegionPickerActions` 四个。渲染按区域拆成 `RegionHeaderArea` / `RegionListArea` / `RegionDialogs` 三个模块，主组件只做装配与宽窄形态分派。Provider 的 value 由容器 `useMemo` 合成一次、宽窄两个渲染分支共用；不过只有真的被 `memo` 行组件消费的那几份才从中获益，哪些承重、哪些只是留余地见 [渲染性能与行级缓存](docs/render-performance.md)。
 
-每个渲染区只声明自己真正消费的那几格形状，而不是逐字段转发：`RegionListArea` 收 `RegionListLayout` / `RegionListUiState` / `RegionListEdits` / `RegionListCommands` 合成的 `WorkspaceNodeScope`，`RegionHeaderArea` 收布局、浮层与命令三格，`RegionDialogs` 收当前那个 `RegionOverlay`、对话框布局、工作区视图与提交入口。列表侧因此不接触任何状态 setter，浮层形状不出容器那一层。只有确实被多个调用点复用的纯逻辑才外提到 `data/` 与 `utils/`，其余留在原地，避免为了「能抽」而抽出一堆只有一个调用点的间接层。
+每个渲染区只声明自己真正消费的那几格形状，而不是逐字段转发：`RegionListArea` 收 `RegionListLayout` / `RegionListEdits` / `RegionListCommands` 合成的 `WorkspaceNodeScope`，`RegionHeaderArea` 收布局、浮层与命令三格，`RegionDialogs` 收当前那个 `RegionOverlay`、对话框布局、工作区视图与提交入口。列表侧因此不接触任何状态 setter，浮层形状不出容器那一层。只有确实被多个调用点复用的纯逻辑才外提到 `data/` 与 `utils/`，其余留在原地，避免为了「能抽」而抽出一堆只有一个调用点的间接层。
 
 聚焦 / 最近使用 / 置顶三份记录**只有一处变换逻辑**（`pickerState.ts`），宿主半边在变更时用它修剪、浏览器半边在渲染菜单时用它排序，两边因此不可能各写一份「最近使用怎么排」的判断。
 
@@ -216,3 +221,5 @@ pnpm run build
 ```
 
 `pnpm run verify:mount`（仓库根）会用真实 `dsh` 启动器验证本包能被加载。
+
+**改完 `src/` 必须 `pnpm run build`，否则 GUI 加载的仍是旧 `lib/client.js`**——而 `vitest` 直接 import 源码，测试照样全绿，`lib/` 又在 `.gitignore` 内，`git status` 看不出差异。改了宿主半边还要重启 `dsh`。其余约束见[开发约定](docs/conventions.md)。

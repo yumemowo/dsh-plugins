@@ -73,13 +73,28 @@ export function sameSessionStatus(a, b): boolean {
 | 官方动作对象 | 在 `index.ts` 里按服务缓存，`labels` 写成取值器 | 服务是单例，同一服务期间复用即可；`labels` 用 getter 才能既复用对象、又让切换语言后的下一次读取拿到新译文 |
 | 文案表 `labels` | `useMemo(() => regionLabels(t, tWorkspace, tSidebar), […])` | 缓存的是投影结果而不是译文；几个 `t` 都在调用时才读当前语言 |
 | 区域文案 `{ t, labels }` | 容器用一层 `useMemo` 合成 `RegionLocale` 交给 `RegionLocaleProvider` | 文案不再逐层传参，组件改从 `useLocale()` 取，Provider 的 value 因此成了唯一那格 prop |
+| 折叠态的读与取反 | `useExpansionValue` 里一层 `useMemo` 合成，交给 `ExpansionProvider` | 目前没有 `memo` 组件消费它（`RegionListArea` / `WorkspaceSection` 都是普通组件），因此这层稳定化是**为将来留的**，不是当下的收益；真正让它必须写成 `useMemo` 的是依赖列语义，见下条 |
+| 视图选项偏好 | `useLocalViewOptionsValue` 里一层 `useMemo` 合成，交给 `LocalViewOptionsProvider` | **这条是承重的**：`SessionRowView` 被 `memo` 包住且消费指示器样式，value 每次新建会让它的比对失效 |
 | 归组动作 | `useCallback(..., [apply, moveSession])` | 它会随归组上下文传到每一行 |
 | 行打开动作 | 传**未绑定**的 `openSession`，由行自己绑 id | 绑好的闭包每次渲染都是新引用 |
 | 归组上下文 | 动作传未绑定的版本，行自己在组件内绑 id | 同上；`onSelectGroup` 因此对所有行是同一个引用 |
 
 一个通用手法：把「传动作」换成「传动作 + 参数」。行级 `memo` 比对的是动作本身（稳定），参数在组件内部拼接，于是 `memo` 能命中。
 
-**Provider 的 value 必须 `useMemo`，不能写成行内对象字面量。** 文案改走 `useLocale()` 之后，组件接口里的 `t` / `labels` 两格消失，剩下 `RegionLocale` 的 value 一格，它的身份是否稳定直接决定行级比对成不成立。已用 real-React + jsdom 实测：value 身份稳定时，`React.memo` 包住的行组件在父组件重渲染时命中 0 次重渲染；value 每次新建时同样条件下是 2 次（两次父渲染各一次）。容器的两个渲染分支（宽栏与窄栏）都包同一层 Provider，因此窄栏那条分支也共用同一个 value。
+### provider 的 value 与行级缓存的真实关系
+
+被 `memo` 包住的组件默认按引用比对 props，但 **context 的变化穿透 `memo`**：provider 每次渲染新建 value 时，消费该 context 的 memo 行会跟着父组件一遍遍重渲染。
+
+`test/providerMemo.test.tsx` 用一个形状与 `SessionRowView` 一致的行把这条机制钉住（真 `react-dom` + jsdom，数的是行组件函数体的执行次数）：
+
+| provider value | 两次父组件重渲染后，被 `memo` 包住的行重渲染次数 |
+| --- | --- |
+| 保持同一身份 | 0 |
+| 每次新建 | 2 |
+
+**但这条只在真有 `memo` 消费方时才承重。** 区域内被 `memo` 包住的只有 `SessionRowView` 与 `SessionRowMenu` 两个行组件：前者消费 `LocalViewOptions` 与 `RegionLocale`，后者消费 `RegionLocale`，**两个都不消费 `Expansion`**。因此折叠态那份 value 的稳定性目前不产生任何收益——`useExpansion()` 的消费方都是普通函数组件，context 变化只会让它们走一趟本就要走的重渲染。同理，`ExpansionCommands` 的成员是被单独读取的（`expansion.expandWorkspace`），两个命令 hook 的依赖数组里写的也是成员而不是整袋，整袋身份从来没被观察过。
+
+规则「只对真有 `memo` 消费方的 provider 引入 value 稳定化」记在[开发约定](conventions.md#性能优化)。折叠态那份仍然留着 `useMemo`，理由不是缓存收益，而是**依赖列语义**：函数在 memo 内部定义，依赖只列输入（三份记录、三个 setter、`nesting`），往袋里加一层不会出现「加了函数忘了补依赖」而静默持有旧闭包。视图选项与文案那两份则是真的为了缓存。
 
 ## 推导放在哪一层
 
@@ -97,7 +112,7 @@ export function sameSessionStatus(a, b): boolean {
 
 以下数字来自 jsdom + `react-dom` 的渲染基准，不是在真实浏览器里量的。它能回答「成本随行数怎么增长、`memo` 有没有命中」，但绝对毫秒数不能直接外推到真机。
 
-测量方法是造 N 行会话、每轮只替换其中一条摘要对象（其余保持同一引用），用 `React.Profiler` 或计数插桩观察实际渲染次数。探针是一次性的，没有随提交保留；要复现重新写一个同等规模的即可。
+**这一节的数字没有随提交保留探针**（测量方法是造 N 行会话、每轮只替换其中一条摘要对象，用 `React.Profiler` 或计数插桩观察实际渲染次数），因此它是历史测量记录，不是可复现的断言。引用它时请照此理解：能说明量级与趋势，不能再当作「已实测」去支撑新的结论。要复现需重新写一个同等规模的探针。下面那条 provider value 的机制则已经用 `test/providerMemo.test.tsx` 钉住。
 
 | 800 行时单次流式更新的耗时 | 数值 |
 | --- | --- |
@@ -121,6 +136,8 @@ export function sameSessionStatus(a, b): boolean {
 
 | 不变量 | 测试 |
 | --- | --- |
+| provider value 身份稳定时，被 `memo` 包住且消费该 context 的行不被父组件重渲染拖着走 | `leaves a memoized consumer untouched when the provider value keeps one identity` |
+| provider value 每次新建时，同一行的重渲染次数与父组件次数相等 | `re-renders a memoized consumer once per parent render when the value is rebuilt` |
 | 未变的摘要在重新投影后保持同一行对象 | `reuses the row object when its summary is unchanged` |
 | 只有变化的那条摘要换新对象，其余不动 | `gives a changed summary a new row object and leaves the rest alone` |
 | 子代理运行数变化时行对象必须重建 | `rebuilds a row when the subagent count changes under it` |

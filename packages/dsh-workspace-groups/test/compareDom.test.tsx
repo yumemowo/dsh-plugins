@@ -73,7 +73,7 @@ function fakeLocale(): LocaleRuntime {
 }
 
 /** 各标准源的空快照，组件挂得上即可 */
-const EMPTY_WORKSPACES = { items: [], archivedSessionIds: [] }
+const EMPTY_WORKSPACES = { items: [], archivedSessionIds: [], phase: 'ready' }
 const EMPTY_SESSIONS = { ids: [], byId: {}, phase: 'ready' }
 
 const workspacesSelector = (select: (state: never) => unknown): unknown =>

@@ -61,7 +61,7 @@
 | 会话状态点 | `StateDot`（运行态画追光方阵，其余画圆点；颜色由原语的主题规则给出） |
 | 视图选项面板里的嵌套开关 | `IconWorkspaceTreeOutlineRegular`（官方「按工作区树分组」那一项的字形） |
 | 视图选项面板里的两条展示方式 | `IconFolderCloseRegular` / `IconFlatListOutlineRegular`（官方「按工作区」与「单列表」同字形）；选中标记用 `IconCheckOutlineRegular` |
-| 展示方式的状态与持久化 | `defineStore`（`@deepseek-ai/dsh-client-store`，与官方 `groupBy` 同一引擎；组件读 `useStore`、写 `actions`） |
+| 展示方式 / 指示器 / 三层折叠态的状态与持久化 | `defineStore`（`@deepseek-ai/dsh-client-store`，与官方 `groupBy` 同一引擎；组件读 `useStore`、写 `actions`） |
 | 行尾相对时间 | `relativeTime`（官方 `timeLabel` 用的同一个分桶函数，文案走官方语言包） |
 | 「添加工作区」入口提示 | `Tooltip`（与官方 header 同一 `delayMs` 与展开方向） |
 | 行内 `...` 菜单与行右键菜单 | `Menu`（右键那份走它的 `getAnchorRect`，官方 `WorkspacePickFlow` 用的同一入口） |
@@ -82,9 +82,9 @@
 
 primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标成 external 由宿主从基线模块表解析；它是 shell 静态模块表的成员，不会多出第二份实例。
 
-## 展示方式的状态：复用官方 store 引擎与座位
+## 浏览器本地状态：复用官方 store 引擎与座位
 
-**展示方式（按工作区 / 平铺）是浏览器本地偏好**，不是分组元数据：它不进宿主的存储域，也不随快照往返。这一层整段照官方 `ui-workspace` 管 `groupBy` 的做法：
+**展示方式（按工作区 / 平铺）、指示器样式与三层折叠态都是浏览器本地偏好**，不是分组元数据：它们不进宿主的存储域，也不随快照往返。这一层整段照官方 `ui-workspace` 管 `groupBy` 的做法：
 
 | 环节 | 用的东西 |
 | --- | --- |
@@ -96,7 +96,50 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 
 **对照模式下必须共享同一个实例。** `sidebar.right.pane.tab` 是 session 作用域的座位，渲染器会按会话各调一次 `create`；直接用原句柄会让展示方式变成「每个会话各存一份」，切会话就变回「按工作区」。因此 `apply` 里建一次实例，用 `sharedViewModeStore` 把 `create` 收成恒返回它，两条注册路径读到的才是同一份设置、同一个持久化键。官方的视图状态存储也是这么做的（`{ ...viewHandle, create: () => viewInstance }`）。
 
-存储键取 `dsh.workspace-groups.view.v1`，与官方 `dsh.workspace.view.*` 不共用：两者是两套独立的界面状态，共用键会让两边互相覆盖。
+存储键取 `dsh.workspace-groups.view.v1`，与官方 `dsh.workspace.view.*` 不共用：两者是两套独立的界面状态，共用键会让两边互相覆盖。也**不跟着官方升版本号**：官方升到 `.v5` 是它自己排布演进的事，本包这一份靠归一化兜缺省，升版本只会顺手丢掉用户已选的偏好。
+
+**这份 store 里的东西一律不逐层传 props，统一经 provider + 具名 hook 取。** 两个 hook 按「装什么」分工，各自带一个 provider：
+
+| hook | 装什么 | 消费方 |
+| --- | --- | --- |
+| `useLocalViewOptions.ts` | 展示方式、指示器样式 | `ViewOptionsMenu`（两项设置在面板里）、`SessionRowView`（指示器样式影响每行的字形）、`RegionListArea`（展示方式决定三条分支） |
+| `useExpansion.ts` | 三层折叠态的读与取反 | `RegionListArea`（虚拟分组段、未分组桶、工作区行）、`WorkspaceSection`（组内会话分组） |
+
+驱动这条规则的是**消费方散布**，不是「store 的东西特殊」：这两类值的消费点都穿过整棵渲染树，逐层传会让每一层都被迫声明一圈与自己无关的签名，而中间层（例如 `WorkspaceSection`）还得为此多收一个它不用的 `workspaceId`（现在它确实要拿这个 id 才能定位组内分组，但那本来就是它作为「一个工作区区块」应有的身份）。
+
+**另一条边界要一并记清**：走 hook 的只有**浏览器本地 store**里的值。其余状态仍按各渲染区实际消费的形状下发：
+
+| 状态 | 存放 | 怎么到达消费方 |
+| --- | --- | --- |
+| 展示方式、指示器样式 | 浏览器 store | `useLocalViewOptions()` |
+| 三层折叠态 | 浏览器 store | `useExpansion()` |
+| 子工作区嵌套开关（`nested`） | 宿主存储域（随快照往返） | 区域容器当 props 下发 |
+| 搜索状态、浮层开合、揭示标记 | 组件内 `useState` | 区域容器合成 `RegionUiState` / `RegionOverlay` 后下发 |
+| 分组快照与派生布局 | 组件内 state + 纯派生 | 各渲染区按 shape 收窄（`WorkspaceNodeScope` 等） |
+
+「写到展开」那三个入口（`expandWorkspace` / `expandVirtualWorkspace` / `expandGroup`）**不进 hook**：它们只在揭示搜索结果与新建会话前由容器调用，是编排而不是共享读数，因此留在容器内部。
+
+## 折叠态的展开规则
+
+官方把工作区层的展开记录也存进同一份 store（`groupExpansion`），并用 **`boolean | undefined` 三态**把「用户没碰过」与「用户显式选过」分流。本包复用这套三态机制（记录形状与分层见[数据存储](data-storage.md)），展开规则如下：
+
+| 情形 | 展开态 |
+| --- | --- |
+| 键缺席、工作区无父（顶层 / 一级目录） | 展开 |
+| 键缺席、工作区有父（子工作区） | 折叠 |
+| 键缺席、工作区分组 | 展开 |
+| 键缺席、会话分组 | 折叠 |
+| 键已存在 | 按记录，覆盖上面的默认 |
+| 新建工作区（真的落在某个父下面时） | 写展开，连同它的父链 |
+| 揭示搜索结果 | 写展开，除非该层已显式展开 |
+
+前两行与官方**不同**：官方是「有孩子就展开、叶子折叠」。反例是 `repo/src`——有父、自己还有子节点，官方展开而本包折叠。
+
+「写展开」的判据与官方那条 effect 也不同：官方是「只在显式为 `false` 时才写 `true`」，本包是「除非显式为 `true`，否则写展开」。这不是独立的一条设计，而是上面默认值的直接结果——本包对子工作区与会话分组默认折叠，只补显式 `false` 的键会漏掉绝大多数需要展开的情形。
+
+**没有移植**官方那条「当前会话所在工作区若缺席就补 `true`」的自动展开 effect，也没有它那套「折叠时每工作区只渲染 5 条会话」的上限（后者在官方是组件内 state，本包根本没有对应功能）。
+
+记录分三层存（`expansion.workspace` / `.virtualWorkspace` / `.group`），而不是官方那一张 `groupExpansion`：三层的键形态本就不同（会话分组是 `workspaceId:groupId` 的二元组），分开存省掉自造前缀，也因为三层的清理策略不同（见[数据存储](data-storage.md)）。动作命名刻意避开 `groupExpansion`——官方那个名字在官方语境里指**工作区**，而本包的 `group` 专指会话分组，照抄会把读者引向错误的一层。
 
 ## 语言包
 

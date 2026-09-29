@@ -6,7 +6,7 @@
  */
 import type { ComponentType } from 'react'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { WorkspaceListPhase, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { WorkspaceGroupsSnapshot } from './remote.ts'
 import type { HostInfo } from './hostInfo.ts'
@@ -17,6 +17,12 @@ import type { OfficialAddLabels, OfficialSessionLabels, SidebarTranslate, Worksp
 export interface WorkspaceState {
   items: readonly WorkspaceView[]
   archivedSessionIds: readonly string[]
+  /**
+   * 工作区列表的到达阶段
+   *
+   * `pending` 期间 `items` 还是空的，据它清理浏览器本地记录会清空用户的全部记录
+   */
+  phase: WorkspaceListPhase
 }
 
 /**
@@ -253,7 +259,7 @@ export interface AddWorkspaceActions {
    * 新工作区采纳成功后的回调
    *
    * 采纳发生在「添加工作区」那个组件里，而「它该不该嵌进某个分组」要看整片列表的层级关系
-   * 因此这条事实回传到区域组件，由它判断要不要问一次
+   * 因此这条事实回传到区域组件，由它展开该工作区并判断要不要问一次
    * @param workspaceId - 刚采纳的工作区
    * @param path - 它的 cwd
    */

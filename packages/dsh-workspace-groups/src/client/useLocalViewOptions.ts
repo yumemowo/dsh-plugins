@@ -7,11 +7,11 @@
  * 因此改成 context + 具名 hook
  * 区域根部把读数与写入口合成一次放进这里，用到的地方自己 `useLocalViewOptions()` 取
  *
- * 提供者交出的 value 身份必须稳定（容器侧用 `useMemo` 合成），行级缓存按引用比对 props
+ * 提供者交出的 value 身份由容器用 `useMemo` 稳定住：指示器样式被 `memo` 包住的会话行消费，value 每次新建会让那层比对失效
  * 缺少提供者时抛出，而不是让叶子拿到 `null` 后在各处崩掉
  *
- * 只装浏览器本地 store 里那两个选择（展示方式、指示器样式）
- * 视图选项面板里那第三个设置（子工作区嵌套）是分组元数据、随快照往返，因此仍由区域容器当 props 下发
+ * 浏览器本地 store 里的东西一律走 hook 取，不分发 props：这一份装展示方式与指示器样式，三层折叠态另起 `useExpansion.ts`
+ * store 之外的状态仍按各渲染区实际消费的形状下发（子工作区嵌套开关随快照往返、搜索与浮层是组件内 state）
  */
 import { createContext, createElement, useContext } from 'react'
 import type { ReactElement, ReactNode } from 'react'

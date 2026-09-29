@@ -43,7 +43,7 @@ export function AddWorkspaceControl({
       .createWorkspace(path)
       .then((workspace) => {
         setFlowOpen(false)
-        // 先让区域判断要不要问一句「放进父所在的分组」，再开新会话：
+        // 先让区域展开新工作区、并判断要不要问一句「放进父所在的分组」，再开新会话
         // 对话框与新建会话的导航抢焦点时，先到的那一个才读得到用户的意图
         actions.onAdopted?.(String(workspace.workspaceId), path)
         actions.startSession(String(workspace.workspaceId))

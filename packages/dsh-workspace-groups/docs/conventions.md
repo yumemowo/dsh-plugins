@@ -1,0 +1,53 @@
+# 开发约定
+
+改这个包时要守的硬约束。每条都注明**怎么被发现**——其中多数违反后不会报错，只表现为「界面不对」或「测试全绿但功能没生效」，因此值得先读一遍。
+
+跨包的约束（pnpm、工作区脚本、构建顺序）在[仓库根 README](../../README.md)；**本文件只收本包范围内的约定**。等第二个真包出现、需要共享这些条目时，再考虑提升到仓库根。
+
+## 结论必须有实测支撑
+
+**凡是性能结论（谁更快、开销多大、缓存有没有命中），先有同 harness 的实测，再写进代码或文档；不得以静态阅读源码或读官方 bundle 推断根因。** 这条不是风格偏好：本包曾两次从源码静态读出的根因都被实测否掉（先断言「官方行组件更轻」，实测是官方做得更多；再断言「官方限 5 行」，实测官方有溢出按钮且展开全部行也不卡）。
+
+**探针必须能当场复现，不能只留一句「已实测」。**
+
+| 要求 | 说明 |
+| --- | --- |
+| 探针入库 | 结论写进文档时，仓库里要有一份能跑的探针；能写成测试就写成测试（如 `test/providerMemo.test.tsx` 量 provider value 身份对行级缓存的影响），不要写成散文 |
+| 标明可复现性 | 无探针的历史数字要标注「历史测量记录，不是可复现的断言」，只能说明量级与趋势，不能再拿去支撑新结论 |
+| 探针要能失败 | 新写的探针先做一次变异测试（去掉被测机制，断言应反转），确认它真的在量那件事而不是恒真 |
+
+`docs/render-performance.md` 里的毫秒数属于「历史测量记录」那一类；provider value 那条机制则是可复现的。
+
+## 构建与产物
+
+| 约束 | 违反后 | 怎么被发现 |
+| --- | --- | --- |
+| 只用 pnpm（`packageManager: pnpm@11.24.0`） | 锁文件与 store 布局错乱 | 仓库根 `package.json` 锁定 |
+| 改完 `src/` 必须重新构建产物 | GUI 仍加载旧 `lib/client.js`，界面完全没变；而 `vitest` 直接 import 源码，**测试照样全绿** | `pnpm run build`；`lib/` 在 `.gitignore` 内，`git status` 看不出差异 |
+| 改宿主半边要重启 `dsh` | `dsh-client-hmr` 只推客户端 bundle，宿主仍是旧版本 | 见[客户端集成](client-integration.md#热重载与两端不同步) |
+| `.tsx` 必须写进两个 tsconfig 的 `include` | `tsc` **静默不检查** `.tsx` 文件 | `tsconfig.json` / `tsconfig.test.json` 都已含 `src/**/*.tsx` |
+| 新增基线模块要同步两处 | 漏 `EXTERNAL` 会把官方包打进产物（第二份引擎实例）；漏 `BASELINE` 断言失效 | `scripts/build-client.mjs` 的 `EXTERNAL` 与 `test/bundle.test.ts` 的 `BASELINE` 必须同时列出全部基线模块。node 取不到真包的那两个（primitives、client-store）还要在 `vitest.config.ts` 的 `resolve.alias` 配替身 |
+
+**验证产物时挑字符串字面量与对象属性名，不要挑函数名或局部变量名。** 产物 `minify: true` 会重命名它们，按名字 grep 恒为 0；同时 esbuild 把中文转成 `\uXXXX`，直接 grep 中文同样得 0。曾因此误判「构建丢了内容」，实际只是函数被改名。
+
+## 测试
+
+| 约束 | 说明 |
+| --- | --- |
+| 用例名用小写、以第三人称动词开头的行为描述串 | `it('nests a child workspace inside its parent')`。全仓 686 条一律这个形态：小写起首、`keeps` / `reports` / `leaves` 这类动词打头、不用 `should`。写新用例时照同一形态，不要换成 `Should_...` 之类 |
+| 断言 DOM 结构、样式选择器、交互路径的用例用真 `react-dom` | 文件头加 `// @vitest-environment jsdom`，照 `test/nestingDom.test.tsx` 的驱动方式 |
+| 单测 import 的是基线替身，有盲区 | 替身看不到真包导出表；那条链由 `test/bundle.test.ts` 补（按宿主的方式装载产物） |
+| 测试里 CSS 类名不哈希 | `vitest.config.ts` 的 `classNameStrategy: 'non-scoped'`，断言的是「哪个元素带哪条规则」 |
+
+## 代码组织
+
+| 约束 | 说明 |
+| --- | --- |
+| 单消费方的 hook 与它独占的 interface 放回**唯一消费它的组件文件** | 不为了「能抽」而抽出一堆只有一个调用点的间接层 |
+| 类型在生产侧可拆、在消费处收窄 | 判断「类型过大」看消费方实际用到的字段占比，不是「只多出一两个字段」就算合理 |
+| 文件行数不是问题，阅读成本才是 | 用 `// ── … ──` 分节标记把它压下去 |
+| 注释只写这段代码做了什么 | 不写设计决策的来龙去脉，不引用文档章节号或原文；命名已能表达语义的不写 |
+
+## 性能优化
+
+**只对真有 `memo` 消费方的 provider 引入 value 稳定化，且引入前先确认消费方。** 判断方式：列出该 context 的消费方，逐个看有没有被 `memo` 包住——没有就是纯粹的复杂性。别把「进 context 就得 `useMemo`」当无条件规则。依据与探针见[渲染性能与行级缓存](render-performance.md#provider-的-value-与行级缓存的真实关系)。

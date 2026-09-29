@@ -73,7 +73,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     wide: true,
     expandSidebar: () => {},
     useWorkspaces: ((select: (s: unknown) => unknown) =>
-      select({ items: workspaces, archivedSessionIds: [] })) as never,
+      select({ items: workspaces, archivedSessionIds: [], phase: 'ready' })) as never,
     useSessions: ((select: (s: unknown) => unknown) =>
       select({ ids: ['a', 'orphan'], byId, phase: 'ready' })) as never,
     useSessionStatus: ((select: (s: unknown) => unknown) => select(new Map())) as never,

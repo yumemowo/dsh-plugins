@@ -1,7 +1,7 @@
 /**
  * 一个工作区区块，标题行 + 撑开体（子工作区、会话分组、平铺的未归组会话、空态）
  *
- * 折叠状态由区域组件按 key 持有，这里只消费布尔值，因此不同工作区、不同分组之间的开合互不影响
+ * 折叠状态由区域组件按 key 记录在浏览器本地 store 里，这里只消费算好的布尔值，因此不同工作区、不同分组之间的开合互不影响
  *
  * 段序是「子工作区 → 会话分组 → 平铺会话」，先文件夹后文件是资源管理器的惯性，而会话分组里也可能放子工作区，因此它夹在两者之间
  * 子工作区本身仍是一个完整的工作区块，由 `renderChildWorkspace` 交回，深度任意层都不必在这里知道层级
@@ -12,25 +12,25 @@ import { GroupSection } from './GroupSection.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
 import type { WorkspaceRowProps } from './WorkspaceRow.tsx'
 
+import { useExpansion } from '../useExpansion.ts'
 import { useLocale } from '../useLocale.ts'
 import { compareSessionRows } from '../data/sessions.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
 import styles from './components/rows.module.css'
 
-/** 本工作区块体内会话分组的操作，作用于哪个分组由参数指明 */
+/** 本工作区块体内会话分组的操作，作用于哪个分组由参数指明；开合不在这里，它走 `useExpansion` */
 export interface WorkspaceGroupActions {
-  onToggle: (groupId: string) => void
   onRename: (section: { id: string; label: string }) => void
   onDelete: (section: { id: string; label: string }) => void
   onCreateSession: (section: { id: string; label: string }) => void
 }
 
 export interface WorkspaceSectionProps {
+  /** 本区块是哪个工作区，组内分组的开合要按它定位 */
+  workspaceId: string
   /** 工作区标题行的全部输入，整体交给 `WorkspaceRow`，撑开体的开合也读它的 `expanded` */
   row: WorkspaceRowProps
   layout: WorkspaceLayout
-  /** 分组的展开态查询，展开键的构成由区域组件持有 */
-  isGroupExpanded: (groupId: string) => boolean
   /** 该工作区块在层级里的深度，从 0 起，缩进由它换算 */
   depth: number
   groupActions: WorkspaceGroupActions
@@ -41,15 +41,16 @@ export interface WorkspaceSectionProps {
 }
 
 export function WorkspaceSection({
+  workspaceId,
   row,
   layout,
-  isGroupExpanded,
   depth,
   groupActions,
   renderSession,
   renderChildWorkspace,
 }: WorkspaceSectionProps): ReactElement {
   const { labels } = useLocale()
+  const expansion = useExpansion()
   const childIds = layout.children ?? []
   const hasAnyRow =
     layout.groups.length > 0 || layout.loose.length > 0 || childIds.length > 0
@@ -74,8 +75,8 @@ export function WorkspaceSection({
             <GroupSection
               key={section.id}
               section={section}
-              expanded={isGroupExpanded(section.id)}
-              onToggle={() => groupActions.onToggle(section.id)}
+              expanded={expansion.isGroupExpanded({ workspaceId, groupId: section.id })}
+              onToggle={() => expansion.toggleGroup({ workspaceId, groupId: section.id })}
               onRename={() => groupActions.onRename({ id: section.id, label: section.label })}
               onDelete={() => groupActions.onDelete({ id: section.id, label: section.label })}
               onCreateSession={() =>

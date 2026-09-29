@@ -9,7 +9,7 @@ import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/clie
 import { readAllCss } from './readCss.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
-import { viewModeProps } from './viewMode-stub.ts'
+import { viewModeProps, viewModeStoreStub, storeViewModeProps } from './viewMode-stub.ts'
 
 /**
  * 工作区分组的真实 DOM 结构
@@ -55,7 +55,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     wide: true,
     expandSidebar: () => {},
     useWorkspaces: ((select: (s: unknown) => unknown) =>
-      select({ items: workspaces, archivedSessionIds: [] })) as never,
+      select({ items: workspaces, archivedSessionIds: [], phase: 'ready' })) as never,
     useSessions: ((select: (s: unknown) => unknown) =>
       select({ ids: ['a', 'b', 'orphan'], byId, phase: 'ready' })) as never,
     useSessionStatus: ((select: (s: unknown) => unknown) =>
@@ -306,6 +306,40 @@ describe('workspace group DOM structure', () => {
 
     const body = container.querySelector('.virtualWorkspaceBody')
     expect(body?.querySelector('.empty')?.textContent).toBe('这个工作区分组里还没有工作区')
+
+    await act(async () => root.unmount())
+  })
+
+  it('expands a workspace group by default and collapses it on click', async () => {
+    // 工作区分组那一层的默认是展开，因此第一下点击是折叠，与工作区行同一套极性
+    const store = viewModeStoreStub()
+    const { container, root } = await mount(storeViewModeProps(store))
+
+    const group = container.querySelector('.virtualWorkspace')
+    if (group === null) throw new Error('no workspace group rendered')
+    expect(group.querySelector('.expand')?.classList.contains('expandOpen')).toBe(true)
+
+    await act(async () => {
+      group.querySelector<HTMLElement>('.virtualWorkspaceHead')?.click()
+    })
+
+    expect(store.getSnapshot().expansion?.virtualWorkspace).toEqual({ wg1: false })
+    expect(
+      container.querySelector('.virtualWorkspace .expand')?.classList.contains('expandOpen'),
+    ).toBe(false)
+
+    await act(async () => root.unmount())
+  })
+
+  it('opens a workspace group that was explicitly collapsed before', async () => {
+    // 显式 false 覆盖默认展开：重挂载后仍按记录收起，点一下才回到展开
+    const store = viewModeStoreStub()
+    store.setVirtualWorkspaceExpanded('wg1', false)
+    const { container, root } = await mount(storeViewModeProps(store))
+
+    expect(
+      container.querySelector('.virtualWorkspace .expand')?.classList.contains('expandOpen'),
+    ).toBe(false)
 
     await act(async () => root.unmount())
   })

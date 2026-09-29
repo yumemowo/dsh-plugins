@@ -13,6 +13,8 @@ import { regionLabels } from '../src/client/labels.ts'
 import { regionTranslate, sidebarTranslate, translateWith, workspaceTranslate } from './locale-stub.ts'
 import { menuLabelArrow, menuLabelText } from './menu-label.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { ExpansionProvider } from '../src/client/useExpansion.ts'
+import type { Expansion } from '../src/client/useExpansion.ts'
 import { viewModeProps } from './viewMode-stub.ts'
 
 /**
@@ -482,6 +484,24 @@ function withLocale(node: ReactElement): ReactElement {
   })
 }
 
+/**
+ * 折叠态提供者的一份替身
+ *
+ * 读与取反现在走 `useExpansion()`，直接渲染叶子（不走区域容器）时那一层要自己补上
+ * 缺省全部按折叠回答：本文件关心的是撑开结构，不是开合语义（那些在 nestingDom / viewMode 里验）
+ */
+function expansionStub(overrides: Partial<Expansion> = {}): Expansion {
+  return {
+    isWorkspaceExpanded: () => false,
+    isVirtualWorkspaceExpanded: () => false,
+    isGroupExpanded: () => false,
+    toggleWorkspace: () => {},
+    toggleVirtualWorkspace: () => {},
+    toggleGroup: () => {},
+    ...overrides,
+  }
+}
+
 function sessionRowNode(options: {
   official?: boolean
   grouping?: boolean
@@ -610,6 +630,7 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
     updatedAt: 0,
   }))
   const props: WorkspaceSectionProps = {
+    workspaceId: 'w1',
     row: {
       title: 'W1',
       expanded,
@@ -630,10 +651,8 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
       onDelete: () => {},
     },
     layout: { groups: [], loose, children: [] },
-    isGroupExpanded: () => false,
     depth: 0,
     groupActions: {
-      onToggle: () => {},
       onRename: () => {},
       onDelete: () => {},
       onCreateSession: () => {},
@@ -651,7 +670,15 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
     order: [] as string[],
     expandBodies: [] as unknown[],
   }
-  render(withLocale(React.createElement(WorkspaceSection, props)), out)
+  render(
+    withLocale(
+      React.createElement(ExpansionProvider, {
+        value: expansionStub(),
+        children: React.createElement(WorkspaceSection, props),
+      }),
+    ),
+    out,
+  )
   return out
 }
 
@@ -751,7 +778,7 @@ function props(
     wide,
     expandSidebar: () => {},
     useWorkspaces: ((select: (s: unknown) => unknown) =>
-      select({ items: workspaces, archivedSessionIds: [] })) as never,
+      select({ items: workspaces, archivedSessionIds: [], phase: 'ready' })) as never,
     useSessions: ((select: (s: unknown) => unknown) =>
       select({ ids: [...sessionIds, 'orphan'], byId, phase: 'ready' })) as never,
     useSessionStatus: ((select: (s: unknown) => unknown) =>

@@ -12,7 +12,7 @@ import {
 } from '../src/client/official.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
-import { viewModeProps } from './viewMode-stub.ts'
+import { viewModeProps, viewModeStoreStub, storeViewModeProps } from './viewMode-stub.ts'
 
 /**
  * 搜索的真实 DOM 冒烟
@@ -45,7 +45,7 @@ function props(wide = true): WorkspaceGroupsProps {
     wide,
     expandSidebar: () => {},
     useWorkspaces: ((select: (s: unknown) => unknown) =>
-      select({ items: workspaces, archivedSessionIds: [] })) as never,
+      select({ items: workspaces, archivedSessionIds: [], phase: 'ready' })) as never,
     useSessions: ((select: (s: unknown) => unknown) =>
       select({ ids: ['a', 'orphan'], byId, phase: 'ready' })) as never,
     useSessionStatus: ((select: (s: unknown) => unknown) =>
@@ -314,6 +314,50 @@ describe('search in a real DOM', () => {
       // 被揭示的正是那条会话所在的行（标题为它的 displayTitle，行里还有时间）
       expect(scrolled.length).toBe(1)
       expect(scrolled[0]?.querySelector('.rowTitle')?.textContent).toBe('修复登录超时')
+    } finally {
+      Element.prototype.scrollIntoView = originalScroll
+    }
+  })
+
+  it('expands a group that is collapsed by default before revealing its session', async () => {
+    // 会话分组默认折叠，而揭示的判据是「除非显式展开，否则写展开」
+    // 若沿用官方那套「只在显式为 false 时才写」，缺键的默认折叠分组不会被补上，被揭示的行会落在看不见的地方
+    const store = viewModeStoreStub()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    // jsdom 没有布局引擎，scrollIntoView 也不存在；本用例只断言写下的记录，装一个空实现即可
+    const originalScroll = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = () => {}
+    try {
+      await act(async () => {
+        root.render(
+          React.createElement(WorkspaceGroupsRegion, {
+            ...props(),
+            ...storeViewModeProps(store),
+          }),
+        )
+      })
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      // 默认折叠：这一层键缺席，生效值是收起
+      expect(store.getSnapshot().expansion?.group ?? {}).toEqual({})
+      await expandSearch(container)
+      await type(container, '修复')
+      await act(async () => {
+        ;(container.querySelector('.searchResult') as HTMLElement).click()
+      })
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      // 揭示路径显式写下了这一层的展开
+      expect(store.getSnapshot().expansion?.group).toEqual({ 'w1:g1': true })
+      // 工作区层同样按「除非显式展开，否则写展开」走：键缺席就补一条，判据看的是记录而不是生效值
+      expect(store.getSnapshot().expansion?.workspace).toEqual({ w1: true })
     } finally {
       Element.prototype.scrollIntoView = originalScroll
     }

@@ -4,7 +4,7 @@
  * 这是 `sidebar.workspaces` 的接替者，该插槽是 single 类型，本包以 `priority: -1` 注册从而成为渲染者
  * 官方 ui-workspace 的同名注册仍留在注册表中但不再渲染
  *
- * 本模块负责状态与编排：折叠态、全部浮层草稿，以及把快照切成每个工作区的布局
+ * 本模块负责状态与编排：全部浮层草稿，以及把快照切成每个工作区的布局
  * 行的外观与菜单分别由 views/ 下的组件负责
  *
  * 只有用户创建的分组才有分组头，未归组的会话直接平铺在工作区下，与原生会话列表一致
@@ -14,11 +14,11 @@
  * 那是工作区一级的容器，与本包在工作区内刻意不造「未分组分组」的取舍无关
  *
  * 这一层按「数据源 / 派生 / 交互状态 / 命令 / 渲染」分段，段间有分节标记
- * 八个 hook 的消费方只有本文件的 `WorkspaceGroupsRegion`，因此与容器同处一个文件；
+ * 这些 hook 的消费方只有本文件的 `WorkspaceGroupsRegion`，因此与容器同处一个文件
  * 三块渲染区各是 views/ 下的一个模块，只声明自己真正消费的那几格形状
  */
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { WorkspaceListPhase, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -50,9 +50,11 @@ import { normalizeSnapshot } from '../remote.ts'
 import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { rootVirtualKey } from '../../rootEntry.ts'
 import { useFlipMarker } from '../useFlipMarker.ts'
-import { indicatorOf, modeOf } from '../store/viewMode.ts'
-import type { ViewModeStoreHandle } from '../store/viewMode.ts'
+import { UNGROUPED_KEY, expandedAt, indicatorOf, modeOf, sessionGroupExpansionOf, sessionGroupKey, virtualExpansionOf, workspaceExpansionOf } from '../store/viewMode.ts'
+import type { SessionGroupRef, ViewModeStoreHandle } from '../store/viewMode.ts'
 import { RegionLocaleProvider } from '../useLocale.ts'
+import { ExpansionProvider } from '../useExpansion.ts'
+import type { Expansion } from '../useExpansion.ts'
 import { LocalViewOptionsProvider } from '../useLocalViewOptions.ts'
 import type { LocalViewOptions } from '../useLocalViewOptions.ts'
 import type { RegionLocale } from '../useLocale.ts'
@@ -91,6 +93,8 @@ interface RegionSources {
   labels: RegionLabels
   workspaces: readonly WorkspaceView[]
   archivedSessionIds: readonly string[]
+  /** 工作区列表的到达阶段，`pending` 期间 `items` 还是空的，清理记录要看它 */
+  phase: WorkspaceListPhase
   sessions: SessionListState
   statusSnapshot: SessionStatusSnapshot
   home: string | undefined
@@ -136,10 +140,10 @@ interface RegionLayout {
 }
 
 /**
- * 区域内的全部交互状态
+ * 区域内的交互状态
  *
  * 八个互斥浮层收在一个 `overlay` 槽里，任意时刻至多开一个由类型保证
- * 三个折叠态各记一份，键的构成也各自独立，因此两层开合互不影响
+ * 折叠态不在这里：它是浏览器本地 store 里的值，读与取反经 `useExpansion.ts` 的 hook 下发
  * 这一层不做任何决策，只交出状态与它们的读写入口
  */
 interface RegionUiState {
@@ -154,23 +158,35 @@ interface RegionUiState {
   viewOptionsOpen: boolean
   setViewOptionsOpen: (next: boolean | ((open: boolean) => boolean)) => void
   viewOptionsTrigger: RefObject<HTMLButtonElement>
-  expandedWorkspaces: Record<string, boolean>
-  setExpandedWorkspaces: (next: (prev: Record<string, boolean>) => Record<string, boolean>) => void
-  expandedGroups: Record<string, boolean>
-  setExpandedGroups: (next: (prev: Record<string, boolean>) => Record<string, boolean>) => void
-  expandedVirtualWorkspaces: Record<string, boolean>
-  setExpandedVirtualWorkspaces: (
-    next: (prev: Record<string, boolean>) => Record<string, boolean>,
-  ) => void
   /** 从搜索结果打开、等待滚进可视区的那一行，滚动完成后由行自己回报清除 */
   revealSessionId: string | undefined
   setRevealSessionId: (next: string | undefined | ((current: string | undefined) => string | undefined)) => void
-  /** 折叠状态取反，默认展开，因此只有显式 false 才算折叠 */
-  toggleWorkspace: (key: string) => void
-  toggleGroup: (key: string) => void
-  toggleVirtualWorkspace: (key: string) => void
   /** 被打开的那一行滚进可视区后清掉标记，避免它在后续重新挂载时再滚一次 */
   acknowledgeReveal: (sessionId: string) => void
+}
+
+/**
+ * 折叠态的写入口，只有区域容器用得到
+ *
+ * 读与取反面向所有消费方、走 `useExpansion.ts` 的 hook；这三个是揭示 / 新建会话前的编排，不对外下发
+ */
+interface ExpansionCommands {
+  /** 写到展开，已经生效展开的不重复写 */
+  expandWorkspace: (key: string) => void
+  expandVirtualWorkspace: (key: string) => void
+  expandGroup: (ref: SessionGroupRef) => void
+}
+
+/**
+ * 折叠态在区域里的整份交界面
+ *
+ * `read` 经 context 下发给所有消费方，另两格只有容器用得到
+ */
+interface ExpansionValue {
+  read: Expansion
+  commands: ExpansionCommands
+  /** 摘掉工作区层里已经不存在的工作区的记录 */
+  retainWorkspaceKeys: (keys: readonly string[]) => void
 }
 
 /** 工作区新增的跟随追问与搜索结果页 */
@@ -182,9 +198,6 @@ interface RegionSearchActions {
   /** 从搜索结果打开一条会话，先把它的两层折叠展开并清掉查询 */
   openSearchResult: (match: SearchMatch) => void
 }
-
-/** 未分组桶在工作区状态表里占用的键，它没有真实的 workspaceId */
-const UNGROUPED_KEY = ''
 
 /** 平铺列表不渲染时交出的空行集，恒定同一份引用，避免每次渲染换新数组 */
 const EMPTY_ROWS: readonly SessionRow[] = []
@@ -215,6 +228,7 @@ function useRegionSources(props: WorkspaceGroupsProps): RegionSources {
   const workspaces = useWorkspaces((state) => state.items) as readonly WorkspaceView[]
   // 归档集是注册表全局的，归档会话仍留在工作区的 sessionIds 里，必须显式过滤，否则已归档的会话会继续出现在列表里
   const archivedSessionIds = useWorkspaces((state) => state.archivedSessionIds) as readonly string[]
+  const phase = useWorkspaces((state) => state.phase) as WorkspaceListPhase
   const sessions = useSessions((state) => state) as SessionListState
   // 待交互 / 运行 / 完成提醒是同一个事实源的三个字段，等待审批时会话可能并不在 running，因此必须单独读，不能从会话摘要里推
   const statusSnapshot = useSessionStatus((state) => state) as SessionStatusSnapshot
@@ -231,6 +245,7 @@ function useRegionSources(props: WorkspaceGroupsProps): RegionSources {
     labels,
     workspaces,
     archivedSessionIds,
+    phase,
     sessions,
     statusSnapshot,
     home,
@@ -474,30 +489,18 @@ function useRegionLayout(
 
 // ── 交互状态 ──
 
+/**
+ * 区域内的交互状态
+ *
+ * 折叠态不在这一层：它是浏览器本地 store 里的值，读与取反走 `useExpansion.ts` 的 hook
+ */
 function useRegionUiState(): RegionUiState {
   const [overlay, openOverlay] = useState<RegionOverlay | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const pickerTrigger = useRef<HTMLButtonElement>(null)
   const [viewOptionsOpen, setViewOptionsOpen] = useState(false)
   const viewOptionsTrigger = useRef<HTMLButtonElement>(null)
-  const [expandedWorkspaces, setExpandedWorkspaces] = useState<Record<string, boolean>>({})
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
-  const [expandedVirtualWorkspaces, setExpandedVirtualWorkspaces] = useState<
-    Record<string, boolean>
-  >({})
   const [revealSessionId, setRevealSessionId] = useState<string | undefined>(undefined)
-
-  const toggleWorkspace = useCallback((key: string) => {
-    setExpandedWorkspaces((prev) => ({ ...prev, [key]: prev[key] === false }))
-  }, [])
-
-  const toggleGroup = useCallback((key: string) => {
-    setExpandedGroups((prev) => ({ ...prev, [key]: prev[key] === false }))
-  }, [])
-
-  const toggleVirtualWorkspace = useCallback((key: string) => {
-    setExpandedVirtualWorkspaces((prev) => ({ ...prev, [key]: prev[key] === false }))
-  }, [])
 
   const acknowledgeReveal = useCallback((sessionId: string) => {
     setRevealSessionId((current) => (current === sessionId ? undefined : current))
@@ -512,19 +515,92 @@ function useRegionUiState(): RegionUiState {
     viewOptionsOpen,
     setViewOptionsOpen,
     viewOptionsTrigger,
-    expandedWorkspaces,
-    setExpandedWorkspaces,
-    expandedGroups,
-    setExpandedGroups,
-    expandedVirtualWorkspaces,
-    setExpandedVirtualWorkspaces,
     revealSessionId,
     setRevealSessionId,
-    toggleWorkspace,
-    toggleGroup,
-    toggleVirtualWorkspace,
     acknowledgeReveal,
   }
+}
+
+/**
+ * 把 store 座位的三层折叠态与层级推导演成读、取反与写入口
+ *
+ * 三份记录只装「用户显式选过的展开态」，键缺席表示用户从未碰过这一层，缺省由结构现推（无父工作区展开、会话分组折叠…），因此读之前一律先归一到空记录
+ * 写入口都是显式赋值（`set…(…)`）而不是取反：取反要先读出当前生效值，而那个值依赖默认推导
+ * 生效判据是「用户显式选择 + 结构默认」的合成，因此工作区层要 `nesting`、另两层只要记录
+ * @param props - 区域 props，只用它的 store 座位两格
+ * @param nesting - 层级推导结果，工作区层的默认由它给出
+ */
+function useExpansionValue(props: WorkspaceGroupsProps, nesting: Nesting): ExpansionValue {
+  const { useStore, actions } = props
+  const workspaceExpanded = workspaceExpansionOf(useStore((state) => state))
+  const virtualExpanded = virtualExpansionOf(useStore((state) => state))
+  const sessionGroupExpanded = sessionGroupExpansionOf(useStore((state) => state))
+  const { setWorkspaceExpanded, setVirtualWorkspaceExpanded, setSessionGroupExpanded } = actions
+
+  /**
+   * 面向所有消费方的读数与取反
+   *
+   * 依赖列的是输入（记录、setter 与层级推导）而不是函数名：函数在内部定义，将来加一层只需补进这里，不会出现「加了函数忘了补依赖」那种静默持有旧闭包的情形
+   * 工作区层的默认按结构分层：没有父工作区的（含末尾「未分组」桶的哨兵空串）默认展开，子工作区默认折叠
+   * 判据是 `ancestorsOf` 的长度而不是官方那套「有孩子就展开」——`repo/src` 有父也有子，这里折叠、官方展开
+   */
+  const read = useMemo((): Expansion => {
+    const isWorkspaceExpanded = (key: string) =>
+      expandedAt(workspaceExpanded, key, nesting.ancestorsOf(key).length === 0)
+    const isVirtualWorkspaceExpanded = (key: string) => expandedAt(virtualExpanded, key, true)
+    const isGroupExpanded = (ref: SessionGroupRef) =>
+      expandedAt(sessionGroupExpanded, sessionGroupKey(ref), false)
+    return {
+      isWorkspaceExpanded,
+      isVirtualWorkspaceExpanded,
+      isGroupExpanded,
+      toggleWorkspace: (key) => setWorkspaceExpanded(key, !isWorkspaceExpanded(key)),
+      toggleVirtualWorkspace: (key) =>
+        setVirtualWorkspaceExpanded(key, !isVirtualWorkspaceExpanded(key)),
+      toggleGroup: (ref) => setSessionGroupExpanded(ref, !isGroupExpanded(ref)),
+    }
+  }, [
+    workspaceExpanded,
+    virtualExpanded,
+    sessionGroupExpanded,
+    nesting,
+    setWorkspaceExpanded,
+    setVirtualWorkspaceExpanded,
+    setSessionGroupExpanded,
+  ])
+
+  /**
+   * 把某一层写到展开，除非它已经显式展开
+   *
+   * 揭示与新建会话前都走它：这两处要的是「展开」这个结果，而不是「写一条记录」
+   * 判据看的是**记录**而不是生效值：默认折叠的层（子工作区、会话分组）靠这条把缺席的键补上，缺了它就看不见目标行
+   * 已经显式为 `true` 的层跳过，它的生效态本就是展开，重复写只会多一条无用的键
+   */
+  const commands = useMemo((): ExpansionCommands => {
+    return {
+      expandWorkspace: (key) => {
+        if (workspaceExpanded[key] === true) return
+        setWorkspaceExpanded(key, true)
+      },
+      expandVirtualWorkspace: (key) => {
+        if (virtualExpanded[key] === true) return
+        setVirtualWorkspaceExpanded(key, true)
+      },
+      expandGroup: (ref) => {
+        if (sessionGroupExpanded[sessionGroupKey(ref)] === true) return
+        setSessionGroupExpanded(ref, true)
+      },
+    }
+  }, [
+    workspaceExpanded,
+    virtualExpanded,
+    sessionGroupExpanded,
+    setWorkspaceExpanded,
+    setVirtualWorkspaceExpanded,
+    setSessionGroupExpanded,
+  ])
+
+  return { read, commands, retainWorkspaceKeys: actions.retainWorkspaceKeys }
 }
 
 // ── 命令：搜索与新增工作区 ──
@@ -541,19 +617,30 @@ function useRegionSearch(
   layout: RegionLayout,
   snapshot: WorkspaceGroupsSnapshot,
   ui: RegionUiState,
+  expansion: ExpansionCommands,
   search: SearchState,
 ): RegionSearchActions {
   const { sessions, workspaces, archivedSessionIds, statusSnapshot } = sources
   const { searchResultLimit, openSession } = props
 
   /**
-   * 新增工作区采纳成功后，按层级关系判断要不要问一句「放进父所在的分组」
+   * 新增工作区采纳成功后的收尾：先把该展开的几层展开，再判断要不要问一句「放进父所在的分组」
    *
    * 新工作区此刻还没进列表，因此这里按路径找它最短的直接父工作区，而不是按 id
-   * 父不存在、或父自己没在任何一个分组里时不问，默认的嵌套渲染已经把它放在父下面了，放进分组不是必需的
+   * 那个查找用的正是嵌套推导算父节点的同一套条件（同虚拟工作区 + 路径祖先），因此「找到了父节点」就等于「它真的会渲染在那个父节点内」
+   * 找不到父节点时它落成自己那个容器的顶层，本来就默认展开，不需要写任何记录
+   *
+   * 采纳之后紧接着会在新工作区里开一个新会话，展开是那一步的副作用：不展开的话新工作区默认折叠，会话落在看不见的撑开体里
+   * 因此展开「新工作区 + 它的父链」，父链上那些只需按记录补，已经是显式展开的不重复写
+   *
+   * 新工作区那一格必须无条件写：它此刻还不在推导里，`ancestorsOf` 对它返回空链、生效值会暂时算成默认展开
+   * 若按生效值判断就会跳过写入，等它带着父节点进列表时又塌回折叠
+   *
+   * 父节点不存在、或父节点自己没在任何一个分组里时不问分组，默认的嵌套渲染已经把它放在父节点下面了，放进分组不是必需的
    */
   const onWorkspaceAdopted = useCallback(
     (workspaceId: string, path: string): void => {
+      // 关掉嵌套时每个工作区都是自己那个容器的顶层，必定落在默认展开的那一档，不需要写记录
       if (!snapshot.nested) return
       const parentId = nearestAncestorForPath(
         layout.workspaceIds,
@@ -563,9 +650,14 @@ function useRegionSearch(
         layout.virtualOfWorkspace(workspaceId),
       )
       if (parentId === undefined) return
+      // 新工作区自己有父节点，默认因此是折叠；而它的键此刻还没进推导，生效值算不出来，只能按记录显式写展开
+      expansion.expandWorkspace(workspaceId)
+      for (const id of [parentId, ...layout.nesting.ancestorsOf(parentId)]) {
+        expansion.expandWorkspace(id)
+      }
       const parent = layout.workspaceById.get(parentId)
       const directGroups = snapshot.byWorkspace[parentId] ?? []
-      // 只在父恰好有一个分组时替用户选定它，有多个时该选哪个不是这里能替用户定的
+      // 只在父节点恰好有一个分组时替用户选定它，有多个时该选哪个不是这里能替用户定的
       if (directGroups.length !== 1) return
       const group = directGroups[0]
       if (group === undefined) return
@@ -579,7 +671,7 @@ function useRegionSearch(
       }
       ui.openOverlay({ kind: 'merge', ...draft })
     },
-    [snapshot.nested, snapshot.byWorkspace, layout.workspaceIds, layout.workspaceById],
+    [snapshot.nested, snapshot.byWorkspace, layout.workspaceIds, layout.workspaceById, layout.nesting, expansion.expandWorkspace, ui.openOverlay],
   )
 
   // 「添加工作区」延迟到渲染期解析，它要读官方 directoryFlow 洞的占用者
@@ -620,7 +712,10 @@ function useRegionSearch(
    * 打开之前先把这条会话所在的两层折叠打开并清掉搜索：结果行点下去的意图是「去看这条会话」
    * 而它可能正躺在收起的工作区或分组里，不展开就落在一个看不见的行上
    * 这正是官方 `revealSessionId` 承担的那段编排——官方在那里由组件订阅会话树自行展开
-   * 本包把展开状态放在本组件里，因此在打开前直接写这两份状态
+   * 本包把展开状态放在浏览器本地 store 里，因此在打开前直接写那几份记录
+   *
+   * 判据是「除非显式展开，否则写展开」而不是官方那套「只在显式为 false 时才写」
+   * 官方默认「有孩子就展开」，缺席通常已经展开；本包对子工作区与会话分组的默认是折叠，缺席必须被补上
    *
    * 清掉查询还有一层意义：结果列表随即被常规列表取代，标记的那一行才真的存在
    */
@@ -628,31 +723,18 @@ function useRegionSearch(
     const workspaceId = match.workspace?.id
     if (workspaceId === undefined) {
       // 无所属工作区的会话落在末尾的隐式「未分组」区段里，同样要先展开
-      ui.setExpandedWorkspaces((prev) =>
-        prev[UNGROUPED_KEY] === false ? { ...prev, [UNGROUPED_KEY]: true } : prev,
-      )
+      expansion.expandWorkspace(UNGROUPED_KEY)
     } else {
       // 工作区本身可能还躺在一个收起的工作区分组里，与外层两层一样要先展开，否则揭示的那一行落在看不见的地方
       const rootGroupId = virtualWorkspaceIdOf(layout.rootLayout.groups, workspaceId)
-      if (rootGroupId !== '') {
-        ui.setExpandedVirtualWorkspaces((prev) =>
-          prev[rootGroupId] === false ? { ...prev, [rootGroupId]: true } : prev,
-        )
-      }
+      if (rootGroupId !== '') expansion.expandVirtualWorkspace(rootGroupId)
       // 工作区自己可能是嵌在父工作区体内的子工作区，从根节点那一层起逐层展开它所有的祖先
       // 只展开它自己会让那一行落在收起的父撑开体里，用户看不到它
-      const lineage = [workspaceId, ...layout.nesting.ancestorsOf(workspaceId)]
-      ui.setExpandedWorkspaces((prev) => {
-        let next = prev
-        for (const id of lineage) {
-          if (next[id] !== false) continue
-          next = { ...next, [id]: true }
-        }
-        return next
-      })
+      for (const id of [workspaceId, ...layout.nesting.ancestorsOf(workspaceId)]) {
+        expansion.expandWorkspace(id)
+      }
       if (match.group !== undefined) {
-        const key = `${workspaceId}:${match.group.id}`
-        ui.setExpandedGroups((prev) => (prev[key] === false ? { ...prev, [key]: true } : prev))
+        expansion.expandGroup({ workspaceId, groupId: match.group.id })
       }
     }
     ui.setRevealSessionId(match.row.id)
@@ -687,6 +769,7 @@ function useRegionGroupActions(
   props: WorkspaceGroupsProps,
   snapshot: WorkspaceGroupsSnapshot,
   ui: RegionUiState,
+  expansion: ExpansionCommands,
   apply: (action: Promise<WorkspaceGroupsSnapshot>) => void,
 ): RegionGroupActions {
   const { createGroup, renameGroup, deleteGroup, moveSession, moveWorkspace, createVirtualWorkspace,
@@ -807,11 +890,9 @@ function useRegionGroupActions(
    * @param groupId - 新会话要归入的分组，空串表示归入未归组区
    */
   const createSessionIn = (workspaceId: string, groupId: string): void => {
-    ui.setExpandedWorkspaces((prev) => ({ ...prev, [workspaceId]: true }))
+    expansion.expandWorkspace(workspaceId)
     // 展开而不是取反，分组本就展开时，切换会把它收起来，新会话反而看不见
-    if (groupId !== '') {
-      ui.setExpandedGroups((prev) => ({ ...prev, [`${workspaceId}:${groupId}`]: true }))
-    }
+    if (groupId !== '') expansion.expandGroup({ workspaceId, groupId })
     void startSession(workspaceId)
       .then((sessionId) => {
         // 被更晚的导航取代时没有会话要摆位置
@@ -1105,7 +1186,23 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const { mode: viewMode, indicator } = localViewOptions
   const { snapshot, apply } = useSnapshotFeed(props.loadGroups, props.onReady)
   const layout = useRegionLayout(workspaces, snapshot, labels)
+  const expansion = useExpansionValue(props, layout.nesting)
   const ui = useRegionUiState()
+
+  /**
+   * 列表就绪时摘掉工作区层里已经失效的键
+   *
+   * 守卫不能省：`pending` 期间 `items` 是空的，据它清理会把用户的全部工作区展开记录清光（官方那条 `workspacePhase !== 'ready'` 防的就是这个）
+   *
+   * 会话分组与工作区分组两层不在这里清：它们没有对应的就绪信号（`SnapshotFeed` 初值与拉取失败降级值是同一份空快照形状）
+   * 而失效的键只是几十字节的垃圾，用户永远看不到——键不再对应任何渲染对象
+   * 判错方向的代价却是丢掉用户记录且不可逆，因此留待「快照带上成功标记」那块单独做
+   */
+  const { phase: workspacePhase } = sources
+  useEffect(() => {
+    if (workspacePhase !== 'ready') return
+    expansion.retainWorkspaceKeys(['', ...layout.workspaceIds])
+  }, [workspacePhase, expansion.retainWorkspaceKeys, layout.workspaceIds])
 
   // 搜索状态留在这里而不是 header 内部，窄栏入口要触发宽栏输入框的聚焦
   // 这一跨形态的联动需要一个共同宿主
@@ -1117,9 +1214,9 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const now = Date.now()
 
   const { addWorkspace, searchResult, openSearchResult } = useRegionSearch(
-    props, sources, layout, snapshot, ui, search,
+    props, sources, layout, snapshot, ui, expansion.commands, search,
   )
-  const groupActions = useRegionGroupActions(props, snapshot, ui, apply)
+  const groupActions = useRegionGroupActions(props, snapshot, ui, expansion.commands, apply)
   const nestActions = useRegionNestActions(props, snapshot, layout, ui, apply)
   const pickerActions = useRegionPickerActions(props, snapshot, ui, apply)
 
@@ -1223,7 +1320,6 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const scope: WorkspaceNodeScope = {
     snapshot,
     layout,
-    ui,
     edits,
     commands,
     rowsByWorkspace,
@@ -1269,6 +1365,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   return (
     <RegionLocaleProvider value={locale}>
       <LocalViewOptionsProvider value={localViewOptions}>
+        <ExpansionProvider value={expansion.read}>
         {/* 指示器样式挂在根节点上，列表里每一行读同一个值，不必逐行下发 */}
         <div className={styles.root} ref={flipRef} data-wg-indicator={indicator}>
           <RegionHeaderArea
@@ -1290,8 +1387,6 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             scope={scope}
             flatRows={flatRows}
             stray={stray}
-            ungroupedExpanded={ui.expandedWorkspaces[UNGROUPED_KEY] !== false}
-            onToggleUngrouped={() => ui.toggleWorkspace(UNGROUPED_KEY)}
           />
           {/* 对话框挂在列表之外
             * 它们都是 portal 到 body 的浮层，放进 overflow
@@ -1305,6 +1400,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             actions={dialogActions}
           />
         </div>
+        </ExpansionProvider>
       </LocalViewOptionsProvider>
     </RegionLocaleProvider>
   )

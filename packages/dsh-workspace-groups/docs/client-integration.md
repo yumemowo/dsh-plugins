@@ -101,7 +101,7 @@ dsh 0.1.7-rc.1 把图标名从「字形 + 尺寸」改成了「字形 + 线宽�
 | --- | --- |
 | `react` / `react-dom` / `react/jsx-runtime` / `react-dom/client` | 组件与 portal |
 | `@deepseek-ai/dsh-client-ui-primitives` | 图标与官方控件原语 |
-| `@deepseek-ai/dsh-client-store` | 展示方式的状态与持久化（`defineStore`） |
+| `@deepseek-ai/dsh-client-store` | 展示方式、指示器与三层折叠态的状态与持久化（`defineStore`） |
 
 **后两个在 node 测试环境里取不到真包**：primitives 只存在于客户端的基线静态模块表，client-store 的引擎则依赖未随本仓库安装的 `zustand` / `immer`（顶层 `import 'zustand/vanilla'` 会直接 `ERR_MODULE_NOT_FOUND`）。因此 `vitest.config.ts` 给这两个各配了一个 `resolve.alias` 替身（`test/primitives-stub.mjs` / `test/store-stub.mjs`），替身只实现测试用到的那部分契约。
 

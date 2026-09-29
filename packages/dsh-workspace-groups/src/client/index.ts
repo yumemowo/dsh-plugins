@@ -242,7 +242,7 @@ export function apply(ctx: Context): void {
    *
    * 与 `officialActions` 同为延迟到渲染期的解析器。解析结果为空表示本包没读到占用者（宿主没装目录选择器插件）
    * 此时入口按钮整体不渲染，不留点不动的死按钮
-   * @param onAdopted - 采纳成功后的回调，区域组件用它判断新工作区该不该嵌进某个分组
+   * @param onAdopted - 采纳成功后的回调，区域组件用它展开新工作区并判断该不该嵌进某个分组
    * @returns 添加工作区的动作，控制器或洞占用者缺失时为 undefined
    */
   const addWorkspaceActions = (
