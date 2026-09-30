@@ -8,5 +8,7 @@
     // 本包含浏览器半边，需要 DOM 类型（document、HTMLSelectElement 等）
     "lib": ["es2023", "dom", "dom.iterable"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  // 宿主半边不 import src/client/**：排除它不会带走被引用的文件
+  "exclude": ["src/client/**"]
 }
