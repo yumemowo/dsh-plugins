@@ -77,7 +77,7 @@ src/client/
         └── dialogs/
             ├── NameDialog.tsx      建组 / 改名 / 重命名工作区共用的单行输入框
             ├── DeleteDialog.tsx    破坏性操作确认框
-            ├── ListDialog.tsx      带名单的确认框（关闭嵌套、放进父分组）
+            ├── ListDialog.tsx      带名单的确认框（关闭嵌套、放进父工作区分组）
             └── dialogs.module.css  三个对话框共用的样式
 ```
 

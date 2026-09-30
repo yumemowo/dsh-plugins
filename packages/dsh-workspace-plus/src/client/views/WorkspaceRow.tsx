@@ -85,7 +85,11 @@ export interface WorkspaceRowProps {
    * 与 `virtualWorkspace` 平级但进的是另一层容器，这个是父工作区体内的会话分组
    */
   parentGroup?: ParentGroupMenuInput | undefined
-  /** 「移动到分组」子菜单的选中分派，条目 id 形如 `pg:<父 id>:<分组 id>` 或 `ungroup-child-workspace` */
+  /**
+   * 「移动到分组」子菜单的选中分派
+   *
+   * 交回的是菜单条目 id 原文，解析归 `menus.tsx` 的 `parseParentGroupId`
+   */
   onSelectParentGroup?: ((id: string) => void) | undefined
 }
 

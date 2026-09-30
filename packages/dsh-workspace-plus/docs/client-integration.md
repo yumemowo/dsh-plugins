@@ -74,6 +74,15 @@
 
 **`create` 是惰性工厂，不是裸 schema。** 0.1.7-rc.1 起注册表只认 `create()`，并且会缓存首次物化结果（见 `dsh-typert-registry` 的 `materializeSchema`），因此同一个 codec 重复调用必须返回同一实例。
 
+### URL 只带方法名，参数走 JSON body
+
+调用地址是 `POST /api/<namespace>/<method>`，**参数不进 URL**：客户端发出 `{ type: 'client-request', rpcId, method, payload: { args } }` 作为 JSON body，服务端只从 `pathname` 取 endpoint，再按 descriptor 逐参数 `decode`。
+
+这决定了两件事：
+
+- **参数可以任意结构化**（对象、数组、`null`），不存在「URL 里放不下对象」的限制。本包的 `address` 参数是 `{ kind, id }` 对象，与官方 `SessionAddress` 走同一条路径。
+- **没有可以手拼的 URL 调用**。GET 或带查询串的调用落到 404（方法不匹配）或 415（content-type 不对），因此不存在需要兼容的 URL 参数契约。`?token=` 是启动鉴权，与 API 参数无关。
+
 这条契约写错的代价不对称，值得单独记一笔：清单校验失败发生在宿主半边，症状却是浏览器那边**全静默**——
 
 | 环节 | 表现 |

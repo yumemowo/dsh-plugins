@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ROOT_CONTAINER,
   deriveNesting,
   descendantsOf,
-  groupContainer,
   isAncestorPath,
   nearestAncestorForPath,
-  virtualContainer,
 } from '../src/client/data/nest.ts'
 import type { NestingBinding, NestingInput } from '../src/client/data/nest.ts'
 
@@ -75,10 +72,10 @@ describe('deriveNesting', () => {
     )
 
     // 没有自己归属的后代落在父所在的那一段，它们自己再逐层向下带出后代
-    expect(nesting.containerOf('w1')).toBe(ROOT_CONTAINER)
-    expect(nesting.containerOf('w2')).toBe(ROOT_CONTAINER)
-    expect(nesting.containerOf('w3')).toBe(ROOT_CONTAINER)
-    expect(nesting.rootsOf(ROOT_CONTAINER)).toEqual(['w1', 'w4'])
+    expect(nesting.containerOf('w1')).toEqual({ kind: 'root' })
+    expect(nesting.containerOf('w2')).toEqual({ kind: 'root' })
+    expect(nesting.containerOf('w3')).toEqual({ kind: 'root' })
+    expect(nesting.rootsOf(nesting.containers.root)).toEqual(['w1', 'w4'])
     // 段内层级与「整棵子树」都由这一份索引给出，父带出子，子再带出孙
     expect(nesting.childIdsOf('w1')).toEqual(['w2'])
     expect(nesting.childIdsOf('w2')).toEqual(['w3'])
@@ -92,7 +89,7 @@ describe('deriveNesting', () => {
       input({ workspaceIds: ['w1', 'w3'], pathOf: pathsOf(tree) }),
     )
 
-    expect(nesting.containerOf('w3')).toBe(ROOT_CONTAINER)
+    expect(nesting.containerOf('w3')).toEqual({ kind: 'root' })
     expect(nesting.childIdsOf('w1')).toEqual(['w3'])
   })
 
@@ -112,7 +109,7 @@ describe('deriveNesting', () => {
 
     expect(nesting.childIdsOf('repo')).toEqual(['pkg'])
     expect(nesting.ancestorsOf('pkg')).toEqual(['repo'])
-    expect(nesting.rootsOf(virtualContainer('vg1'))).toEqual(['repo'])
+    expect(nesting.rootsOf(nesting.containers.virtualOf('vg1'))).toEqual(['repo'])
   })
 
   it('leaves workspaces in different virtual workspaces unlinked', () => {
@@ -125,8 +122,8 @@ describe('deriveNesting', () => {
       }),
     )
 
-    expect(nesting.containerOf('w1')).toBe(virtualContainer('vg1'))
-    expect(nesting.containerOf('w2')).toBe(virtualContainer('vg2'))
+    expect(nesting.containerOf('w1')).toBe(nesting.containers.virtualOf('vg1'))
+    expect(nesting.containerOf('w2')).toBe(nesting.containers.virtualOf('vg2'))
     expect(nesting.ancestorsOf('w2')).toEqual([])
   })
 
@@ -144,9 +141,9 @@ describe('deriveNesting', () => {
     )
 
     // 放进分组的那个落在父体内的分组里，它名下的后代跟着它落在同一段
-    expect(nesting.containerOf('w2')).toBe(groupContainer('w1', 'g1'))
-    expect(nesting.containerOf('w3')).toBe(groupContainer('w1', 'g1'))
-    expect(nesting.rootsOf(groupContainer('w1', 'g1'))).toEqual(['w2'])
+    expect(nesting.containerOf('w2')).toBe(nesting.containers.groupOf('w1', 'g1'))
+    expect(nesting.containerOf('w3')).toBe(nesting.containers.groupOf('w1', 'g1'))
+    expect(nesting.rootsOf(nesting.containers.groupOf('w1', 'g1'))).toEqual(['w2'])
     expect(nesting.groupedChildIdsOf('w1', 'g1')).toEqual(['w2'])
     expect(nesting.looseChildIdsOf('w1')).toEqual([])
   })
@@ -163,7 +160,7 @@ describe('deriveNesting', () => {
     )
 
     expect(nesting.bindingOf('w2')).toBeUndefined()
-    expect(nesting.containerOf('w2')).toBe(ROOT_CONTAINER)
+    expect(nesting.containerOf('w2')).toEqual({ kind: 'root' })
     expect(nesting.looseChildIdsOf('w1')).toEqual(['w2'])
   })
 
@@ -207,7 +204,7 @@ describe('deriveNesting', () => {
     )
 
     // 关掉时每个工作区都退回自己那个容器的顶层，界面因此与没有这个特性时一致
-    expect(nesting.rootsOf(ROOT_CONTAINER)).toEqual(['w1', 'w2', 'w3'])
+    expect(nesting.rootsOf(nesting.containers.root)).toEqual(['w1', 'w2', 'w3'])
     expect(nesting.ancestorsOf('w2')).toEqual([])
     expect(nesting.ancestorsOf('w3')).toEqual([])
   })
@@ -225,7 +222,7 @@ describe('deriveNesting', () => {
       input({ workspaceIds: ['w1', 'w9'], pathOf: pathsOf({ w1: '/repo' }) }),
     )
 
-    expect(nesting.containerOf('w9')).toBe(ROOT_CONTAINER)
+    expect(nesting.containerOf('w9')).toEqual({ kind: 'root' })
     expect(nesting.ancestorsOf('w9')).toEqual([])
   })
 
@@ -240,7 +237,7 @@ describe('deriveNesting', () => {
       }),
     )
 
-    expect(nesting.containerOf('w2')).toBe(ROOT_CONTAINER)
+    expect(nesting.containerOf('w2')).toEqual({ kind: 'root' })
   })
 })
 
@@ -329,5 +326,40 @@ describe('descendantsOf', () => {
 
   it('reports nothing for a workspace without a path', () => {
     expect(descendantsOf(['w1'], pathsOf({}), () => '', 'w1')).toEqual([])
+  })
+
+  it('hands out the same container instance for the same container', () => {
+    // 容器在推导内部按身份寻址，查 rootsOf 必须交回发牌器交出的那个实例
+    // 现造一个内容相同的节点查不到任何东西，表现是所有工作区都被当作非顶层而静默塌层
+    const nesting = deriveNesting(
+      input({
+        workspaceIds: ['w1', 'w2', 'w3'],
+        pathOf: pathsOf(tree),
+        virtualOf: (id) => (id === 'w3' ? 'vg1' : ''),
+        bindingOf: () => ({ workspaceId: 'w1', groupId: 'g1' }),
+        groupIdsOf: () => new Set(['g1']),
+      }),
+    )
+
+    expect(nesting.containers.virtualOf('vg1')).toBe(nesting.containers.virtualOf('vg1'))
+    expect(nesting.containers.groupOf('w1', 'g1')).toBe(nesting.containers.groupOf('w1', 'g1'))
+    expect(nesting.containers.root).toBe(nesting.containers.root)
+    // 推导自己用的实例就是发牌器交出的那一个：w2 被放进 w1 的分组，w3 落在虚拟分组里
+    expect(nesting.containerOf('w2')).toBe(nesting.containers.groupOf('w1', 'g1'))
+    expect(nesting.containerOf('w3')).toBe(nesting.containers.virtualOf('vg1'))
+    expect(nesting.rootsOf(nesting.containers.groupOf('w1', 'g1'))).toEqual(['w2'])
+  })
+
+  it('hands out a container for a virtual workspace with no members', () => {
+    // 快照里可能有还没有任何成员的虚拟分组，它照样要能取到那一段的节点
+    // 否则渲染空分组时查表落空，空态占位那一行跟着消失
+    const nesting = deriveNesting(input({ workspaceIds: [] }))
+
+    expect(nesting.containers.virtualOf('wg-empty')).toEqual({
+      kind: 'virtual',
+      groupId: 'wg-empty',
+    })
+    expect(nesting.rootsOf(nesting.containers.virtualOf('wg-empty'))).toEqual([])
+    expect(nesting.rootsOf(nesting.containers.root)).toEqual([])
   })
 })

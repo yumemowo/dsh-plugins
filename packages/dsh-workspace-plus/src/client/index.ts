@@ -257,7 +257,7 @@ export function apply(ctx: Context): void {
       startSession: (workspaceId) => uiWorkspace?.startSession(workspaceId as never),
       // 传解析器而不是当次读数，占用者可能在两次渲染之间换人
       occupant: () => directoryFlowOccupant(ctx.slots),
-      // 区域组件把「刚采纳了哪个工作区」接回去，据此判断要不要问一句放进父所在的分组
+      // 区域组件把「刚采纳了哪个工作区」接回去，据此判断要不要问一句放进父工作区所在的分组
       onAdopted,
       labels: officialAddLabels(tWorkspace),
     }
@@ -360,8 +360,8 @@ export function apply(ctx: Context): void {
       unnestWorkspaces: (workspaceIds) => callSnapshot('unnestWorkspaces', [workspaceIds]),
       setNested: (enabled) => callSnapshot('setNested', [enabled]),
       forgetWorkspace: (workspaceId) => callSnapshot('forgetWorkspace', [workspaceId]),
-      focusEntry: (key) => callSnapshot('focusEntry', [key]),
-      togglePinned: (key) => callSnapshot('togglePinned', [key]),
+      focusEntry: (address) => callSnapshot('focusEntry', [address]),
+      togglePinned: (address) => callSnapshot('togglePinned', [address]),
       // 工作区自身的改名与删除直接走官方工作区控制器，不另造 RPC，删除只移除注册，文件夹与会话记录都由宿主保留
       renameWorkspace: (workspaceId, title) =>
         workspaces.rename(workspaceId as never, title).then(() => undefined),

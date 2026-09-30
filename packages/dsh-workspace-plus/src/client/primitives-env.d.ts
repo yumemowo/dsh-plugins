@@ -159,7 +159,7 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     icon?: ReactNode
   }) => ReactNode
 
-  /** 16px 图标原语，颜色继承自父级 */
+  /** 16px 图标原语，颜色继承自父级元素 */
   export type IconComponent = (props: {
     size?: number
     className?: string

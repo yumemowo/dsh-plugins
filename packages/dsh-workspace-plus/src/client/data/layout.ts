@@ -3,11 +3,10 @@
  *
  * 纯数据变换：一层把工作区当前的会话行与分组定义切成「分组段 + 未归组行」，另一层把工作区列表与工作区分组切成「分组段 + 未归组工作区」
  *
- * 两层都还要认 cwd 路径推导出的父子关系，会话分组里可以放进子工作区，工作区列表里被嵌套的那些不再出现在根节点
+ * 两层都还要认 cwd 路径推导出的父工作区与子工作区关系，会话分组里可以放进子工作区，工作区列表里被嵌套的那些不再出现在根节点
  */
 import type { Group, VirtualWorkspace } from '../remote.ts'
-import { ROOT_CONTAINER, virtualContainer } from './nest.ts'
-import type { Nesting } from './nest.ts'
+import type { ContainerNode, Nesting } from './nest.ts'
 import type {
   GroupSection,
   RootLayout,
@@ -122,8 +121,8 @@ export function buildRootLayout(
   const sections: VirtualWorkspaceSection[] = []
 
   /** 一个容器里的顶层成员，按传入顺序，不开嵌套时原样返回 */
-  const topsOf = (container: string, members: readonly string[]): string[] => {
-    if (nesting === undefined) return [...members]
+  const topsOf = (container: ContainerNode | undefined, members: readonly string[]): string[] => {
+    if (nesting === undefined || container === undefined) return [...members]
     const roots = new Set(nesting.rootsOf(container))
     return members.filter((id) => roots.has(id))
   }
@@ -145,15 +144,15 @@ export function buildRootLayout(
       // 归属保住全量，内嵌不改变「它在哪个分组里」
       workspaceIds: ids,
       // 渲染只列这一层的顶层，被嵌套的那些在父工作区体内
-      roots: topsOf(virtualContainer(group.id), ids),
+      roots: topsOf(nesting?.containers.virtualOf(group.id), ids),
     })
   }
 
   return {
     groups: sections,
-    // 未归组的那些同样只留根节点容器里的顶层，被嵌套的在父工作区体内
+    // 未归组的那些同样只留最外层那一段的顶层，被嵌套的在父工作区体内
     loose: topsOf(
-      ROOT_CONTAINER,
+      nesting?.containers.root,
       workspaceIds.filter((id) => !claimed.has(id)),
     ),
   }

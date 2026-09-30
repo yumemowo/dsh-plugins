@@ -251,7 +251,7 @@ function WorkspaceNode({
   const built = buildLayout(
     rowsByWorkspace.get(workspaceId) ?? [],
     snapshot.byWorkspace[workspaceId] ?? [],
-    // 组内子工作区，放进这个分组、且父是当前工作区的那些。它们自己可能还有后代，渲染时逐层向下取
+    // 组内子工作区，放进这个分组、且父工作区是当前工作区的那些。它们自己可能还有后代，渲染时逐层向下取
     (groupId) => layout.nesting.groupedChildIdsOf(workspaceId, groupId),
     layout.nesting.looseChildIdsOf(workspaceId),
   )
@@ -274,7 +274,7 @@ function WorkspaceNode({
   /**
    * 该工作区行上那份「移动到分组…」菜单的选项集
    *
-   * 候选是它 cwd 路径上的任意一个现存祖先，放进谁的分组谁就是父——因此不是一个自动选定的最近祖先
+   * 候选是它 cwd 路径上的任意一个现存祖先，放进谁的分组谁就是父工作区——因此不是一个自动选定的最近祖先
    * 只有真的有分组可进时这一项才出现，父工作区名下没有分组时它整项渲染成禁用，不留一个点不动的热区
    * 祖先按从近到远列出，与列表里的层级顺序一致
    */

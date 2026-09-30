@@ -19,6 +19,7 @@ export const name = 'workspace-plus'
 /** 分组存储依赖宿主已挂载的存储域设施 */
 export const inject = ['storageDomain']
 
+export type { EntryAddress, RootEntryAddress } from './rootEntry.ts'
 export type {
   Group,
   PickerSnapshot,
@@ -54,8 +55,8 @@ export function apply(ctx: Context): void {
     unnestWorkspaces: async (workspaceIds) => (await service).unnestWorkspaces(workspaceIds),
     setNested: async (enabled) => (await service).setNested(enabled),
     forgetWorkspace: async (workspaceId) => (await service).forgetWorkspace(workspaceId),
-    focusEntry: async (key) => (await service).focusEntry(key),
-    togglePinned: async (key) => (await service).togglePinned(key),
+    focusEntry: async (address) => (await service).focusEntry(address),
+    togglePinned: async (address) => (await service).togglePinned(address),
   }
 
   // typert-loader 按这份绑定把 facade 的方法挂到网关上

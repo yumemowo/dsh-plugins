@@ -14,18 +14,16 @@ import type { Nesting } from './nest.ts'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { RECENT_SHOWN } from '../../pickerState.ts'
 import type { PickerState } from '../../pickerState.ts'
-import { rootVirtualKey, rootWorkspaceKey } from '../../rootEntry.ts'
+import { addressKey, sameAddress, virtualAddress, workspaceAddress } from '../../rootEntry.ts'
+import type { RootEntryAddress } from '../../rootEntry.ts'
 
 /** 菜单里一个可聚焦的条目 */
 export interface PickerEntry {
-  /** 条目键（见 `rootEntry.ts`），也是菜单项 id 与聚焦记录里的取值 */
+  /** 条目地址，也是聚焦记录里的取值 */
+  address: RootEntryAddress
+  /** 稳定字符串形式，供 React 的 `key` 用（它只接受字符串与数字） */
   key: string
-  /**
-   * 对象自己的 id，不含前缀
-   *
-   * 与 {@link key} 分开传，改名与删除要把它交给既有的对话框与宿主接口，而那两处收的都是裸 id（分组 id 或工作区 id）
-   * 让每个消费方各自去切前缀等于把 `rootEntry.ts` 的编码规则抄到多处
-   */
+  /** 对象自己的 id，改名与删除要把它交给既有的对话框与宿主接口，那两处收的都是裸 id */
   id: string
   /** 显示名：工作区标题或分组名 */
   label: string
@@ -57,7 +55,7 @@ export function rootPickerEntries(
    * 把一段里的工作区按层级展开成条目，`base` 是该段第一层的缩进
    *
    * 每个工作区只出一次。传入的 `ids` 理论上已经只剩这一段的顶层
-   * 但父带出的子项与它可能重叠（例如调用方直接把整段传进来），去重后不会出现同一个工作区两行
+   * 但父工作区带出的子工作区与它可能重叠（例如调用方直接把整段传进来），去重后不会出现同一个工作区两行
    */
   const pushTree = (ids: readonly string[], base: number): void => {
     const seen = new Set<string>()
@@ -67,8 +65,10 @@ export function rootPickerEntries(
       const workspace = workspaceById.get(workspaceId)
       // 布局只包含快照里存在的工作区，因此这里不会落空，防一手避免类型断言
       if (workspace !== undefined) {
+        const address = workspaceAddress(workspaceId)
         entries.push({
-          key: rootWorkspaceKey(workspaceId),
+          address,
+          key: addressKey(address),
           id: workspaceId,
           label: workspace.title,
           kind: 'workspace',
@@ -84,9 +84,11 @@ export function rootPickerEntries(
   for (const section of layout.groups) {
     // 虚拟工作区分组只列它自己，它名下的成员不在菜单里单独出现
     // 聚焦这个分组与聚焦它名下的某个成员是同一片内容，列出成员只会让菜单多出一层
-    // 与列表重复的层级（组内父子在列表里照常渲染，只是不在这里各占一行）
+    // 与列表重复的层级（组内父工作区与子工作区在列表里照常渲染，只是不在这里各占一行）
+    const address = virtualAddress(section.id)
     entries.push({
-      key: rootVirtualKey(section.id),
+      address,
+      key: addressKey(address),
       id: section.id,
       label: section.label,
       kind: 'virtual',
@@ -94,31 +96,30 @@ export function rootPickerEntries(
     })
   }
 
-  // 未归入任何虚拟工作区的那些按嵌套层级展开，父在 0 层，子工作区按层级往下缩进
+  // 未归入任何虚拟工作区的那些按嵌套层级展开，父工作区在 0 层，子工作区按层级往下缩进
   // 菜单里只有这一段按层级展开，虚拟工作区分组由分组名一个条目代表（见上面的注释）
   pushTree(layout.loose, 0)
   return entries
 }
 
 /**
- * 解析一个聚焦键指向的现存条目
+ * 解析一个聚焦地址指向的现存条目
  *
- * 记录比列表活得久，工作区被删、分组被解散之后，那个键仍可能躺在三份记录里
+ * 记录比列表活得久，工作区被删、分组被解散之后，那个地址仍可能躺在三份记录里
  * 聚焦与两处渲染都从这里取「它现在还指着什么」，因此三处对同一条记录的判断不会各说一套——解析不到时一律当作没有聚焦
- * @param key - 聚焦记录里的键，空串表示「全部」
- * @returns 该键指向的条目，空串或指向已消失的对象时为 undefined
+ * @returns 该地址指向的条目，`all` 或指向已消失的对象时为 undefined
  */
 export function resolveFocus(
   entries: readonly PickerEntry[],
-  key: string,
+  address: RootEntryAddress,
 ): PickerEntry | undefined {
-  if (key === '') return undefined
-  return entries.find((entry) => entry.key === key)
+  if (address.kind === 'all') return undefined
+  return entries.find((entry) => sameAddress(entry.address, address))
 }
 
 /** 菜单的三个分区 */
 export interface PickerSections {
-  /** 最近聚焦过的若干条目，最近一次在最前 */
+  /** 最近聚焦过的条目，至多 {@link RECENT_SHOWN} 条，最近一次在最前 */
   recent: PickerEntry[]
   /** 已置顶的条目，顺序按最近使用，从没用过的排在最后 */
   pinned: PickerEntry[]
@@ -129,7 +130,10 @@ export interface PickerSections {
 /**
  * 把条目与记录切成菜单的三个分区
  *
- * 最近使用与置顶都可能提到已经消失的条目（记录比列表活得久），因此两处都要按现存条目过滤，而不是直接把记录渲染出来
+ * 记录里存几条与这里渲染几条不是一回事：`recent` 记录按 `RECENT_HISTORY_LIMIT` 存，这里只渲染前 {@link RECENT_SHOWN} 条
+ * 两处都在本函数落地，调用方不必自己截断
+ *
+ * 最近使用与置顶都可能提到不认识的东西，两处都按现存条目过滤，而不是直接把记录渲染出来（记录比列表活得久，且外部文件可能被手改）
  * 「全部」分区不做任何过滤，它本来就来自现存列表
  * @returns 三个分区，最近使用至多 {@link RECENT_SHOWN} 条
  */
@@ -137,21 +141,22 @@ export function pickerSections(
   entries: readonly PickerEntry[],
   picker: PickerState,
 ): PickerSections {
-  const byKey = new Map(entries.map((entry) => [entry.key, entry]))
+  const found = (address: RootEntryAddress): PickerEntry | undefined =>
+    entries.find((entry) => sameAddress(entry.address, address))
   const recent = picker.recent
-    .map((key) => byKey.get(key))
+    .map(found)
     .filter((entry): entry is PickerEntry => entry !== undefined)
     .slice(0, RECENT_SHOWN)
   // 置顶按最近使用顺序排，记录里的位置就是「最近一次用到它是多久以前」
   // 没进过记录的排在最后并在彼此之间保持传入顺序（`sort` 在稳定实现下保持原序）
-  const rank = new Map(picker.recent.map((key, index) => [key, index]))
+  const rankOf = (address: RootEntryAddress): number => {
+    const index = picker.recent.findIndex((entry) => sameAddress(entry, address))
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index
+  }
   const pinned = picker.pinned
-    .map((key) => byKey.get(key))
+    .map(found)
     .filter((entry): entry is PickerEntry => entry !== undefined)
-    .sort(
-      (a, b) =>
-        (rank.get(a.key) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.key) ?? Number.MAX_SAFE_INTEGER),
-    )
+    .sort((a, b) => rankOf(a.address) - rankOf(b.address))
   return { recent, pinned, all: [...entries] }
 }
 
@@ -166,13 +171,12 @@ export function pickerSections(
  * 没有聚焦、或聚焦的条目已经不在了，都原样返回传入的布局——后者不能退化成空列表，否则第二行写着「全部工作区」而列表整片是空的
  * @param layout - 未聚焦时的根节点布局
  * @param entries - 菜单条目，聚焦对象必须是其中之一才算数
- * @param focused - 当前聚焦的条目键，空串表示「全部」
  * @returns 要渲染的分组段与独立工作区
  */
 export function focusedLayout(
   layout: RootLayout,
   entries: readonly PickerEntry[],
-  focused: string,
+  focused: RootEntryAddress,
 ): RootLayout {
   const entry = resolveFocus(entries, focused)
   if (entry === undefined) return layout
@@ -193,13 +197,12 @@ export function focusedLayout(
  * 聚焦一个工作区分组时组内被嵌套的成员也算在内：平铺下它们与顶层成员同属这片内容
  * @param layout - 未聚焦时的根节点布局
  * @param entries - 菜单条目，聚焦对象必须是其中之一才算数
- * @param focused - 当前聚焦的条目键，空串表示「全部」
  * @returns 允许出现的工作区 id，无聚焦或聚焦已失效时为 undefined，表示「全部」
  */
 export function focusedWorkspaceIds(
   layout: RootLayout,
   entries: readonly PickerEntry[],
-  focused: string,
+  focused: RootEntryAddress,
 ): readonly string[] | undefined {
   const entry = resolveFocus(entries, focused)
   if (entry === undefined) return undefined

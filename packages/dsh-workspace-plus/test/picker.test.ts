@@ -7,8 +7,8 @@ import {
   rootPickerEntries,
 } from '../src/client/data/picker.ts'
 import { RECENT_HISTORY_LIMIT, RECENT_SHOWN } from '../src/pickerState.ts'
-import { rootVirtualKey, rootWorkspaceKey } from '../src/rootEntry.ts'
-import { deriveNesting, virtualContainer } from '../src/client/data/nest.ts'
+import { ALL_ENTRIES, virtualAddress, workspaceAddress } from '../src/rootEntry.ts'
+import { deriveNesting } from '../src/client/data/nest.ts'
 import type { NestingInput } from '../src/client/data/nest.ts'
 
 /**
@@ -43,29 +43,29 @@ describe('rootPickerEntries', () => {
   it('lists the root cells in list order', () => {
     // 「全部」分区要与列表逐行对应：先是各分组，再是未归组的独立工作区
     expect(rootPickerEntries(LAYOUT, VIEWS)).toEqual([
-      { key: rootVirtualKey('vg1'), id: 'vg1', label: '前端仓库', kind: 'virtual', depth: 0 },
-      { key: rootVirtualKey('vg2'), id: 'vg2', label: '空组', kind: 'virtual', depth: 0 },
-      { key: rootWorkspaceKey('w3'), id: 'w3', label: 'W3', kind: 'workspace', depth: 0 },
-      { key: rootWorkspaceKey('w4'), id: 'w4', label: 'W4', kind: 'workspace', depth: 0 },
+      { address: virtualAddress('vg1'), key: 'vw:vg1', id: 'vg1', label: '前端仓库', kind: 'virtual', depth: 0 },
+      { address: virtualAddress('vg2'), key: 'vw:vg2', id: 'vg2', label: '空组', kind: 'virtual', depth: 0 },
+      { address: workspaceAddress('w3'), key: 'ws:w3', id: 'w3', label: 'W3', kind: 'workspace', depth: 0 },
+      { address: workspaceAddress('w4'), key: 'ws:w4', id: 'w4', label: 'W4', kind: 'workspace', depth: 0 },
     ])
   })
 
   it('omits a workspace that is inside a group', () => {
     // 组内的 W1 / W2 不单独列出：聚焦它们与聚焦所属分组是同一片内容
-    const keys = rootPickerEntries(LAYOUT, VIEWS).map((entry) => entry.key)
+    const addresses = rootPickerEntries(LAYOUT, VIEWS).map((entry) => entry.address)
 
-    expect(keys).not.toContain(rootWorkspaceKey('w1'))
-    expect(keys).not.toContain(rootWorkspaceKey('w2'))
+    expect(addresses).not.toContainEqual(workspaceAddress('w1'))
+    expect(addresses).not.toContainEqual(workspaceAddress('w2'))
   })
 
   it('skips a workspace the snapshot no longer has', () => {
     // 布局与工作区快照可能短暂不一致，缺视图时跳过而不是渲染一个无名条目
     const entries = rootPickerEntries(LAYOUT, index(view('w3', 'W3')))
 
-    expect(entries.map((entry) => entry.key)).toEqual([
-      rootVirtualKey('vg1'),
-      rootVirtualKey('vg2'),
-      rootWorkspaceKey('w3'),
+    expect(entries.map((entry) => entry.address)).toEqual([
+      virtualAddress('vg1'),
+      virtualAddress('vg2'),
+      workspaceAddress('w3'),
     ])
   })
 
@@ -79,15 +79,16 @@ describe('pickerSections', () => {
 
   it('shows the recent entries newest first and caps the shown count', () => {
     // 记录里可以有很多条（置顶区排序要用到），但「最近使用」只展示前几条
-    const recent = Array.from({ length: RECENT_HISTORY_LIMIT }, () => rootWorkspaceKey('w3'))
+    const recent = Array.from({ length: RECENT_HISTORY_LIMIT }, () => workspaceAddress('w3'))
     const sections = pickerSections(entries, {
-      focused: '',
-      recent: [rootWorkspaceKey('w4'), ...recent],
+      focused: ALL_ENTRIES,
+      recent: [workspaceAddress('w4'), ...recent],
       pinned: [],
     })
 
     expect(sections.recent[0]).toEqual({
-      key: rootWorkspaceKey('w4'),
+      address: workspaceAddress('w4'),
+      key: 'ws:w4',
       id: 'w4',
       label: 'W4',
       kind: 'workspace',
@@ -96,11 +97,28 @@ describe('pickerSections', () => {
     expect(sections.recent).toHaveLength(RECENT_SHOWN)
   })
 
+  it('keeps the recent section full when the record holds an all address', () => {
+    // 记录是外部文件、可能被手改，因此读取侧仍要滤掉 `all`：它不对应任何条目
+    // 若它占了展示名额，满记录时最近使用就会少一条——这里钉住它不占展示
+    const ids = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6']
+    const many = rootPickerEntries(
+      { groups: [], loose: ids },
+      index(...ids.map((id) => view(id, id.toUpperCase()))),
+    )
+    const recent = [ALL_ENTRIES, ...ids.map(workspaceAddress)]
+    const sections = pickerSections(many, { focused: ALL_ENTRIES, recent, pinned: [] })
+
+    // 六个真实条目里取最靠前的五个，`all` 不占位
+    expect(sections.recent.map((entry) => entry.label)).toEqual(['A1', 'A2', 'A3', 'A4', 'A5'])
+    expect(sections.recent).toHaveLength(RECENT_SHOWN)
+    expect(sections.recent.some((entry) => entry.address.kind === 'all')).toBe(false)
+  })
+
   it('drops recorded entries that no longer exist', () => {
     const sections = pickerSections(entries, {
-      focused: '',
-      recent: [rootWorkspaceKey('gone'), rootWorkspaceKey('w3')],
-      pinned: [rootVirtualKey('vg-gone'), rootVirtualKey('vg1')],
+      focused: ALL_ENTRIES,
+      recent: [workspaceAddress('gone'), workspaceAddress('w3')],
+      pinned: [virtualAddress('vg-gone'), virtualAddress('vg1')],
     })
 
     expect(sections.recent.map((entry) => entry.label)).toEqual(['W3'])
@@ -111,9 +129,9 @@ describe('pickerSections', () => {
     // 「置顶按最近使用顺序排序」：记录里的位置就是「上一次用到它是多久以前」
     // 从没用过的（没进 recent）排在最后
     const sections = pickerSections(entries, {
-      focused: '',
-      recent: [rootWorkspaceKey('w4'), rootVirtualKey('vg1')],
-      pinned: [rootWorkspaceKey('w3'), rootWorkspaceKey('w4'), rootVirtualKey('vg1')],
+      focused: ALL_ENTRIES,
+      recent: [workspaceAddress('w4'), virtualAddress('vg1')],
+      pinned: [workspaceAddress('w3'), workspaceAddress('w4'), virtualAddress('vg1')],
     })
 
     expect(sections.pinned.map((entry) => entry.label)).toEqual(['W4', '前端仓库', 'W3'])
@@ -121,16 +139,16 @@ describe('pickerSections', () => {
 
   it('keeps the pinned order stable among entries with no history', () => {
     const sections = pickerSections(entries, {
-      focused: '',
+      focused: ALL_ENTRIES,
       recent: [],
-      pinned: [rootWorkspaceKey('w4'), rootWorkspaceKey('w3')],
+      pinned: [workspaceAddress('w4'), workspaceAddress('w3')],
     })
 
     expect(sections.pinned.map((entry) => entry.label)).toEqual(['W4', 'W3'])
   })
 
   it('gives the all section the full list in display order', () => {
-    const sections = pickerSections(entries, { focused: '', recent: [], pinned: [] })
+    const sections = pickerSections(entries, { focused: ALL_ENTRIES, recent: [], pinned: [] })
 
     expect(sections.all.map((entry) => entry.label)).toEqual(['前端仓库', '空组', 'W3', 'W4'])
   })
@@ -140,19 +158,19 @@ describe('resolveFocus', () => {
   const entries = rootPickerEntries(LAYOUT, VIEWS)
 
   it('finds the entry a key points at', () => {
-    expect(resolveFocus(entries, rootVirtualKey('vg1'))?.label).toBe('前端仓库')
-    expect(resolveFocus(entries, rootWorkspaceKey('w3'))?.label).toBe('W3')
+    expect(resolveFocus(entries, virtualAddress('vg1'))?.label).toBe('前端仓库')
+    expect(resolveFocus(entries, workspaceAddress('w3'))?.label).toBe('W3')
   })
 
-  it('treats the empty key as no focus', () => {
-    expect(resolveFocus(entries, '')).toBeUndefined()
+  it('treats the all address as no focus', () => {
+    expect(resolveFocus(entries, ALL_ENTRIES)).toBeUndefined()
   })
 
   it('treats a key whose target is gone as no focus', () => {
     // 记录比列表活得久，聚焦的条目被删掉之后不能继续按那个键过滤
     // 否则列表整片空掉而第二行还写着一个不存在的名字
-    expect(resolveFocus(entries, rootWorkspaceKey('gone'))).toBeUndefined()
-    expect(resolveFocus(entries, rootVirtualKey('gone'))).toBeUndefined()
+    expect(resolveFocus(entries, workspaceAddress('gone'))).toBeUndefined()
+    expect(resolveFocus(entries, virtualAddress('gone'))).toBeUndefined()
   })
 })
 
@@ -160,25 +178,25 @@ describe('focusedLayout', () => {
   const entries = rootPickerEntries(LAYOUT, VIEWS)
 
   it('returns the whole layout when nothing is focused', () => {
-    expect(focusedLayout(LAYOUT, entries, '')).toEqual(LAYOUT)
+    expect(focusedLayout(LAYOUT, entries, ALL_ENTRIES)).toEqual(LAYOUT)
   })
 
   it('returns only the group members when a group is focused', () => {
-    const layout = focusedLayout(LAYOUT, entries, rootVirtualKey('vg1'))
+    const layout = focusedLayout(LAYOUT, entries, virtualAddress('vg1'))
 
     // 组头不再重复渲染（第二行已经写着组名），因此 groups 是空的
     expect(layout).toEqual({ groups: [], loose: ['w1', 'w2'] })
   })
 
   it('returns only that workspace when a loose workspace is focused', () => {
-    const layout = focusedLayout(LAYOUT, entries, rootWorkspaceKey('w4'))
+    const layout = focusedLayout(LAYOUT, entries, workspaceAddress('w4'))
 
     expect(layout).toEqual({ groups: [], loose: ['w4'] })
   })
 
   it('drops a focused workspace that is not a menu entry', () => {
     // 不开嵌套时组内工作区不列进菜单，聚焦它的记录因此解析不到，退回整片内容
-    const layout = focusedLayout(LAYOUT, entries, rootWorkspaceKey('w1'))
+    const layout = focusedLayout(LAYOUT, entries, workspaceAddress('w1'))
 
     expect(layout).toEqual(LAYOUT)
   })
@@ -203,8 +221,8 @@ describe('focusedLayout', () => {
     const nesting = deriveNesting(input)
     const nested = rootPickerEntries(LAYOUT, VIEWS, nesting)
 
-    expect(nested.map((entry) => entry.key)).not.toContain(rootWorkspaceKey('w1'))
-    const layout = focusedLayout(LAYOUT, nested, rootWorkspaceKey('w1'))
+    expect(nested.map((entry) => entry.address)).not.toContainEqual(workspaceAddress('w1'))
+    const layout = focusedLayout(LAYOUT, nested, workspaceAddress('w1'))
 
     expect(layout).toEqual(LAYOUT)
   })
@@ -223,11 +241,11 @@ describe('focusedLayout', () => {
     })
     const entries = rootPickerEntries(LAYOUT, VIEWS, nesting)
 
-    expect(entries.map((entry) => entry.key)).toEqual([
-      rootVirtualKey('vg1'),
-      rootVirtualKey('vg2'),
-      rootWorkspaceKey('w3'),
-      rootWorkspaceKey('w4'),
+    expect(entries.map((entry) => entry.address)).toEqual([
+      virtualAddress('vg1'),
+      virtualAddress('vg2'),
+      workspaceAddress('w3'),
+      workspaceAddress('w4'),
     ])
   })
 
@@ -245,10 +263,10 @@ describe('focusedLayout', () => {
 
     // 菜单里只有未归组的独立工作区按层级展开，父在 0 层，子跟在它后面缩进一层
     expect(entries).toEqual([
-      { key: rootVirtualKey('vg1'), id: 'vg1', label: '前端仓库', kind: 'virtual', depth: 0 },
-      { key: rootVirtualKey('vg2'), id: 'vg2', label: '空组', kind: 'virtual', depth: 0 },
-      { key: rootWorkspaceKey('w3'), id: 'w3', label: 'W3', kind: 'workspace', depth: 0 },
-      { key: rootWorkspaceKey('w4'), id: 'w4', label: 'W4', kind: 'workspace', depth: 1 },
+      { address: virtualAddress('vg1'), key: 'vw:vg1', id: 'vg1', label: '前端仓库', kind: 'virtual', depth: 0 },
+      { address: virtualAddress('vg2'), key: 'vw:vg2', id: 'vg2', label: '空组', kind: 'virtual', depth: 0 },
+      { address: workspaceAddress('w3'), key: 'ws:w3', id: 'w3', label: 'W3', kind: 'workspace', depth: 0 },
+      { address: workspaceAddress('w4'), key: 'ws:w4', id: 'w4', label: 'W4', kind: 'workspace', depth: 1 },
     ])
   })
 
@@ -269,17 +287,17 @@ describe('focusedLayout', () => {
     expect(nesting.childIdsOf('a')).toEqual(['b'])
     // v 虽在 a 的路径下，但它属于另一个虚拟分组，跨范围不相连
     expect(nesting.childIdsOf('a')).not.toContain('v')
-    expect(nesting.rootsOf(virtualContainer('vg1'))).toEqual(['v'])
+    expect(nesting.rootsOf(nesting.containers.virtualOf('vg1'))).toEqual(['v'])
   })
 
-  it('falls back to the whole layout when the focused key is unknown', () => {
-    // 记录被手改过，退回整片内容，而不是渲染一个空列表
-    expect(focusedLayout(LAYOUT, entries, 'nonsense')).toEqual(LAYOUT)
+  it('falls back to the whole layout when the focused entry is gone', () => {
+    // 记录比列表活得久，指向已消失的对象时退回整片内容，而不是渲染一个空列表
+    expect(focusedLayout(LAYOUT, entries, workspaceAddress('gone'))).toEqual(LAYOUT)
   })
 
   it('renders an empty group as an empty focused list', () => {
     // 空分组是通常状态，聚焦它得到空列表是正确的：列表里没有东西可显示
-    expect(focusedLayout(LAYOUT, entries, rootVirtualKey('vg2'))).toEqual({
+    expect(focusedLayout(LAYOUT, entries, virtualAddress('vg2'))).toEqual({
       groups: [],
       loose: [],
     })
@@ -290,11 +308,11 @@ describe('focusedWorkspaceIds', () => {
   const entries = rootPickerEntries(LAYOUT, VIEWS)
 
   it('allows everything when nothing is focused', () => {
-    expect(focusedWorkspaceIds(LAYOUT, entries, '')).toBeUndefined()
+    expect(focusedWorkspaceIds(LAYOUT, entries, ALL_ENTRIES)).toBeUndefined()
   })
 
   it('allows only that workspace when one is focused', () => {
-    expect(focusedWorkspaceIds(LAYOUT, entries, rootWorkspaceKey('w4'))).toEqual(['w4'])
+    expect(focusedWorkspaceIds(LAYOUT, entries, workspaceAddress('w4'))).toEqual(['w4'])
   })
 
   it('allows the whole group membership rather than its rendered roots', () => {
@@ -306,11 +324,11 @@ describe('focusedWorkspaceIds', () => {
     }
     const nested = rootPickerEntries(layout, VIEWS)
 
-    expect(focusedWorkspaceIds(layout, nested, rootVirtualKey('vg1'))).toEqual(['w1', 'w2', 'w3'])
+    expect(focusedWorkspaceIds(layout, nested, virtualAddress('vg1'))).toEqual(['w1', 'w2', 'w3'])
   })
 
-  it('falls back to everything when the focused key is unknown', () => {
+  it('falls back to everything when the focused entry is gone', () => {
     // 记录比列表活得久，解析不到时按没有聚焦处理，而不是空数组（那会让列表整片空掉）
-    expect(focusedWorkspaceIds(LAYOUT, entries, 'nonsense')).toBeUndefined()
+    expect(focusedWorkspaceIds(LAYOUT, entries, workspaceAddress('gone'))).toBeUndefined()
   })
 })

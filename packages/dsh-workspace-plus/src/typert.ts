@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { snapshotSchema } from './spec.ts'
+import { entryAddressSchema, snapshotSchema } from './spec.ts'
 
 /**
  * Host 面 Typert 清单
@@ -48,8 +48,8 @@ const nestedEnabledCodec = codec('NestedEnabled', () => z.boolean())
 /** 可空分组 id，null 表示「移出到未分组」 */
 const nullableGroupIdCodec = codec('NullableGroupId', () => z.string().nullable())
 
-/** 菜单条目键：工作区与工作区分组共用一套带前缀的键（见 `rootEntry.ts`） */
-const entryKeyCodec = codec('RootEntryKey', () => z.string())
+/** 根节点条目地址：工作区 / 工作区分组 / 「全部」三类共用一套带 `kind` 标签的取值（见 `rootEntry.ts`） */
+const entryAddressCodec = codec('RootEntryAddress', () => entryAddressSchema)
 
 const PACKAGE = '@yumemowo/dsh-workspace-plus'
 const SERVICE = 'workspacePlus'
@@ -138,8 +138,8 @@ export const TYPERT = {
     direct('forgetWorkspace', [
       { name: 'workspaceId', codec: workspaceIdCodec },
     ]),
-    direct('focusEntry', [{ name: 'key', codec: entryKeyCodec }]),
-    direct('togglePinned', [{ name: 'key', codec: entryKeyCodec }]),
+    direct('focusEntry', [{ name: 'address', codec: entryAddressCodec }]),
+    direct('togglePinned', [{ name: 'address', codec: entryAddressCodec }]),
   ],
   model: {
     services: [
@@ -222,12 +222,12 @@ export const TYPERT = {
           {
             kind: 'method',
             name: 'focusEntry',
-            signature: 'focusEntry(key: string): Promise<WorkspaceGroupsSnapshot>',
+            signature: 'focusEntry(address: RootEntryAddress): Promise<WorkspaceGroupsSnapshot>',
           },
           {
             kind: 'method',
             name: 'togglePinned',
-            signature: 'togglePinned(key: string): Promise<WorkspaceGroupsSnapshot>',
+            signature: 'togglePinned(address: RootEntryAddress): Promise<WorkspaceGroupsSnapshot>',
           },
         ],
         types: [
@@ -243,9 +243,14 @@ export const TYPERT = {
               'export interface VirtualWorkspace { id: string; name: string; workspaceIds: string[] }',
           },
           {
+            name: 'RootEntryAddress',
+            declaration:
+              "export type RootEntryAddress = { kind: 'workspace'; id: string } | { kind: 'virtual'; id: string } | { kind: 'all' }",
+          },
+          {
             name: 'PickerSnapshot',
             declaration:
-              'export interface PickerSnapshot { focused: string; recent: string[]; pinned: string[] }',
+              'export interface PickerSnapshot { focused: RootEntryAddress; recent: RootEntryAddress[]; pinned: RootEntryAddress[] }',
           },
           {
             name: 'WorkspaceGroupsSnapshot',

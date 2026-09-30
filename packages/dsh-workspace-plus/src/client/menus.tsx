@@ -3,6 +3,11 @@
  *
  * 只产出菜单数据（id、文案、图标、禁用与危险标记），不关心菜单如何渲染与开合
  * 渲染由 `Menu` 原语负责，开合状态由持有锚点的行组件负责
+ *
+ * 条目 id 一律是字符串（官方原语的契约），选中回调据此分派
+ * 需要表达「对哪个对象的什么操作」时，把标识拼进字符串，由本模块解析回来:
+ *   - `pg:` 已做到构造与解析各只一处（`buildParentGroupMenuItem` / `parseParentGroupId`）
+ *   - `vw:` 目前只有构造在这里，解析由消费侧按前缀切分，改动时两处都要看
  */
 import {
   IconArchiveOutlineRegular,
@@ -27,7 +32,7 @@ import styles from './menus.module.css'
  * 只给 `aria-haspopup` / `aria-expanded` 这类无障碍信号，箭头因此塞进 `label` 里
  * 由 `.menuLabel` 两端对齐推到行尾
  *
- * 子菜单为空时不加，原语只在 `submenu` 非空时才把该项当子菜单父项（展开、键盘进入、`aria-haspopup` 都按这个判断）
+ * 子菜单为空时不加，原语只在 `submenu` 非空时才把该项当作拥有子菜单的项（展开、键盘进入、`aria-haspopup` 都按这个判断）
  * 加了箭头就是在指一个展不开的菜单
  * @param entries - 该项的二级子菜单
  * @returns 有子菜单时是两端对齐的行，否则原样返回文案
@@ -188,7 +193,7 @@ export interface WorkspaceMenuInput {
   /** 根节点上的工作区分组选项集，缺省表示该行不提供移入工作区分组的入口 */
   virtualWorkspaceGrouping?: VirtualWorkspaceMenuInput | undefined
   /**
-   * 父工作区体内的会话分组选项集，缺省表示该行不提供移入父分组的入口
+   * 父工作区体内的会话分组选项集，缺省表示该行不提供移入父工作区分组的入口
    *
    * 与 `virtualWorkspaceGrouping` 分开，两者进的是不同层级的容器，只在一处有可选项时另一项不出现
    */
@@ -220,7 +225,7 @@ export interface ParentGroupMenuInput {
   /**
    * 可选的「祖先工作区 + 它的分组」
    *
-   * 父可以是任意一个祖先（cwd 路径上更上层的现存工作区），放进谁的分组谁就是父
+   * 父工作区可以是任意一个祖先（cwd 路径上更上层的现存工作区），放进谁的分组谁就是父工作区
    * 只有一个祖先时分组名本身就是唯一的坐标，有多个时视图侧会把祖先名并进去
    */
   candidates: readonly {
@@ -249,6 +254,7 @@ export interface ParentGroupMenuInput {
 export function buildParentGroupMenuItem(input: ParentGroupMenuInput): MenuActionItem {
   const submenu: MenuActionItem[] = input.candidates.flatMap((ancestor) =>
     ancestor.groups.map((group) => ({
+      // 形状由 `parseParentGroupId` 解析回来，改这里要一并改它
       id: `${PARENT_GROUP_PREFIX}${ancestor.parentId}:${group.id}`,
       label:
         input.candidates.length === 1
@@ -289,10 +295,26 @@ export interface VirtualWorkspaceMenuInput {
   ungroupLabel: string
 }
 
-/** 工作区行「移动到…」子菜单的条目 id 前缀与固定项 */
+/**
+ * 工作区行「移动到…」子菜单里「移入某个工作区分组」的条目 id 前缀，后面跟分组 id
+ *
+ * 与 `rootEntry.ts` 的 `addressKey()` 为工作区分组交出的字符串字面相同，但互不相干：
+ * 这一个只活在菜单打开期间，选中即弃；那一个由 `RootEntryAddress` 派生，供 React 的 `key` 用
+ * 改动其中之一不必跟着改另一个
+ */
 export const VIRTUAL_WORKSPACE_PREFIX = 'vw:'
 
-/** 父工作区体内某个分组的条目 id 前缀，后面跟 `<父工作区 id>:<分组 id>` */
+/**
+ * 父工作区体内某个分组的条目 id 前缀，后面跟 `<父工作区 id>:<分组 id>`
+ *
+ * 两个 id 拼成一个字符串是为了满足官方 Menu 原语的契约：条目只有 `id: string`，
+ * 选中回调也是 `(id: string) => void`，本次选择的目标只能编码进字符串
+ *
+ * 与 `rootEntry.ts` 的 `RootEntryAddress` 是两回事：那里用带 `kind` 标签的对象承载类别
+ *
+ * 分隔符沿用 `:`：工作区 id 是宿主生成的 UUID，分组 id 由本包生成（`g…`），两者都不含冒号
+ * 若将来某一方的 id 可能含冒号，这里要换成不会出现在 id 里的分隔符，否则 `parseParentGroupId` 会切错位
+ */
 export const PARENT_GROUP_PREFIX = 'pg:'
 
 /** 工作区行进父工作区分组相关条目 id */
@@ -304,7 +326,9 @@ export const PARENT_GROUP_ITEM = {
 } as const
 
 /**
- * 解析一个父分组的条目 id
+ * 解析一个父工作区分组的条目 id
+ *
+ * 与 {@link buildParentGroupMenuItem} 是一对：构造只那一处、解析只这一处，形状改动不会漏掉半边
  * @returns 父工作区 id 与分组 id，形状不对时为 undefined
  */
 export function parseParentGroupId(id: string): { parentId: string; groupId: string } | undefined {

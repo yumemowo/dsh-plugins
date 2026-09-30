@@ -9,6 +9,7 @@ import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/c
 import type { WorkspaceListPhase, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { WorkspaceGroupsSnapshot } from './remote.ts'
+import type { RootEntryAddress } from '../rootEntry.ts'
 import type { HostInfo } from './hostInfo.ts'
 import type { GroupChoice } from './data/types.ts'
 import type { OfficialAddLabels, OfficialSessionLabels, SidebarTranslate, WorkspaceTranslate } from './official.ts'
@@ -181,16 +182,10 @@ export interface RegionActions {
    * 删除工作区时调用，工作区没了，它留下的归属记录再也不会被渲染
    */
   forgetWorkspace: (workspaceId: string) => Promise<WorkspaceGroupsSnapshot>
-  /**
-   * 聚焦一个根节点条目，并把它记入最近使用
-   *
-   * 条目既可能是工作区也可能是工作区分组，因此参数是条目键而不是 id
-   * 键自带类别前缀，不会被两套 id 的取值混淆
-   * @param key - 条目键，空串表示退回「全部」
-   */
-  focusEntry: (key: string) => Promise<WorkspaceGroupsSnapshot>
+  /** 聚焦一个根节点条目，并把它记入最近使用 */
+  focusEntry: (address: RootEntryAddress) => Promise<WorkspaceGroupsSnapshot>
   /** 切换一个根节点条目的置顶，置顶与取消置顶是同一个方法 */
-  togglePinned: (key: string) => Promise<WorkspaceGroupsSnapshot>
+  togglePinned: (address: RootEntryAddress) => Promise<WorkspaceGroupsSnapshot>
   /** 重命名工作区 */
   renameWorkspace: (workspaceId: string, title: string) => Promise<void>
   /** 删除工作区注册，文件夹与会话记录保留 */
@@ -235,7 +230,7 @@ export interface RegionActions {
    * 此时入口按钮不渲染，不留点不动的死按钮
    *
    * 区域组件会给解析结果补一个 `onAdopted`，把「刚采纳了哪个工作区」这条事实接回来
-   * @param onAdopted - 采纳成功后的回调，缺省时区域不问「要不要放进父所在的分组」
+   * @param onAdopted - 采纳成功后的回调，缺省时区域不问「要不要放进父工作区所在的分组」
    */
   addWorkspace?:
     | ((onAdopted: AddWorkspaceActions['onAdopted']) => AddWorkspaceActions | undefined)

@@ -4,6 +4,7 @@ import * as React from 'react'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
+import { workspaceAddress } from '../src/rootEntry.ts'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { readAllCss } from './readCss.ts'
@@ -677,7 +678,7 @@ describe('nested sub-workspaces in a real DOM', () => {
     // 平铺下聚焦语义照旧：它把这批内容收窄到某个工作区，而不是让第二行写着聚焦对象、列表却无动于衷
     const { container, root } = await mount({
       ...viewModeProps('flat'),
-      loadGroups: async () => snapshot({ picker: { focused: 'ws:w2', recent: [], pinned: [] } }),
+      loadGroups: async () => snapshot({ picker: { focused: workspaceAddress('w2'), recent: [], pinned: [] } }),
     })
 
     // 聚焦在 w2 上，而 w2 名下没有会话，因此平铺列表是空的，w1 那条会话不再出现
@@ -941,7 +942,7 @@ describe('nested sub-workspaces in a real DOM', () => {
   })
 
   it('keeps the picked folding state across a remount', async () => {
-    // 刷新后要停在上次的开合上：这是本次改动与原先组件内 state 的核心差别
+    // 折叠态存在浏览器本地 store 里，因此重新挂载后仍停在上次的开合上
     const store = viewModeStoreStub()
     const first = await mount(storeViewModeProps(store))
     await act(async () => {

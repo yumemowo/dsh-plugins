@@ -44,7 +44,7 @@ function pendingStatus(kind: string, labels: SessionStatusLabels): SessionStatus
  * 顺序与官方 `sessionStatuses` 一致：待交互在前，运行中的子代理作为它的补充跟在后面
  * 子代理会话本身不在侧边栏显示，但它们运行时要让祖先行亮起运行点，因此这里同时看本会话的 `running` 与子代理运行数
  *
- * 空闲也返回一条（官方 `status.idle`），因为悬停卡片要把它列出来，行首那个点是否画由 {@link sessionStatus} 决定
+ * 空闲也返回一条（官方 `status.idle`），因为悬停卡片要把它列出来，行首那个点是否画由 {@link rowStatusDot} 决定
  * @param pendingKind - 该会话当前待交互的种类，没有待交互时为空
  * @returns 按优先级排列的状态，第一条是行首要显示的那一条
  */

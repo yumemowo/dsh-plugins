@@ -1,5 +1,5 @@
 /**
- * 区域对话框：四个草稿框、四个确认框与一次「放进父分组」的追问
+ * 区域对话框：四个草稿框、四个确认框与一次「放进父工作区分组」的追问
  *
  * 这八个浮层互斥，任意时刻至多开一个。这条不变式由 `RegionOverlay` 这个可辨识联合承担，
  * 而不是靠「Modal 挡住了第二个入口」——将来加入非 Modal 的浮层也不会同时开出两个
@@ -16,10 +16,10 @@ import { ListDialog } from './components/dialogs/ListDialog.tsx'
 import { NameDialog } from './components/dialogs/NameDialog.tsx'
 
 /**
- * 一次待确认的「把新增的子工作区放进父所在的分组」
+ * 一次待确认的「把新增的子工作区放进父工作区所在的分组」
  *
- * 只有新增工作区这一条路径用它，新工作区落在某个工作区之下，而那个父恰好只在一个分组里时
- * 问一句要不要顺手放进去。父有多个分组时不问——该选哪个不是这里能替用户定的
+ * 只有新增工作区这一条路径用它，新工作区落在某个工作区之下，而那个父工作区恰好只在一个分组里时
+ * 问一句要不要顺手放进去。父工作区有多个分组时不问——该选哪个不是这里能替用户定的
  */
 export interface MergeDraft {
   /** 目标分组所属的父工作区 */
@@ -77,7 +77,7 @@ export interface RegionDialogLayout {
   focused: boolean
   /** 关闭嵌套时会被解除嵌套的工作区名单 */
   groupedChildLabels: readonly string[]
-  /** 按 id 取回工作区视图，「放进父分组」那一步按它列出名单 */
+  /** 按 id 取回工作区视图，「放进父工作区分组」那一步按它列出名单 */
   workspaceById: ReadonlyMap<string, WorkspaceView>
 }
 
@@ -90,7 +90,7 @@ export interface RegionDialogActions {
   commitWorkspaceRename: () => void
   commitWorkspaceDelete: () => void
   commitNestedOff: () => void
-  /** 提交一次「放进父所在的分组」，为假表示这次不放 */
+  /** 提交一次「放进父工作区所在的分组」，为假表示这次不放 */
   commitMerge: (merge: boolean) => void
 }
 

@@ -48,7 +48,8 @@ import type { RegionTranslate } from '../locales.ts'
 import { PARENT_GROUP_ITEM, VIRTUAL_WORKSPACE_ITEM, VIRTUAL_WORKSPACE_PREFIX, parseParentGroupId } from '../menus.tsx'
 import { normalizeSnapshot } from '../remote.ts'
 import type { WorkspaceGroupsSnapshot } from '../remote.ts'
-import { rootVirtualKey } from '../../rootEntry.ts'
+import { sameAddress, virtualAddress } from '../../rootEntry.ts'
+import type { RootEntryAddress } from '../../rootEntry.ts'
 import { useFlipMarker } from '../useFlipMarker.ts'
 import { UNGROUPED_KEY, expandedAt, indicatorOf, modeOf, sessionGroupExpansionOf, sessionGroupKey, virtualExpansionOf, workspaceExpansionOf } from '../store/viewMode.ts'
 import type { SessionGroupRef, ViewModeStoreHandle } from '../store/viewMode.ts'
@@ -341,7 +342,7 @@ function useSnapshotFeed(
  *
  * 工作区 id 按宿主顺序排（`workspaces` 本身就是那个顺序），因此没有建过工作区分组时 `loose` 就是全部工作区
  * 这一层不改变任何行的位置——界面与没有这个功能时完全一致
- * 子工作区的父子关系不落盘，每次都从 cwd 现推，落盘的归属只决定「渲染在哪个分组里」
+ * 子工作区与父工作区的关系不落盘，每次都从 cwd 现推，落盘的归属只决定「渲染在哪个分组里」
  */
 function useRegionLayout(
   workspaces: readonly WorkspaceView[],
@@ -385,7 +386,7 @@ function useRegionLayout(
   /**
    * 子工作区嵌套的推导
    *
-   * 路径关系不落盘，每次都从 cwd 现推，落盘的归属只决定「渲染在哪个分组里」，是否成父子恒由路径决定
+   * 路径关系不落盘，每次都从 cwd 现推，落盘的归属只决定「渲染在哪个分组里」，是否成父工作区与子工作区恒由路径决定
    * 开关关着时推导结果里每个工作区都是自己那个容器的顶层，界面因此与没有这个特性时完全一致
    */
   const nesting = useMemo(
@@ -431,7 +432,7 @@ function useRegionLayout(
   /**
    * 当前聚焦的条目
    *
-   * 解析不到（聚焦的条目已经被删掉或解散）时当作没有聚焦，记录比列表活得久，直接按那个键过滤会让列表整片空掉，而第二行还写着一个已经不存在的名字
+   * 解析不到（聚焦的条目已经被删掉或解散）时当作没有聚焦，记录比列表活得久，直接按那个地址过滤会让列表整片空掉，而第二行还写着一个已经不存在的名字
    */
   const resolvedFocus = resolveFocus(pickerEntries, snapshot.picker.focused)
   const currentFocus = resolvedFocus?.label ?? labels.picker.all
@@ -531,7 +532,7 @@ function useExpansionValue(props: WorkspaceGroupsProps, nesting: Nesting): Expan
    *
    * 依赖列的是输入（记录、setter 与层级推导）而不是函数名：函数在内部定义，将来加一层只需补进这里，不会出现「加了函数忘了补依赖」那种静默持有旧闭包的情形
    * 工作区层的默认按结构分层：没有父工作区的（含末尾「未分组」桶的哨兵空串）默认展开，子工作区默认折叠
-   * 判据是 `ancestorsOf` 的长度而不是官方那套「有孩子就展开」——`repo/src` 有父也有子，这里折叠、官方展开
+   * 判据是 `ancestorsOf` 的长度而不是官方那套「有孩子就展开」——`repo/src` 有父工作区也有子工作区，这里折叠、官方展开
    */
   const read = useMemo((): Expansion => {
     const isWorkspaceExpanded = (key: string) =>
@@ -613,14 +614,14 @@ function useRegionSearch(
   const { searchResultLimit, openSession } = props
 
   /**
-   * 新增工作区采纳成功后的收尾：先把该展开的几层展开，再判断要不要问一句「放进父所在的分组」
+   * 新增工作区采纳成功后的收尾：先把该展开的几层展开，再判断要不要问一句「放进父工作区所在的分组」
    *
    * 新工作区此刻还没进列表，因此这里按路径找它最短的直接父工作区，而不是按 id
    * 那个查找用的正是嵌套推导算父节点的同一套条件（同虚拟工作区 + 路径祖先），因此「找到了父节点」就等于「它真的会渲染在那个父节点内」
    * 找不到父节点时它落成自己那个容器的顶层，本来就默认展开，不需要写任何记录
    *
    * 采纳之后紧接着会在新工作区里开一个新会话，展开是那一步的副作用：不展开的话新工作区默认折叠，会话落在看不见的撑开体里
-   * 因此展开「新工作区 + 它的父链」，父链上那些只需按记录补，已经是显式展开的不重复写
+   * 因此展开「新工作区 + 它的父工作区链」，链上那些只需按记录补，已经是显式展开的不重复写
    *
    * 新工作区那一格必须无条件写：它此刻还不在推导里，`ancestorsOf` 对它返回空链、生效值会暂时算成默认展开
    * 若按生效值判断就会跳过写入，等它带着父节点进列表时又塌回折叠
@@ -718,7 +719,7 @@ function useRegionSearch(
       const rootGroupId = virtualWorkspaceIdOf(layout.rootLayout.groups, workspaceId)
       if (rootGroupId !== '') expansion.expandVirtualWorkspace(rootGroupId)
       // 工作区自己可能是嵌在父工作区体内的子工作区，从根节点那一层起逐层展开它所有的祖先
-      // 只展开它自己会让那一行落在收起的父撑开体里，用户看不到它
+      // 只展开它自己会让那一行落在收起的父工作区撑开体里，用户看不到它
       for (const id of [workspaceId, ...layout.nesting.ancestorsOf(workspaceId)]) {
         expansion.expandWorkspace(id)
       }
@@ -818,7 +819,8 @@ function useRegionGroupActions(
       let after = next
       if (workspaceId !== undefined) after = await moveWorkspace(workspaceId, created.id)
       if (!follow) return after
-      return focusEntry(rootVirtualKey(created.id))
+      const address = virtualAddress(created.id)
+      return focusEntry(address)
     }
     apply(createVirtualWorkspace(name).then(finish))
   }
@@ -990,8 +992,8 @@ function useRegionNestActions(
   /**
    * 取一个工作区名下「已经放进某个分组」的后代
    *
-   * 未放进任何分组的后代由路径推导自动跟随父的位置，因此不需要改写归属
-   * 已经放进某个分组的要跟着父一起换组，否则它们会在分组边界上脱离父的层级
+   * 未放进任何分组的后代由路径推导自动跟随父工作区的位置，因此不需要改写归属
+   * 已经放进某个分组的要跟着父工作区一起换组，否则它们会在分组边界上脱离父工作区的层级
    */
   const groupedDescendantsOf = (workspaceId: string): string[] =>
     descendantsOf(
@@ -1004,13 +1006,13 @@ function useRegionNestActions(
   /**
    * 把一个工作区（连同它名下的子工作区）放进某个祖先工作区的会话分组
    *
-   * 「父」由选中那个分组决定，不是自动取最近祖先，放进谁的分组谁就是父
+   * 父工作区由选中那个分组决定，不是自动取最近祖先，放进谁的分组谁就是父工作区
    *
    * 归属记在子工作区自己的记录上，因此这里交出的是要写归属的那批 id：
    * 工作区自己不写（它是被放进分组的那一个），它名下的子工作区要一并跟随，否则层级会在分组边界上断开
    *
    * 分两次写，先把它放进分组，再把跟随的子工作区放进去
-   * 第二次失败时会留下「父已进组、子还在外面」的状态——那是可恢复的，下次再移一次即可，不必为此加补偿事务
+   * 第二次失败时会留下「父工作区已进组、子工作区还在外面」的状态——那是可恢复的，下次再移一次即可，不必为此加补偿事务
    */
   const selectParentGroup = useCallback(
     (workspaceId: string, id: string): void => {
@@ -1020,9 +1022,9 @@ function useRegionNestActions(
       }
       const target = parseParentGroupId(id)
       if (target === undefined) return
-      // 整棵子树跟着走，保持层级关系，父进哪个分组，它名下已经放进别处分组的子工作区一并换过去
+      // 整棵子树跟着走，保持层级关系，父工作区进哪个分组，它名下已经放进别处分组的子工作区一并换过去
       // 未放进任何分组的那些由路径推导自动跟随，不必写
-      // 两步分开写，因此父已进组、子还留在原组是一段可恢复的中间态——下次移一次即可
+      // 两步分开写，因此父工作区已进组、子工作区还留在原组是一段可恢复的中间态——下次移一次即可
       const followers = groupedDescendantsOf(workspaceId)
       // 每一步都要走 `apply`，它把宿主回的整份快照写进本地状态
       // 直接 `void nestWorkspaces(...)` 会把那次写入的结果丢掉，界面因此停在旧快照上——
@@ -1062,9 +1064,9 @@ function useRegionNestActions(
   }
 
   /**
-   * 提交一次「放进父所在的分组」
+   * 提交一次「放进父工作区所在的分组」
    *
-   * 选「放进去」时写这次归属，选「不放进去」时什么都不做——新工作区仍按路径推导渲染在父下面
+   * 选「放进去」时写这次归属，选「不放进去」时什么都不做——新工作区仍按路径推导渲染在父工作区下面
    * @param merge - 为真表示把新工作区放进那个分组
    */
   const commitMerge = (merge: boolean): void => {
@@ -1089,8 +1091,8 @@ function useRegionNestActions(
 
 /** 选择器面板的选中、置顶与行尾两项操作 */
 interface RegionPickerActions {
-  selectFocus: (key: string) => void
-  selectPinned: (key: string) => void
+  selectFocus: (address: RootEntryAddress) => void
+  selectPinned: (address: RootEntryAddress) => void
   renamePickerEntry: (entry: PickerEntry) => void
   deletePickerEntry: (entry: PickerEntry) => void
 }
@@ -1115,15 +1117,15 @@ function useRegionPickerActions(
    * 聚焦要落盘（它是最近使用的记录源），因此走 `apply` 收宿主回的整份快照
    * 菜单随即收起——它的作用就是把用户送到那一片内容上，留着只会挡住刚聚焦的列表
    */
-  const selectFocus = (key: string): void => {
+  const selectFocus = (address: RootEntryAddress): void => {
     ui.setPickerOpen(false)
-    if (key === snapshot.picker.focused) return
-    apply(focusEntry(key))
+    if (sameAddress(address, snapshot.picker.focused)) return
+    apply(focusEntry(address))
   }
 
   /** 菜单行尾的置顶按钮：切换该条目的置顶，菜单保持打开 */
-  const selectPinned = (key: string): void => {
-    apply(togglePinned(key))
+  const selectPinned = (address: RootEntryAddress): void => {
+    apply(togglePinned(address))
   }
 
   /**

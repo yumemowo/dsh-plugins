@@ -5,7 +5,7 @@
  * 缺少提供者时抛出，而不是让叶子拿到 `null` 后在各处崩掉
  *
  * 提供者交出的 value 身份必须稳定（容器侧用 `useMemo` 合成）：行级缓存按引用比对 props
- * value 每次新建会让 `React.memo` 包住的行组件在最坏情况下每次父渲染都重渲染（见 `docs/render-performance.md`）
+ * value 每次新建会让 `React.memo` 包住的行组件在最坏情况下每次父组件渲染都重渲染（见 `docs/render-performance.md`）
  */
 import { createContext, createElement, useContext } from 'react'
 import type { ReactElement, ReactNode } from 'react'

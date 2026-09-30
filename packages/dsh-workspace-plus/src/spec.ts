@@ -1,5 +1,7 @@
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import { z } from 'zod'
+import { ALL_ENTRIES } from './rootEntry.ts'
+import type { RootEntryAddress } from './rootEntry.ts'
 
 /** 一个会话分组：稳定的标识、显示名，以及按顺序归属的会话 */
 export const groupSchema = z.object({
@@ -12,7 +14,7 @@ export const groupSchema = z.object({
  * 一个工作区被放进某个分组时记录的归属
  *
  * 存的是子工作区自己的这份记录，而不是往父工作区的分组里追加成员
- * 一个子工作区因此天然至多只有一个归属，父分组被删除时这份记录也只是一个悬空引用，由渲染侧判为无效
+ * 一个子工作区因此天然至多只有一个归属，父工作区的分组被删除时这份记录也只是一个悬空引用，由渲染侧判为无效
  *
  * `workspaceId` 是父工作区 id，分组本身属于某个工作区，归属必须落在同一个工作区里，不跨工作区移动
  */
@@ -44,16 +46,28 @@ export const virtualWorkspaceSchema = z.object({
 })
 
 /**
+ * 根节点条目地址的持久化形状
+ *
+ * 标注成 {@link RootEntryAddress}，让形状只有 `rootEntry.ts` 那一处定义：改一边而忘了另一边会被 tsc 拦下
+ * 两个半边与线上 codec 都从这一份派生
+ */
+export const entryAddressSchema: z.ZodType<RootEntryAddress> = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('workspace'), id: z.string() }),
+  z.object({ kind: z.literal('virtual'), id: z.string() }),
+  z.object({ kind: z.literal('all') }),
+])
+
+/**
  * 菜单的聚焦 / 最近使用 / 置顶记录
  *
- * 三者都是根节点条目的键列表（见 `rootEntry.ts`），因此能指向工作区与工作区分组两类对象
+ * 三者都是根节点条目地址的列表（见 `rootEntry.ts`），因此能指向工作区与工作区分组两类对象
  * 字段都带默认值，旧文件里没有这几格时按空读，不必升版本号
  * 与 `virtualWorkspaces` 同一取舍，升版本会让既有文件直接 version-mismatch
  */
 export const pickerStateSchema = z.object({
-  focused: z.string().default(''),
-  recent: z.array(z.string()).default([]),
-  pinned: z.array(z.string()).default([]),
+  focused: entryAddressSchema.default(ALL_ENTRIES),
+  recent: z.array(entryAddressSchema).default([]),
+  pinned: z.array(entryAddressSchema).default([]),
 })
 
 /**
@@ -63,7 +77,7 @@ export const pickerStateSchema = z.object({
  */
 export const workspaceTreeSchema = z.object({
   virtualWorkspaces: z.array(virtualWorkspaceSchema),
-  picker: pickerStateSchema.default({ focused: '', recent: [], pinned: [] }),
+  picker: pickerStateSchema.default({ focused: ALL_ENTRIES, recent: [], pinned: [] }),
   /**
    * 是否按子工作区渲染
    *
@@ -91,7 +105,7 @@ export const workspaceGroupsSpec = defineDomain({
     schema: workspaceTreeSchema,
     initial: {
       virtualWorkspaces: [],
-      picker: { focused: '', recent: [], pinned: [] },
+      picker: { focused: ALL_ENTRIES, recent: [], pinned: [] },
       nested: true,
     },
   },

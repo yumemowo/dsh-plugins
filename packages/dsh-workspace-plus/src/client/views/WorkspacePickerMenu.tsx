@@ -30,6 +30,8 @@ import { IconButton } from './components/IconButton.tsx'
 import { useFloatingPanel } from './components/useFloatingPanel.ts'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import type { PickerEntry, PickerSections } from '../data/picker.ts'
+import { ALL_ENTRIES, sameAddress } from '../../rootEntry.ts'
+import type { RootEntryAddress } from '../../rootEntry.ts'
 import { useLocale } from '../useLocale.ts'
 import pickerStyles from './WorkspacePickerMenu.module.css'
 import rowsStyles from './components/rows.module.css'
@@ -48,15 +50,15 @@ export interface WorkspacePickerMenuProps {
   open: boolean
   /** 触发器元素，面板贴它的下缘展开 */
   triggerRef: RefObject<HTMLElement>
-  /** 当前聚焦的条目键，空串表示「全部」 */
-  focused: string
+  /** 当前聚焦条目的地址，面板按它标出选中项 */
+  focused: RootEntryAddress
   /** 菜单的三个分区 */
   sections: PickerSections
   onClose: () => void
   /** 选中一个条目：聚焦它 */
-  onSelect: (key: string) => void
+  onSelect: (address: RootEntryAddress) => void
   /** 切换一个条目的置顶 */
-  onTogglePinned: (key: string) => void
+  onTogglePinned: (address: RootEntryAddress) => void
   /** 重命名一个条目，工作区分组与独立工作区各走自己的对话框 */
   onRename: (entry: PickerEntry) => void
   /** 删除一个条目，工作区分组与独立工作区各走自己的确认框 */
@@ -89,8 +91,8 @@ function PickerRow({
   entry: PickerEntry
   focused: boolean
   pinned: boolean
-  onSelect: (key: string) => void
-  onTogglePinned: (key: string) => void
+  onSelect: (address: RootEntryAddress) => void
+  onTogglePinned: (address: RootEntryAddress) => void
   onRename: (entry: PickerEntry) => void
   onDelete: (entry: PickerEntry) => void
 }): ReactElement {
@@ -105,8 +107,8 @@ function PickerRow({
       aria-current={focused ? 'true' : undefined}
       // 缩进层级由条目自带，样式按这个属性换算，与列表里的层级步进同一个 16px
       style={{ '--wg-picker-depth': String(entry.depth) } as Record<string, string>}
-      onClick={() => onSelect(entry.key)}
-      onKeyDown={(event) => handleRowKeyDown(event, () => onSelect(entry.key))}
+      onClick={() => onSelect(entry.address)}
+      onKeyDown={(event) => handleRowKeyDown(event, () => onSelect(entry.address))}
     >
       <span className={pickerStyles.pickerIcon}>
         {entry.kind === 'virtual' ? <IconVirtualFolder16 /> : <IconFolderCloseRegular />}
@@ -131,7 +133,7 @@ function PickerRow({
           ariaLabel={pinLabel}
           icon={pinned ? <IconPinFillRegular /> : <IconPinOutlineRegular />}
           pressed={pinned}
-          onClick={() => onTogglePinned(entry.key)}
+          onClick={() => onTogglePinned(entry.address)}
         />
       </span>
     </div>
@@ -219,9 +221,13 @@ export function WorkspacePickerMenu({
         * 它是恢复入口，没聚焦时点它不做任何事，留着就是一个点不动的死条目
         *
         * 它不是菜单条目而是一个动作（退出聚焦、回到全部），因此不带选中标记，也不带那三枚操作按钮：这里的「全部」没有可重命名或删除的对象 */}
-      {focused === '' ? null : (
+      {focused.kind === 'all' ? null : (
         <div className={pickerStyles.pickerSection}>
-          <button type="button" className={pickerStyles.pickerReset} onClick={() => onSelect('')}>
+          <button
+            type="button"
+            className={pickerStyles.pickerReset}
+            onClick={() => onSelect(ALL_ENTRIES)}
+          >
             <span className={pickerStyles.pickerIcon}>
               <IconFolderCloseRegular />
             </span>
@@ -239,8 +245,8 @@ export function WorkspacePickerMenu({
             <PickerRow
               key={entry.key}
               entry={entry}
-              focused={entry.key === focused}
-              pinned={sections.pinned.some((item) => item.key === entry.key)}
+              focused={sameAddress(entry.address, focused)}
+              pinned={sections.pinned.some((item) => sameAddress(item.address, entry.address))}
               onSelect={onSelect}
               onTogglePinned={onTogglePinned}
               onRename={onRename}
@@ -259,7 +265,7 @@ export function WorkspacePickerMenu({
             <PickerRow
               key={entry.key}
               entry={entry}
-              focused={entry.key === focused}
+              focused={sameAddress(entry.address, focused)}
               pinned
               onSelect={onSelect}
               onTogglePinned={onTogglePinned}
@@ -278,8 +284,8 @@ export function WorkspacePickerMenu({
             <PickerRow
               key={entry.key}
               entry={entry}
-              focused={entry.key === focused}
-              pinned={sections.pinned.some((item) => item.key === entry.key)}
+              focused={sameAddress(entry.address, focused)}
+              pinned={sections.pinned.some((item) => sameAddress(item.address, entry.address))}
               onSelect={onSelect}
               onTogglePinned={onTogglePinned}
               onRename={onRename}

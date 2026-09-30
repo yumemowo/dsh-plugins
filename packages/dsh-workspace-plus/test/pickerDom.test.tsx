@@ -9,7 +9,8 @@ import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/clie
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
 import { viewModeProps } from './viewMode-stub.ts'
-import { rootVirtualKey, rootWorkspaceKey } from '../src/rootEntry.ts'
+import { ALL_ENTRIES, virtualAddress, workspaceAddress } from '../src/rootEntry.ts'
+import type { RootEntryAddress } from '../src/rootEntry.ts'
 
 /**
  * 对话框要用真实 DOM 断言
@@ -85,7 +86,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     loadGroups: async () =>
       snapshot({
         workspaceGroups: [{ id: 'vg1', name: '前端仓库', workspaceIds: ['w1'] }],
-        picker: { focused: '', recent: [], pinned: [] },
+        picker: { focused: ALL_ENTRIES, recent: [], pinned: [] },
       }),
     onReady: () => () => {},
     createGroup: async () => snapshot(),
@@ -333,7 +334,7 @@ describe('workspace picker in a real DOM', () => {
       loadGroups: async () =>
         snapshot({
           workspaceGroups: [{ id: 'vg1', name: '前端仓库', workspaceIds: ['w1'] }],
-          picker: { focused: rootVirtualKey('vg1'), recent: [rootVirtualKey('vg1')], pinned: [] },
+          picker: { focused: virtualAddress('vg1'), recent: [virtualAddress('vg1')], pinned: [] },
         }),
     })
 
@@ -353,7 +354,7 @@ describe('workspace picker in a real DOM', () => {
     const { container, root } = await mount({
       loadGroups: async () =>
         snapshot({
-          picker: { focused: rootWorkspaceKey('w2'), recent: [rootWorkspaceKey('w2')], pinned: [] },
+          picker: { focused: workspaceAddress('w2'), recent: [workspaceAddress('w2')], pinned: [] },
         }),
     })
 
@@ -374,7 +375,7 @@ describe('workspace picker in a real DOM', () => {
       loadGroups: async () =>
         snapshot({
           workspaceGroups: [{ id: 'vg1', name: '前端仓库', workspaceIds: ['w1'] }],
-          picker: { focused: rootWorkspaceKey('gone'), recent: [rootWorkspaceKey('gone')], pinned: [] },
+          picker: { focused: workspaceAddress('gone'), recent: [workspaceAddress('gone')], pinned: [] },
         }),
     })
 
@@ -399,7 +400,7 @@ describe('workspace picker in a real DOM', () => {
     const focused = await mount({
       loadGroups: async () =>
         snapshot({
-          picker: { focused: rootWorkspaceKey('w2'), recent: [rootWorkspaceKey('w2')], pinned: [] },
+          picker: { focused: workspaceAddress('w2'), recent: [workspaceAddress('w2')], pinned: [] },
         }),
     })
     await openMenu(focused.container)
@@ -413,9 +414,9 @@ describe('workspace picker in a real DOM', () => {
         snapshot({
           workspaceGroups: [{ id: 'vg1', name: '前端仓库', workspaceIds: ['w1'] }],
           picker: {
-            focused: '',
-            recent: [rootWorkspaceKey('w3'), rootVirtualKey('vg1')],
-            pinned: [rootVirtualKey('vg1')],
+            focused: ALL_ENTRIES,
+            recent: [workspaceAddress('w3'), virtualAddress('vg1')],
+            pinned: [virtualAddress('vg1')],
           },
         }),
     })
@@ -441,10 +442,10 @@ describe('workspace picker in a real DOM', () => {
   })
 
   it('focuses an entry from the panel through the host action', async () => {
-    const calls: string[] = []
+    const calls: RootEntryAddress[] = []
     const { container, root } = await mount({
-      focusEntry: async (key: string) => {
-        calls.push(key)
+      focusEntry: async (address: RootEntryAddress) => {
+        calls.push(address)
         return snapshot()
       },
     })
@@ -455,7 +456,7 @@ describe('workspace picker in a real DOM', () => {
       rowOf('W3').click()
     })
 
-    expect(calls).toEqual([rootWorkspaceKey('w3')])
+    expect(calls).toEqual([workspaceAddress('w3')])
     // 选完菜单收起
     expect(panel()).toBeNull()
 
@@ -463,10 +464,10 @@ describe('workspace picker in a real DOM', () => {
   })
 
   it('toggles a pin without closing the panel', async () => {
-    const calls: string[] = []
+    const calls: RootEntryAddress[] = []
     const { container, root } = await mount({
-      togglePinned: async (key: string) => {
-        calls.push(key)
+      togglePinned: async (address: RootEntryAddress) => {
+        calls.push(address)
         return snapshot()
       },
     })
@@ -476,7 +477,7 @@ describe('workspace picker in a real DOM', () => {
       actionOf(rowOf('前端仓库'), '置顶“前端仓库”').click()
     })
 
-    expect(calls).toEqual([rootVirtualKey('vg1')])
+    expect(calls).toEqual([virtualAddress('vg1')])
     // 置顶是就地组织菜单，不该把用户弹出菜单
     expect(panel()).not.toBeNull()
 
@@ -550,7 +551,7 @@ describe('workspace picker in a real DOM', () => {
       confirmDialog()
       await Promise.resolve()
     })
-    // 确认后走官方工作区控制器，带的是裸 id（不带 `ws:` 前缀）
+    // 确认后走官方工作区控制器，带的是裸工作区 id 而不是条目定位
     expect(called).toEqual(['w2:W2 改名'])
 
     await act(async () => root.unmount())
@@ -584,10 +585,10 @@ describe('workspace picker in a real DOM', () => {
   it('separates the row actions from the row itself', async () => {
     // 点「重命名」却跳去聚焦那个工作区是这里最容易踩的一处：三枚按钮必须是独立的热区
     // 不能嵌在行按钮里面
-    const focused: string[] = []
+    const focused: RootEntryAddress[] = []
     const { container, root } = await mount({
-      focusEntry: async (key: string) => {
-        focused.push(key)
+      focusEntry: async (address: RootEntryAddress) => {
+        focused.push(address)
         return snapshot()
       },
     })
@@ -620,7 +621,7 @@ describe('workspace picker in a real DOM', () => {
       loadGroups: async () =>
         snapshot({
           workspaceGroups: [{ id: 'vg1', name: '前端仓库', workspaceIds: ['w1'] }],
-          picker: { focused: rootWorkspaceKey('w2'), recent: [], pinned: [] },
+          picker: { focused: workspaceAddress('w2'), recent: [], pinned: [] },
         }),
     })
     await openCreateDialog(focused.container)
@@ -630,23 +631,23 @@ describe('workspace picker in a real DOM', () => {
   })
 
   it('focuses the group it just created when the switch checkbox is ticked', async () => {
-    const focused: string[] = []
+    const focused: RootEntryAddress[] = []
     let groups = [{ id: 'vg1', name: '前端仓库', workspaceIds: ['w1'] }]
     const { container, root } = await mount({
       loadGroups: async () =>
         snapshot({
           workspaceGroups: groups,
-          picker: { focused: rootWorkspaceKey('w2'), recent: [], pinned: [] },
+          picker: { focused: workspaceAddress('w2'), recent: [], pinned: [] },
         }),
       createVirtualWorkspace: async (name: string) => {
         groups = [...groups, { id: 'vg2', name, workspaceIds: [] }]
-        return snapshot({ workspaceGroups: groups, picker: { focused: '', recent: [], pinned: [] } })
+        return snapshot({ workspaceGroups: groups, picker: { focused: ALL_ENTRIES, recent: [], pinned: [] } })
       },
-      focusEntry: async (key: string) => {
-        focused.push(key)
+      focusEntry: async (address: RootEntryAddress) => {
+        focused.push(address)
         return snapshot({
           workspaceGroups: groups,
-          picker: { focused: key, recent: [key], pinned: [] },
+          picker: { focused: address, recent: [address], pinned: [] },
         })
       },
     })
@@ -674,27 +675,27 @@ describe('workspace picker in a real DOM', () => {
       await Promise.resolve()
     })
 
-    // 新建的分组排在最后，聚焦的是它（裸 id 拼上 `vw:` 前缀）
-    expect(focused).toEqual([rootVirtualKey('vg2')])
+    // 新建的分组排在最后，聚焦的是它
+    expect(focused).toEqual([virtualAddress('vg2')])
 
     await act(async () => root.unmount())
   })
 
   it('keeps the current focus when the switch checkbox is left unticked', async () => {
-    const focused: string[] = []
+    const focused: RootEntryAddress[] = []
     let groups = [{ id: 'vg1', name: '前端仓库', workspaceIds: ['w1'] }]
     const { container, root } = await mount({
       loadGroups: async () =>
         snapshot({
           workspaceGroups: groups,
-          picker: { focused: rootWorkspaceKey('w2'), recent: [], pinned: [] },
+          picker: { focused: workspaceAddress('w2'), recent: [], pinned: [] },
         }),
       createVirtualWorkspace: async (name: string) => {
         groups = [...groups, { id: 'vg2', name, workspaceIds: [] }]
-        return snapshot({ workspaceGroups: groups, picker: { focused: '', recent: [], pinned: [] } })
+        return snapshot({ workspaceGroups: groups, picker: { focused: ALL_ENTRIES, recent: [], pinned: [] } })
       },
-      focusEntry: async (key: string) => {
-        focused.push(key)
+      focusEntry: async (address: RootEntryAddress) => {
+        focused.push(address)
         return snapshot()
       },
     })
@@ -728,7 +729,7 @@ describe('workspace picker in a real DOM', () => {
       loadGroups: async () =>
         snapshot({
           workspaceGroups: [{ id: 'vg1', name: '前端仓库', workspaceIds: ['w1'] }],
-          picker: { focused: '', recent: [rootWorkspaceKey('w2')], pinned: [] },
+          picker: { focused: ALL_ENTRIES, recent: [workspaceAddress('w2')], pinned: [] },
         }),
     })
     await openMenu(container)

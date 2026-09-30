@@ -8,7 +8,8 @@ import type {
   WorkspaceNesting,
 } from './spec.ts'
 import { normalizePickerState, withFocus, withPinnedToggled, withoutEntry } from './pickerState.ts'
-import { rootVirtualKey, rootWorkspaceKey } from './rootEntry.ts'
+import { virtualAddress, workspaceAddress } from './rootEntry.ts'
+import type { RootEntryAddress } from './rootEntry.ts'
 
 /** 分组存储与变更操作的实现，注册为 `ctx.workspacePlus` */
 export interface WorkspaceGroupsService {
@@ -42,7 +43,7 @@ export interface WorkspaceGroupsService {
    *
    * 归属记在子工作区自己的记录上，因此一个子工作区天然只能有一个归属，不跨工作区移动
    * @param workspaceIds - 要放进该分组的子工作区
-   * @param parentWorkspaceId - 持有该分组的工作区，也就是这些子工作区的父
+   * @param parentWorkspaceId - 持有该分组的工作区，也就是这些子工作区的父工作区
    * @param groupId - 目标分组 id
    */
   nestWorkspaces(
@@ -62,19 +63,17 @@ export interface WorkspaceGroupsService {
   /**
    * 把一个工作区从所有分组与归属里摘除
    *
-   * 删除工作区时清理由此留下的记录，不另开一套删除接口，它自己的归属、挂在它名下的分组的归属、以及指向它的父子引用都在这一次写里清掉
+   * 删除工作区时清理由此留下的记录，不另开一套删除接口，它自己的归属、挂在它名下的分组的归属、以及以它为父工作区的那些归属都在这一次写里清掉
    */
   forgetWorkspace(workspaceId: string): Promise<WorkspaceGroupsSnapshot>
   /**
    * 聚焦一个根节点条目，并把它记入最近使用
-   * @param key - 条目键（见 `rootEntry.ts`），空串表示退回「全部」
    */
-  focusEntry(key: string): Promise<WorkspaceGroupsSnapshot>
+  focusEntry(address: RootEntryAddress): Promise<WorkspaceGroupsSnapshot>
   /**
    * 切换一个根节点条目的置顶
-   * @param key - 条目键（见 `rootEntry.ts`）
    */
-  togglePinned(key: string): Promise<WorkspaceGroupsSnapshot>
+  togglePinned(address: RootEntryAddress): Promise<WorkspaceGroupsSnapshot>
 }
 
 /** 生成一个会话分组 id，同工作区内唯一即可，无需全局唯一 */
@@ -172,7 +171,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
   /**
    * 一次写入多份工作区的分组记录
    *
-   * 把工作区放进分组时要连带它名下的子工作区一起写，分多次写会让「父已归组、子还在外面」有一段可观察的窗口
+   * 把工作区放进分组时要连带它名下的子工作区一起写，分多次写会让「父工作区已归组、子工作区还在外面」有一段可观察的窗口
    * @param updates - 每个要改的工作区及其新记录
    */
   async function saveMany(
@@ -220,15 +219,14 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
    * 删除一个根节点条目并同时摘掉它在菜单三份记录里的痕迹
    *
    * 两次写会让「分组已消失、聚焦还指着它」有一段可观察的窗口，因此合成一次
-   * @param key - 被删除条目的键
    * @param groups - 删除后的分组列表
    * @returns 变更后的快照
    */
   function dropEntry(
-    key: string,
+    address: RootEntryAddress,
     groups: VirtualWorkspace[],
   ): Promise<WorkspaceGroupsSnapshot> {
-    const picker = withoutEntry(normalizePickerState(tree.get().picker), key)
+    const picker = withoutEntry(normalizePickerState(tree.get().picker), address)
     return writeTree({ virtualWorkspaces: groups, picker })
   }
 
@@ -304,7 +302,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
       // 只解散分组：组内工作区回到未分组，工作区及其会话都不受影响
       // 分组在菜单三份记录里的条目一并摘掉，否则聚焦在一个已解散的分组上时列表会整片空掉
       return dropEntry(
-        rootVirtualKey(groupId),
+        virtualAddress(groupId),
         treeGroups().filter((group) => group.id !== groupId),
       )
     },
@@ -375,8 +373,8 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
 
     async forgetWorkspace(workspaceId) {
       // 工作区已被删除，它留下的记录再也不会被渲染，元数据里挂着不存在的 id 只会让两边长期偏离
-      // 三处一起清：它在根节点分组里的成员资格、它自己的嵌套归属、以及指向它作为父的归属
-      // 第三处不能省——父没了，那些子工作区再也不会被渲染在它下面，留着就是悬空引用
+      // 三处一起清：它在根节点分组里的成员资格、它自己的嵌套归属、以及以它为父工作区的归属
+      // 第三处不能省——父工作区没了，那些子工作区再也不会被渲染在它下面，留着就是悬空引用
       const groups = treeGroups()
       const pruned = groups.map((group) => ({
         ...group,
@@ -389,7 +387,8 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
         ([childId, record]) =>
           childId !== workspaceId && record.nesting?.workspaceId === workspaceId,
       )
-      const next = await dropEntry(rootWorkspaceKey(workspaceId), changed ? pruned : groups)
+      const address = workspaceAddress(workspaceId)
+      const next = await dropEntry(address, changed ? pruned : groups)
       for (const [childId, record] of orphaned) {
         // 无条件写回，不共用 `saveRecord`：后者会把两份内容都空的记录整条删掉
         await table.put(childId, { groups: record.groups, nesting: null })
@@ -397,12 +396,12 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
       return orphaned.length === 0 ? next : snapshot()
     },
 
-    async focusEntry(key) {
-      return savePicker(withFocus(normalizePickerState(tree.get().picker), key))
+    async focusEntry(address) {
+      return savePicker(withFocus(normalizePickerState(tree.get().picker), address))
     },
 
-    async togglePinned(key) {
-      return savePicker(withPinnedToggled(normalizePickerState(tree.get().picker), key))
+    async togglePinned(address) {
+      return savePicker(withPinnedToggled(normalizePickerState(tree.get().picker), address))
     },
   }
 }

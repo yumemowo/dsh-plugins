@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { normalizePickerState } from '../pickerState.ts'
+import type { RootEntryAddress } from '../rootEntry.ts'
 
 /**
  * 客户端侧的 Remote 贡献声明
@@ -26,10 +27,21 @@ const virtualWorkspaceSchema = z.object({
   workspaceIds: z.array(z.string()),
 })
 
+/**
+ * 与宿主 `spec.ts` 的 `entryAddressSchema` 同形，两端形状必须一致否则网关拒收
+ *
+ * 标注成 {@link RootEntryAddress} 钉住形状：两侧各写一份是网关的要求（客户端不得引用宿主那半边的模块），但形状只有 `rootEntry.ts` 一处定义
+ */
+const entryAddressSchema: z.ZodType<RootEntryAddress> = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('workspace'), id: z.string() }),
+  z.object({ kind: z.literal('virtual'), id: z.string() }),
+  z.object({ kind: z.literal('all') }),
+])
+
 const pickerSchema = z.object({
-  focused: z.string(),
-  recent: z.array(z.string()),
-  pinned: z.array(z.string()),
+  focused: entryAddressSchema,
+  recent: z.array(entryAddressSchema),
+  pinned: z.array(entryAddressSchema),
 })
 
 const snapshotSchema = z.object({
@@ -130,8 +142,12 @@ export const REMOTE_CONTRIBUTION = {
     descriptor('unnestWorkspaces', [{ name: 'workspaceIds', codec: strList('WorkspaceIds') }]),
     descriptor('setNested', [{ name: 'enabled', codec: bool('NestedEnabled') }]),
     descriptor('forgetWorkspace', [{ name: 'workspaceId', codec: str('WorkspaceId') }]),
-    descriptor('focusEntry', [{ name: 'key', codec: str('RootEntryKey') }]),
-    descriptor('togglePinned', [{ name: 'key', codec: str('RootEntryKey') }]),
+    descriptor('focusEntry', [
+      { name: 'address', codec: codec('RootEntryAddress', () => entryAddressSchema) },
+    ]),
+    descriptor('togglePinned', [
+      { name: 'address', codec: codec('RootEntryAddress', () => entryAddressSchema) },
+    ]),
   ],
 }
 
@@ -159,9 +175,9 @@ export interface VirtualWorkspace {
 
 /** 菜单的聚焦 / 最近使用 / 置顶记录，形状与宿主 `spec.ts` 一致 */
 export interface PickerSnapshot {
-  focused: string
-  recent: string[]
-  pinned: string[]
+  focused: RootEntryAddress
+  recent: RootEntryAddress[]
+  pinned: RootEntryAddress[]
 }
 
 export interface WorkspaceGroupsSnapshot {

@@ -25,6 +25,7 @@ import type { ReactElement, RefObject } from 'react'
 import type { AddWorkspaceActions } from '../actions.ts'
 import { pickerSections } from '../data/picker.ts'
 import type { PickerEntry } from '../data/picker.ts'
+import type { RootEntryAddress } from '../../rootEntry.ts'
 import { useLocale } from '../useLocale.ts'
 import { IconChevronDownOutlineRegular, IconSlidersTwoOutlineRegular } from '../runtime.ts'
 import { AddWorkspaceControl } from './AddWorkspaceControl.tsx'
@@ -67,8 +68,8 @@ export interface RegionHeaderOverlays {
 
 /** 顶部区消费的命令 */
 export interface RegionHeaderCommands {
-  onSelectFocus: (key: string) => void
-  onTogglePinned: (key: string) => void
+  onSelectFocus: (address: RootEntryAddress) => void
+  onTogglePinned: (address: RootEntryAddress) => void
   onRenameEntry: (entry: PickerEntry) => void
   onDeleteEntry: (entry: PickerEntry) => void
   /** 把一个工作区放进某个分组，或先建一个再放 */
@@ -83,8 +84,8 @@ interface RegionHeaderAreaProps {
   searching: boolean
   nestingEnabled: boolean
   onToggleNested: () => void
-  /** 当前聚焦条目的键，菜单按它标出选中项 */
-  focusedKey: string
+  /** 当前聚焦条目的地址，菜单按它标出选中项 */
+  focusedKey: RootEntryAddress
   /** 解析出来的「添加工作区」服务面，缺省时该入口不渲染 */
   addWorkspace: AddWorkspaceActions | undefined
   search: SearchState

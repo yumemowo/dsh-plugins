@@ -1,3 +1,4 @@
+import { ALL_ENTRIES } from '../src/rootEntry.ts'
 import type {
   Group,
   PickerSnapshot,
@@ -30,7 +31,7 @@ export function snapshot(init: SnapshotInit = {}): WorkspaceGroupsSnapshot {
     byWorkspace: init.byWorkspace ?? {},
     nesting: init.nesting ?? {},
     workspaceGroups: init.workspaceGroups ?? [],
-    picker: init.picker ?? { focused: '', recent: [], pinned: [] },
+    picker: init.picker ?? { focused: ALL_ENTRIES, recent: [], pinned: [] },
     nested: init.nested ?? true,
   }
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createWorkspaceGroupsService } from '../src/service.ts'
 import { workspaceGroupsSpec, workspaceTreeSchema } from '../src/spec.ts'
-import { rootVirtualKey, rootWorkspaceKey } from '../src/rootEntry.ts'
+import { ALL_ENTRIES, virtualAddress, workspaceAddress } from '../src/rootEntry.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Group } from '../src/spec.ts'
 
@@ -65,7 +65,7 @@ describe('workspace groups service', () => {
       byWorkspace: {},
       nesting: {},
       workspaceGroups: [],
-      picker: { focused: '', recent: [], pinned: [] },
+      picker: { focused: ALL_ENTRIES, recent: [], pinned: [] },
       nested: true,
     })
   })
@@ -337,40 +337,40 @@ describe('picker state', () => {
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
 
-    expect((await service.list()).picker).toEqual({ focused: '', recent: [], pinned: [] })
+    expect((await service.list()).picker).toEqual({ focused: ALL_ENTRIES, recent: [], pinned: [] })
   })
 
   it('records a focus with the newest first', async () => {
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
 
-    await service.focusEntry(rootWorkspaceKey('w1'))
-    const focused = await service.focusEntry(rootVirtualKey('vg1'))
+    await service.focusEntry(workspaceAddress('w1'))
+    const focused = await service.focusEntry(virtualAddress('vg1'))
 
-    expect(focused.picker.focused).toBe(rootVirtualKey('vg1'))
-    expect(focused.picker.recent).toEqual([rootVirtualKey('vg1'), rootWorkspaceKey('w1')])
+    expect(focused.picker.focused).toEqual(virtualAddress('vg1'))
+    expect(focused.picker.recent).toEqual([virtualAddress('vg1'), workspaceAddress('w1')])
   })
 
-  it('accepts the empty key as a focus back to everything', async () => {
+  it('accepts the all address as a focus back to everything', async () => {
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
-    await service.focusEntry(rootWorkspaceKey('w1'))
+    await service.focusEntry(workspaceAddress('w1'))
 
-    const cleared = await service.focusEntry('')
+    const cleared = await service.focusEntry(ALL_ENTRIES)
 
-    expect(cleared.picker.focused).toBe('')
-    // 退回「全部」也是一次使用，因此它照样留在最近使用里
-    expect(cleared.picker.recent).toContain('')
+    expect(cleared.picker.focused).toEqual(ALL_ENTRIES)
+    // 「全部」只改聚焦，不进历史：它不对应任何条目，记进来只会白挤掉一条真实历史
+    expect(cleared.picker.recent).toEqual([workspaceAddress('w1')])
   })
 
   it('toggles a pin on and off', async () => {
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
 
-    const on = await service.togglePinned(rootWorkspaceKey('w1'))
-    expect(on.picker.pinned).toEqual([rootWorkspaceKey('w1')])
+    const on = await service.togglePinned(workspaceAddress('w1'))
+    expect(on.picker.pinned).toEqual([workspaceAddress('w1')])
 
-    const off = await service.togglePinned(rootWorkspaceKey('w1'))
+    const off = await service.togglePinned(workspaceAddress('w1'))
     expect(off.picker.pinned).toEqual([])
   })
 
@@ -378,55 +378,55 @@ describe('picker state', () => {
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     const groupId = (await service.createVirtualWorkspace('旧名')).workspaceGroups[0]?.id ?? ''
-    await service.focusEntry(rootVirtualKey(groupId))
-    await service.togglePinned(rootVirtualKey(groupId))
+    await service.focusEntry(virtualAddress(groupId))
+    await service.togglePinned(virtualAddress(groupId))
 
     const renamed = await service.renameVirtualWorkspace(groupId, '新名')
 
     // 改名不动 id，聚焦与置顶因此仍然指着同一个对象
-    expect(renamed.picker.focused).toBe(rootVirtualKey(groupId))
-    expect(renamed.picker.pinned).toEqual([rootVirtualKey(groupId)])
+    expect(renamed.picker.focused).toEqual(virtualAddress(groupId))
+    expect(renamed.picker.pinned).toEqual([virtualAddress(groupId)])
   })
 
   it('clears a deleted group from all three records', async () => {
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     const groupId = (await service.createVirtualWorkspace('前端')).workspaceGroups[0]?.id ?? ''
-    const key = rootVirtualKey(groupId)
+    const key = virtualAddress(groupId)
     await service.focusEntry(key)
     await service.togglePinned(key)
 
     const deleted = await service.deleteVirtualWorkspace(groupId)
 
     // 分组没了，聚焦若还指着它，列表会整片空掉而第二行写着一个不存在的名字
-    expect(deleted.picker).toEqual({ focused: '', recent: [], pinned: [] })
+    expect(deleted.picker).toEqual({ focused: ALL_ENTRIES, recent: [], pinned: [] })
   })
 
   it('clears a forgotten workspace from all three records', async () => {
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
-    const key = rootWorkspaceKey('w1')
+    const key = workspaceAddress('w1')
     await service.focusEntry(key)
     await service.togglePinned(key)
 
     const forgotten = await service.forgetWorkspace('w1')
 
-    expect(forgotten.picker).toEqual({ focused: '', recent: [], pinned: [] })
+    expect(forgotten.picker).toEqual({ focused: ALL_ENTRIES, recent: [], pinned: [] })
   })
 
   it('keeps the picker state of other entries when one is deleted', async () => {
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
-    await service.focusEntry(rootWorkspaceKey('w2'))
-    await service.focusEntry(rootWorkspaceKey('w1'))
-    await service.togglePinned(rootWorkspaceKey('w2'))
+    await service.focusEntry(workspaceAddress('w2'))
+    await service.focusEntry(workspaceAddress('w1'))
+    await service.togglePinned(workspaceAddress('w2'))
 
     const forgotten = await service.forgetWorkspace('w1')
 
     expect(forgotten.picker).toEqual({
-      focused: '',
-      recent: [rootWorkspaceKey('w2')],
-      pinned: [rootWorkspaceKey('w2')],
+      focused: ALL_ENTRIES,
+      recent: [workspaceAddress('w2')],
+      pinned: [workspaceAddress('w2')],
     })
   })
 
@@ -558,7 +558,31 @@ describe('picker state', () => {
     const { ctx } = createFakeContext({ virtualWorkspaces: [] })
     const service = await createWorkspaceGroupsService(ctx)
 
-    expect((await service.list()).picker).toEqual({ focused: '', recent: [], pinned: [] })
+    expect((await service.list()).picker).toEqual({ focused: ALL_ENTRIES, recent: [], pinned: [] })
+  })
+
+  it('stores the picker records as tagged addresses rather than prefixed strings', async () => {
+    // 落盘形状是持久化身份：工作区与工作区分组的 id 可能撞值，只存 id 会让一条记录在两种含义之间摇摆
+    const { ctx, readStored } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const groupId = (await service.createVirtualWorkspace('前端')).workspaceGroups[0]?.id ?? ''
+    await service.focusEntry(virtualAddress(groupId))
+
+    const stored = readStored() as { picker: { focused: unknown } }
+    expect(stored.picker.focused).toEqual({ kind: 'virtual', id: groupId })
+  })
+
+  it('rejects a global whose picker holds a shape the schema does not know', async () => {
+    // global 的校验在域打开时就跑，形状不认识就整份打不开，不会退化成空记录
+    // 这是刻意的：静默把不认识的记录当空读会丢掉用户已有的聚焦与置顶
+    const { ctx } = createFakeContext({
+      virtualWorkspaces: [],
+      picker: { focused: 'vw:wg1', recent: ['vw:wg1', '', 'ws:w1'], pinned: ['ws:w1'] },
+    })
+
+    const service = await createWorkspaceGroupsService(ctx)
+
+    await expect(service.list()).rejects.toThrow()
   })
 
   it('writes a global that still parses on the next open', async () => {
@@ -567,8 +591,8 @@ describe('picker state', () => {
     const { ctx, readStored } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     const groupId = (await service.createVirtualWorkspace('前端')).workspaceGroups[0]?.id ?? ''
-    await service.focusEntry(rootVirtualKey(groupId))
-    await service.togglePinned(rootWorkspaceKey('w1'))
+    await service.focusEntry(virtualAddress(groupId))
+    await service.togglePinned(workspaceAddress('w1'))
     await service.moveWorkspace('w1', groupId)
 
     const stored = readStored() as { virtualWorkspaces: unknown[]; picker: unknown }
