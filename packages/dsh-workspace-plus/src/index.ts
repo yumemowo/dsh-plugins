@@ -8,8 +8,6 @@
  *  3. 挂上 `typertRemote` 绑定，使 `./typert` 清单能把它经网关暴露给浏览器
  *
  * 浏览器半边另有出口（`exports["./client"]`），由 Web 客户端加载，注册进侧边栏的 `sidebar.workspaces` 区域
- *
- * @module @yumemowo/dsh-workspace-plus
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { createWorkspaceGroupsService } from './service.ts'
