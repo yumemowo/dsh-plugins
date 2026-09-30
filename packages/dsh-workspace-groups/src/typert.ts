@@ -22,7 +22,7 @@ function codec(typeSymbol: string, build: () => z.ZodType) {
   let value: z.ZodType | undefined
   return {
     mode: 'strict' as const,
-    typeSymbol: `@your-scope/dsh-workspace-groups#${typeSymbol}`,
+    typeSymbol: `@yumemowo/dsh-workspace-groups#${typeSymbol}`,
     create: () => (value ??= build()),
   }
 }
@@ -51,7 +51,7 @@ const nullableGroupIdCodec = codec('NullableGroupId', () => z.string().nullable(
 /** 菜单条目键：工作区与工作区分组共用一套带前缀的键（见 `rootEntry.ts`） */
 const entryKeyCodec = codec('RootEntryKey', () => z.string())
 
-const PACKAGE = '@your-scope/dsh-workspace-groups'
+const PACKAGE = '@yumemowo/dsh-workspace-groups'
 const SERVICE = 'workspaceGroups'
 
 /**

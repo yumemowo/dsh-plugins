@@ -1,8 +1,6 @@
-# @your-scope/dsh-workspace-groups
+# @yumemowo/dsh-workspace-groups
 
 为 dsh Web 侧边栏提供两级分组与子工作区嵌套：**工作区分组**（把一组工作区打包管理，只出现在列表最外层）、**会话分组**（每个工作区内部的会话归类），以及按目录路径自动推导的**子工作区嵌套**（`/repo/a` 渲染在 `/repo` 体内）。
-
-> `@your-scope` 是占位符，发布前替换为你自己的 npm scope（改 `package.json` 与 `cordis.patch.yml` 两处）。
 
 ## 它替换了什么
 
@@ -81,7 +79,7 @@ README 只讲本包是什么、怎么用。设计论证、对齐依据与踩过�
 
 ```bash
 dsh plugin --profile web add "$PWD/packages/dsh-workspace-groups"
-dsh --profile web --dump-config | grep -A2 '== @your-scope/dsh-workspace-groups'
+dsh --profile web --dump-config | grep -A2 '== @yumemowo/dsh-workspace-groups'
 ```
 
 改完客户端代码后重新构建并刷新页面：

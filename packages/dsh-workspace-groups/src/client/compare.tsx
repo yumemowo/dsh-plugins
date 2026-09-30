@@ -23,7 +23,7 @@ import type { ViewModeStoreHandle } from './store/viewMode.ts'
 import styles from './views/WorkspaceGroupsRegion.module.css'
 
 /** 注册进原生右侧栏的实现 id，同时是 tab 体座位的键 */
-export const COMPARE_TAB_ID = '@your-scope/dsh-workspace-groups/compare'
+export const COMPARE_TAB_ID = '@yumemowo/dsh-workspace-groups/compare'
 
 /** 判别值：`openTab` 按它找类型，tab 记录也按它找类型 */
 export const COMPARE_TAB_KIND = 'workspace-groups'

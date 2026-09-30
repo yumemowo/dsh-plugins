@@ -10,7 +10,7 @@
  * npm 包名带 scope，但源码中的 {@link name} 保持简短且不带 scope：它命名的是
  * fiber 而非包，带 scope 的包身份由 patch 的 `name:` 字段承载。
  *
- * @module @your-scope/dsh-hello
+ * @module @yumemowo/dsh-hello
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { Config } from './config.ts'

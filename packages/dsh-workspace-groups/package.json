@@ -1,9 +1,20 @@
 {
-  "name": "@your-scope/dsh-workspace-groups",
+  "name": "@yumemowo/dsh-workspace-groups",
   "version": "0.1.0",
   "description": "为 dsh Web 侧边栏提供两级分组：工作区分组（把一组工作区打包管理，只出现在列表最外层）与会话分组（每个工作区内部的会话归类）。",
   "type": "module",
   "license": "MIT",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "sidebar",
+    "workspace",
+    "web-ui"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -39,6 +50,7 @@
   },
   "scripts": {
     "build": "node scripts/gen-css-types.mjs && tsc -p tsconfig.json && node scripts/build-client.mjs",
+    "prepare": "pnpm run build",
     "typecheck": "node scripts/gen-css-types.mjs && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -1,15 +1,15 @@
-# @your-scope/dsh-hello
+# @yumemowo/dsh-hello
 
 本 monorepo 的参考 dsh 插件：提供一个 `hello` 服务（`ctx.hello`）与一个面向模型的
 `hello_greet` 工具。新增插件时可复制本包作为起点。
 
 ## 命名
 
-npm 包名带 scope（`@your-scope/dsh-hello`），但运行时标识符保持简短、不带 scope：
+npm 包名带 scope（`@yumemowo/dsh-hello`），但运行时标识符保持简短、不带 scope：
 
 | 标识符 | 取值 | 位置 |
 | --- | --- | --- |
-| npm 包名 | `@your-scope/dsh-hello` | `package.json` 的 `name`，以及 patch 的 `name:` |
+| npm 包名 | `@yumemowo/dsh-hello` | `package.json` 的 `name`，以及 patch 的 `name:` |
 | 行 id | `hello` | `cordis.patch.yml` 的 `id:` |
 | 插件/fiber 名 | `hello` | `src/index.ts` 的 `export const name` |
 | 服务名 | `hello` | `ctx.hello` |
@@ -35,7 +35,7 @@ npm 包名带 scope（`@your-scope/dsh-hello`），但运行时标识符保持�
 
 ```bash
 dsh plugin --profile compat add "$PWD/packages/dsh-hello"
-dsh --profile compat --dump-config | grep -A2 '== @your-scope/dsh-hello'
+dsh --profile compat --dump-config | grep -A2 '== @yumemowo/dsh-hello'
 ```
 
 ## 配置

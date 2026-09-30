@@ -9,4 +9,4 @@
 # 因此这里必须用 -1 才能接替官方组件
 - insert:
     - id: workspace-groups
-      name: '@your-scope/dsh-workspace-groups'
+      name: '@yumemowo/dsh-workspace-groups'

@@ -9,7 +9,7 @@
  *
  * 浏览器半边另有出口（`exports["./client"]`），由 Web 客户端加载，注册进侧边栏的 `sidebar.workspaces` 区域
  *
- * @module @your-scope/dsh-workspace-groups
+ * @module @yumemowo/dsh-workspace-groups
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { createWorkspaceGroupsService } from './service.ts'

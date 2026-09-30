@@ -52,13 +52,13 @@ const codec = (typeSymbol: string, build: () => z.ZodType) => {
   let value: z.ZodType | undefined
   return {
     mode: 'strict' as const,
-    typeSymbol: `@your-scope/dsh-workspace-groups#${typeSymbol}`,
+    typeSymbol: `@yumemowo/dsh-workspace-groups#${typeSymbol}`,
     create: () => (value ??= build()),
   }
 }
 
 /** 与宿主 `./typert` 清单的方法集合一一对应 */
-const PACKAGE = '@your-scope/dsh-workspace-groups'
+const PACKAGE = '@yumemowo/dsh-workspace-groups'
 /** 网关按此 namespace 归组方法表，客户端用 `remote.<namespace>` 取服务 */
 export const SERVICE = 'workspaceGroups'
 

@@ -100,7 +100,7 @@ describe('lib/client.js bundle', () => {
   it('registers itself under the package name the client module table expects', () => {
     const mod = loadBundle() as { id?: string }
 
-    expect(mod.id).toBe('@your-scope/dsh-workspace-groups')
+    expect(mod.id).toBe('@yumemowo/dsh-workspace-groups')
   })
 
   it('exports the apply hook the client loader calls', () => {
@@ -184,7 +184,7 @@ describe('lib/client.js bundle', () => {
 
     // 反向确认注入确实发生：每张样式表一个 data-plugin-css 标记
     const tags = new Set(
-      [...source.matchAll(/"(@your-scope\/dsh-workspace-groups\/[^"]*\.module\.css)"/g)].map(
+      [...source.matchAll(/"(@yumemowo\/dsh-workspace-groups\/[^"]*\.module\.css)"/g)].map(
         (m) => m[1],
       ),
     )

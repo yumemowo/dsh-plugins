@@ -15,4 +15,4 @@
 # 以及任何 --patch 覆盖层 —— 都按 `id` 定位本行，且逐行以最后一层为准。
 - insert:
     - id: hello
-      name: '@your-scope/dsh-hello'
+      name: '@yumemowo/dsh-hello'

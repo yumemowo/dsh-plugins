@@ -6,10 +6,8 @@
 
 | 包 | 作用 | 形态 |
 | --- | --- | --- |
-| `@your-scope/dsh-workspace-groups` | 侧边栏的分组工作区列表，接替官方 `sidebar.workspaces` 区域 | 宿主 + 浏览器双半 |
-| `@your-scope/dsh-hello` | 参考骨架：一个 `ctx.hello` 服务与一个 `hello_greet` 工具 | 纯宿主 |
-
-> `@your-scope` 是占位符。发布前替换为真实的 npm scope，每个包需要改 `package.json` 与 `cordis.patch.yml` 两处。
+| `@yumemowo/dsh-workspace-groups` | 侧边栏的分组工作区列表，接替官方 `sidebar.workspaces` 区域 | 宿主 + 浏览器双半 |
+| `@yumemowo/dsh-hello` | 参考骨架：一个 `ctx.hello` 服务与一个 `hello_greet` 工具 | 纯宿主 |
 
 ### dsh-workspace-groups
 
@@ -33,7 +31,7 @@
 
 ```bash
 dsh plugin --profile web add "$PWD/packages/dsh-workspace-groups"
-dsh --profile web --dump-config | grep -A2 '== @your-scope/dsh-workspace-groups'
+dsh --profile web --dump-config | grep -A2 '== @yumemowo/dsh-workspace-groups'
 ```
 
 把路径换成 `packages/dsh-hello` 即可安装示例插件。
