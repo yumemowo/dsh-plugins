@@ -6,10 +6,10 @@
 
 | 包 | 作用 | 形态 |
 | --- | --- | --- |
-| `@yumemowo/dsh-workspace-groups` | 侧边栏的分组工作区列表，接替官方 `sidebar.workspaces` 区域 | 宿主 + 浏览器双半 |
+| `@yumemowo/dsh-workspace-plus` | 侧边栏的分组工作区列表，接替官方 `sidebar.workspaces` 区域 | 宿主 + 浏览器双半 |
 | `@yumemowo/dsh-hello` | 参考骨架：一个 `ctx.hello` 服务与一个 `hello_greet` 工具 | 纯宿主 |
 
-### dsh-workspace-groups
+### dsh-workspace-plus
 
 把 dsh Web 侧边栏的工作区列表换成分组视图，在官方列表之上多出两级容器：**工作区分组**把一组工作区打包管理、只出现在列表最外层；**会话分组**在单个工作区内部归类会话。建组、移入移出、重命名删除、展开折叠都是手动操作，未归组的会话仍平铺在原位，因此一个分组都没建时界面与官方列表一致。
 
@@ -21,7 +21,7 @@
 - **会话操作**：重命名、分叉、归档与归组，以及三类行共用的行内 `...` 菜单和右键菜单。
 - **悬停详情卡片**：补全行上被截断的工作区目录、创建时刻与会话状态。
 
-它接替的只是 `sidebar.workspaces` 一个区域，logo、面板列表、设置与底部操作的插槽不受影响。完整功能清单、与官方组件的复用关系，以及尚未实现的官方功能见[该包 README](packages/dsh-workspace-groups/README.md)。
+它接替的只是 `sidebar.workspaces` 一个区域，logo、面板列表、设置与底部操作的插槽不受影响。完整功能清单、与官方组件的复用关系，以及尚未实现的官方功能见[该包 README](packages/dsh-workspace-plus/README.md)。
 
 ### dsh-hello
 
@@ -30,13 +30,13 @@
 ## 安装
 
 ```bash
-dsh plugin --profile web add "$PWD/packages/dsh-workspace-groups"
-dsh --profile web --dump-config | grep -A2 '== @yumemowo/dsh-workspace-groups'
+dsh plugin --profile web add "$PWD/packages/dsh-workspace-plus"
+dsh --profile web --dump-config | grep -A2 '== @yumemowo/dsh-workspace-plus'
 ```
 
 把路径换成 `packages/dsh-hello` 即可安装示例插件。
 
-`dsh-workspace-groups` 改完客户端代码后必须重新构建产物，否则 GUI 加载的仍是旧的 `lib/client.js`；改了宿主半边则要重启 `dsh`。
+`dsh-workspace-plus` 改完客户端代码后必须重新构建产物，否则 GUI 加载的仍是旧的 `lib/client.js`；改了宿主半边则要重启 `dsh`。
 
 ## 环境要求
 
@@ -63,7 +63,7 @@ pnpm run check        # 以上全部，按顺序执行
 .
 ├── packages/
 │   ├── dsh-hello/                # 纯宿主参考插件
-│   └── dsh-workspace-groups/     # 侧边栏分组插件（宿主 + 浏览器双半）
+│   └── dsh-workspace-plus/     # 侧边栏分组插件（宿主 + 浏览器双半）
 ├── scripts/
 │   └── verify-profile-mount.mjs  # 端到端挂载校验
 ├── pnpm-workspace.yaml           # 工作区、依赖 catalog 与 pnpm 设置

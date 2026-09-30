@@ -126,7 +126,7 @@ importers:
         specifier: 'catalog:'
         version: 5.0.0(@types/node@26.5.1)(jsdom@30.0.1)(vite@8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(yaml@2.9.1))
 
-  packages/dsh-workspace-groups:
+  packages/dsh-workspace-plus:
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: 'catalog:'
