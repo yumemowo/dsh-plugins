@@ -7,7 +7,7 @@
 | 包 | 作用 | 形态 |
 | --- | --- | --- |
 | `@yumemowo/dsh-workspace-plus` | 侧边栏的分组工作区列表，接替官方 `sidebar.workspaces` 区域 | 宿主 + 浏览器双半 |
-| `@yumemowo/dsh-hello` | 参考骨架：一个 `ctx.hello` 服务与一个 `hello_greet` 工具 | 纯宿主 |
+| `@yumemowo/dsh-hello` | 创建新插件用的参考骨架：一个 `ctx.hello` 服务与一个 `hello_greet` 工具 | 纯宿主 |
 
 ### dsh-workspace-plus
 
