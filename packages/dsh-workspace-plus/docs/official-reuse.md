@@ -78,7 +78,7 @@
 - **工作区分组的图标是自绘的。**「优先复用官方原语」指的是优先复用**接口与控件**，不是说字形只能用现成的那几个。0.1.7-rc.1 的 primitives 导出表里没有任何「分组 / 容器 / 堆叠」类字形，也没有虚线的文件夹，而工作区分组既需要一个「新建」入口、又需要与旁边的实线文件夹（它代表**工作区本身**）区分开。因此按官方规范自绘一个，视觉上与它们同族（见 [自绘图标](custom-icons.md)）。同一版新增了图钉，置顶按钮因此从自绘换成官方字形。
 - **删除分组用普通 `Modal`，不用 `RiskConfirmation`。** 后者自带警告图标与「须勾选确认」的复选框，而删除分组只解散分组、不动会话本身，达不到那个破坏级别。危险语义改由确认按钮的错误色承载（`.dangerAction` 设 `--dsw-alias-state-error-primary`）——这与官方 `ui-workspace` 的删除按钮是同一做法：`Button` 没有 `danger` variant，改色就靠传 `className`。
 - **行内 16px 图标按钮保留自绘。** 官方 `ui-workspace` 的行内按钮也是它自己的 CSS Module（16px 命中区、4px 圆角、悬停提亮文字色），primitives 没有等价的 16px 行内按钮；换成 primitives 的 `Button`（28px 高、带悬停底色）会让行外观明显偏离官方。因此几何保留同一份 16px 约定，图标取原语。
-- **展示方式的三个取值用本包自有文案。** 官方那组是「分组方式 / 按工作区 / 单列表」，语义是官方自己那三种排布；本包只有两种，取值也不同（`workspace` / `flat`），照抄官方键名会让两边对不上号。因此另起 `viewMode.label` / `viewMode.workspace` / `viewMode.flat`，中文取「展示方式 / 按工作区 / 平铺」。字形仍取官方同款（`IconFolderCloseRegular` / `IconFlatListOutlineRegular`），外观上读得出与官方那组是同一族。
+- **展示方式用本包自有文案。** 官方那组是「分组方式 / 按工作区 / 按工作区树 / 单列表」，语义是官方自己那三种排布；本包只有两种，取值也不同（`workspace` / `flat`），照抄官方键名会让两边对不上号。因此另起 `viewMode.label` / `viewMode.workspace` / `viewMode.flat`，中文取「展示方式 / 按工作区 / 平铺」。字形仍取官方同款（`IconFolderCloseRegular` / `IconFlatListOutlineRegular`），外观上读得出与官方那组是同一族；官方第三项「按工作区树」的 `IconWorkspaceTreeOutlineRegular` 则由本包的子工作区嵌套开关借用，见[自绘图标](custom-icons.md)。
 
 primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标成 external 由宿主从基线模块表解析；它是 shell 静态模块表的成员，不会多出第二份实例。
 

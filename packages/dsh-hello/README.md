@@ -31,12 +31,16 @@ npm 包名带 scope（`@yumemowo/dsh-hello`），但运行时标识符保持简�
 | `cordis.patch.yml` | 插入 `hello` 行的 bundle patch |
 | `test/hello.test.ts` | 在其真实依赖之上挂载该插件 |
 
-## 安装到 profile
+## 本地验证
+
+复制本包作为新插件起点后，可把它挂进一个临时 profile 验证入口、patch 与配置 schema 都能被加载器接受：
 
 ```bash
 dsh plugin --profile compat add "$PWD/packages/dsh-hello"
 dsh --profile compat --dump-config | grep -A2 '== @yumemowo/dsh-hello'
 ```
+
+本包是供参考的骨架，不是给最终用户安装的插件。
 
 ## 配置
 

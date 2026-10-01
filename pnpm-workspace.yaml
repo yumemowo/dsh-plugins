@@ -59,11 +59,9 @@ minimumReleaseAgeExclude: []
 overrides:
   zod: 4.6.2
 
-# 本 checkout 所在的沙箱中 $HOME 是只读的，pnpm 默认的全局 store/cache
-#（~/.local/share/pnpm）不可写。把它们放在工作区内，`pnpm install` 在任何环境都能跑通。
-#
-# 在普通机器上可删除这两行，改用共享的全局 store 以节省磁盘。
-# 注意：pnpm 11 从本文件读取这两项，而不是从 .npmrc。
+# pnpm 11 从本文件读取 storeDir / cacheDir，而不是从 .npmrc 读取。
+# 指向工作区内可让 store 与 cache 随仓库自包含，不写则回落到 pnpm 默认的
+# 全局位置（~/.local/share/pnpm）。
 storeDir: .pnpm-store
 cacheDir: .pnpm-cache
 allowBuilds:
