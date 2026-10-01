@@ -17,6 +17,9 @@ catalog:
   '@types/node': ^26.5.1
   typescript: ^5.9.3
   vitest: ^5.0.0
+  # scripts/verify-plugin-compat.mjs 用它判定 peer 范围是否接受最低 dsh 版本。
+  # 与 dsh 自身同一套实现，避免校验语义和宿主漂移。
+  semver: ^7.8.5
 
   # 浏览器半边：客户端包与 Web shell 共享同一份运行时实例，
   # 因此 React 必须与 shell 基线一致（18.x），否则会出现两个 React 实例。

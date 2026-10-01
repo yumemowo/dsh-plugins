@@ -353,7 +353,7 @@ export function regionLabels(
         t('nested.addDesc', { name, parent, group }),
     },
     viewMode: {
-      // 官方菜单里那组「分组方式 / 按工作区 / 单列表」的措辞本包不复用：这边的三个取值是另一套语义
+      // 官方菜单里那组「分组方式 / 按工作区 / 按工作区树 / 单列表」的措辞本包不复用：这边的两个取值是另一套语义
       label: t('viewMode.label'),
       workspace: t('viewMode.workspace'),
       flat: t('viewMode.flat'),

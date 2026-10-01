@@ -33,15 +33,20 @@ dsh plugin --profile web add "github:yumemowo/dsh-plugins#path:packages/<包名>
 > dsh plugin --profile web update <包名>
 > ```
 
+## 版本兼容
+
+各插件需要 dsh `0.2.0-rc.1` 及以上，覆盖整个 `0.2.x`。
+
 ## 开发
 
 ```bash
-pnpm install          # 安装工作区依赖
-pnpm run build        # 编译各包到 packages/*/lib
-pnpm run typecheck    # 校验 src 与 test 两个工程，不产出文件
-pnpm run test         # 逐包执行 vitest run
-pnpm run verify:mount # 组装并启动一个包含各插件的临时 profile
-pnpm run check        # 以上全部，按顺序执行
+pnpm install           # 安装工作区依赖
+pnpm run build         # 编译各包到 packages/*/lib
+pnpm run typecheck     # 校验 src 与 test 两个工程，不产出文件
+pnpm run test          # 逐包执行 vitest run
+pnpm run verify:compat # 校验各包的 dsh 兼容声明
+pnpm run verify:mount  # 组装并启动一个包含各插件的临时 profile
+pnpm run check         # 以上全部，按顺序执行
 ```
 
 环境要求：Node.js ≥ 22.19、pnpm 11（`corepack enable pnpm`）。`pnpm run verify:mount` 还需要 PATH 中有 `dsh`。
@@ -58,6 +63,7 @@ pnpm run check        # 以上全部，按顺序执行
 │   ├── dsh-hello/                # 纯宿主参考插件，复制它作为新插件的起点
 │   └── dsh-workspace-plus/       # 侧边栏分组插件（宿主 + 浏览器双半）
 ├── scripts/
+│   ├── verify-plugin-compat.mjs  # dsh 兼容声明的静态校验
 │   └── verify-profile-mount.mjs  # 端到端挂载校验
 ├── pnpm-workspace.yaml           # 工作区、依赖 catalog 与 pnpm 设置
 └── tsconfig.base.json            # 各包继承的编译选项
