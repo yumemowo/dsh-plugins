@@ -236,8 +236,17 @@ export interface ParentGroupMenuInput {
     /** 该父工作区体内的会话分组 */
     groups: readonly { id: string; label: string }[]
   }[]
-  /** 该工作区当前所在的分组 id，没有时为空串 */
-  currentGroupId: string
+  /**
+   * 该工作区当前所在的父工作区分组，不在任何分组里时缺省
+   *
+   * 父工作区与分组要一起给：分组 id 只在一个工作区内唯一，单看分组 id 认不出是哪个祖先名下的
+   */
+  current?:
+    | {
+        parentId: string
+        groupId: string
+      }
+    | undefined
   /** 「移动到分组…」一级项文案 */
   moveToLabel: string
   /** 「移出分组」一级项文案，未嵌套时该项不出现 */
@@ -245,22 +254,50 @@ export interface ParentGroupMenuInput {
 }
 
 /**
+ * 某个「祖先工作区 + 分组」是不是该工作区已经在的那一个
+ *
+ * 按这一对比较而不是只看分组 id：分组 id 只在一个工作区内唯一，另一个祖先名下可能有一个同 id 的分组
+ */
+function isCurrentParentGroup(
+  input: ParentGroupMenuInput,
+  parentId: string,
+  groupId: string,
+): boolean {
+  return input.current !== undefined &&
+    input.current.parentId === parentId &&
+    input.current.groupId === groupId
+}
+
+/**
+ * 该工作区行有没有可移入的父工作区分组
+ *
+ * 调用方据此决定「移动到分组…」整项渲染不渲染：没有目标而它当前也不在任何分组里时整项不出现
+ */
+export function hasMovableParentGroup(input: ParentGroupMenuInput): boolean {
+  return input.candidates.some((ancestor) =>
+    ancestor.groups.some((group) => !isCurrentParentGroup(input, ancestor.parentId, group.id)),
+  )
+}
+
+/**
  * 工作区行菜单里的「移动到分组…」一级项
  *
- * 与虚拟工作区分组那一项同一取舍，一级项本身不禁用，子菜单为空时也只是没有可移入的目标
+ * 与虚拟工作区分组那一项不同：那一项的子菜单里总有一个「新建」可点，这一项没有可移入的目标时只能禁用
  * 不带图标，`IconVirtualWorkspace16` 是虚拟工作区分组的字形，这一项进的是父工作区体内的会话分组，另一个层级
  * @returns 可放进 Menu items 的一级项
  */
 export function buildParentGroupMenuItem(input: ParentGroupMenuInput): MenuActionItem {
   const submenu: MenuActionItem[] = input.candidates.flatMap((ancestor) =>
-    ancestor.groups.map((group) => ({
-      // 形状由 `parseParentGroupId` 解析回来，改这里要一并改它
-      id: `${PARENT_GROUP_PREFIX}${ancestor.parentId}:${group.id}`,
-      label:
-        input.candidates.length === 1
-          ? group.label
-          : `${ancestor.parentLabel} / ${group.label}`,
-    })),
+    ancestor.groups
+      .filter((group) => !isCurrentParentGroup(input, ancestor.parentId, group.id))
+      .map((group) => ({
+        // 形状由 `parseParentGroupId` 解析回来，改这里要一并改它
+        id: `${PARENT_GROUP_PREFIX}${ancestor.parentId}:${group.id}`,
+        label:
+          input.candidates.length === 1
+            ? group.label
+            : `${ancestor.parentLabel} / ${group.label}`,
+      })),
   )
   return {
     id: PARENT_GROUP_ITEM.move,
@@ -428,7 +465,7 @@ export function buildWorkspaceMenuItems(input: WorkspaceMenuInput): readonly Men
     grouping = true
     items.push({ type: 'separator', id: WORKSPACE_MENU_SEPARATOR.parentGroup })
     items.push(buildParentGroupMenuItem(input.parentGrouping))
-    if (input.parentGrouping.currentGroupId !== '') {
+    if (input.parentGrouping.current !== undefined) {
       items.push({ id: PARENT_GROUP_ITEM.ungroup, label: input.parentGrouping.ungroupLabel })
     }
   }

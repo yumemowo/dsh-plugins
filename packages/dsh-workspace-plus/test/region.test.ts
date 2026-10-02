@@ -443,12 +443,12 @@ describe('buildWorkspaceMenuItems with a parent-group entry', () => {
   }
 
   /** 一祖先一分组的选项集 */
-  function grouping(currentGroupId = '') {
+  function grouping(current?: { parentId: string; groupId: string }) {
     return {
       candidates: [
         { parentId: 'w1', parentLabel: 'W1', groups: [{ id: 'g1', label: '前端' }] },
       ],
-      currentGroupId,
+      ...(current === undefined ? {} : { current }),
       moveToLabel: '移动到分组…',
       ungroupLabel: '移出分组',
     }
@@ -474,7 +474,10 @@ describe('buildWorkspaceMenuItems with a parent-group entry', () => {
   })
 
   it('adds the ungroup entry right below move-to once the workspace is nested', () => {
-    const items = buildWorkspaceMenuItems({ ...labels, parentGrouping: grouping('g1') })
+    const items = buildWorkspaceMenuItems({
+      ...labels,
+      parentGrouping: grouping({ parentId: 'w1', groupId: 'g1' }),
+    })
 
     expect(items.map((item) => (item as { id?: string }).id)).toEqual([
       'new-group',
@@ -533,7 +536,6 @@ describe('buildWorkspaceMenuItems with a parent-group entry', () => {
       candidates: [
         { parentId: 'w1', parentLabel: 'W1', groups: [{ id: 'g1', label: '前端' }] },
       ],
-      currentGroupId: '',
       moveToLabel: '移动到分组…',
       ungroupLabel: '移出分组',
     })
@@ -542,7 +544,6 @@ describe('buildWorkspaceMenuItems with a parent-group entry', () => {
         { parentId: 'w1', parentLabel: 'W1', groups: [{ id: 'g1', label: '前端' }] },
         { parentId: 'w2', parentLabel: 'W2', groups: [{ id: 'g2', label: '前端' }] },
       ],
-      currentGroupId: '',
       moveToLabel: '移动到分组…',
       ungroupLabel: '移出分组',
     })
@@ -558,7 +559,6 @@ describe('buildWorkspaceMenuItems with a parent-group entry', () => {
       candidates: [
         { parentId: 'w1', parentLabel: 'W1', groups: [{ id: 'g1', label: '前端' }] },
       ],
-      currentGroupId: '',
       moveToLabel: '移动到分组…',
       ungroupLabel: '移出分组',
     })
@@ -567,17 +567,66 @@ describe('buildWorkspaceMenuItems with a parent-group entry', () => {
     expect(parseParentGroupId('pg:w1:g1')).toEqual({ parentId: 'w1', groupId: 'g1' })
   })
 
-  it('disables the entry when no ancestor holds a group', () => {
+  it('hides the parent group the workspace already sits in', () => {
     const item = buildParentGroupMenuItem({
-      candidates: [{ parentId: 'w1', parentLabel: 'W1', groups: [] }],
-      currentGroupId: '',
+      candidates: [
+        {
+          parentId: 'w1',
+          parentLabel: 'W1',
+          groups: [
+            { id: 'g1', label: '前端' },
+            { id: 'g2', label: '后端' },
+          ],
+        },
+      ],
+      current: { parentId: 'w1', groupId: 'g1' },
       moveToLabel: '移动到分组…',
       ungroupLabel: '移出分组',
     })
 
-    // 一级项不禁用，但子菜单为空时要明说它此刻无处可去，而不是指一个展不开的菜单
+    // 把已在的分组再列一次，点下去是无意义的操作
+    expect(item.submenu?.map((entry) => entry.id)).toEqual(['pg:w1:g2'])
+  })
+
+  it('keeps a same-named group under another ancestor', () => {
+    const item = buildParentGroupMenuItem({
+      candidates: [
+        { parentId: 'w1', parentLabel: 'W1', groups: [{ id: 'g1', label: '前端' }] },
+        { parentId: 'w2', parentLabel: 'W2', groups: [{ id: 'g1', label: '前端' }] },
+      ],
+      current: { parentId: 'w1', groupId: 'g1' },
+      moveToLabel: '移动到分组…',
+      ungroupLabel: '移出分组',
+    })
+
+    // 分组 id 只在一个工作区内唯一，按 id 单独比对会把另一个祖先名下那个同名分组一并剔掉
+    expect(item.submenu?.map((entry) => entry.id)).toEqual(['pg:w2:g1'])
+  })
+
+  it('disables the entry when no ancestor holds a group', () => {
+    const item = buildParentGroupMenuItem({
+      candidates: [{ parentId: 'w1', parentLabel: 'W1', groups: [] }],
+      moveToLabel: '移动到分组…',
+      ungroupLabel: '移出分组',
+    })
+
+    // 没有可移入的目标时一级项禁用，而不是指一个展不开的菜单
     expect(item.disabled).toBe(true)
     expect(menuLabelArrow(item.label)).toBeUndefined()
+  })
+
+  it('disables the entry when the only ancestor group is the one it sits in', () => {
+    const item = buildParentGroupMenuItem({
+      candidates: [
+        { parentId: 'w1', parentLabel: 'W1', groups: [{ id: 'g1', label: '前端' }] },
+      ],
+      current: { parentId: 'w1', groupId: 'g1' },
+      moveToLabel: '移动到分组…',
+      ungroupLabel: '移出分组',
+    })
+
+    expect(item.disabled).toBe(true)
+    expect(item.submenu).toEqual([])
   })
 
   it('gives the entry a trailing arrow because it opens a submenu', () => {
@@ -585,7 +634,6 @@ describe('buildWorkspaceMenuItems with a parent-group entry', () => {
       candidates: [
         { parentId: 'w1', parentLabel: 'W1', groups: [{ id: 'g1', label: '前端' }] },
       ],
-      currentGroupId: '',
       moveToLabel: '移动到分组…',
       ungroupLabel: '移出分组',
     })
@@ -600,7 +648,6 @@ describe('buildWorkspaceMenuItems with a parent-group entry', () => {
       candidates: [
         { parentId: 'w1', parentLabel: 'W1', groups: [{ id: 'g1', label: '前端' }] },
       ],
-      currentGroupId: '',
       moveToLabel: '移动到分组…',
       ungroupLabel: '移出分组',
     })

@@ -42,7 +42,12 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
       items,
       onSelect,
     }: {
-      items?: { id: string; label?: React.ReactNode; submenu?: { id: string; label?: React.ReactNode }[] }[]
+      items?: {
+        id: string
+        label?: React.ReactNode
+        disabled?: boolean
+        submenu?: { id: string; label?: React.ReactNode }[]
+      }[]
       onSelect?: (id: string) => void
     }) =>
       h(
@@ -55,6 +60,8 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
               key: item.id,
               type: 'button',
               'data-wg-test-item': item.id,
+              // 真原语把 `disabled` 原样交给按钮，禁用的项点不动
+              disabled: item.disabled === true,
               onClick: () => onSelect?.(item.id),
             },
             item.label as React.ReactNode,
@@ -197,6 +204,41 @@ function sections(container: HTMLElement): { title: string; depth: string }[] {
   })
 }
 
+/**
+ * 点开某个工作区行尾的 `...`，交回该行的标题行
+ *
+ * 替身把菜单就地渲染而不是 portal 出去，因此每一行的那份条目都留在文档里
+ * 断言某个工作区的菜单时要按交回的这段范围查，否则会读到它体内子工作区那几行
+ */
+async function openRowMenu(container: HTMLElement, title: string): Promise<Element> {
+  const section = Array.from(container.querySelectorAll('.workspace')).find(
+    (candidate) => candidate.querySelector('.workspaceTitle')?.textContent === title,
+  )
+  if (section === undefined) throw new Error(`no workspace section titled ${title}`)
+  await act(async () => {
+    ;(section.querySelector('.rowActionSlot button') as HTMLButtonElement | undefined)?.click()
+  })
+  // 悬停卡片替身会给标题行再套一层锚点盒，因此按后代取而不是 `:scope >`
+  const head = section.querySelector('.workspaceHead')
+  if (head === null) throw new Error(`no workspace head in section titled ${title}`)
+  return head
+}
+
+/**
+ * 某一行菜单里的条目 id，按文档序并去重
+ *
+ * 一份行菜单在文档里出现两次（行内 `...` 那份与右键那份），两者条目相同，断言只关心集合
+ */
+function rowMenuItems(head: Element): string[] {
+  return [
+    ...new Set(
+      Array.from(head.querySelectorAll('[data-wg-test-item]')).map(
+        (entry) => entry.getAttribute('data-wg-test-item') ?? '',
+      ),
+    ),
+  ]
+}
+
 describe('nested sub-workspaces in a real DOM', () => {
   it('nests a child workspace inside its parent by cwd path', async () => {
     const { container, root } = await mount()
@@ -331,12 +373,7 @@ describe('nested sub-workspaces in a real DOM', () => {
     })
 
     // 打开子工作区那一行的 `...` 菜单
-    const pkg = Array.from(container.querySelectorAll('.workspace')).find(
-      (section) => section.querySelector('.workspaceTitle')?.textContent === 'dsh-workspace-plus',
-    )
-    await act(async () => {
-      ;(pkg?.querySelector('.rowActionSlot button') as HTMLButtonElement | undefined)?.click()
-    })
+    await openRowMenu(container, 'dsh-workspace-plus')
 
     // 点一级项「移动到分组…」，再点它子菜单里那个分组
     const entry = document.body.querySelector<HTMLButtonElement>('[data-wg-test-item="move-to-parent-group"]')
@@ -359,6 +396,58 @@ describe('nested sub-workspaces in a real DOM', () => {
     expect(
       group?.querySelector('.nest .workspaceTitle')?.textContent,
     ).toBe('dsh-workspace-plus')
+
+    await act(async () => root.unmount())
+  })
+
+  it('hides the ancestor group the child workspace already sits in', async () => {
+    // 子工作区已在 w1 的 g1 里，候选里不该再出现 g1——点它是一次无意义的操作
+    const { container, root } = await mount({
+      loadGroups: async () =>
+        snapshot({
+          byWorkspace: {
+            w1: [
+              { id: 'g1', name: '前端', sessionIds: [] },
+              { id: 'g2', name: '后端', sessionIds: [] },
+            ],
+          },
+          nesting: { w2: { workspaceId: 'w1', groupId: 'g1' } },
+        }),
+    })
+
+    const row = await openRowMenu(container, 'W2')
+
+    expect(rowMenuItems(row).filter((id) => id.startsWith('pg:'))).toEqual(['pg:w1:g2'])
+    await act(async () => root.unmount())
+  })
+
+  it('leaves the parent-group entry disabled while the workspace sits in its only group', async () => {
+    // 没有别的目标可移入，但「移出分组」还在，因此这一项以禁用态占位而不是整项消失
+    const { container, root } = await mount({
+      loadGroups: async () =>
+        snapshot({
+          byWorkspace: { w1: [{ id: 'g1', name: '前端', sessionIds: [] }] },
+          nesting: { w2: { workspaceId: 'w1', groupId: 'g1' } },
+        }),
+    })
+
+    const row = await openRowMenu(container, 'W2')
+
+    const entry = row.querySelector<HTMLButtonElement>('[data-wg-test-item="move-to-parent-group"]')
+    expect(entry, 'the entry must stay visible as a disabled placeholder').not.toBeNull()
+    expect(entry?.disabled).toBe(true)
+    expect(row.querySelector('[data-wg-test-item="ungroup-child-workspace"]')).not.toBeNull()
+
+    await act(async () => root.unmount())
+  })
+
+  it('renders no parent-group entry while the workspace has neither a group nor a target', async () => {
+    // W3 在 /repo/a/b 下，它没有分组；它的祖先 W1、W2 名下也没有任何分组，因此整项不渲染
+    const { container, root } = await mount()
+
+    const row = await openRowMenu(container, 'W3')
+
+    expect(row.querySelector('[data-wg-test-item="move-to-parent-group"]')).toBeNull()
 
     await act(async () => root.unmount())
   })

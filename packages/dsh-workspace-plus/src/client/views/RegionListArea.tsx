@@ -23,6 +23,7 @@ import type { RootLayout, SessionRow } from '../data/types.ts'
 import type { RegionLabels } from '../labels.ts'
 import { UNGROUPED_KEY } from '../store/viewMode.ts'
 import { useExpansion } from '../useExpansion.ts'
+import { hasMovableParentGroup } from '../menus.tsx'
 import type { ParentGroupMenuInput, VirtualWorkspaceMenuInput } from '../menus.tsx'
 import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { abbreviateHomePath } from '../utils/pathUtils.ts'
@@ -275,11 +276,15 @@ function WorkspaceNode({
    * 该工作区行上那份「移动到分组…」菜单的选项集
    *
    * 候选是它 cwd 路径上的任意一个现存祖先，放进谁的分组谁就是父工作区——因此不是一个自动选定的最近祖先
-   * 只有真的有分组可进时这一项才出现，父工作区名下没有分组时它整项渲染成禁用，不留一个点不动的热区
+   * 已经被它放进的那个分组不出现在候选里，把自己已在的分组再列一次是无意义的操作
    * 祖先按从近到远列出，与列表里的层级顺序一致
    */
   const parentGroupMenu = ((): ParentGroupMenuInput | undefined => {
-    const current = layout.nesting.bindingOf(workspaceId)
+    const binding = layout.nesting.bindingOf(workspaceId)
+    const current =
+      binding === undefined
+        ? undefined
+        : { parentId: binding.workspaceId, groupId: binding.groupId }
     const candidates = layout.nesting.ancestorsOf(workspaceId).map((parentId) => {
       const parent = layout.workspaceById.get(parentId)
       return {
@@ -291,16 +296,17 @@ function WorkspaceNode({
         })),
       }
     })
-    const movable = candidates.some((ancestor) => ancestor.groups.length > 0)
-    // 既没有可移入的目标、也不在任何一个分组里时整项不渲染，留着就是一个点不动的死入口
-    // 这与「虚拟工作区分组」那一项不同——那一项的子菜单里总有一个「新建」可点
-    if (!movable && current === undefined) return undefined
-    return {
+    const input: ParentGroupMenuInput = {
       candidates,
-      currentGroupId: current?.groupId ?? '',
+      current,
       moveToLabel: labels.nested.moveToGroup,
       ungroupLabel: labels.nested.ungroupChild,
     }
+    // 既没有可移入的目标、也不在任何一个分组里时整项不渲染，留着就是一个点不动的死入口
+    // 这与「虚拟工作区分组」那一项不同——那一项的子菜单里总有一个「新建」可点
+    // 已在某个分组里时仍要留着它，那时它以禁用态与下方的「移出分组」并列
+    if (!hasMovableParentGroup(input) && current === undefined) return undefined
+    return input
   })()
 
   return (
