@@ -52,16 +52,12 @@ describe('locales', () => {
       'menu.newVirtualWorkspace',
       'moveToGroup',
       'moveToVirtualWorkspace',
-      'nested.addDesc',
-      'nested.addTitle',
       'nested.disable',
       'nested.disableDesc',
       'nested.disableTitle',
       'nested.disabledNote',
       'nested.groupEmpty',
       'nested.inGroup',
-      'nested.mergeConfirm',
-      'nested.mergeSkip',
       'nested.moveToGroup',
       'nested.reEnableHint',
       'nested.setting',
@@ -71,6 +67,9 @@ describe('locales', () => {
       'picker.all',
       'picker.change',
       'picker.entry',
+      'picker.focusNewConfirm',
+      'picker.focusNewDesc',
+      'picker.focusNewTitle',
       'picker.followFocus',
       'picker.pin',
       'picker.pinned',
@@ -245,6 +244,15 @@ describe('regionLabels', () => {
     expect(labels.picker.all).toBe('全部工作区')
     expect(labels.picker.recent).toBe('最近使用')
     expect(labels.picker.pinned).toBe('置顶')
+  })
+
+  it('names both workspaces in the focus-new confirmation', () => {
+    // 用户据此判断改换聚焦对象之后看到的是哪一个，因此两个名字都要点到
+    // 名字特意取与说明正文无重合的串：取「新工作区」这类词时断言会被正文自身满足，变异测试不反转
+    const desc = labels.picker.focusNewDesc('pkg-new', 'repo-old')
+    expect(labels.picker.focusNewTitle('pkg-new')).toContain('pkg-new')
+    expect(desc).toContain('pkg-new')
+    expect(desc).toContain('repo-old')
   })
 
   it('names the row actions after the entry they act on', () => {

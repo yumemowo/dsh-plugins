@@ -10,6 +10,7 @@
  * 它们按 `depth` 缩进，层级因此在菜单里也读得出来
  */
 import type { RootLayout } from './types.ts'
+import { isAncestorPath } from './nest.ts'
 import type { Nesting } from './nest.ts'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { RECENT_SHOWN } from '../../pickerState.ts'
@@ -208,4 +209,54 @@ export function focusedWorkspaceIds(
   if (entry === undefined) return undefined
   if (entry.kind === 'workspace') return [entry.id]
   return layout.groups.find((group) => group.id === entry.id)?.workspaceIds ?? []
+}
+
+/**
+ * 新工作区在当前聚焦下可不可见，以及不可见时该走哪条路让它可见
+ *
+ * 采纳之后紧接着会在新工作区里开一个新会话并打开它，而聚焦把列表收窄到那一片
+ * 新工作区落在被聚焦范围之外时那条会话行谁也看不到，因此采纳路径先问一次这里
+ */
+export type AdoptionVisibility =
+  /** 列表不裁剪，或新工作区本来就会渲染在被聚焦的那一片里，什么都不必做 */
+  | { kind: 'visible' }
+  /** 被聚焦的是一个虚拟工作区分组，把它放进那个分组是唯一能让新工作区出现在视野里的写入 */
+  | { kind: 'join-virtual'; groupId: string }
+  /** 被聚焦的是一个真实工作区，没有能替用户做的写入，问一句要不要改换聚焦对象 */
+  | { kind: 'ask-focus'; focusedLabel: string }
+
+/**
+ * 判一次新工作区在当前的聚焦下可不可见
+ *
+ * 三条判据按聚焦对象的种类分派：没有聚焦、聚焦的是虚拟分组、聚焦的是真实工作区
+ * 「会渲染在被聚焦的工作区体内」要三条同时成立：嵌套开着、被聚焦的工作区有可用 cwd、新工作区的 cwd 是它的后代目录
+ * 被聚焦的工作区必然不在任何虚拟工作区分组里——菜单只列分组名，组内成员不作为可聚焦条目，因此这里不必再比两者的分组归属
+ * @param input.focused - 当前聚焦的条目地址
+ * @param input.entries - 菜单条目，聚焦地址必须在其中解析得到才算数
+ * @param input.path - 新工作区的 cwd
+ * @param input.nestingEnabled - 嵌套是否生效，关掉时任何工作区都不渲染在另一个工作区体内
+ * @param input.pathOf - 按 id 取工作区的 cwd
+ * @returns 该走哪条路让它可见
+ */
+export function adoptionVisibility(input: {
+  focused: RootEntryAddress
+  entries: readonly PickerEntry[]
+  path: string
+  nestingEnabled: boolean
+  pathOf: (workspaceId: string) => string | undefined
+}): AdoptionVisibility {
+  const focusedEntry = resolveFocus(input.entries, input.focused)
+  if (focusedEntry === undefined) return { kind: 'visible' }
+  if (focusedEntry.kind === 'virtual') {
+    return { kind: 'join-virtual', groupId: focusedEntry.id }
+  }
+  const focusedPath = input.pathOf(focusedEntry.id)
+  if (
+    input.nestingEnabled &&
+    focusedPath !== undefined &&
+    isAncestorPath(focusedPath, input.path)
+  ) {
+    return { kind: 'visible' }
+  }
+  return { kind: 'ask-focus', focusedLabel: focusedEntry.label }
 }

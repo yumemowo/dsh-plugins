@@ -856,7 +856,7 @@ function props(
       ? {}
       : {
           addWorkspace: () => ({
-            createWorkspace: async (path: string) => ({ workspaceId: `w-${path}` }),
+            createWorkspace: async (path: string) => ({ workspaceId: `w-${path}`, title: path }),
             startSession: () => {},
             occupant: () => ({
               component: (() => null) as never,

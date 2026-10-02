@@ -28,7 +28,14 @@ import type { AddWorkspaceActions, OfficialSessionActions, RegionActions, Region
 import { buildRootLayout, virtualWorkspaceIdOf } from '../data/layout.ts'
 import { descendantsOf, deriveNesting, nearestAncestorForPath } from '../data/nest.ts'
 import type { Nesting } from '../data/nest.ts'
-import { focusedLayout, focusedWorkspaceIds, pickerSections, resolveFocus, rootPickerEntries } from '../data/picker.ts'
+import {
+  adoptionVisibility,
+  focusedLayout,
+  focusedWorkspaceIds,
+  pickerSections,
+  resolveFocus,
+  rootPickerEntries,
+} from '../data/picker.ts'
 import type { PickerEntry } from '../data/picker.ts'
 import { searchSessions } from '../data/search.ts'
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
@@ -48,7 +55,7 @@ import type { RegionTranslate } from '../locales.ts'
 import { PARENT_GROUP_ITEM, VIRTUAL_WORKSPACE_ITEM, VIRTUAL_WORKSPACE_PREFIX, parseParentGroupId } from '../menus.tsx'
 import { normalizeSnapshot } from '../remote.ts'
 import type { WorkspaceGroupsSnapshot } from '../remote.ts'
-import { sameAddress, virtualAddress } from '../../rootEntry.ts'
+import { sameAddress, virtualAddress, workspaceAddress } from '../../rootEntry.ts'
 import type { RootEntryAddress } from '../../rootEntry.ts'
 import { useFlipMarker } from '../useFlipMarker.ts'
 import { UNGROUPED_KEY, expandedAt, indicatorOf, modeOf, sessionGroupExpansionOf, sessionGroupKey, virtualExpansionOf, workspaceExpansionOf } from '../store/viewMode.ts'
@@ -60,7 +67,7 @@ import { LocalViewOptionsProvider } from '../useLocalViewOptions.ts'
 import type { LocalViewOptions } from '../useLocalViewOptions.ts'
 import type { RegionLocale } from '../useLocale.ts'
 import { RegionDialogs } from './RegionDialogs.tsx'
-import type { MergeDraft, RegionDialogActions, RegionOverlay } from './RegionDialogs.tsx'
+import type { RegionDialogActions, RegionOverlay } from './RegionDialogs.tsx'
 import { RegionHeaderArea, RegionRailHeader } from './RegionHeaderArea.tsx'
 import type { RegionHeaderCommands, RegionHeaderOverlays } from './RegionHeaderArea.tsx'
 import { RegionListArea } from './RegionListArea.tsx'
@@ -182,16 +189,6 @@ interface ExpansionValue {
   commands: ExpansionCommands
   /** 摘掉工作区层里已经不存在的工作区的记录 */
   retainWorkspaceKeys: (keys: readonly string[]) => void
-}
-
-/** 工作区新增的跟随追问与搜索结果页 */
-interface RegionSearchActions {
-  /** 解析出来的「添加工作区」入口，未被占用时缺省 */
-  addWorkspace: AddWorkspaceActions | undefined
-  /** 本次搜索的结果页 */
-  searchResult: SessionSearchResult
-  /** 从搜索结果打开一条会话，先把它的两层折叠展开并清掉查询 */
-  openSearchResult: (match: SearchMatch) => void
 }
 
 /** 平铺列表不渲染时交出的空行集，恒定同一份引用，避免每次渲染换新数组 */
@@ -366,9 +363,16 @@ function useRegionLayout(
     return index
   }, [workspaces])
 
-  /** 取一个工作区的 cwd，缺省表示它没有可用路径，那个工作区因此不会被嵌套 */
-  const pathOfWorkspace = (workspaceId: string): string | undefined =>
-    workspaceById.get(workspaceId)?.path
+  /**
+   * 取一个工作区的 cwd，缺省表示它没有可用路径，那个工作区因此不会被嵌套
+   *
+   * 是 `useCallback` 而不是每次渲染新建：它以 `layout` 的一格身份进入 `selectParentGroup` 的依赖数组
+   * 每渲染新建一份会让那个 `useCallback` 每次渲染都判定为依赖变过，缓存失效
+   */
+  const pathOfWorkspace = useCallback(
+    (workspaceId: string): string | undefined => workspaceById.get(workspaceId)?.path,
+    [workspaceById],
+  )
 
   /**
    * workspaceId → 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里
@@ -593,87 +597,65 @@ function useExpansionValue(props: WorkspaceGroupsProps, nesting: Nesting): Expan
   return { read, commands, retainWorkspaceKeys: actions.retainWorkspaceKeys }
 }
 
-// ── 命令：搜索与新增工作区 ──
+// ── 展开编排 ──
 
 /**
- * 搜索结果页与「添加工作区」入口
+ * 展开一个新采纳的工作区与它的父工作区链
  *
- * 这一层把两件事凑齐：结果页按快照缓存，采纳回调要读整片列表的层级关系
- * 两者都随工作区与分组快照变化，因此与区域其余部分共用同一份读数
+ * 新工作区此刻还不在嵌套推导里，`ancestorsOf` 对它返回空链，因此父工作区要按 cwd 路径现查
+ * 找得到父工作区就说明它会渲染在那个父工作区体内，那一层默认折叠，必须写展开，否则新会话落在看不见的撑开体里
+ * 新工作区那一格也要写：它进列表后按路径有自己的父工作区、同样默认折叠，此刻按生效值判断只会看到「默认展开」这个假象
+ * 关掉嵌套、或找不到父工作区时不写任何记录——那时它落成自己那个容器的顶层，本来就默认展开，写了等于把「用户没碰过」变成「用户选了展开」
  */
-function useRegionSearch(
+function revealNewWorkspace(
+  nested: boolean,
+  workspaceId: string,
+  path: string,
+  layout: RegionLayout,
+  expansion: ExpansionCommands,
+): void {
+  if (!nested) return
+  const parentId = nearestAncestorForPath(
+    layout.workspaceIds,
+    layout.pathOfWorkspace,
+    layout.virtualOfWorkspace,
+    path,
+    layout.virtualOfWorkspace(workspaceId),
+  )
+  if (parentId === undefined) return
+  expansion.expandWorkspace(workspaceId)
+  for (const id of [parentId, ...layout.nesting.ancestorsOf(parentId)]) {
+    expansion.expandWorkspace(id)
+  }
+}
+
+// ── 命令：搜索 ──
+
+/** 搜索结果页与从结果里打开一条会话 */
+interface SearchResults {
+  /** 本次搜索的结果页 */
+  searchResult: SessionSearchResult
+  /** 从搜索结果打开一条会话，先把它的两层折叠展开并清掉查询 */
+  openSearchResult: (match: SearchMatch) => void
+}
+
+/**
+ * 搜索结果页
+ *
+ * 计算是纯的且输入都来自快照，因此跟着这些输入走 memo：流式期间每次活动都会重渲染整片区域，不缓存就要在每次活动重扫一遍全部会话
+ */
+function useSearchResults(
   props: WorkspaceGroupsProps,
   sources: RegionSources,
-  layout: RegionLayout,
   snapshot: WorkspaceGroupsSnapshot,
-  ui: RegionUiState,
+  layout: RegionLayout,
   expansion: ExpansionCommands,
   search: SearchState,
-): RegionSearchActions {
+  ui: RegionUiState,
+): SearchResults {
   const { sessions, workspaces, archivedSessionIds, statusSnapshot } = sources
   const { searchResultLimit, openSession } = props
 
-  /**
-   * 新增工作区采纳成功后的收尾：先把该展开的几层展开，再判断要不要问一句「放进父工作区所在的分组」
-   *
-   * 新工作区此刻还没进列表，因此这里按路径找它最短的直接父工作区，而不是按 id
-   * 那个查找用的正是嵌套推导算父节点的同一套条件（同虚拟工作区 + 路径祖先），因此「找到了父节点」就等于「它真的会渲染在那个父节点内」
-   * 找不到父节点时它落成自己那个容器的顶层，本来就默认展开，不需要写任何记录
-   *
-   * 采纳之后紧接着会在新工作区里开一个新会话，展开是那一步的副作用：不展开的话新工作区默认折叠，会话落在看不见的撑开体里
-   * 因此展开「新工作区 + 它的父工作区链」，链上那些只需按记录补，已经是显式展开的不重复写
-   *
-   * 新工作区那一格必须无条件写：它此刻还不在推导里，`ancestorsOf` 对它返回空链、生效值会暂时算成默认展开
-   * 若按生效值判断就会跳过写入，等它带着父节点进列表时又塌回折叠
-   *
-   * 父节点不存在、或父节点自己没在任何一个分组里时不问分组，默认的嵌套渲染已经把它放在父节点下面了，放进分组不是必需的
-   */
-  const onWorkspaceAdopted = useCallback(
-    (workspaceId: string, path: string): void => {
-      // 关掉嵌套时每个工作区都是自己那个容器的顶层，必定落在默认展开的那一档，不需要写记录
-      if (!snapshot.nested) return
-      const parentId = nearestAncestorForPath(
-        layout.workspaceIds,
-        layout.pathOfWorkspace,
-        layout.virtualOfWorkspace,
-        path,
-        layout.virtualOfWorkspace(workspaceId),
-      )
-      if (parentId === undefined) return
-      // 新工作区自己有父节点，默认因此是折叠；而它的键此刻还没进推导，生效值算不出来，只能按记录显式写展开
-      expansion.expandWorkspace(workspaceId)
-      for (const id of [parentId, ...layout.nesting.ancestorsOf(parentId)]) {
-        expansion.expandWorkspace(id)
-      }
-      const parent = layout.workspaceById.get(parentId)
-      const directGroups = snapshot.byWorkspace[parentId] ?? []
-      // 只在父节点恰好有一个分组时替用户选定它，有多个时该选哪个不是这里能替用户定的
-      if (directGroups.length !== 1) return
-      const group = directGroups[0]
-      if (group === undefined) return
-      const draft: MergeDraft = {
-        parentId,
-        groupId: group.id,
-        parentLabel: parent?.title ?? parentId,
-        groupLabel: group.name,
-        childLabel: layout.workspaceById.get(workspaceId)?.title ?? workspaceId,
-        workspaceIds: [workspaceId],
-      }
-      ui.openOverlay({ kind: 'merge', ...draft })
-    },
-    [snapshot.nested, snapshot.byWorkspace, layout.workspaceIds, layout.workspaceById, layout.nesting, expansion.expandWorkspace, ui.openOverlay],
-  )
-
-  // 「添加工作区」延迟到渲染期解析，它要读官方 directoryFlow 洞的占用者
-  // 而目录选择器插件的加载顺序不受本包约束，订阅占用情况让入口跟着占用者出现
-  const addWorkspace = sources.flowOccupied
-    ? props.addWorkspace?.(onWorkspaceAdopted)
-    : undefined
-
-  /**
-   * 本次搜索的结果页。计算是纯的且输入都来自快照，因此跟着这些输入走 memo：
-   * 流式期间每次活动都会重渲染整片区域，不缓存就要在每次活动重扫一遍全部会话
-   */
   const searchResult = useMemo(
     () =>
       searchSessions(
@@ -697,8 +679,6 @@ function useRegionSearch(
   )
 
   /**
-   * 从搜索结果打开一条会话
-   *
    * 打开之前先把这条会话所在的两层折叠打开并清掉搜索：结果行点下去的意图是「去看这条会话」
    * 而它可能正躺在收起的工作区或分组里，不展开就落在一个看不见的行上
    * 这正是官方 `revealSessionId` 承担的那段编排——官方在那里由组件订阅会话树自行展开
@@ -732,7 +712,88 @@ function useRegionSearch(
     openSession(match.row.id)
   }
 
-  return { addWorkspace, searchResult, openSearchResult }
+  return { searchResult, openSearchResult }
+}
+
+// ── 命令：新增工作区 ──
+
+/** 「添加工作区」入口与采纳之后的聚焦追问 */
+interface WorkspaceAdoption {
+  /** 解析出来的「添加工作区」入口，未被占用时缺省 */
+  addWorkspace: AddWorkspaceActions | undefined
+  /** 提交一次「是否聚焦到新工作区」，为真表示把视图聚焦过去 */
+  commitFocusNew: (focus: boolean) => void
+}
+
+/**
+ * 新工作区采纳之后的收尾，以及聚焦确认框的提交
+ *
+ * 采纳之后紧接着会在新工作区里开一个新会话并打开它，而聚焦把列表收窄到那一片
+ * 新工作区落在被聚焦范围之外时那条会话行谁也看不到，因此先按 {@link adoptionVisibility} 判一次
+ * 聚焦虚拟工作区时把它放进那个分组，它当场成为那一片的成员；聚焦真实工作区时没有能替用户做的写入，问一句要不要改换聚焦对象
+ */
+function useWorkspaceAdoption(
+  props: WorkspaceGroupsProps,
+  layout: RegionLayout,
+  snapshot: WorkspaceGroupsSnapshot,
+  ui: RegionUiState,
+  expansion: ExpansionCommands,
+  apply: (action: Promise<WorkspaceGroupsSnapshot>) => void,
+  flowOccupied: boolean,
+): WorkspaceAdoption {
+  // 普通函数而不是 `useCallback`：它的身份从没被观察过
+  // 它只落到 `AddWorkspaceActions.onAdopted` 上，被 `AddWorkspaceControl` 在采纳成功后调一次
+  // 那个组件不是 `memo`，也没有依赖数组；两个被 `memo` 包住的行组件都不收它，因此缓存它没有收益
+  const onWorkspaceAdopted = (workspaceId: string, path: string, name: string): void => {
+    const visibility = adoptionVisibility({
+      focused: snapshot.picker.focused,
+      entries: layout.pickerEntries,
+      path,
+      nestingEnabled: snapshot.nested,
+      pathOf: layout.pathOfWorkspace,
+    })
+    if (visibility.kind === 'ask-focus') {
+      ui.openOverlay({
+        kind: 'focus-new',
+        workspaceId,
+        path,
+        name,
+        focusedLabel: visibility.focusedLabel,
+      })
+      return
+    }
+    if (visibility.kind === 'join-virtual') {
+      // 分组归属是这一层本地的状态，因此必须收下宿主回的整份快照
+      // 丢掉它会让新工作区归属于旧的快照，界面看起来像「加进去了但列表里没有」
+      apply(props.moveWorkspace(workspaceId, visibility.groupId))
+      // 用户可能把那个分组合起来过，显式写展开，否则新工作区落在收起的组里
+      expansion.expandVirtualWorkspace(visibility.groupId)
+      return
+    }
+    revealNewWorkspace(snapshot.nested, workspaceId, path, layout, expansion)
+  }
+
+  // 「添加工作区」延迟到渲染期解析，它要读官方 directoryFlow 洞的占用者
+  // 而目录选择器插件的加载顺序不受本包约束，订阅占用情况让入口跟着占用者出现
+  const addWorkspace = flowOccupied ? props.addWorkspace?.(onWorkspaceAdopted) : undefined
+
+  /**
+   * 提交一次「是否聚焦到新工作区」
+   *
+   * 选「聚焦」时先把新工作区与它的父工作区链展开，再改聚焦：聚焦之后列表只列它自己，而它按路径有自己的父工作区、默认折叠，不展开的话紧接着打开的新会话仍落在看不见的撑开体里
+   * 选「取消」时什么都不做——用户已经知道那条会话不在视野内
+   * @param focus - 为真表示把视图聚焦到新工作区
+   */
+  const commitFocusNew = (focus: boolean): void => {
+    const draft = ui.overlay
+    if (draft?.kind !== 'focus-new') return
+    ui.openOverlay(null)
+    if (!focus) return
+    revealNewWorkspace(snapshot.nested, draft.workspaceId, draft.path, layout, expansion)
+    apply(props.focusEntry(workspaceAddress(draft.workspaceId)))
+  }
+
+  return { addWorkspace, commitFocusNew }
 }
 
 // ── 命令：建删改 ──
@@ -935,7 +996,6 @@ interface RegionNestActions {
   selectParentGroup: (workspaceId: string, id: string) => void
   requestNestedToggle: () => void
   commitNestedOff: () => void
-  commitMerge: (merge: boolean) => void
 }
 
 /**
@@ -1063,27 +1123,12 @@ function useRegionNestActions(
     apply(setNested(false))
   }
 
-  /**
-   * 提交一次「放进父工作区所在的分组」
-   *
-   * 选「放进去」时写这次归属，选「不放进去」时什么都不做——新工作区仍按路径推导渲染在父工作区下面
-   * @param merge - 为真表示把新工作区放进那个分组
-   */
-  const commitMerge = (merge: boolean): void => {
-    const draft = ui.overlay
-    if (draft?.kind !== 'merge') return
-    ui.openOverlay(null)
-    if (!merge) return
-    apply(nestWorkspaces(draft.workspaceIds, draft.parentId, draft.groupId))
-  }
-
   return {
     startVirtualWorkspaceCreate,
     selectVirtualWorkspace,
     selectParentGroup,
     requestNestedToggle,
     commitNestedOff,
-    commitMerge,
   }
 }
 
@@ -1204,8 +1249,11 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   // 这里取同一做法：时间文案的精度是分钟级，跟着别的重渲染刷新足够
   const now = Date.now()
 
-  const { addWorkspace, searchResult, openSearchResult } = useRegionSearch(
-    props, sources, layout, snapshot, ui, expansion.commands, search,
+  const { searchResult, openSearchResult } = useSearchResults(
+    props, sources, snapshot, layout, expansion.commands, search, ui,
+  )
+  const { addWorkspace, commitFocusNew } = useWorkspaceAdoption(
+    props, layout, snapshot, ui, expansion.commands, apply, sources.flowOccupied,
   )
   const groupActions = useRegionGroupActions(props, snapshot, ui, expansion.commands, apply)
   const nestActions = useRegionNestActions(props, snapshot, layout, ui, apply)
@@ -1338,8 +1386,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     startVirtualWorkspaceCreate: nestActions.startVirtualWorkspaceCreate,
   }
 
-  // 同上：八个提交入口的字段名与这两个动作袋逐格同名
-  const dialogActions: RegionDialogActions = { ...groupActions, ...nestActions }
+  // 同上：提交入口的字段名与这两个动作袋逐格同名
+  const dialogActions: RegionDialogActions = { ...groupActions, ...nestActions, commitFocusNew }
 
   return (
     <RegionLocaleProvider value={locale}>

@@ -119,7 +119,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
         timeLabel(updatedAt, now, workspaceTranslate()),
     }),
     addWorkspace: () => ({
-      createWorkspace: async (path: string) => ({ workspaceId: `w-${path}` }),
+      createWorkspace: async (path: string) => ({ workspaceId: `w-${path}`, title: path }),
       startSession: () => {},
       occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
       labels: officialAddLabels(workspaceTranslate()),

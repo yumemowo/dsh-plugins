@@ -230,7 +230,7 @@ export interface RegionActions {
    * 此时入口按钮不渲染，不留点不动的死按钮
    *
    * 区域组件会给解析结果补一个 `onAdopted`，把「刚采纳了哪个工作区」这条事实接回来
-   * @param onAdopted - 采纳成功后的回调，缺省时区域不问「要不要放进父工作区所在的分组」
+   * @param onAdopted - 采纳成功后的回调，缺省时区域不处理新工作区的可见性
    */
   addWorkspace?:
     | ((onAdopted: AddWorkspaceActions['onAdopted']) => AddWorkspaceActions | undefined)
@@ -244,8 +244,12 @@ export interface RegionActions {
  * 两处都是官方 WorkspaceBrowser 内部调的同一批接口，因此官方改行为时本包自动跟随，不另造 RPC
  */
 export interface AddWorkspaceActions {
-  /** 把选中的宿主机目录登记为工作区 */
-  createWorkspace: (path: string) => Promise<{ workspaceId: string }>
+  /**
+   * 把选中的宿主机目录登记为工作区
+   *
+   * 官方 `create` 回的是整个工作区视图，这里只取用得上的两格
+   */
+  createWorkspace: (path: string) => Promise<{ workspaceId: string; title: string }>
   /** 在指定工作区里开一个新会话并打开它 */
   startSession: (workspaceId: string) => void
   /** directoryFlow 洞占用者的解析器 */
@@ -253,12 +257,13 @@ export interface AddWorkspaceActions {
   /**
    * 新工作区采纳成功后的回调
    *
-   * 采纳发生在「添加工作区」那个组件里，而「它该不该嵌进某个分组」要看整片列表的层级关系
-   * 因此这条事实回传到区域组件，由它展开该工作区并判断要不要问一次
+   * 采纳发生在「添加工作区」那个组件里，而「它会不会落在被聚焦的那一片里」要看整片列表的层级关系
+   * 因此这条事实回传到区域组件，由它处理该工作区的可见性
    * @param workspaceId - 刚采纳的工作区
    * @param path - 它的 cwd
+   * @param name - 它的显示名，聚焦确认框按它点名
    */
-  onAdopted?: ((workspaceId: string, path: string) => void) | undefined
+  onAdopted?: ((workspaceId: string, path: string, name: string) => void) | undefined
   /** 入口与错误框的文案 */
   labels: OfficialAddLabels
 }

@@ -404,8 +404,11 @@ header 第一行的「工作区」旁有一个向下的箭头，它打开一个�
 1. 点入口 → 直接打开 picking 交互（官方在侧边栏用 `addOnly: true`，同样不先弹工作区列表菜单）；
 2. 用户在交互里选中一个目录（或取消）；
 3. 选中后调官方 `ctx.workspaces.create({ path })` 采纳；
-4. 采纳成功 → 官方 `ctx.uiWorkspace.startSession(workspaceId)`，在新工作区里开一个新会话并打开；
-5. 采纳失败 → 官方 `folderError.title` 错误框，`folderError.retry`（「重新选择」）重开交互。
+4. 采纳成功 → 先让它在新会话打开那一刻可见：聚焦在虚拟工作区分组上就把它放进那个分组，聚焦在真实工作区而它不会渲染在那一片里就问一句要不要把视图聚焦过去（见[子工作区嵌套](sub-workspace-nesting.md#新增工作区时先让它可见)）；
+5. 随后调官方 `ctx.uiWorkspace.startSession(workspaceId)`，在新工作区里开一个新会话并打开；
+6. 采纳失败 → 官方 `folderError.title` 错误框，`folderError.retry`（「重新选择」）重开交互。
 
-picking 交互本身不重写：它整段来自官方 `sidebar.workspaces.directoryFlow` 洞的占用者（native / browse 两种组合都覆盖，见 [与官方实现的复用关系](official-reuse.md) 的「目录选择器」一节）。文案零新增——入口、错误框标题与「重新选择」都取官方 `workspace` 命名空间的既有键。
+**这一步是「添加新工作区 → 在新工作区创建一个空会话并打开它」这条用户直觉的护栏。** 「添加」与「打开」分属两个界面：列表归本包的聚焦管，会话面板归官方导航管，聚焦会把列表收窄到那一片。不处理的话，用户看到的是「加了一个工作区，然后什么也没发生」——新会话确实开了，只是那一行不在视野里。
+
+picking 交互本身不重写：它整段来自官方 `sidebar.workspaces.directoryFlow` 洞的占用者（native / browse 两种组合都覆盖，见 [与官方实现的复用关系](official-reuse.md) 的「目录选择器」一节）。入口、错误框标题与「重新选择」都取官方 `workspace` 命名空间的既有键；只有第 4 步那个聚焦确认框的文案是本包自有的（`picker.focusNewTitle` / `picker.focusNewDesc` / `picker.focusNewConfirm` 三个键，官方没有「换一个工作区看」这件事的措辞）。
 

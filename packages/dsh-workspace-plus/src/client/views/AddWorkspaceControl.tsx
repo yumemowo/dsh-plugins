@@ -43,9 +43,10 @@ export function AddWorkspaceControl({
       .createWorkspace(path)
       .then((workspace) => {
         setFlowOpen(false)
-        // 先让区域展开新工作区、并判断要不要问一句「放进父工作区所在的分组」，再开新会话
+        // 先让区域处理新工作区的可见性（放进被聚焦的分组，或问一句要不要聚焦过去），再开新会话
         // 对话框与新建会话的导航抢焦点时，先到的那一个才读得到用户的意图
-        actions.onAdopted?.(String(workspace.workspaceId), path)
+        // 名字在这里一并交出：区域此刻读不到它，工作区快照要等这一次 create 落地后才带上新行
+        actions.onAdopted?.(String(workspace.workspaceId), path, workspace.title)
         actions.startSession(String(workspace.workspaceId))
       })
       .catch((reason: unknown) => {

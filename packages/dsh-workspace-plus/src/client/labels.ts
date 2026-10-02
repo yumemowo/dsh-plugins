@@ -202,14 +202,6 @@ export interface NestedLabels {
   inGroup: (parent: string) => string
   /** 既没有会话也没有子工作区的分组里的占位文案 */
   groupEmpty: string
-  /** 新增工作区确认框的「放进分组」 */
-  mergeConfirm: string
-  /** 同上那个框的「先不放进分组」，新工作区仍按路径渲染在父工作区下面 */
-  mergeSkip: string
-  /** 新增工作区时的放入确认框标题 */
-  addTitle: string
-  /** 该确认框的说明，新工作区、父工作区与分组名由调用方传入 */
-  addDesc: (name: string, parent: string, group: string) => string
 }
 
 /** 工作区下拉菜单的文案 */
@@ -254,6 +246,12 @@ export interface PickerLabels {
    * 已经看着全部内容时，「切过去」没有可切的目的地
    */
   followFocus: string
+  /** 新增工作区时那个「是否聚焦到新工作区」确认框的标题，新工作区名由调用方传入 */
+  focusNewTitle: (name: string) => string
+  /** 该确认框的说明，新工作区名与当前聚焦的工作区名由调用方传入 */
+  focusNewDesc: (name: string, focused: string) => string
+  /** 同上那个框的「聚焦」 */
+  focusNewConfirm: string
 }
 
 /**
@@ -334,6 +332,9 @@ export function regionLabels(
       rename: (name: string) => t('picker.rename', { name }),
       remove: (name: string) => t('picker.remove', { name }),
       followFocus: t('picker.followFocus'),
+      focusNewTitle: (name: string) => t('picker.focusNewTitle', { name }),
+      focusNewDesc: (name: string, focused: string) => t('picker.focusNewDesc', { name, focused }),
+      focusNewConfirm: t('picker.focusNewConfirm'),
     },
     nested: {
       setting: t('nested.setting'),
@@ -346,11 +347,6 @@ export function regionLabels(
       ungroupChild: t('nested.ungroupChild'),
       inGroup: (parent: string) => t('nested.inGroup', { parent }),
       groupEmpty: t('nested.groupEmpty'),
-      mergeConfirm: t('nested.mergeConfirm'),
-      mergeSkip: t('nested.mergeSkip'),
-      addTitle: t('nested.addTitle'),
-      addDesc: (name: string, parent: string, group: string) =>
-        t('nested.addDesc', { name, parent, group }),
     },
     viewMode: {
       // 官方菜单里那组「分组方式 / 按工作区 / 按工作区树 / 单列表」的措辞本包不复用：这边的两个取值是另一套语义

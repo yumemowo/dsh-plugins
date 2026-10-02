@@ -87,7 +87,7 @@ function props(wide = true): WorkspaceGroupsProps {
         timeLabel(updatedAt, now, workspaceTranslate()),
     }),
     addWorkspace: () => ({
-      createWorkspace: async (path: string) => ({ workspaceId: `w-${path}` }),
+      createWorkspace: async (path: string) => ({ workspaceId: `w-${path}`, title: path }),
       startSession: () => {},
       occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
       labels: officialAddLabels(workspaceTranslate()),

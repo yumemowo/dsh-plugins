@@ -143,7 +143,7 @@ function face(overrides: Partial<AddWorkspaceActions> = {}): {
     actions: {
       createWorkspace: async (path: string) => {
         created.push(path)
-        return { workspaceId: `w-${path}` }
+        return { workspaceId: `w-${path}`, title: path.split('/').pop() ?? path }
       },
       startSession: (workspaceId: string) => started.push(workspaceId),
       occupant: () => ({
@@ -339,13 +339,13 @@ describe('AddWorkspaceControl', () => {
   })
 
   it('reports the adopted workspace back to the region before starting a session', async () => {
-    // 区域据此判断新工作区该不该嵌进父所在的分组，这条回调不接上时那一步会静默地永不发生
-    const adopted: [string, string][] = []
+    // 区域据此处理新工作区的可见性，这条回调不接上时那一步会静默地永不发生
+    const adopted: [string, string, string][] = []
     const order: string[] = []
     const { actions } = face({
-      onAdopted: (workspaceId, path) => {
+      onAdopted: (workspaceId, path, name) => {
         order.push('adopted')
-        adopted.push([workspaceId, path])
+        adopted.push([workspaceId, path, name])
       },
       startSession: () => order.push('session'),
     })
@@ -355,7 +355,8 @@ describe('AddWorkspaceControl', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(adopted).toEqual([['w-/tmp/picked', '/tmp/picked']])
+    // 名字一并回传：区域此刻读不到新工作区，快照要等 create 落地后才带上它
+    expect(adopted).toEqual([['w-/tmp/picked', '/tmp/picked', 'picked']])
     // 先回传事实再开会话，对话框与新建会话的导航抢焦点时，先到的那一个才读得到用户意图
     expect(order).toEqual(['adopted', 'session'])
   })

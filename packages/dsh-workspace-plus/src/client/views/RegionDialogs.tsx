@@ -1,5 +1,5 @@
 /**
- * 区域对话框：四个草稿框、四个确认框与一次「放进父工作区分组」的追问
+ * 区域对话框：四个草稿框、四个确认框与一次「是否聚焦到新工作区」的追问
  *
  * 这八个浮层互斥，任意时刻至多开一个。这条不变式由 `RegionOverlay` 这个可辨识联合承担，
  * 而不是靠「Modal 挡住了第二个入口」——将来加入非 Modal 的浮层也不会同时开出两个
@@ -11,29 +11,24 @@ import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/cl
 import type { OfficialSessionActions } from '../actions.ts'
 import type { GroupNameDraft, VirtualWorkspaceNameDraft, WorkspaceNameDraft } from '../data/types.ts'
 import { useLocale } from '../useLocale.ts'
-import { DeleteDialog } from './components/dialogs/DeleteDialog.tsx'
-import { ListDialog } from './components/dialogs/ListDialog.tsx'
+import { ConfirmDialog } from './components/dialogs/ConfirmDialog.tsx'
 import { NameDialog } from './components/dialogs/NameDialog.tsx'
 
 /**
- * 一次待确认的「把新增的子工作区放进父工作区所在的分组」
+ * 一次待确认的「把视图聚焦到新增的工作区」
  *
- * 只有新增工作区这一条路径用它，新工作区落在某个工作区之下，而那个父工作区恰好只在一个分组里时
- * 问一句要不要顺手放进去。父工作区有多个分组时不问——该选哪个不是这里能替用户定的
+ * 只有新增工作区这一条路径用它：列表正聚焦在别的工作区上，而新工作区不会渲染在那一片里
+ * 紧接着打开的新会话因此不在视野内，问一句要不要改换聚焦对象
  */
-export interface MergeDraft {
-  /** 目标分组所属的父工作区 */
-  parentId: string
-  /** 目标分组 */
-  groupId: string
-  /** 父工作区名，用于文案 */
-  parentLabel: string
-  /** 分组名，用于文案 */
-  groupLabel: string
-  /** 新增工作区的名字，用于文案 */
-  childLabel: string
-  /** 要放进该分组的工作区 */
-  workspaceIds: string[]
+export interface FocusNewDraft {
+  /** 新增的工作区 */
+  workspaceId: string
+  /** 它的 cwd，用户确认聚焦后据此展开它与它的父工作区链 */
+  path: string
+  /** 新增工作区的显示名，用于文案 */
+  name: string
+  /** 当前聚焦的工作区名，用于文案 */
+  focusedLabel: string
 }
 
 /** 一个待删除的会话分组 */
@@ -69,7 +64,7 @@ export type RegionOverlay =
   | ({ kind: 'workspace-rename' } & WorkspaceNameDraft)
   | ({ kind: 'workspace-delete' } & WorkspaceDeleteTarget)
   | ({ kind: 'nested-off' })
-  | ({ kind: 'merge' } & MergeDraft)
+  | ({ kind: 'focus-new' } & FocusNewDraft)
 
 /** 对话框区消费的派生布局 */
 export interface RegionDialogLayout {
@@ -77,8 +72,6 @@ export interface RegionDialogLayout {
   focused: boolean
   /** 关闭嵌套时会被解除嵌套的工作区名单 */
   groupedChildLabels: readonly string[]
-  /** 按 id 取回工作区视图，「放进父工作区分组」那一步按它列出名单 */
-  workspaceById: ReadonlyMap<string, WorkspaceView>
 }
 
 /** 对话框区的提交入口，每个都按自己的浮层类型从草稿里取值 */
@@ -90,8 +83,8 @@ export interface RegionDialogActions {
   commitWorkspaceRename: () => void
   commitWorkspaceDelete: () => void
   commitNestedOff: () => void
-  /** 提交一次「放进父工作区所在的分组」，为假表示这次不放 */
-  commitMerge: (merge: boolean) => void
+  /** 提交一次「是否聚焦到新工作区」，为真表示把视图聚焦过去 */
+  commitFocusNew: (focus: boolean) => void
 }
 
 interface RegionDialogsProps {
@@ -156,7 +149,7 @@ export function RegionDialogs(props: RegionDialogsProps): ReactElement {
 
     case 'virtual-workspace-delete': {
       return (
-        <DeleteDialog
+        <ConfirmDialog
           title={labels.deleteVirtualWorkspace}
           description={labels.confirmDeleteVirtualWorkspace(overlay.label)}
           confirmLabel={labels.deleteVirtualWorkspace}
@@ -192,7 +185,7 @@ export function RegionDialogs(props: RegionDialogsProps): ReactElement {
 
     case 'group-delete': {
       return (
-        <DeleteDialog
+        <ConfirmDialog
           title={labels.deleteGroup}
           description={labels.confirmDeleteGroup(overlay.label)}
           confirmLabel={labels.deleteGroup}
@@ -204,7 +197,7 @@ export function RegionDialogs(props: RegionDialogsProps): ReactElement {
 
     case 'workspace-delete': {
       return (
-        <DeleteDialog
+        <ConfirmDialog
           title={labels.deleteWorkspace}
           description={labels.confirmDeleteWorkspace(overlay.label)}
           confirmLabel={labels.deleteWorkspace}
@@ -216,7 +209,7 @@ export function RegionDialogs(props: RegionDialogsProps): ReactElement {
 
     case 'nested-off': {
       return (
-        <ListDialog
+        <ConfirmDialog
           title={labels.nested.disableTitle}
           description={labels.nested.disableDesc}
           items={props.layout.groupedChildLabels}
@@ -228,16 +221,14 @@ export function RegionDialogs(props: RegionDialogsProps): ReactElement {
       )
     }
 
-    case 'merge': {
+    case 'focus-new': {
       return (
-        <ListDialog
-          title={labels.nested.addTitle}
-          description={labels.nested.addDesc(overlay.childLabel, overlay.parentLabel, overlay.groupLabel)}
-          items={overlay.workspaceIds.map((id) => props.layout.workspaceById.get(id)?.title ?? id)}
-          confirmLabel={labels.nested.mergeConfirm}
-          alt={{ label: labels.nested.mergeSkip, onSelect: () => actions.commitMerge(false) }}
-          onConfirm={() => actions.commitMerge(true)}
-          onClose={() => actions.commitMerge(false)}
+        <ConfirmDialog
+          title={labels.picker.focusNewTitle(overlay.name)}
+          description={labels.picker.focusNewDesc(overlay.name, overlay.focusedLabel)}
+          confirmLabel={labels.picker.focusNewConfirm}
+          onConfirm={() => actions.commitFocusNew(true)}
+          onClose={() => actions.commitFocusNew(false)}
         />
       )
     }

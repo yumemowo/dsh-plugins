@@ -156,7 +156,26 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 
 悬停卡片的文案同样一个键都不用加：创建时刻取官方 `hover.created` + `date.ymd`，复制提示取 `common` 的通用词 `copy`、成功反馈取 `hover.copied`，卡片那份相对时间取 `time.ago`；会话卡片里「空闲」那一条取官方的 `status.idle`——行首不画点但卡片要把它列出来，那个词官方本来就有，不另造。
 
-本包字典只剩官方没有对应词的键：会话分组那一套（`actions.group.aria` / `newGroup` / `renameGroup` / `deleteGroup` / `groupNamePrompt` / `delete.desc.group` / `moveToGroup` / `ungroup`）、工作区分组那一套（`actions.virtualWorkspace.aria` / `newVirtualWorkspace` / `menu.newVirtualWorkspace` / `renameVirtualWorkspace` / `deleteVirtualWorkspace` / `virtualWorkspaceNamePrompt` / `delete.desc.virtualWorkspace` / `moveToVirtualWorkspace` / `ungroupWorkspace` / `virtualWorkspaceEmpty`）、展示方式那一套（`viewMode.label` / `viewMode.workspace` / `viewMode.flat`），加 `compareTabDescription` 与 `unimplemented`。「添加工作区」与「搜索」的文案因此一个键都不用加：添加入口取官方 `workspace.add`、错误框取 `folderError.title` 与 `folderError.retry`；搜索的入口 tooltip、输入框与结果区取官方 `search` / `search.sessions.aria` / `search.placeholder` / `search.clear` / `search.results.aria` / `search.noMatches` / `search.hasMore`。注意添加入口是 `workspace.add`（「添加工作区」），不是 `menu.addWorkspace`（「添加工作区…」）——后者是工作区列表菜单里那一项，带省略号表示还要再选一次。`actions.group.aria` 是分组自己的无障碍标签（官方只有工作区与会话两个），分组 `+` 的标签则直接复用官方的 `actions.newSession.aria`——语义完全相同，不另造一个同义键。`labels.test.ts` 会断言字典里没有任何与官方重合的键，避免以后又抄回来。
+本包字典只剩官方没有对应词的键，按族归并如下：
+
+| 族 | 键 | 管什么 |
+| --- | --- | --- |
+| 会话分组 | `newGroup` `renameGroup` `deleteGroup` `groupNamePrompt` `delete.desc.group` `moveToGroup` `ungroup` `actions.group.aria` | 工作区内的会话分组：入口、建、改名、删除、移入 / 移出，以及分组行的无障碍标签 |
+| 工作区分组 | `newVirtualWorkspace` `menu.newVirtualWorkspace` `renameVirtualWorkspace` `deleteVirtualWorkspace` `virtualWorkspaceNamePrompt` `delete.desc.virtualWorkspace` `moveToVirtualWorkspace` `ungroupWorkspace` `virtualWorkspaceEmpty` `actions.virtualWorkspace.aria` | 根节点上的工作区分组：入口、建、改名、删除、移入 / 移出、空态与无障碍标签 |
+| 子工作区嵌套 | `nested.setting` `nested.disable` `nested.disableTitle` `nested.disableDesc` `nested.disabledNote` `nested.reEnableHint` `nested.moveToGroup` `nested.ungroupChild` `nested.inGroup` `nested.groupEmpty` | 开关与它的关闭确认、移入 / 移出分组、父工作区标注、组内空态 |
+| 工作区选择器 | `picker.entry` `picker.change` `picker.all` `picker.recent` `picker.pinned` `picker.pin` `picker.unpin` `picker.rename` `picker.remove` `picker.followFocus` `picker.focusNewTitle` `picker.focusNewDesc` `picker.focusNewConfirm` | 面板入口与三个分区、条目行内的置顶 / 改名 / 删除、新增工作区时的聚焦确认 |
+| 展示方式 | `viewMode.label` `viewMode.workspace` `viewMode.flat` | 按工作区 / 平铺 |
+| 状态指示器 | `indicator.label` `indicator.icon` `indicator.bar` | 图标 / 色条 |
+| 对照模式与说明 | `compareTabDescription` `unimplemented` | 对照 tab 的描述、实验特性说明 |
+
+完整键集由 `labels.test.ts` 逐个列出，新增文案时那里会提醒重新确认它是否真的官方没有；本表只按族归并，不重复那份清单。
+
+**「添加工作区」与「搜索」的文案反过来，能用官方键的一律不倒抄**：添加入口取官方 `workspace.add`、错误框取 `folderError.title` 与 `folderError.retry`；搜索的入口 tooltip、输入框与结果区取官方 `search` / `search.sessions.aria` / `search.placeholder` / `search.clear` / `search.results.aria` / `search.noMatches` / `search.hasMore`。两处容易走错：
+
+- 添加入口是 `workspace.add`（「添加工作区」），不是 `menu.addWorkspace`（「添加工作区…」）——后者是工作区列表菜单里那一项，带省略号表示还要再选一次。
+- 分组 `+` 的按钮标签直接复用官方的 `actions.newSession.aria`，语义完全相同，不另造同义键。反过来 `actions.group.aria` 是官方没有的——官方只有工作区与会话两个无障碍标签。
+
+`labels.test.ts` 还会断言字典里没有任何与官方重合的键，避免以后又抄回来。
 
 **「重命名」这个动作有两个键，不是同一个文案。** 菜单项用官方的通用动词 `rename`（`重命名` / `Rename`），对话框标题才用点明对象的键。这不是本包的取舍，而是照官方 `ui-workspace` 抄的：
 

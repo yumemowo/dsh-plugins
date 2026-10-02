@@ -4,7 +4,8 @@ import * as React from 'react'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
-import { workspaceAddress } from '../src/rootEntry.ts'
+import { workspaceAddress, virtualAddress } from '../src/rootEntry.ts'
+import type { RootEntryAddress } from '../src/rootEntry.ts'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { readAllCss } from './readCss.ts'
@@ -149,7 +150,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
         timeLabel(updatedAt, now, workspaceTranslate()),
     }),
     addWorkspace: () => ({
-      createWorkspace: async (path: string) => ({ workspaceId: `w-${path}` }),
+      createWorkspace: async (path: string) => ({ workspaceId: `w-${path}`, title: path }),
       startSession: () => {},
       occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
       labels: officialAddLabels(workspaceTranslate()),
@@ -720,10 +721,11 @@ describe('nested sub-workspaces in a real DOM', () => {
     await act(async () => root.unmount())
   })
 
-  it('asks before placing a newly added workspace into its parent group', async () => {
-    // 采纳成功后的回调由「添加工作区」那个组件回传，这里直接驱动它，验证按路径做出的判断
+  it('asks nothing about groups, whichever parent the new workspace lands under', async () => {
+    // 采纳成功后的回调由「添加工作区」那个组件回传，这里直接驱动它
+    // 采纳路径只处理「新工作区可不可见」，不再替用户改归属：放进分组要用户自己移
     const placed: { ids: readonly string[]; parent: string; group: string }[] = []
-    let adopted: ((workspaceId: string, path: string) => void) | undefined
+    let adopted: ((workspaceId: string, path: string, name: string) => void) | undefined
     const { root } = await mount({
       loadGroups: async () =>
         snapshot({
@@ -732,7 +734,7 @@ describe('nested sub-workspaces in a real DOM', () => {
       addWorkspace: (onAdopted) => {
         adopted = onAdopted
         return {
-          createWorkspace: async () => ({ workspaceId: 'w-new' }),
+          createWorkspace: async () => ({ workspaceId: 'w-new', title: '新工作区' }),
           startSession: () => {},
           occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
           labels: officialAddLabels(workspaceTranslate()),
@@ -745,23 +747,256 @@ describe('nested sub-workspaces in a real DOM', () => {
     })
 
     expect(adopted).toBeTypeOf('function')
-    await act(async () => adopted?.('w-new', '/repo/a/c'))
-    await act(async () => {
-      ;(document.body.querySelector('[role="dialog"]') as HTMLElement | null)
-    })
-
-    // 落在 /repo/a 之下，而它的父 w2 没有任何分组：不问，默认的嵌套渲染已经放好了
+    // /repo/a 之下的新工作区，它的父工作区 w2 没有任何分组
+    await act(async () => adopted?.('w-new', '/repo/a/c', '新工作区'))
     expect(document.body.querySelector('[role="dialog"]')).toBeNull()
 
-    await act(async () => adopted?.('w-new', '/repo/x'))
-    // 落在 /repo 之下，而 w1 恰好只有一个分组：问一句
+    // /repo 之下的新工作区，w1 恰好只有一个分组——此前会在这里问一句，现在也不问
+    await act(async () => adopted?.('w-new', '/repo/x', '新工作区'))
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    expect(placed).toEqual([])
+
+    await act(async () => root.unmount())
+  })
+
+  it('adds a newly adopted workspace to the virtual workspace that the view is focused on', async () => {
+    // 聚焦虚拟工作区分组时列表只列那一片，新工作区落在外面就看不见
+    // 直接把它放进该分组是唯一能替用户做的写入，因此不问，也不新建会话之外的额外步骤
+    const moved: { workspaceId: string; groupId: string }[] = []
+    let adopted: ((workspaceId: string, path: string, name: string) => void) | undefined
+    const { root } = await mount({
+      loadGroups: async () =>
+        snapshot({
+          workspaceGroups: [{ id: 'vg1', name: 'dsh plugins', workspaceIds: ['w1'] }],
+          picker: { focused: virtualAddress('vg1'), recent: [], pinned: [] },
+        }),
+      moveWorkspace: async (workspaceId, groupId) => {
+        moved.push({ workspaceId, groupId })
+        return snapshot()
+      },
+      addWorkspace: (onAdopted) => {
+        adopted = onAdopted
+        return {
+          createWorkspace: async () => ({ workspaceId: 'w-new', title: '新工作区' }),
+          startSession: () => {},
+          occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
+          labels: officialAddLabels(workspaceTranslate()),
+        }
+      },
+    })
+
+    // /other 与 vg1 里的 /repo 毫无路径关系，因此不是「本来就看得见」那一类
+    await act(async () => adopted?.('w-new', '/other', '新工作区'))
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(moved).toEqual([{ workspaceId: 'w-new', groupId: 'vg1' }])
+    // 放进分组是替用户做的，不该再弹一个框问他
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+
+    await act(async () => root.unmount())
+  })
+
+  it('asks whether to focus the new workspace when it is out of the focused range', async () => {
+    // 聚焦真实工作区 w2（/repo/a）时那一片只有它自己与渲染在它体内的子工作区
+    // /repo/x 不在 /repo/a 之下，紧接着打开的新会话因此看不见，问一句要不要改换聚焦对象
+    const focused: RootEntryAddress[] = []
+    let adopted: ((workspaceId: string, path: string, name: string) => void) | undefined
+    const { root } = await mount({
+      loadGroups: async () =>
+        snapshot({ picker: { focused: workspaceAddress('w2'), recent: [], pinned: [] } }),
+      focusEntry: async (address) => {
+        focused.push(address)
+        return snapshot({ picker: { focused: address, recent: [], pinned: [] } })
+      },
+      addWorkspace: (onAdopted) => {
+        adopted = onAdopted
+        return {
+          createWorkspace: async () => ({ workspaceId: 'w-new', title: '新工作区' }),
+          startSession: () => {},
+          occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
+          labels: officialAddLabels(workspaceTranslate()),
+        }
+      },
+    })
+
+    await act(async () => adopted?.('w-new', '/repo/x', '新工作区'))
     const dialog = document.body.querySelector('[role="dialog"]')
-    expect(dialog?.textContent).toContain('前端')
+    // 两个名字都要点到：用户据此判断改换聚焦对象之后看到的是哪一个
+    expect(dialog?.textContent).toContain('新工作区')
+    expect(dialog?.textContent).toContain('W2')
     const confirm = Array.from(dialog?.querySelectorAll('button') ?? []).find(
-      (button) => button.textContent === '放进分组',
+      (button) => button.textContent === '聚焦',
     )
     await act(async () => confirm?.click())
-    expect(placed).toEqual([{ ids: ['w-new'], parent: 'w1', group: 'g1' }])
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(focused).toEqual([{ kind: 'workspace', id: 'w-new' }])
+
+    await act(async () => root.unmount())
+  })
+
+  it('keeps the focus where it is when the operator declines the new workspace', async () => {
+    const focused: RootEntryAddress[] = []
+    let adopted: ((workspaceId: string, path: string, name: string) => void) | undefined
+    const { root } = await mount({
+      loadGroups: async () =>
+        snapshot({ picker: { focused: workspaceAddress('w2'), recent: [], pinned: [] } }),
+      focusEntry: async (address) => {
+        focused.push(address)
+        return snapshot({ picker: { focused: address, recent: [], pinned: [] } })
+      },
+      addWorkspace: (onAdopted) => {
+        adopted = onAdopted
+        return {
+          createWorkspace: async () => ({ workspaceId: 'w-new', title: '新工作区' }),
+          startSession: () => {},
+          occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
+          labels: officialAddLabels(workspaceTranslate()),
+        }
+      },
+    })
+
+    await act(async () => adopted?.('w-new', '/other', '新工作区'))
+    const dialog = document.body.querySelector('[role="dialog"]')
+    const cancel = Array.from(dialog?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === '取消',
+    )
+    await act(async () => cancel?.click())
+
+    expect(focused).toEqual([])
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+
+    await act(async () => root.unmount())
+  })
+
+  it('asks nothing when the new workspace already renders inside the focused workspace', async () => {
+    // 聚焦在 w2（/repo/a）上，而新工作区 /repo/a/c 正是它的后代：默认的嵌套渲染就把它放在那一片里
+    let adopted: ((workspaceId: string, path: string, name: string) => void) | undefined
+    const { root } = await mount({
+      loadGroups: async () =>
+        snapshot({ picker: { focused: workspaceAddress('w2'), recent: [], pinned: [] } }),
+      addWorkspace: (onAdopted) => {
+        adopted = onAdopted
+        return {
+          createWorkspace: async () => ({ workspaceId: 'w-new', title: '新工作区' }),
+          startSession: () => {},
+          occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
+          labels: officialAddLabels(workspaceTranslate()),
+        }
+      },
+    })
+
+    await act(async () => adopted?.('w-new', '/repo/a/c', '新工作区'))
+
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+
+    await act(async () => root.unmount())
+  })
+
+  it('asks about focus even when the new workspace is a cwd descendant, if nesting is off', async () => {
+    // 关掉嵌套时任何工作区都不渲染在另一个工作区体内，聚焦在 w2（/repo/a）上的那一片就只剩它自己
+    // /repo/a/c 虽在它的路径之下，也不会出现在那一片里，因此同样要问
+    let adopted: ((workspaceId: string, path: string, name: string) => void) | undefined
+    const { root } = await mount({
+      loadGroups: async () =>
+        snapshot({
+          nested: false,
+          picker: { focused: workspaceAddress('w2'), recent: [], pinned: [] },
+        }),
+      addWorkspace: (onAdopted) => {
+        adopted = onAdopted
+        return {
+          createWorkspace: async () => ({ workspaceId: 'w-new', title: '新工作区' }),
+          startSession: () => {},
+          occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
+          labels: officialAddLabels(workspaceTranslate()),
+        }
+      },
+    })
+
+    await act(async () => adopted?.('w-new', '/repo/a/c', '新工作区'))
+
+    const dialog = document.body.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain('新工作区')
+    expect(dialog?.textContent).toContain('W2')
+
+    await act(async () => root.unmount())
+  })
+
+  it('writes no folding record when confirming focus with nesting off', async () => {
+    // 关掉嵌套时每个工作区都是自己那个容器的顶层，展开是白送的
+    // 确认聚焦这一步与采纳路径一样按嵌套是否生效判断，不能因为「聚焦后只看它自己」就补一条记录
+    const store = viewModeStoreStub()
+    let adopted: ((workspaceId: string, path: string, name: string) => void) | undefined
+    const { root } = await mount({
+      ...storeViewModeProps(store),
+      loadGroups: async () =>
+        snapshot({
+          nested: false,
+          picker: { focused: workspaceAddress('w2'), recent: [], pinned: [] },
+        }),
+      focusEntry: async (address) =>
+        snapshot({ picker: { focused: address, recent: [], pinned: [] } }),
+      addWorkspace: (onAdopted) => {
+        adopted = onAdopted
+        return {
+          createWorkspace: async () => ({ workspaceId: 'w-new', title: '新工作区' }),
+          startSession: () => {},
+          occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
+          labels: officialAddLabels(workspaceTranslate()),
+        }
+      },
+    })
+
+    await act(async () => adopted?.('w-new', '/repo/a/c', '新工作区'))
+    const confirm = Array.from(
+      document.body.querySelector('[role="dialog"]')?.querySelectorAll('button') ?? [],
+    ).find((button) => button.textContent === '聚焦')
+    await act(async () => confirm?.click())
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(store.getSnapshot().expansion?.workspace ?? {}).toEqual({})
+
+    await act(async () => root.unmount())
+  })
+
+  it('writes no folding record when confirming focus without any parent in reach', async () => {
+    // /other 之下没有任何现存工作区，新工作区落成自己那个容器的顶层，本来就默认展开
+    const store = viewModeStoreStub()
+    let adopted: ((workspaceId: string, path: string, name: string) => void) | undefined
+    const { root } = await mount({
+      ...storeViewModeProps(store),
+      loadGroups: async () =>
+        snapshot({ picker: { focused: workspaceAddress('w2'), recent: [], pinned: [] } }),
+      focusEntry: async (address) =>
+        snapshot({ picker: { focused: address, recent: [], pinned: [] } }),
+      addWorkspace: (onAdopted) => {
+        adopted = onAdopted
+        return {
+          createWorkspace: async () => ({ workspaceId: 'w-new', title: '新工作区' }),
+          startSession: () => {},
+          occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
+          labels: officialAddLabels(workspaceTranslate()),
+        }
+      },
+    })
+
+    await act(async () => adopted?.('w-new', '/other', '新工作区'))
+    const confirm = Array.from(
+      document.body.querySelector('[role="dialog"]')?.querySelectorAll('button') ?? [],
+    ).find((button) => button.textContent === '聚焦')
+    await act(async () => confirm?.click())
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(store.getSnapshot().expansion?.workspace ?? {}).toEqual({})
 
     await act(async () => root.unmount())
   })
@@ -770,13 +1005,13 @@ describe('nested sub-workspaces in a real DOM', () => {
     // 采纳之后紧接着会在新工作区里开一个新会话，展开是那一步的副作用
     // 新工作区自己有父、默认折叠，不写记录的话新会话会落在看不见的撑开体里
     const store = viewModeStoreStub()
-    let adopted: ((workspaceId: string, path: string) => void) | undefined
+    let adopted: ((workspaceId: string, path: string, name: string) => void) | undefined
     const { root } = await mount({
       ...storeViewModeProps(store),
       addWorkspace: (onAdopted) => {
         adopted = onAdopted
         return {
-          createWorkspace: async () => ({ workspaceId: 'w-new' }),
+          createWorkspace: async () => ({ workspaceId: 'w-new', title: '新工作区' }),
           startSession: () => {},
           occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
           labels: officialAddLabels(workspaceTranslate()),
@@ -785,7 +1020,7 @@ describe('nested sub-workspaces in a real DOM', () => {
     })
 
     // /repo/a/b 之下的新工作区：父是 w3，它自己的父链是 w3 → w2 → w1
-    await act(async () => adopted?.('w-new', '/repo/a/b/c'))
+    await act(async () => adopted?.('w-new', '/repo/a/b/c', '新工作区'))
 
     // 新工作区自己与整条父链都被显式写成展开；父链顶层 w1 本就是默认展开，这里也记一条（判据看记录、不看生效值）
     expect(store.getSnapshot().expansion?.workspace).toEqual({
@@ -804,13 +1039,13 @@ describe('nested sub-workspaces in a real DOM', () => {
     // /other 之下没有任何现存工作区，新工作区落成自己那个容器的顶层，本来就默认展开
     // 这时不该写任何记录：写了就等于把「用户没碰过」变成「用户选了展开」
     const store = viewModeStoreStub()
-    let adopted: ((workspaceId: string, path: string) => void) | undefined
+    let adopted: ((workspaceId: string, path: string, name: string) => void) | undefined
     const { root } = await mount({
       ...storeViewModeProps(store),
       addWorkspace: (onAdopted) => {
         adopted = onAdopted
         return {
-          createWorkspace: async () => ({ workspaceId: 'w-new' }),
+          createWorkspace: async () => ({ workspaceId: 'w-new', title: '新工作区' }),
           startSession: () => {},
           occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
           labels: officialAddLabels(workspaceTranslate()),
@@ -818,7 +1053,7 @@ describe('nested sub-workspaces in a real DOM', () => {
       },
     })
 
-    await act(async () => adopted?.('w-new', '/tmp/elsewhere'))
+    await act(async () => adopted?.('w-new', '/tmp/elsewhere', '新工作区'))
 
     expect(store.getSnapshot().expansion?.workspace ?? {}).toEqual({})
 
@@ -828,14 +1063,14 @@ describe('nested sub-workspaces in a real DOM', () => {
   it('writes no folding record when nesting is off', async () => {
     // 关掉嵌套时每个工作区都是自己那个容器的顶层，父链在渲染上不存在，展开是白送的
     const store = viewModeStoreStub()
-    let adopted: ((workspaceId: string, path: string) => void) | undefined
+    let adopted: ((workspaceId: string, path: string, name: string) => void) | undefined
     const { root } = await mount({
       ...storeViewModeProps(store),
       loadGroups: async () => snapshot({ nested: false }),
       addWorkspace: (onAdopted) => {
         adopted = onAdopted
         return {
-          createWorkspace: async () => ({ workspaceId: 'w-new' }),
+          createWorkspace: async () => ({ workspaceId: 'w-new', title: '新工作区' }),
           startSession: () => {},
           occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
           labels: officialAddLabels(workspaceTranslate()),
@@ -843,7 +1078,7 @@ describe('nested sub-workspaces in a real DOM', () => {
       },
     })
 
-    await act(async () => adopted?.('w-new', '/repo/a/b/c'))
+    await act(async () => adopted?.('w-new', '/repo/a/b/c', '新工作区'))
 
     expect(store.getSnapshot().expansion?.workspace ?? {}).toEqual({})
 

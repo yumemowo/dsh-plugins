@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  adoptionVisibility,
   focusedLayout,
   focusedWorkspaceIds,
   pickerSections,
@@ -330,5 +331,108 @@ describe('focusedWorkspaceIds', () => {
   it('falls back to everything when the focused entry is gone', () => {
     // 记录比列表活得久，解析不到时按没有聚焦处理，而不是空数组（那会让列表整片空掉）
     expect(focusedWorkspaceIds(LAYOUT, entries, workspaceAddress('gone'))).toBeUndefined()
+  })
+})
+
+/**
+ * 新增工作区的可见性判定
+ *
+ * 采纳之后紧接着会在新工作区里开一个新会话并打开它，而聚焦把列表收窄到那一片
+ * 这里的断言就是那张判决表：什么情况下已经看得见、什么情况下放进被聚焦的分组、什么情况下要问一句
+ *
+ * 用未归组的工作区当聚焦对象：菜单里只有它们一个个可聚焦，分组名下的成员由分组名一个条目代表
+ */
+describe('adoptionVisibility', () => {
+  const entries = rootPickerEntries(LAYOUT, VIEWS)
+  // w3 与 w4 是未归组的那些，因此它们是菜单里可聚焦的真实工作区
+  const paths: Record<string, string> = { w3: '/repo/a', w4: '/elsewhere' }
+  const pathOf = (id: string): string | undefined => paths[id]
+
+  /** 聚焦 w3（`/repo/a`）判一次可见性 */
+  function visibility(path: string, nestingEnabled = true) {
+    return adoptionVisibility({
+      focused: workspaceAddress('w3'),
+      entries,
+      path,
+      nestingEnabled,
+      pathOf,
+    })
+  }
+
+  it('leaves everything alone when nothing is focused', () => {
+    // 没有聚焦时列表不裁剪，新工作区必然可见，一条记录都不必改
+    expect(
+      adoptionVisibility({
+        focused: ALL_ENTRIES,
+        entries,
+        path: '/elsewhere/x',
+        nestingEnabled: true,
+        pathOf,
+      }),
+    ).toEqual({ kind: 'visible' })
+  })
+
+  it('leaves everything alone when the focused entry is gone', () => {
+    // 记录比列表活得久，解析不到时按没有聚焦处理，新工作区落进整片内容里
+    expect(
+      adoptionVisibility({
+        focused: workspaceAddress('gone'),
+        entries,
+        path: '/elsewhere/x',
+        nestingEnabled: true,
+        pathOf,
+      }),
+    ).toEqual({ kind: 'visible' })
+  })
+
+  it('joins the virtual workspace the view is focused on', () => {
+    // 聚焦虚拟分组时那一片就是它的成员，放进它是唯一能让新工作区出现在视野里的写入
+    expect(
+      adoptionVisibility({
+        focused: virtualAddress('vg1'),
+        entries,
+        path: '/elsewhere/x',
+        nestingEnabled: true,
+        pathOf,
+      }),
+    ).toEqual({ kind: 'join-virtual', groupId: 'vg1' })
+  })
+
+  it('leaves a workspace that already renders inside the focused one alone', () => {
+    // /repo/a/c 是 /repo/a 的后代，默认的嵌套渲染就把它放在那一片里
+    expect(visibility('/repo/a/c')).toEqual({ kind: 'visible' })
+  })
+
+  it('treats the focused directory itself as outside rather than inside', () => {
+    // 同一个目录：`isAncestorPath` 判的是严格祖先，新工作区与它并列，不在它体内
+    expect(visibility('/repo/a')).toEqual({ kind: 'ask-focus', focusedLabel: 'W3' })
+  })
+
+  it('asks to focus when the new workspace is outside the focused subtree', () => {
+    // 分属两条路径，聚焦在 w3 上时新工作区不会出现在那一片里
+    expect(visibility('/elsewhere/x')).toEqual({ kind: 'ask-focus', focusedLabel: 'W3' })
+  })
+
+  it('compares paths on segment boundaries rather than as string prefixes', () => {
+    // /repo/ab 不是 /repo/a 的后代目录，共用前缀不算数
+    expect(visibility('/repo/ab/x')).toEqual({ kind: 'ask-focus', focusedLabel: 'W3' })
+  })
+
+  it('asks to focus when nesting is off, even for a cwd descendant', () => {
+    // 关掉嵌套时任何工作区都不渲染在另一个工作区体内，路径关系在渲染上不成立
+    expect(visibility('/repo/a/c', false)).toEqual({ kind: 'ask-focus', focusedLabel: 'W3' })
+  })
+
+  it('asks to focus when the focused workspace has no usable path', () => {
+    // 缺 cwd 的工作区不参与嵌套，谈不上「渲染在它体内」
+    expect(
+      adoptionVisibility({
+        focused: workspaceAddress('w3'),
+        entries,
+        path: '/repo/a/c',
+        nestingEnabled: true,
+        pathOf: () => undefined,
+      }),
+    ).toEqual({ kind: 'ask-focus', focusedLabel: 'W3' })
   })
 })

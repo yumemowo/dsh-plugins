@@ -257,7 +257,7 @@ export function apply(ctx: Context): void {
       startSession: (workspaceId) => uiWorkspace?.startSession(workspaceId as never),
       // 传解析器而不是当次读数，占用者可能在两次渲染之间换人
       occupant: () => directoryFlowOccupant(ctx.slots),
-      // 区域组件把「刚采纳了哪个工作区」接回去，据此判断要不要问一句放进父工作区所在的分组
+      // 区域组件把「刚采纳了哪个工作区」接回去，据此判断它在新会话打开那一刻可不可见
       onAdopted,
       labels: officialAddLabels(tWorkspace),
     }

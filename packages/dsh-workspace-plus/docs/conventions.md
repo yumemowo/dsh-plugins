@@ -26,15 +26,33 @@
 | 改完 `src/` 必须重新构建产物 | GUI 仍加载旧 `lib/client.js`，界面完全没变；而 `vitest` 直接 import 源码，**测试照样全绿** | `pnpm run build`；`lib/` 在 `.gitignore` 内，`git status` 看不出差异 |
 | 改宿主半边要重启 `dsh` | `dsh-client-hmr` 只推客户端 bundle，宿主仍是旧版本 | 见[客户端集成](client-integration.md#热重载与两端不同步) |
 | `.tsx` 必须写进两个 tsconfig 的 `include` | `tsc` **静默不检查** `.tsx` 文件 | `tsconfig.json` / `tsconfig.test.json` 都已含 `src/**/*.tsx` |
+| 查客户端类型要走 `pnpm run typecheck`，不能只看 `build` / `test` | 客户端类型错误在 `build` 与 `test` 下全是假绿，产物照出、用例照过 | 见下面「客户端半边只由 `tsconfig.test.json` 检查」 |
 | 新增基线模块要同步两处 | 漏 `EXTERNAL` 会把官方包打进产物（第二份引擎实例）；漏 `BASELINE` 断言失效 | `scripts/build-client.mjs` 的 `EXTERNAL` 与 `test/bundle.test.ts` 的 `BASELINE` 必须同时列出全部基线模块。node 取不到真包的那两个（primitives、client-store）还要在 `vitest.config.ts` 的 `resolve.alias` 配替身 |
 
 **验证产物时挑字符串字面量与对象属性名，不要挑函数名或局部变量名。** 产物 `minify: true` 会重命名它们，按名字 grep 恒为 0；同时 esbuild 把中文转成 `\uXXXX`，直接 grep 中文同样得 0。曾因此误判「构建丢了内容」，实际只是函数被改名。
+
+### 客户端半边只由 `tsconfig.test.json` 检查
+
+本包分宿主与浏览器两个半边，**只有 `tsconfig.test.json` 覆盖全部源码**：
+
+| 配置 / 命令 | 覆盖 `src/client/**` | 说明 |
+| --- | --- | --- |
+| `tsconfig.json` | 否 | `exclude: ["src/client/**"]`——宿主半边不 import 客户端，排除它不会带走被引用的文件 |
+| `tsconfig.test.json` | **是** | 第二个工程，`include` 里含 `src/**/*` 与 `test/**/*`，客户端类型只在这里被检查 |
+| `pnpm run build` | 否 | 客户端走 `scripts/build-client.mjs` 的 esbuild，只剥类型不检查 |
+| `vitest run` | 否 | vitest 同样只转译 |
+| `pnpm run typecheck` | **是** | 先跑 `tsconfig.json`，再跑 `tsconfig.test.json` |
+| `pnpm run check` | **是** | typecheck 是其中一步 |
+
+后果是**客户端类型错误在 `build` 与 `test` 下全都不报**：产物照常生成、655 条用例照常全绿，只有 `pnpm run typecheck` 会拒绝。仓库目前没有 CI，`pnpm run check` 是唯一闸门。
+
+曾有一次实测：往 `src/client/data/picker.ts` 注入 `const x: string = 42`，`tsc -p tsconfig.json --noEmit`、`pnpm run build`、`vitest run` 三者全部通过，只有 `tsc -p tsconfig.test.json` 报出 `TS2322`。**因此只跑 `build` 或 `test` 就宣称「类型检查通过」是无效结论。**
 
 ## 测试
 
 | 约束 | 说明 |
 | --- | --- |
-| 用例名用小写、以第三人称动词开头的行为描述串 | `it('nests a child workspace inside its parent')`。全仓 638 条一律这个形态：小写起首、`keeps` / `reports` / `leaves` 这类动词打头、不用 `should`。写新用例时照同一形态，不要换成 `Should_...` 之类 |
+| 用例名用小写、以第三人称动词开头的行为描述串 | `it('nests a child workspace inside its parent')`。全仓 663 条一律这个形态：小写起首、`keeps` / `reports` / `leaves` 这类动词打头、不用 `should`。写新用例时照同一形态，不要换成 `Should_...` 之类 |
 | 断言 DOM 结构、样式选择器、交互路径的用例用真 `react-dom` | 文件头加 `// @vitest-environment jsdom`，照 `test/nestingDom.test.tsx` 的驱动方式 |
 | 单测 import 的是基线替身，有盲区 | 替身看不到真包导出表；那条链由 `test/bundle.test.ts` 补（按宿主的方式装载产物） |
 | 测试里 CSS 类名不哈希 | `vitest.config.ts` 的 `classNameStrategy: 'non-scoped'`，断言的是「哪个元素带哪条规则」 |
