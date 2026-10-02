@@ -810,6 +810,31 @@ describe('nested sub-workspaces in a real DOM', () => {
     await act(async () => root.unmount())
   })
 
+  it('turns nesting off right away when no child workspace was put into a group', async () => {
+    // 默认数据里 W2、W3 只是按 cwd 路径推导出来的层级，没有任何归属落盘
+    // 关掉它不解除任何人的嵌套，因此不必问一句
+    const calls: boolean[] = []
+    const { container, root } = await mount({
+      setNested: async (enabled: boolean) => {
+        calls.push(enabled)
+        return snapshot({ nested: enabled })
+      },
+    })
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '.headerAction[aria-label="视图选项"]',
+    )
+    await act(async () => trigger?.click())
+    await act(async () => {
+      ;(document.body.querySelector('[role="switch"]') as HTMLElement | null)?.click()
+    })
+
+    expect(calls).toEqual([false])
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+
+    await act(async () => root.unmount())
+  })
+
   it('asks nothing about groups, whichever parent the new workspace lands under', async () => {
     // 采纳成功后的回调由「添加工作区」那个组件回传，这里直接驱动它
     // 采纳路径只处理「新工作区可不可见」，不再替用户改归属：放进分组要用户自己移

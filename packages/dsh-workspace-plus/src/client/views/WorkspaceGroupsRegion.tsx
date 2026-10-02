@@ -1103,7 +1103,8 @@ function useRegionNestActions(
   /**
    * 视图选项里的嵌套开关
    *
-   * 开启直接写，关闭要先过二次确认，并把会被解除嵌套的工作区逐个列出来
+   * 开启直接写；关闭只在真的会把某个子工作区解除嵌套时才过二次确认，并把那批工作区逐个列出来
+   * 没有任何子工作区归组时关掉它只影响按路径推导的展示层级，当场生效即可
    * 这一层是「用户点了一下」与「真的写盘」之间的分派，真正的写入在 {@link commitNestedOff}
    *
    * 确认框只列放进某个分组的那些，未放进分组的子工作区本来就只是按路径推导出来的展示层级
@@ -1112,6 +1113,10 @@ function useRegionNestActions(
   const requestNestedToggle = (): void => {
     if (!snapshot.nested) {
       apply(setNested(true))
+      return
+    }
+    if (layout.groupedChildLabels.length === 0) {
+      apply(setNested(false))
       return
     }
     ui.openOverlay({ kind: 'nested-off' })
