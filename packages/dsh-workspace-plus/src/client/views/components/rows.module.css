@@ -410,6 +410,62 @@
 .rowMenuOpen .rowTime,
 .row:has(.rowAction:focus-visible) .rowTime { display: none; }
 
+/* ── 行尾的图钉 ───────────────────────────────────────────
+   操作位在左、图钉在右
+
+   已置顶的图钉常驻可见并占着 16px：它的位置因此不随时间隐去、操作位展开而变
+   未置顶的图钉与操作位一起显隐，静止时连宽度一起收成 0——不为一个看不见的状态图标留空位
+
+   颜色取官方那次置顶标记用的同一档色阶（label-caption），不另造一套
+   overflow 与操作位槽同理：裁掉收起时溢出的图标，并把 flex 项的自动最小尺寸归零，否则子项 16px 会把 width: 0 顶回去 */
+.rowPin {
+  flex: none;
+  cursor: pointer;
+  height: 16px;
+  padding: 0;
+  background: 0 0;
+  border: none;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* 已置顶：常驻可见，色阶比未置顶那一档强，因此它读起来是「这一行的状态」而不是一个待点的入口 */
+.rowPinOn {
+  width: 16px;
+  opacity: 1;
+  color: var(--dsw-alias-label-caption);
+}
+
+.rowPinOn:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 未置顶：静止时不占宽也不可见，与操作位同时展开 */
+.rowPinOff {
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+  color: var(--dsw-alias-label-caption);
+}
+
+/* 三条触发条件与 .rowTime / .rowActionSlot 那两组一一对应，保证行尾在任一时刻只有一套控件占位
+   图钉排在操作位之后，但仍读行自身的悬停与行内键盘焦点 */
+.row:hover > .rowPinOff,
+.row:focus-within > .rowPinOff,
+.rowPinOff:focus-visible {
+  width: 16px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 达到上限时未置顶的图钉禁用，指针事件一并去掉，不留看不见却能点中的热区 */
+.rowPinOff:disabled {
+  cursor: default;
+}
+
 /* 分组的会话数与 time 一样让位，三条触发条件与上面那组一一对应，行类换成分组行 */
 .groupHead:hover .groupCount,
 .groupHead.rowMenuOpen .groupCount,

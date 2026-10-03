@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { readAllCss, readModuleCss, readReducedMotionCss } from './readCss.ts'
+import { moduleCssFiles, readAllCss, readModuleCss, readReducedMotionCss, stripComments } from './readCss.ts'
 
 /**
  * 取样式表文本
@@ -21,6 +21,46 @@ function readCss(): string {
 const OWN_CLASSES = [...new Set([...readCss().matchAll(/\.([A-Za-z_][A-Za-z0-9_-]*)/g)].map((m) => `.${m[1]}`))]
 
 describe('client stylesheet', () => {
+  /**
+   * 每张样式表**真正声明过**的类名
+   *
+   * 只看选择器里的类名，不看注释：注释会举别的模块的类名当例子
+   * 声明形如 `.name` 且紧跟 `{`、`,`、`:` 或伪类，出现在选择器位置
+   */
+  function declaredClasses(css: string): Set<string> {
+    const names = new Set<string>()
+    for (const m of stripComments(css).matchAll(/(^|\})\s*([^{}@/]+)\{/gm)) {
+      for (const cls of (m[2] ?? '').matchAll(/\.([A-Za-z_][A-Za-z0-9_-]*)/g)) {
+        names.add(cls[1] ?? '')
+      }
+    }
+    return names
+  }
+
+  /**
+   * 同名类出现在多个模块里就是危险的
+   *
+   * CSS Modules 按**所属模块**哈希：在 A 表里写 `B 的类名` 会编译成 `A 的哈希 + 该名字`，
+   * 与 B 表真正产出的 `B 的哈希 + 该名字` 对不上，选择器永远匹配不到，规则静默失效
+   * 界面上只表现为「某处少了一点样式」，编译、类型与 DOM 断言都不报错
+   * 因此这类名字必须由本模块自己声明，或改用不受哈希保护的 `data-wg-*` 选择
+   */
+  it('never lets two stylesheets declare the same class name', () => {
+    const modules = moduleCssFiles()
+    expect(modules.length).toBeGreaterThan(5)
+    /** 类名 → 声明它的模块 */
+    const owners = new Map<string, string[]>()
+    for (const file of modules) {
+      for (const name of declaredClasses(readModuleCss(file))) {
+        owners.set(name, [...(owners.get(name) ?? []), file])
+      }
+    }
+    const shared = [...owners]
+      .filter(([, files]) => files.length > 1)
+      .map(([name, files]) => `.${name} ← ${files.join(', ')}`)
+    expect(shared).toEqual([])
+  })
+
   it('keeps every stylesheet free of backticks', () => {
     // 样式表由构建脚本按文本读取，反引号不再截断任何东西
     // 但类名与 :global 之外的裸反引号一律是笔误，留一条廉价断言
@@ -1174,5 +1214,115 @@ describe('client stylesheet', () => {
       if (!rule.selectors.some((s) => s.includes('.menuArrow'))) continue
       expect(rule.body).not.toMatch(/transform/)
     }
+  })
+
+  it('indents a pinned row past the status indicator like a list row', () => {
+    const css = stripComments(readModuleCss('views/PinnedSection.module.css'))
+    const indent = css.match(/\{[^{}]*--wg-row-start:\s*24px[^{}]*\}/)?.[0] ?? ''
+
+    // 指示器绝对定位在行左缘 4~20px，行默认的 8px 内边距会让标题压在它下面
+    // 列表里的行由 .workspaceBody > .sessions > .row 让出这一格，置顶区不在那些容器里，得自己让
+    expect(indent).toContain('padding-left: var(--wg-row-start)')
+    // 选择器只能用本模块的类名：.row 属于另一张样式表，跨模块引用编译后匹配不到
+    const selector = css.slice(0, css.indexOf(indent))
+    const last = selector.slice(selector.lastIndexOf('}') + 1).trim()
+    expect(last).toBe('.pinnedSection .pinScroll > *')
+  })
+
+  it('gives the pinned scroller the same right inset the list uses', () => {
+    // 列表靠 .list 的这两项把 scrollbar 沟槽的宽度还回去（见 WorkspaceGroupsRegion.module.css），
+    // 置顶区不在 .list 里，不自己还一次的话整块比列表窄一条沟槽，行右缘与图钉都对不齐
+    const region = stripComments(readModuleCss('views/WorkspaceGroupsRegion.module.css'))
+    const pinned = stripComments(readModuleCss('views/PinnedSection.module.css'))
+    /** 某条选择器的规则体 */
+    const bodyOf = (css: string, selector: string): string =>
+      new RegExp(`(?:^|\\})\\s*${selector.replace(/[.$*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^{}]*)\\}`)
+        .exec(css)?.[1]?.replace(/\s+/g, ' ').trim() ?? ''
+
+    const list = bodyOf(region, '.list')
+    const scroll = bodyOf(pinned, '.pinScroll')
+    for (const prop of ['margin-right', 'padding-right']) {
+      const pattern = new RegExp(`${prop}:\\s*(calc\\([^;]*\\))`)
+      expect(scroll.match(pattern)?.[1], `.pinScroll 缺 ${prop}`).toBe(
+        list.match(pattern)?.[1],
+      )
+    }
+
+    // 段头不在滚动容器里，因此它不该再吃一份内缩
+    expect(bodyOf(pinned, '.pinnedSection')).not.toMatch(/padding-right/)
+    expect(bodyOf(pinned, '.pinScroll')).toContain('scrollbar-gutter: stable')
+  })
+
+  it('reserves the resting height on the section itself so a popover cannot pull the list up', () => {
+    // 浮出态里预览区脱离了流，因此段自身要常驻住静止高度
+    // 高度只由预览区撑着时，指针一进入整段就塌成「段头 + 分隔」
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((x) => x.trim().replace(/\s+/g, ' ')),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    // 常驻高度由段头 + 预览区 + 分隔三项相加，三项都是变量、可由组件按可见条数改写
+    const section = bodyOf('.pinExpand')
+    expect(section).toMatch(/min-height:\s*calc\(/)
+    expect(section).toContain('--wg-pin-head')
+    expect(section).toContain('--wg-pin-rest')
+    expect(section).toContain('--wg-pin-divider')
+
+    // 光是拉长段还不够：预览区脱离流之后必须整块浮在预留高度之上，且不改动上方两行
+    // 定位写在两态都成立的那条规则上：只写在浮出态时，收回时规则被摘掉、面板回到流里
+    const popover = bodyOf('.pinExpand .pinScroll')
+    expect(popover).toMatch(/position:\s*absolute/)
+    // 落点取段头正下方
+    expect(popover).toContain('top: var(--wg-pin-head')
+
+    // 上限取内容实高而不是视口上限，否则可见高度在过渡前段就走完
+    const open = bodyOf('.pinScrollOpen')
+    expect(open).toContain('--wg-pin-full')
+
+    // 过渡挂在两态都成立的那条规则上，展开与收回因此都有动画
+    expect(bodyOf('.pinScroll')).toMatch(/transition:\s*max-height/)
+
+    // 被裁掉的行留在文档里（收回要有东西可收），但静止时不可见
+    const clipped = rules
+      .filter((rule) => rule.selectors.some((sel) => sel.includes('[data-wg-clipped]')))
+      .map((rule) => rule.body)
+      .join('\n')
+    expect(clipped).toMatch(/visibility:\s*hidden/)
+  })
+
+  it('drops the popover motion under prefers-reduced-motion', () => {
+    const reduced = readReducedMotionCss()
+
+    // 浮出的过渡与可见性延时都要落位
+    // 只撤过渡而留着延时的话，reduced-motion 下收起后仍要多挡一个时长才 Tab 得到
+    expect(reduced).toMatch(/\.pinScroll\s*\{\s*transition:\s*none/)
+    expect(reduced).toMatch(/transition-delay:\s*0s/)
+  })
+
+  it('collapses the unpinned pin instead of reserving a slot for it', () => {
+    // 不为一个看不见的状态图标留空位：未置顶时宽度也收成 0，悬停才展开
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((x) => x.trim().replace(/\s+/g, ' ')),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    expect(bodyOf('.rowPinOff')).toMatch(/width:\s*0/)
+    expect(bodyOf('.rowPinOn')).toMatch(/width:\s*16px/)
+
+    // 收成 0 的前提是容器 overflow 非 visible，否则 flex 项的自动最小尺寸会把子项顶回去
+    const base = bodyOf('.rowPin')
+    expect(base).toMatch(/overflow:\s*hidden/)
+    // 宽度由 0 变 16px，不能只切不透明度
+    const reveal = rules
+      .filter((rule) => rule.selectors.some((x) => x.includes('.rowPinOff')))
+      .map((rule) => rule.body)
+      .join('\n')
+    expect(reveal).toMatch(/width:\s*16px/)
   })
 })

@@ -39,6 +39,9 @@ catalog:
   '@deepseek-ai/dsh-client-ui-sidebar-right': ^0.2.0-rc.2
   '@deepseek-ai/dsh-session': ^0.2.0-rc.2
   '@deepseek-ai/dsh-storage-domain': ^0.2.0-rc.2
+  # 只取类型：官方转发给浏览器的事件白名单（`ctx.remote.$on` 认得哪些事件名）
+  # 由 api-remotes 声明，本包订阅 settings/document-updated 时需要它，运行期由宿主解析。
+  '@deepseek-ai/dsh-api-remotes': ^0.2.0-rc.2
   '@types/react': ~18.3.1
   # 组件内聚样式后类名拼接用官方同一套（web-styling 规定 CSS Modules + clsx）
   # 它不是平台基线模块，会被打进产物

@@ -42,6 +42,8 @@ export const OFFICIAL_WORKSPACE_ZH: Record<string, string> = {
   'conflict.named': '已存在名为“{name}”的工作区。',
   'menu.fork': '分叉会话',
   'menu.archiveSession': '归档会话',
+  'menu.pinSession': '置顶会话',
+  'menu.unpinSession': '取消置顶',
   'status.running': '进行中',
   'status.subagentsRunning.one': '{n} 个子代理运行中',
   'status.subagentsRunning.other': '{n} 个子代理运行中',

@@ -14,7 +14,6 @@ import type { WorkspaceRowProps } from './WorkspaceRow.tsx'
 
 import { useExpansion } from '../useExpansion.ts'
 import { useLocale } from '../useLocale.ts'
-import { compareSessionRows } from '../data/sessions.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
 import styles from './components/rows.module.css'
 
@@ -33,6 +32,13 @@ export interface WorkspaceSectionProps {
   layout: WorkspaceLayout
   /** 该工作区块在层级里的深度，从 0 起，缩进由它换算 */
   depth: number
+  /**
+   * 会话行的排序比较器
+   *
+   * 由区域组件按「置顶会话显示方式」选定后下发：置顶要在各分组内也排到最前时，它会把置顶名次收进去
+   * 三种段落（分组内、未归组段、平铺列表）共用同一个
+   */
+  compareRows: (a: SessionRow, b: SessionRow) => number
   groupActions: WorkspaceGroupActions
   /** 把一个会话行渲染成元素，渲染方式由区域组件决定（是否带归组菜单） */
   renderSession: (row: SessionRow) => ReactNode
@@ -45,6 +51,7 @@ export function WorkspaceSection({
   row,
   layout,
   depth,
+  compareRows,
   groupActions,
   renderSession,
   renderChildWorkspace,
@@ -84,14 +91,14 @@ export function WorkspaceSection({
               }
               renderChildWorkspace={renderChildWorkspace}
             >
-              {[...section.sessions].sort(compareSessionRows).map(renderSession)}
+              {[...section.sessions].sort(compareRows).map(renderSession)}
             </GroupSection>
           ))}
           {/* 未归组的会话平铺在工作区下，不套任何分组头
               指示器不占行内流，会话行的标题因此落在同级容器的图标列上，与会话分组头、子工作区行都不重合 */}
           {layout.loose.length === 0 ? null : (
             <div className={styles.sessions}>
-              {[...layout.loose].sort(compareSessionRows).map(renderSession)}
+              {[...layout.loose].sort(compareRows).map(renderSession)}
             </div>
           )}
           {hasAnyRow ? null : (

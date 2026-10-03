@@ -20,7 +20,7 @@
  */
 import { memo, useEffect, useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
-import { HoverCard, StateDot } from '../runtime.ts'
+import { HoverCard, IconPinFillRegular, IconPinOutlineRegular, StateDot } from '../runtime.ts'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { SessionHoverContent } from './components/HoverCards.tsx'
 import { sameSessionStatuses } from '../data/status.ts'
@@ -93,6 +93,29 @@ export interface SessionRowViewProps {
    * 只在从搜索结果打开会话时下发，缺省表示这一行没有待揭示的请求
    */
   onReveal?: (() => void) | undefined
+  /**
+   * 该行是否已置顶
+   *
+   * 已置顶时图钉常驻可见并占宽，未置顶时与操作位一起显隐，两态的先后顺序相同
+   */
+  pinned?: boolean | undefined
+  /**
+   * 是否还能新增置顶
+   *
+   * 达到上限时未置顶行的图钉转禁用态——上限只拦新增，已置顶的照常可以取消
+   * 缺省表示不涉及上限
+   */
+  canPin?: boolean | undefined
+  /** 切换这一行的置顶，缺省表示该行不提供置顶入口 */
+  onTogglePin?: ((sessionId: string) => void) | undefined
+  /**
+   * 该行是否被容器裁在高度之外
+   *
+   * 交给样式表收起可见性
+   * 被裁掉的行仍然留在文档里（收回方向的动画要有东西可收），但不可以被 Tab 聚焦到看不见的位置
+   * 缺省表示不涉及裁剪
+   */
+  clipped?: boolean | undefined
 }
 
 /**
@@ -127,6 +150,10 @@ function SessionRowViewImpl({
   hoverCopy,
   menuOpen = false,
   action,
+  pinned = false,
+  canPin = true,
+  clipped = false,
+  onTogglePin,
   onContextMenu,
   onOpenSession,
   onReveal,
@@ -143,6 +170,32 @@ function SessionRowViewImpl({
     onReveal()
   }, [onReveal])
 
+  const pin =
+    onTogglePin === undefined ? null : (
+      <button
+        type="button"
+        className={clsx(styles.rowPin, pinned ? styles.rowPinOn : styles.rowPinOff)}
+        // 上限只拦新增：已置顶的行永远可以点它取消，因此禁用判据只看「未置顶且到上限」
+        disabled={!pinned && !canPin}
+        aria-pressed={pinned}
+        aria-label={pinned ? labels.pinned.unpin(shownTitle) : labels.pinned.pin(shownTitle)}
+        onClick={(event) => {
+          // 行本身也可点，不拦住就会连带打开会话
+          event.stopPropagation()
+          onTogglePin(sessionId)
+        }}
+      >
+        {pinned ? <IconPinFillRegular size={13} /> : <IconPinOutlineRegular size={13} />}
+      </button>
+    )
+
+  const actionSlot =
+    action === undefined ? null : (
+      <span className={styles.rowActionSlot} onClick={(event) => event.stopPropagation()}>
+        {action}
+      </span>
+    )
+
   const row = (
     <div
       ref={rowRef}
@@ -151,6 +204,7 @@ function SessionRowViewImpl({
       data-wg-state={status?.state ?? 'idle'}
       // 参与所在撑开体的逐个淡入，序号由撑开体按文档序下发
       data-wg-stagger=""
+      data-wg-clipped={clipped ? '' : undefined}
       role="button"
       tabIndex={0}
       onClick={open}
@@ -160,11 +214,11 @@ function SessionRowViewImpl({
       {status === undefined ? null : <StatusIndicator status={status} />}
       <span className={styles.rowTitle}>{shownTitle}</span>
       {time === undefined ? null : <span className={styles.rowTime}>{time}</span>}
-      {action === undefined ? null : (
-        <span className={styles.rowActionSlot} onClick={(event) => event.stopPropagation()}>
-          {action}
-        </span>
-      )}
+      {/* 行尾两段：操作位在左、图钉在右
+          已置顶的图钉常驻可见并占宽，因此它的位置不随时间隐去、操作位展开而变；
+          未置顶的图钉与操作位一起显隐，静止时连宽度一起收掉 */}
+      {actionSlot}
+      {pin}
     </div>
   )
 
@@ -209,6 +263,10 @@ function sameRowViewProps(prev: SessionRowViewProps, next: SessionRowViewProps):
     prev.hoverDisabled === next.hoverDisabled &&
     prev.hoverCopy === next.hoverCopy &&
     prev.menuOpen === next.menuOpen &&
+    prev.pinned === next.pinned &&
+    prev.canPin === next.canPin &&
+    prev.clipped === next.clipped &&
+    prev.onTogglePin === next.onTogglePin &&
     prev.action === next.action &&
     prev.onContextMenu === next.onContextMenu &&
     prev.onOpenSession === next.onOpenSession &&

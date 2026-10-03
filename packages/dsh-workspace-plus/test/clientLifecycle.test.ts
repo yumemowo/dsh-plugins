@@ -52,6 +52,8 @@ function fakeContext(options: { mount?: () => Promise<() => Promise<void>> } = {
     },
     remote: {
       $mount: options.mount ?? (async () => async () => {}),
+      // 订阅官方转发事件，返回反注册函数；本包只订阅 settings/document-updated
+      $on: () => () => {},
     },
     'remote.workspacePlus': { list: async () => ({ ok: true, value: { byWorkspace: {} } }) },
     // 对照模式下 apply 经 ctx.inject 等 sidebarRightTabs，并从这里自动打开一次

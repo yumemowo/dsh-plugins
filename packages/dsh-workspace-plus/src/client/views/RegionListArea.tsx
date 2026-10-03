@@ -68,6 +68,12 @@ export interface SessionRowScope {
   revealSessionId: string | undefined
   acknowledgeReveal: (sessionId: string) => void
   openSession: (sessionId: string) => void
+  /** 注册表全局的置顶集合，行尾那枚图钉据此判断自己那一格的状态 */
+  pinnedSessionIds: ReadonlySet<string>
+  /** 是否还能新增置顶，达到上限时未置顶行的图钉转禁用态 */
+  canPin: boolean
+  /** 切换一条会话的置顶 */
+  onTogglePin: (sessionId: string) => void
 }
 
 /** 列表侧消费的派生布局 */
@@ -121,6 +127,13 @@ export interface WorkspaceNodeScope {
   currentSessionId: string | undefined
   home: string | undefined
   session: SessionRowScope
+  /**
+   * 会话行的排序比较器
+   *
+   * 递归层每一层都要用它，因此挂在作用域上而不是逐层当 prop 传
+   * 它由容器按「置顶会话显示方式」选定，始终是同一个引用
+   */
+  compareRows: (a: SessionRow, b: SessionRow) => number
 }
 
 interface RegionListAreaProps {
@@ -206,7 +219,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
           />
           <ExpandableBody open={expansion.isWorkspaceExpanded(UNGROUPED_KEY)}>
             <div className={rowsStyles.workspaceBody}>
-              {/* 这些会话不属于任何工作区，没有分组可归，因此菜单里只有官方三项（归组项无处落）
+              {/* 这些会话不属于任何工作区，没有分组可归，因此菜单里只有官方操作块（归组项无处落）
                 * 宿主未提供官方服务时菜单会是空的，那时直接渲染无菜单的行，不留点不动的省略号 */}
               <div className={rowsStyles.sessions}>
                 {props.stray.map((row) => ungroupedRowElement(row, session, rowLabels))}
@@ -343,6 +356,7 @@ function WorkspaceNode({
       }}
       layout={built}
       depth={layout.nesting.levelOf(workspaceId)}
+      compareRows={scope.compareRows}
       groupActions={{
         onRename: (section) => edits.onRenameGroup(workspaceId, section.id, section.label),
         onDelete: (section) => edits.onDeleteGroup(workspaceId, section.id, section.label),
@@ -406,6 +420,12 @@ export function sessionRowElement(
   // 状态只推导一次，行首那个点与卡片那几条取自同一份结果
   const view = statusViewOfRow(row, context.statusSnapshot, labels.status)
   const { time, hoverTime } = rowTimes(row, context, labels)
+  // 置顶两格由行的上下文统一下发：行本身不知道自己在不在置顶集合里
+  const pin = {
+    pinned: context.pinnedSessionIds.has(row.id),
+    canPin: context.canPin,
+    onTogglePin: context.onTogglePin,
+  }
   if (row.blank) {
     return (
       <SessionRowView
@@ -435,6 +455,7 @@ export function sessionRowElement(
       hoverTime={hoverTime}
       grouping={grouping}
       official={context.official}
+      {...pin}
       onOpenSession={context.openSession}
       onReveal={reveal}
     />
@@ -444,7 +465,7 @@ export function sessionRowElement(
 /**
  * 渲染未分组桶里的一个会话行
  *
- * 这些会话不属于任何工作区，没有分组可归，因此菜单里只有官方三项（归组项无处落）
+ * 这些会话不属于任何工作区，没有分组可归，因此菜单里只有官方操作块（归组项无处落）
  * 宿主未提供官方服务时菜单会是空的，那时直接渲染无菜单的行，不留点不动的省略号
  * 与工作区内的行分开成两处：那里的行按分组上下文渲染，这里的行没有那层上下文
  */
@@ -486,6 +507,9 @@ export function ungroupedRowElement(
       statuses={view.statuses}
       hoverTime={hoverTime}
       official={context.official}
+      pinned={context.pinnedSessionIds.has(row.id)}
+      canPin={context.canPin}
+      onTogglePin={context.onTogglePin}
       onOpenSession={context.openSession}
       onReveal={reveal}
     />

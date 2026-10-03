@@ -17,6 +17,8 @@ describe('officialSessionLabels', () => {
     const labels = officialSessionLabels(workspaceTranslate())
 
     expect(labels).toEqual({
+      pin: '置顶会话',
+      unpin: '取消置顶',
       rename: '重命名',
       renameTitle: '重命名会话',
       sessionNamePrompt: '会话名称',

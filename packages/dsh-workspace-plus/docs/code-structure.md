@@ -47,7 +47,7 @@ src/client/
     ├── RegionListArea.tsx          列表区三条分支，含 WorkspaceNode 递归与会话行元素构造
     ├── RegionDialogs.tsx           全部对话框（RegionOverlay 可辨识联合，任意时刻至多开一个）
     ├── WorkspacePickerMenu.tsx     工作区下拉菜单（自绘面板：三个分区、与工作区行同形的条目行、键盘导航）
-    ├── ViewOptionsMenu.tsx         视图选项面板（展示方式两条可选行 + 子工作区嵌套开关）
+    ├── ViewOptionsMenu.tsx         视图选项面板（四组「标题 + 两条可选行」+ 子工作区嵌套开关）
     ├── VirtualWorkspaceCreateControl.tsx  header 的「新建工作区分组」入口
     ├── SearchControl.tsx           搜索状态、入口、输入框与结果列表
     ├── AddWorkspaceControl.tsx     「添加工作区」入口与 picking 流程
@@ -58,11 +58,13 @@ src/client/
     ├── RowActions.tsx              容器行行尾操作位（`...` 菜单 + 可选 `+`），三类行共用
     ├── SessionRowView.tsx          会话行外壳（状态位列、标题、时间、操作位、悬停卡片）
     ├── SessionRowMenu.tsx          带会话操作菜单的会话行
+    ├── PinnedSection.tsx           区域顶部的置顶区（段头 + 置顶会话行，两种溢出给法共用一个控件）
     ├── WorkspaceRail.tsx           窄栏展开入口
     ├── header.module.css           区域头部样式（宽栏两行标题 / 入口组 / 窄栏）
     ├── SearchControl.module.css    搜索入口、输入框与结果列表样式
     ├── WorkspacePickerMenu.module.css  工作区下拉面板样式
     ├── ViewOptionsMenu.module.css  视图选项面板样式
+    ├── PinnedSection.module.css    置顶区样式（段头几何、分隔、预览区与浮出）
     ├── WorkspaceGroupsRegion.module.css  区域根、列表与 tab 外壳样式
     ├── WorkspaceRail.module.css    窄栏入口样式
     └── components/                 无状态、无特定业务状态的 tsx

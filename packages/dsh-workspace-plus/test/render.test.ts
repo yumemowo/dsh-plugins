@@ -8,6 +8,7 @@ import type { WorkspaceSectionProps } from '../src/client/views/WorkspaceSection
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
+import { compareSessionRows } from '../src/client/data/sessions.ts'
 import { RegionLocaleProvider } from '../src/client/useLocale.ts'
 import { regionLabels } from '../src/client/labels.ts'
 import { regionTranslate, sidebarTranslate, translateWith, workspaceTranslate } from './locale-stub.ts'
@@ -652,6 +653,8 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
     },
     layout: { groups: [], loose, children: [] },
     depth: 0,
+    // 名次为空表时这个比较器与 `compareSessionRows` 同序，断言因此与没有置顶时相同
+    compareRows: compareSessionRows,
     groupActions: {
       onRename: () => {},
       onDelete: () => {},
@@ -832,6 +835,7 @@ function props(
     forgetWorkspace: async () => snapshot(),
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
+    setSessionPinned: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     // 结果条数上限来自官方会话控制器的线上契约值
@@ -1044,7 +1048,14 @@ describe('WorkspaceGroupsRegion render', () => {
       'separator-delete',
       'delete',
     ])
-    expect(menuItems(out)).toContainEqual(['rename', 'fork', 'archive', 'separator', 'group'])
+    expect(menuItems(out)).toContainEqual([
+      'pin',
+      'rename',
+      'fork',
+      'archive',
+      'separator',
+      'group',
+    ])
   })
 
   it('uses the generic rename verb in the workspace row menu, like official does', () => {
@@ -1116,8 +1127,8 @@ describe('WorkspaceGroupsRegion render', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
-    // stray 会话没有分组可归，但官方三项照常可用
-    expect(menuItems(out)).toContainEqual(['rename', 'fork', 'archive'])
+    // stray 会话没有分组可归，但官方操作块照常可用
+    expect(menuItems(out)).toContainEqual(['pin', 'rename', 'fork', 'archive'])
   })
 
   it('names the provisional blank session with the official fixed label', () => {
@@ -1149,7 +1160,14 @@ describe('WorkspaceGroupsRegion render', () => {
       'separator-delete',
       'delete',
     ])
-    expect(menuItems(withBlank)).toContainEqual(['rename', 'fork', 'archive', 'separator', 'group'])
+    expect(menuItems(withBlank)).toContainEqual([
+      'pin',
+      'rename',
+      'fork',
+      'archive',
+      'separator',
+      'group',
+    ])
   })
 
   it('shows the summary title once the session leaves the blank state', () => {

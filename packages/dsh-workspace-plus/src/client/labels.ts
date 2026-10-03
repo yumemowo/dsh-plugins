@@ -150,6 +150,12 @@ export interface RegionLabels {
   viewMode: ViewModeLabels
   /** 视图选项面板里「指示器」那一组的文案 */
   indicatorStyle: IndicatorStyleLabels
+  /** 视图选项面板里「置顶溢出」那一组的文案 */
+  pinOverflow: PinOverflowLabels
+  /** 视图选项面板里「置顶显示」那一组的文案 */
+  pinScope: PinScopeLabels
+  /** 置顶区的段头、行尾提示与图钉按钮文案 */
+  pinned: PinnedLabels
 }
 
 /** 视图选项面板里「展示方式」那一组 */
@@ -178,6 +184,42 @@ export interface IndicatorStyleLabels {
   icon: string
   /** 「色条」这一项：一条状态色条 */
   bar: string
+}
+
+/** 视图选项面板里「置顶溢出」那一组 */
+export interface PinOverflowLabels {
+  /** 这一组的标题 */
+  label: string
+  /** 「悬停展开」这一项：静止占可见条数，指针移上去整块浮出 */
+  expand: string
+  /** 「区内滚动」这一项：同一个高度里自行滚动 */
+  scroll: string
+}
+
+/** 视图选项面板里「置顶显示」那一组 */
+export interface PinScopeLabels {
+  /** 这一组的标题 */
+  label: string
+  /** 「仅置顶区」这一项 */
+  section: string
+  /** 「置顶区 + 分组内」这一项：置顶会话在它自己那一段里也排到最前 */
+  inline: string
+}
+
+/** 置顶区的文案 */
+export interface PinnedLabels {
+  /** 段头那个名字，同时是收起 / 展开按钮可见的文字 */
+  section: string
+  /** 行尾提示：共 n 条 */
+  count: (n: number) => string
+  /** 行尾提示：共 total 条、其中还有 more 条没显示 */
+  more: (total: number, more: number) => string
+  /** 未置顶行的图钉按钮标签，会话标题由调用方传入 */
+  pin: (name: string) => string
+  /** 已置顶行的图钉按钮标签，会话标题由调用方传入 */
+  unpin: (name: string) => string
+  /** 置顶数量已达上限时的提示 */
+  limitReached: string
 }
 
 /** 子工作区嵌套相关的文案 */
@@ -358,6 +400,24 @@ export function regionLabels(
       label: t('indicator.label'),
       icon: t('indicator.icon'),
       bar: t('indicator.bar'),
+    },
+    pinOverflow: {
+      label: t('pinOverflow.label'),
+      expand: t('pinOverflow.expand'),
+      scroll: t('pinOverflow.scroll'),
+    },
+    pinScope: {
+      label: t('pinScope.label'),
+      section: t('pinScope.section'),
+      inline: t('pinScope.inline'),
+    },
+    pinned: {
+      section: t('pinned.section'),
+      count: (n: number) => t('pinned.count', { n }),
+      more: (total: number, more: number) => t('pinned.more', { total, more }),
+      pin: (name: string) => t('pinned.pin', { name }),
+      unpin: (name: string) => t('pinned.unpin', { name }),
+      limitReached: t('pinned.limitReached'),
     },
   }
 }

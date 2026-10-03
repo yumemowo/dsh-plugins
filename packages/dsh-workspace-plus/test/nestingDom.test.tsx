@@ -141,6 +141,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     forgetWorkspace: async () => snapshot(),
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
+    setSessionPinned: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,
@@ -633,7 +634,7 @@ describe('nested sub-workspaces in a real DOM', () => {
     await act(async () => root.unmount())
   })
 
-  it('offers both display modes and both indicator styles above the nesting switch', async () => {
+  it('offers every view preference as a titled pair of mutually exclusive options', async () => {
     const { container, root } = await mount()
 
     await act(async () => {
@@ -642,10 +643,10 @@ describe('nested sub-workspaces in a real DOM', () => {
         ?.click()
     })
 
-    // 两组「标题 + 两条互斥可选项」，标题说明各自选的是哪件事
+    // 四组「标题 + 两条互斥可选项」，标题说明各自选的是哪件事；开关那一组不带这个标题行
     expect(
       Array.from(document.body.querySelectorAll('.viewGroupLabel')).map((el) => el.textContent),
-    ).toEqual(['展示方式', '指示器'])
+    ).toEqual(['展示方式', '指示器', '置顶溢出', '置顶显示'])
     const rows = Array.from(
       document.body.querySelectorAll<HTMLButtonElement>('.viewOptionRow'),
     )
@@ -655,6 +656,10 @@ describe('nested sub-workspaces in a real DOM', () => {
       '平铺',
       '图标',
       '色条',
+      '悬停展开',
+      '区内滚动',
+      '仅置顶区',
+      '置顶区 + 分组内',
     ])
     // 当前值由 aria-pressed 与行尾那个勾表达，两者不会各说一套
     expect(rows.map((row) => row.getAttribute('aria-pressed'))).toEqual([
@@ -662,12 +667,15 @@ describe('nested sub-workspaces in a real DOM', () => {
       'false',
       'true',
       'false',
+      'true',
+      'false',
+      'true',
+      'false',
     ])
     // 勾与字形都取官方图标，替身把字形名渲染成文本；替身不吃 className，因此按文本来认
-    expect(rows[0]?.textContent).toContain('IconCheckOutlineRegular')
-    expect(rows[1]?.textContent).not.toContain('IconCheckOutlineRegular')
-    expect(rows[2]?.textContent).toContain('IconCheckOutlineRegular')
-    expect(rows[3]?.textContent).not.toContain('IconCheckOutlineRegular')
+    for (const [index, row] of rows.entries()) {
+      expect(row.textContent?.includes('IconCheckOutlineRegular')).toBe(index % 2 === 0)
+    }
     // 展示方式那两条各取自己的字形：文件夹 / 单列表，与官方那组「分组方式」同字形
     expect(rows[0]?.textContent).toContain('IconFolderCloseRegular')
     expect(rows[1]?.textContent).toContain('IconFlatListOutlineRegular')
@@ -675,8 +683,13 @@ describe('nested sub-workspaces in a real DOM', () => {
     // 因此按图元认——一枚圆 vs 一根圆角矩形
     expect(rows[2]?.querySelector('.viewOptionIcon circle')).not.toBeNull()
     expect(rows[3]?.querySelector('.viewOptionIcon rect')).not.toBeNull()
-    // 三组设置之间各有一条分隔线
-    expect(document.body.querySelectorAll('.viewSeparator').length).toBe(2)
+    // 置顶那两组取官方图钉两态
+    expect(rows[4]?.textContent).toContain('IconPinFillRegular')
+    expect(rows[5]?.textContent).toContain('IconPinOutlineRegular')
+    expect(rows[6]?.textContent).toContain('IconPinOutlineRegular')
+    expect(rows[7]?.textContent).toContain('IconPinFillRegular')
+    // 四组设置与末尾那个开关之间各有一条分隔线
+    expect(document.body.querySelectorAll('.viewSeparator').length).toBe(4)
 
     await act(async () => root.unmount())
   })

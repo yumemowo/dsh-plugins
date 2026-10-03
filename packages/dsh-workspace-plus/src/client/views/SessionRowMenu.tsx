@@ -1,9 +1,9 @@
 /**
  * 带会话操作菜单的会话行
  *
- * 菜单内容分两段：官方三项（重命名 / 分叉 / 归档，直接转调官方服务）与一条分隔线之后的归组项
- * 归组项只在有分组上下文的行上出现——「未分组」桶里的会话不属于任何工作区，没有分组可落，因此那些行只保留官方三项
- * 宿主未提供官方服务时官方三项整体隐藏，同样不留点不动的入口
+ * 菜单内容分两段：官方操作块（置顶 / 重命名 / 分叉 / 归档，转调官方控制器与官方服务）与一条分隔线之后的归组项
+ * 归组项只在有分组上下文的行上出现——「未分组」桶里的会话不属于任何工作区，没有分组可落，因此那些行只保留官方操作块
+ * 宿主未提供官方服务时官方操作块整体隐藏，同样不留点不动的入口
  *
  * 新建中（空白）会话行没有会话可操作，与官方一样整条行都不挂菜单，那条行只是「准备开始一个新会话」的占位，对它重命名或归档都无从谈起
  *
@@ -14,6 +14,7 @@ import { memo, useState } from 'react'
 import type { ReactElement } from 'react'
 import { IconEllipsisOutlineRegular, Menu } from '../runtime.ts'
 import { buildSessionMenuItems } from '../menus.tsx'
+import type { SessionPinMenuInput } from '../menus.tsx'
 import { sameGroupSections } from '../data/layout.ts'
 import { sameSessionStatuses } from '../data/status.ts'
 import { SessionRowView } from './SessionRowView.tsx'
@@ -65,8 +66,14 @@ export interface SessionRowMenuProps {
   hoverTime?: string | undefined
   /** 归组上下文，缺省时菜单里没有归组项 */
   grouping?: SessionGroupingContext | undefined
-  /** 官方三项会话操作，缺省时菜单里没有官方三项 */
+  /** 官方会话操作，缺省时菜单里没有官方操作块 */
   official?: OfficialSessionActions | undefined
+  /** 该行是否已置顶 */
+  pinned?: boolean | undefined
+  /** 是否还能新增置顶，达到上限时图钉转禁用态 */
+  canPin?: boolean | undefined
+  /** 切换这一行的置顶 */
+  onTogglePin?: ((sessionId: string) => void) | undefined
   /**
    * 打开会话
    *
@@ -75,6 +82,21 @@ export interface SessionRowMenuProps {
   onOpenSession: (sessionId: string) => void
   /** 请求把这一行滚进可视区，只在从搜索结果打开时下发 */
   onReveal?: (() => void) | undefined
+}
+
+/**
+ * 菜单里置顶那一项的输入
+ *
+ * 三个字段都到齐才给：缺了切换动作就只是一个点不动的入口
+ * @returns 置顶项的输入，该行不提供置顶入口时为 undefined
+ */
+function pinMenuInput(
+  pinned: boolean | undefined,
+  canPin: boolean | undefined,
+  onTogglePin: ((sessionId: string) => void) | undefined,
+): SessionPinMenuInput | undefined {
+  if (pinned === undefined || canPin === undefined || onTogglePin === undefined) return undefined
+  return { pinned, canPin }
 }
 
 /**
@@ -111,6 +133,9 @@ function sameRowMenuProps(prev: SessionRowMenuProps, next: SessionRowMenuProps):
     prev.title === next.title &&
     prev.selected === next.selected &&
     prev.time === next.time &&
+    prev.pinned === next.pinned &&
+    prev.canPin === next.canPin &&
+    prev.onTogglePin === next.onTogglePin &&
     prev.hoverTime === next.hoverTime &&
     sameSessionStatuses(prevStatuses, nextStatuses) &&
     prev.official === next.official &&
@@ -130,6 +155,9 @@ function SessionRowMenuView({
   hoverTime,
   grouping,
   official,
+  pinned,
+  canPin,
+  onTogglePin,
   onOpenSession,
   onReveal,
 }: SessionRowMenuProps): ReactElement {
@@ -147,6 +175,7 @@ function SessionRowMenuView({
             ungroupLabel: labels.ungroup,
           },
     official: official?.labels,
+    pin: pinMenuInput(pinned, canPin, onTogglePin),
   })
 
   /**
@@ -157,6 +186,10 @@ function SessionRowMenuView({
    */
   const select = (id: string): void => {
     setMenuOpen(false)
+    if (id === 'pin') {
+      onTogglePin?.(row.id)
+      return
+    }
     if (id === 'rename') {
       setRenameDraft(row.title)
       return
@@ -192,6 +225,9 @@ function SessionRowMenuView({
         menuOpen={menuOpen}
         // 卡片要在两种面板开着时都让位：行内 `...` 菜单与行右键菜单
         hoverDisabled={menuOpen || contextMenu.open}
+        pinned={pinned}
+        canPin={canPin}
+        onTogglePin={onTogglePin}
         onOpenSession={onOpenSession}
         onReveal={onReveal}
         onContextMenu={contextMenu.onContextMenu}

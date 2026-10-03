@@ -23,12 +23,14 @@ import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { UiWorkspace } from '@deepseek-ai/dsh-client-ui-workspace/client'
 // 仅用于引入 ui-renderer 的客户端类型增强（ctx.slots 等）
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+// 仅用于引入官方转发事件的键域声明（`ctx.remote.$on` 认得哪些事件名）
+import type {} from '@deepseek-ai/dsh-api-remotes/client'
 // 仅用于引入 sidebar 的插槽声明增强（sidebar.workspaces 的 SlotMap 条目）
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 // 仅用于引入官方 workspace 语言包的键域声明（LocaleNamespaceMap）与 ctx.uiWorkspace 的服务类型
 // 本包复用官方文案与官方动作，靠这份声明让官方改键名时在 tsc 阶段就暴露，而不是运行期显示原始键名
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
-import { REMOTE_CONTRIBUTION, SERVICE, callRemote, normalizeSnapshot } from './remote.ts'
+import { DEFAULT_PINNED_LIMIT, DEFAULT_PINNED_VISIBLE_COUNT, REMOTE_CONTRIBUTION, SERVICE, callRemote, normalizeSnapshot } from './remote.ts'
 import { EMPTY_PICKER_STATE } from '../pickerState.ts'
 import type { WorkspaceGroupsSnapshot } from './remote.ts'
 import { registerCompareTab } from './compare.tsx'
@@ -43,13 +45,23 @@ import { createViewModeStore, sharedViewModeStore } from './store/viewMode.ts'
 /** 浏览器半边声明的服务依赖 */
 export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'remote']
 
-/** 远程面缺失或依赖不全时的空快照：两个字段都空，界面退化成全部平铺 */
+/**
+ * 设置页里本包那一条的命名空间
+ *
+ * 就是宿主那一行 Loader 条目的 id，与 `cordis.patch.yml` 的 `id: workspace-plus` 同值
+ * 客户端不得引用宿主那半边的模块，因此这一格在这里另写一份、不导入 `../index.ts`
+ */
+const SETTINGS_NS = 'workspace-plus'
+
+/** 远程面缺失或依赖不全时的空快照：字段都空，界面退化成全部平铺 */
 const EMPTY_SNAPSHOT: WorkspaceGroupsSnapshot = {
   byWorkspace: {},
   nesting: {},
   workspaceGroups: [],
   picker: EMPTY_PICKER_STATE,
   nested: true,
+  pinnedVisibleCount: DEFAULT_PINNED_VISIBLE_COUNT,
+  pinnedLimit: DEFAULT_PINNED_LIMIT,
 }
 
 /**
@@ -110,6 +122,24 @@ export function apply(ctx: Context): void {
         announceReady()
       }),
     'workspace-plus: connection reset',
+  )
+
+  /**
+   * 本包的行配置改动之后要重拉一次快照
+   *
+   * 两个可调项是 volatile 字段：改动走 Loader 的短路径，宿主不会重跑 apply，也就不会主动推新值过来
+   * 浏览器这一侧因此只有 `connection/reset` 才会重拉，改了设置页里的数字就要重连或刷新才看得见
+   * 订阅官方的 `settings/document-updated`，命中本包时重拉，与 `ui-settings` 自己的重读同一做法
+   *
+   * 事件名取自官方转发白名单（`dsh-api-remotes` 的 `API_REMOTE_FORWARDED_EVENTS`），账本由宿主那一侧维护
+   */
+  ctx.effect(
+    () =>
+      ctx.remote.$on('settings/document-updated', (ns) => {
+        if (ns !== SETTINGS_NS) return
+        announceReady()
+      }),
+    'workspace-plus: settings refresh',
   )
 
   /** 挂载本包自己的 remote 命名空间，成功后取回可调用的方法表 */
@@ -188,7 +218,7 @@ export function apply(ctx: Context): void {
   const loadGroups = (): Promise<WorkspaceGroupsSnapshot> => callSnapshot('list')
 
   /**
-   * 官方三项会话操作的复用面
+   * 官方会话操作的复用面
    *
    * 动作直接调官方服务（`ctx.uiWorkspace` 的分叉/归档、`ctx.sessions` 绑定的重命名）
    * 这三处正是官方会话菜单内部调用的同一批接口，因此官方改行为时本包自动跟随
@@ -307,6 +337,7 @@ export function apply(ctx: Context): void {
         setNested: async () => EMPTY_SNAPSHOT,
         focusEntry: async () => EMPTY_SNAPSHOT,
         togglePinned: async () => EMPTY_SNAPSHOT,
+        setSessionPinned: async () => {},
         renameWorkspace: async () => {},
         deleteWorkspace: async () => {},
         // 会话控制器缺失时退回线上契约里那个固定值（见 RegionActions）
@@ -362,6 +393,15 @@ export function apply(ctx: Context): void {
       forgetWorkspace: (workspaceId) => callSnapshot('forgetWorkspace', [workspaceId]),
       focusEntry: (address) => callSnapshot('focusEntry', [address]),
       togglePinned: (address) => callSnapshot('togglePinned', [address]),
+      // 置顶集合归官方注册表，直接调官方工作区控制器，不另造 RPC
+      // 不接返回值：置顶集合由官方快照下发，这里已经读同一份
+      setSessionPinned: async (sessionId: string, pinned: boolean) => {
+        if (workspaces === undefined) {
+          throw new Error('workspace-plus requires the workspace controller')
+        }
+        if (pinned) await workspaces.pinSession(sessionId as never)
+        else await workspaces.unpinSession(sessionId as never)
+      },
       // 工作区自身的改名与删除直接走官方工作区控制器，不另造 RPC，删除只移除注册，文件夹与会话记录都由宿主保留
       renameWorkspace: (workspaceId, title) =>
         workspaces.rename(workspaceId as never, title).then(() => undefined),

@@ -50,6 +50,8 @@ const snapshotSchema = z.object({
   workspaceGroups: z.array(virtualWorkspaceSchema),
   picker: pickerSchema,
   nested: z.boolean(),
+  pinnedVisibleCount: z.number(),
+  pinnedLimit: z.number(),
 })
 
 /**
@@ -180,6 +182,16 @@ export interface PickerSnapshot {
   pinned: RootEntryAddress[]
 }
 
+/**
+ * 置顶区两个可调项的缺省值
+ *
+ * 与宿主 `config.ts` 的默认值一致
+ * 客户端不得引用宿主那半边的模块，网关两侧各写一份 schema 是既定要求
+ * 因此这两格与 `nested` 一样在这里独立写一份，只作旧宿主缺格时的回落
+ */
+export const DEFAULT_PINNED_VISIBLE_COUNT = 5
+export const DEFAULT_PINNED_LIMIT = 20
+
 export interface WorkspaceGroupsSnapshot {
   byWorkspace: Record<string, Group[]>
   /** 子工作区 → 它被放进的那个分组，开关关着时是空表 */
@@ -188,6 +200,10 @@ export interface WorkspaceGroupsSnapshot {
   picker: PickerSnapshot
   /** 是否按子工作区渲染，缺省当开启 */
   nested: boolean
+  /** 置顶区静止时显示几条 */
+  pinnedVisibleCount: number
+  /** 置顶数量的上限，达到后置顶入口转禁用态 */
+  pinnedLimit: number
 }
 
 /**
@@ -198,7 +214,7 @@ export interface WorkspaceGroupsSnapshot {
  * 直接迭代那个字段会抛 `groups is not iterable`，把整片区域（对照模式下还包括承载它的右侧栏）打挂
  * 缺什么补什么，界面退化成「没有工作区分组、没有菜单状态」而不是崩掉
  * @param value - 远端回的快照，字段可能不全
- * @returns 五个字段都在的快照
+ * @returns 各字段都在的快照
  */
 export function normalizeSnapshot(value: unknown): WorkspaceGroupsSnapshot {
   const raw = (value ?? {}) as Partial<WorkspaceGroupsSnapshot>
@@ -207,8 +223,9 @@ export function normalizeSnapshot(value: unknown): WorkspaceGroupsSnapshot {
     nesting: raw.nesting ?? {},
     workspaceGroups: Array.isArray(raw.workspaceGroups) ? raw.workspaceGroups : [],
     picker: normalizePickerState(raw.picker),
-    // 旧宿主没有这一格，按默认开启补齐，与宿主 `spec.ts` 的默认值一致
     nested: raw.nested !== false,
+    pinnedVisibleCount: raw.pinnedVisibleCount ?? DEFAULT_PINNED_VISIBLE_COUNT,
+    pinnedLimit: raw.pinnedLimit ?? DEFAULT_PINNED_LIMIT,
   }
 }
 

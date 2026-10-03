@@ -32,6 +32,7 @@ function actions(): RegionActions {
     forgetWorkspace: async () => snapshot(),
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
+    setSessionPinned: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,

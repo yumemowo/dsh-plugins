@@ -64,15 +64,18 @@ export interface ExpansionState {
 const NO_EXPANSION: Record<string, boolean> = {}
 
 /**
- * 展示方式、指示器样式与三层折叠态的状态形状，同时是选择器读数的输入
+ * 展示方式、指示器样式、置顶区偏好的状态形状，同时是选择器读数的输入
  *
  * 可选格都是「加过的字段」：持久化引擎读盘时整份替换状态，早于该字段写入的那份 JSON 里没有它
- * 引擎不给合并钩子，因此读取处一律走 {@link modeOf} / {@link indicatorOf} 与三个 `…ExpansionOf`，不要直接读字段
+ * 引擎不给合并钩子，因此读取处一律走 {@link modeOf} / {@link indicatorOf} 与各 `…Of`，不要直接读字段
  */
 export interface ViewModeState {
   mode?: ViewMode | undefined
   indicator?: IndicatorStyle | undefined
   expansion?: ExpansionState | undefined
+  pinOverflow?: PinOverflow | undefined
+  pinScope?: PinScope | undefined
+  pinSectionCollapsed?: boolean | undefined
 }
 
 /** 展示方式，旧数据缺这一格时按「按工作区」 */
@@ -83,6 +86,41 @@ export function modeOf(state: ViewModeState): ViewMode {
 /** 指示器样式，旧数据缺这一格时按「图标」 */
 export function indicatorOf(state: ViewModeState): IndicatorStyle {
   return state.indicator ?? 'icon'
+}
+
+/**
+ * 置顶区的溢出给法
+ *
+ * `expand` 静止时占可见条数的高度，指针移上预览行后整块向下浮出
+ * `scroll` 在同一个高度里自行滚动，两者占据的高度完全相同
+ */
+export type PinOverflow = 'expand' | 'scroll'
+
+/**
+ * 置顶会话的显示方式
+ *
+ * `section` 只在区域顶部那块置顶区里显示
+ * `inline` 除此之外还让置顶会话在它自己所在的那一段里排到最前
+ */
+export type PinScope = 'section' | 'inline'
+
+/** 溢出给法，旧数据缺这一格时按「浮出」 */
+export function pinOverflowOf(state: ViewModeState): PinOverflow {
+  return state.pinOverflow ?? 'expand'
+}
+
+/** 置顶会话显示方式，旧数据缺这一格时按「仅置顶区域」 */
+export function pinScopeOf(state: ViewModeState): PinScope {
+  return state.pinScope ?? 'section'
+}
+
+/**
+ * 置顶区的收起态
+ *
+ * 全局一个布尔，不按工作区分别记；旧数据缺这一格时是展开
+ */
+export function pinSectionCollapsedOf(state: ViewModeState): boolean {
+  return state.pinSectionCollapsed === true
 }
 
 /** 工作区层的展开记录，旧数据缺这一格时是空表（等于用户一层都没碰过） */
@@ -131,6 +169,10 @@ export function createViewModeStore() {
       indicator: 'icon',
       // 三格显式落成空表：它们与上面两格不同，读回旧数据时整格缺席是常态，写成空表让首份落盘就带全形状
       expansion: { workspace: {}, virtualWorkspace: {}, group: {} },
+      // 置顶区的三项同样显式写下默认值，理由与上一行相同
+      pinOverflow: 'expand',
+      pinScope: 'section',
+      pinSectionCollapsed: false,
     }),
     persist: VIEW_MODE_PERSIST_KEY,
     actions: {
@@ -139,6 +181,15 @@ export function createViewModeStore() {
       },
       setIndicator: (draft, indicator: IndicatorStyle) => {
         draft.indicator = indicator
+      },
+      setPinOverflow: (draft, overflow: PinOverflow) => {
+        draft.pinOverflow = overflow
+      },
+      setPinScope: (draft, scope: PinScope) => {
+        draft.pinScope = scope
+      },
+      setPinSectionCollapsed: (draft, collapsed: boolean) => {
+        draft.pinSectionCollapsed = collapsed
       },
       /**
        * 记下工作区层的选择

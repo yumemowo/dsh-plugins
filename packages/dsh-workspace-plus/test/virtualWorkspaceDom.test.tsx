@@ -55,7 +55,13 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     wide: true,
     expandSidebar: () => {},
     useWorkspaces: ((select: (s: unknown) => unknown) =>
-      select({ items: workspaces, archivedSessionIds: [], phase: 'ready' })) as never,
+      select({
+        items: workspaces,
+        archivedSessionIds: [],
+        // 置顶一条：置顶区那几条缩进规则只在这一段渲染时才有节点可查
+        pinnedSessionIds: ['a'],
+        phase: 'ready',
+      })) as never,
     useSessions: ((select: (s: unknown) => unknown) =>
       select({ ids: ['a', 'b', 'orphan'], byId, phase: 'ready' })) as never,
     useSessionStatus: ((select: (s: unknown) => unknown) =>
@@ -90,6 +96,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     forgetWorkspace: async () => snapshot(),
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
+    setSessionPinned: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,

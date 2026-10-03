@@ -17,6 +17,25 @@ declare module '*/menus.module.css' {
   export default classes
 }
 
+declare module '*/PinnedSection.module.css' {
+  const classes: {
+    readonly "pinArrow": string
+    readonly "pinArrowOpen": string
+    readonly "pinDivider": string
+    readonly "pinExpand": string
+    readonly "pinHead": string
+    readonly "pinHeadHint": string
+    readonly "pinHeadName": string
+    readonly "pinHeadSlot": string
+    readonly "pinHeadSpacer": string
+    readonly "pinScroll": string
+    readonly "pinScrollClipped": string
+    readonly "pinScrollOpen": string
+    readonly "pinnedSection": string
+  }
+  export default classes
+}
+
 declare module '*/SearchControl.module.css' {
   const classes: {
     readonly "search": string
@@ -142,6 +161,9 @@ declare module '*/rows.module.css' {
     readonly "rowActionSlot": string
     readonly "rowActions": string
     readonly "rowMenuOpen": string
+    readonly "rowPin": string
+    readonly "rowPinOff": string
+    readonly "rowPinOn": string
     readonly "rowSelected": string
     readonly "rowTime": string
     readonly "rowTitle": string

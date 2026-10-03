@@ -71,6 +71,7 @@ function props(wide = true): WorkspaceGroupsProps {
     forgetWorkspace: async () => snapshot(),
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
+    setSessionPinned: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,

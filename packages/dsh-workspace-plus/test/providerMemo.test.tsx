@@ -35,16 +35,28 @@ function Parent({ build }: { build: () => LocalViewOptions }): React.ReactElemen
   return h(LocalViewOptionsProvider, { value: build(), children: h(Row) })
 }
 
-const STABLE: LocalViewOptions = {
-  mode: 'workspace',
-  indicator: 'icon',
-  setMode: () => {},
-  setIndicator: () => {},
+/** 交出一份完整的偏好对象；`fresh` 为真时每次都是新对象，模拟没写 `useMemo` 的容器 */
+function options(fresh = false): LocalViewOptions {
+  const shared: LocalViewOptions = {
+    mode: 'workspace',
+    indicator: 'icon',
+    setMode: () => {},
+    setIndicator: () => {},
+    pinOverflow: 'expand',
+    setPinOverflow: () => {},
+    pinScope: 'section',
+    setPinScope: () => {},
+    pinSectionCollapsed: false,
+    setPinSectionCollapsed: () => {},
+  }
+  return fresh ? { ...shared } : shared
 }
+
+const STABLE: LocalViewOptions = options()
 
 /** 每次调用都交出一份新对象，模拟没写 `useMemo` 的容器 */
 function rebuilt(): LocalViewOptions {
-  return { mode: 'workspace', indicator: 'icon', setMode: () => {}, setIndicator: () => {} }
+  return options(true)
 }
 
 /** 挂上树并返回卸载入口 */

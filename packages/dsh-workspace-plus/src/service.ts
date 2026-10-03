@@ -1,4 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { DEFAULT_PINNED_LIMIT, DEFAULT_PINNED_VISIBLE_COUNT } from './config.ts'
+import type { WorkspacePlusConfig } from './config.ts'
 import { workspaceGroupsSpec } from './spec.ts'
 import type {
   Group,
@@ -91,13 +93,30 @@ function newVirtualWorkspaceId(): string {
  *
  * 每次变更都以整份快照返回，调用方直接替换本地状态即可，无需自行推导差量
  * @param ctx - 已就绪 `storageDomain` 的插件上下文
+ * @param pinnedConfig - 两个可调项的现场读数，缺省时按各自默认值
  * @returns 服务实现
  */
-export async function createWorkspaceGroupsService(ctx: Context): Promise<WorkspaceGroupsService> {
+export async function createWorkspaceGroupsService(
+  ctx: Context,
+  pinnedConfig?: WorkspacePlusConfig | undefined,
+): Promise<WorkspaceGroupsService> {
   const domain = await ctx.storageDomain.open(workspaceGroupsSpec)
   ctx.effect(() => () => domain.close(), 'workspace-plus: domain close')
   const table = domain.table('by_workspace')
   const tree = domain.global
+
+  /**
+   * 两个可调项，每次下发快照时现场读一次
+   *
+   * 配置字段是 volatile 引用：改动不会重跑 apply，写进去的新值直接落在同一个引用上
+   * 因此这里必须现读而不是在构造时取一次快照
+   */
+  function pinnedSettings(): { pinnedVisibleCount: number; pinnedLimit: number } {
+    return {
+      pinnedVisibleCount: pinnedConfig?.pinnedVisibleCount.get() ?? DEFAULT_PINNED_VISIBLE_COUNT,
+      pinnedLimit: pinnedConfig?.pinnedLimit.get() ?? DEFAULT_PINNED_LIMIT,
+    }
+  }
 
   /** 读取全部记录，按 workspaceId 归集会话分组与嵌套归属 */
   function snapshot(): WorkspaceGroupsSnapshot {
@@ -118,6 +137,7 @@ export async function createWorkspaceGroupsService(ctx: Context): Promise<Worksp
       picker: normalizePickerState(global.picker),
       // 同样补格，旧 global 里没有这一格，直接交给渲染侧会得到 undefined
       nested: global.nested !== false,
+      ...pinnedSettings(),
     }
   }
 

@@ -1,0 +1,247 @@
+/* 区域顶部的置顶区
+ *
+ * 它与 header 平级，两者都在列表的滚动区之外（挂在区域根 .root 之下，不在 .list 里）
+ * 因此列表怎么滚，置顶区都留在原位
+ *
+ * 几何照对照稿采用的那一档（区域级标题 + 空白区分）：
+ *   段头 30px、左缘 8px（脱离内容缩进链）、字号 14px / 字重 600
+ *   分隔是一条 1px 的透明线加 6px 上下 margin，与「细线」那一档几何逐项相同，只差颜色
+ *   段本身 30 + 168 = 198px，加分隔 13px 正好常驻 211px
+ * 静止高度因此是一个常数，与置顶条数无关（条数少于可见条数时由组件算小一些） */
+
+.pinnedSection {
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 段头：与容器行同一套词汇（16px 图标列里的箭头 + 名字 + 行尾计数）
+   靠左缘 8px、字号 14px / 字重 600 与内容缩进链拉开层级 */
+.pinHead {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--wg-pin-head, 30px);
+  padding: 0 8px;
+  border: none;
+  background: 0 0;
+  border-radius: 8px;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  user-select: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.pinHead:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 箭头占 16px 图标列，与容器行的图标列同宽，切换展开态时名字不横向跳动 */
+.pinHeadSlot {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dsw-alias-label-caption);
+}
+
+.pinArrow {
+  transition: transform .15s var(--ds-ease-in-out, ease-in-out);
+}
+
+.pinArrowOpen {
+  transform: rotate(90deg);
+}
+
+.pinHeadName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pinHeadSpacer {
+  flex: 1;
+}
+
+/* 提示承担「还有更多」这个信号，因此取 secondary 而不是 caption
+   它比名字更需要被读出来，但又不该与名字争层级 */
+.pinHeadHint {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+/* 分隔：一条透明线加上下 6px 空白，把置顶区与工作区切开
+   透明而不是可见线：高度与「细线」那一档逐项相同，两档因此可以直接并排比较 */
+.pinDivider {
+  height: 1px;
+  margin: 6px 8px;
+  background: transparent;
+}
+
+/* 预览区：静止时占可见条数的高度
+ * 32px 行高 + 2px 行距，5 行正好落在 168px 上下（上限由组件按可见条数算出并下发）
+ *
+ * 只过渡 max-height 这一条，展开与收回因此都有动画
+ * position 在两态之间不切换：它不可过渡 */
+.pinScroll {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  max-height: var(--wg-pin-rest, 168px);
+  /* 常驻滚动条沟槽：浮出时滚动条才出现的话，前几行会被横向挤左一格
+     预留了宽度就要还回去，否则行右缘比列表短一条沟槽
+     下面两项与 .list 逐项同源（见 WorkspaceGroupsRegion.module.css）：
+     把 .listArea 那层 -edge-inset 折进 margin-right，
+     再由 padding-right 把内容推回离栏缘 edge-inset 处
+     段头不在这个滚动容器里，因此它保持 .pinnedSection 的原右缘，与列表段头一致 */
+  scrollbar-gutter: stable;
+  margin-right: calc(
+    var(--dsh-session-list-scrollbar-offset) - var(--dsh-session-list-edge-inset)
+  );
+  padding-right: calc(
+    var(--dsh-session-list-edge-inset) - var(--dsh-session-list-scrollbar-width) -
+      var(--dsh-session-list-scrollbar-offset)
+  );
+  transition: max-height var(--wg-expand-duration) var(--wg-expand-easing);
+}
+
+/* 行不参与压缩：否则过渡期间行会被压扁，前几行的落点会跟着动 */
+.pinScroll > * {
+  flex: none;
+}
+
+.pinScroll > * + * {
+  margin-top: 2px;
+}
+
+/* 置顶行的缩进取会话行的下限 24px
+ *
+ * 行首那枚状态指示器是绝对定位的（4~20px），行默认的 8px 内边距会让标题压在它下面
+ * 列表里的行由 .workspaceBody > .sessions > .row 那几条规则让出这一格
+ * 置顶区不在那些容器里，因此这里自己让一次
+ *
+ * 选 .pinScroll 的子项而不是它下面的 .row：.row 是另一张样式表的类名，
+ * 跨模块引用会编译成匹配不到的哈希，这条规则就永远是空的
+ * 前缀 .pinnedSection 抬一级优先级，不去依赖两张表的注入先后 */
+.pinnedSection .pinScroll > * {
+  --wg-row-start: 24px;
+  padding-left: var(--wg-row-start);
+}
+
+/* 区内滚动：同一个高度里自行滚动。溢出与否只影响这条规则是否真的滚得动，DOM 结构不变 */
+.pinnedSection[data-wg-overflow='scroll'] .pinScroll[data-wg-overflowing] {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* 浮出：静止态不可滚。指针一放上去就浮出，滚动在这里没有承载对象 */
+.pinScrollClipped {
+  overflow: hidden;
+}
+
+/* 定位锚点挂在段本身身上
+   后代选择器在这里不匹配，绝对定位会去找更外层的定位祖先，浮出面板就落到别处去了
+
+   段自己常驻住静止高度：浮出态里预览区脱离了流，
+   高度只由预览区撑着时，指针一进入整段就塌成「段头 + 分隔」 */
+.pinExpand {
+  position: relative;
+  min-height: calc(
+    var(--wg-pin-head, 30px) + var(--wg-pin-rest, 168px) + var(--wg-pin-divider, 13px)
+  );
+}
+
+/* 浮出档的预览区两态都绝对定位
+ *
+ * 定位只在浮出态给时，收回时那条规则被摘掉、面板回到流里，整段高度跟着涨
+ * 两态同一定位，段的常驻高度因此只由 min-height 决定，过渡只发生在 max-height 上
+ *
+ * 落点取段头正下方，不是 top: 100%——那会落到整块的空位之下、中间空出一段
+ * overflow 恒为 hidden：静止裁剪、浮出交给下面那条规则改 overflow-y */
+.pinExpand .pinScroll {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--wg-pin-head, 30px);
+  z-index: 30;
+  overflow: hidden;
+}
+
+/* 浮出态放开滚动
+ *
+ * 选择器必须带 .pinExpand 前缀
+ * 常驻那条 overflow: hidden 的优先级比单个 .pinScrollOpen 高，不带前缀时 overflow-y: auto 会被压掉 */
+.pinExpand .pinScrollOpen {
+  overflow-y: auto;
+}
+
+/* 浮出态：只改「露出来」相关的几项，定位与落点由上面那条常驻规则负责 */
+.pinScrollOpen {
+  /* 上限取「全部行叠起来」的实高，视口上限只作为第三项防呆
+     内容远矮于视口上限时，可见高度会在过渡前段就走完
+     每一项都必须是合法长度，否则整条声明被判无效、静默退回静止高度 */
+  max-height: min(var(--wg-pin-full, 168px), 60vh, 640px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--dsw-alias-bg-base);
+  /* 只圆下缘、不加描边、不加内边距：上缘与段头齐平，读成「预览被拉长」而不是「另开一个盒子」
+     前几行因此逐格不变 */
+  border-radius: 0 0 10px 10px;
+  box-shadow: 0 10px 22px #0000001f;
+}
+
+/* 静止时被裁在高度之外的那些行
+ *
+ * 它们留在文档里（收回方向要有东西可收），但不能被 Tab 聚焦到看不见的位置
+ * 可见性只在静止态收起，延时到收回结束才生效 */
+.pinScroll:not(.pinScrollOpen) > [data-wg-clipped] {
+  visibility: hidden;
+  transition-delay: var(--wg-expand-duration);
+}
+
+.pinScroll > [data-wg-clipped] {
+  transition-property: visibility;
+  transition-duration: 0s;
+  transition-timing-function: linear;
+}
+
+/* 触屏回退：(hover: none) 的设备没有悬停，浮出模式在那里不可用，按区内滚动渲染 */
+@media (hover: none) {
+  .pinExpand .pinScroll,
+  .pinScrollOpen {
+    position: static;
+    max-height: var(--wg-pin-rest, 168px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pinArrow {
+    transition: none;
+  }
+
+  /* 浮出直接落位，不做拉长/收回动作
+     可见性那条延时也要去掉，否则收起后仍要多挡一个时长才交出焦点 */
+  .pinScroll {
+    transition: none;
+  }
+
+  .pinScroll:not(.pinScrollOpen) > [data-wg-clipped] {
+    transition-delay: 0s;
+  }
+}

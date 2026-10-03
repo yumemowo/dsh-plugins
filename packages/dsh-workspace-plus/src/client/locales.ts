@@ -66,6 +66,18 @@ export const zh = {
   'indicator.label': '指示器',
   'indicator.icon': '图标',
   'indicator.bar': '色条',
+  'pinOverflow.label': '置顶溢出',
+  'pinOverflow.expand': '悬停展开',
+  'pinOverflow.scroll': '区内滚动',
+  'pinScope.label': '置顶显示',
+  'pinScope.section': '仅置顶区',
+  'pinScope.inline': '置顶区 + 分组内',
+  'pinned.section': '置顶',
+  'pinned.count': '{n} 条',
+  'pinned.more': '{total} 条 · 还有 {more} 条',
+  'pinned.pin': '置顶“{name}”',
+  'pinned.unpin': '取消置顶“{name}”',
+  'pinned.limitReached': '置顶数量已达上限，请先取消一条',
 }
 
 /** 英文字典，键集与 {@link zh} 完全一致 */
@@ -124,6 +136,18 @@ export const en = {
   'indicator.label': 'Indicator',
   'indicator.icon': 'Icon',
   'indicator.bar': 'Bar',
+  'pinOverflow.label': 'Pinned overflow',
+  'pinOverflow.expand': 'Expand on hover',
+  'pinOverflow.scroll': 'Scroll in place',
+  'pinScope.label': 'Pinned sessions',
+  'pinScope.section': 'Pinned area only',
+  'pinScope.inline': 'Pinned area + in groups',
+  'pinned.section': 'Pinned',
+  'pinned.count': '{n}',
+  'pinned.more': '{total} · {more} more',
+  'pinned.pin': 'Pin {name}',
+  'pinned.unpin': 'Unpin {name}',
+  'pinned.limitReached': 'Pinned limit reached. Unpin one first.',
 } as const
 
 /** 本命名空间的键域，同时是 {@link zh} 的键集 */

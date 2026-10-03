@@ -67,7 +67,26 @@ describe('workspace groups service', () => {
       workspaceGroups: [],
       picker: { focused: ALL_ENTRIES, recent: [], pinned: [] },
       nested: true,
+      pinnedVisibleCount: 5,
+      pinnedLimit: 20,
     })
+  })
+
+  it('reports the two pinned settings from the live config', async () => {
+    const { ctx } = createFakeContext()
+    // 两个可调项是 volatile 引用：改动不重跑 apply，因此服务必须每次现读
+    let visible = 3
+    const config = {
+      pinnedVisibleCount: { get: () => visible },
+      pinnedLimit: { get: () => 7 },
+    } as unknown as Parameters<typeof createWorkspaceGroupsService>[1]
+    const service = await createWorkspaceGroupsService(ctx, config)
+
+    expect((await service.list()).pinnedVisibleCount).toBe(3)
+    expect((await service.list()).pinnedLimit).toBe(7)
+
+    visible = 8
+    expect((await service.list()).pinnedVisibleCount).toBe(8)
   })
 
   it('creates a group under its workspace', async () => {

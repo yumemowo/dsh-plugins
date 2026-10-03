@@ -15,6 +15,8 @@ import {
   IconChevronRightOutlineRegular,
   IconEditOutlineRegular,
   IconNewChatOutlineRegular,
+  IconPinFillRegular,
+  IconPinOutlineRegular,
   IconPlusOutlineRegular,
   IconTrashOutlineRegular,
 } from './runtime.ts'
@@ -60,14 +62,27 @@ export interface GroupMenuInput {
 }
 
 /**
- * 会话菜单的构造输入：两段都可缺省
+ * 会话菜单里置顶项的输入
+ *
+ * 该项与其余官方项同属官方操作块，缺省表示该行不提供置顶入口
+ */
+export interface SessionPinMenuInput {
+  /** 该行是否已置顶，决定文案与字形取哪一态 */
+  pinned: boolean
+  /** 是否还能新增置顶，未置顶且已达上限时该项禁用 */
+  canPin: boolean
+}
+
+/**
+ * 会话菜单的构造输入：三段都可缺省
  *
  * `grouping` 缺省表示该行没有分组可归（「未分组」桶），`official` 缺省表示宿主未提供官方会话操作
- * 两段都缺时菜单为空——调用方此时应当直接渲染 `SessionRowView` 而不挂菜单
+ * 三段都缺时菜单为空——调用方此时应当直接渲染 `SessionRowView` 而不挂菜单
  */
 export interface SessionMenuInput {
   grouping?: GroupMenuInput | undefined
   official?: OfficialSessionLabels | undefined
+  pin?: SessionPinMenuInput | undefined
 }
 
 /**
@@ -92,20 +107,30 @@ export function buildGroupMenuItem(input: GroupMenuInput): MenuActionItem {
 /**
  * 构造会话「更多操作」菜单的完整条目
  *
- * 排列依次是官方三项（重命名 / 分叉 / 归档）、一条分隔线、以及本包自有的分组项（其下「取消分组」仅当会话已归组）
- * 官方三项在前：它们作用于会话本身，分组项是叠加在此之上的归类操作
+ * 排列依次是官方操作块（置顶 / 重命名 / 分叉 / 归档）、一条分隔线、以及本包自有的分组项（其下「取消分组」仅当会话已归组）
+ * 官方操作块在前：它们作用于会话本身，分组项是叠加在此之上的归类操作
  * 分隔线把「官方能力」与「本包扩展」分成两段，避免两类操作混成一个列表
  *
- * 官方三项的文案与图标都取自官方 `ui-workspace`（见 `official.ts`）
- * 宿主未提供官方服务时整体省略，只留分组项，不留点不动的死按钮，反之「未分组」桶里的会话没有分组上下文，只留官方三项
+ * 官方操作块的文案与图标都取自官方 `ui-workspace`（见 `official.ts`）
+ * 宿主未提供官方服务时整体省略，只留分组项，不留点不动的死按钮
+ * 反之「未分组」桶里的会话没有分组上下文，只留官方操作块
  * 分隔线只在两段都存在时才画
  * @returns Menu items 列表
  */
 export function buildSessionMenuItems(input: SessionMenuInput): readonly MenuItem[] {
   const items: MenuItem[] = []
-  const { grouping, official } = input
+  const { grouping, official, pin } = input
 
   if (official !== undefined) {
+    // 与官方 `PinSessionMenuItem` 同序：置顶在最前
+    if (pin !== undefined) {
+      items.push({
+        id: 'pin',
+        label: pin.pinned ? official.unpin : official.pin,
+        disabled: !pin.pinned && !pin.canPin,
+        icon: pin.pinned ? <IconPinFillRegular /> : <IconPinOutlineRegular />,
+      })
+    }
     items.push(
       { id: 'rename', label: official.rename, icon: <IconEditOutlineRegular /> },
       { id: 'fork', label: official.fork, icon: <IconBranchOutlineRegular /> },

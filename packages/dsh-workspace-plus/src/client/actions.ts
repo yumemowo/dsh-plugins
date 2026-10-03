@@ -18,6 +18,8 @@ import type { OfficialAddLabels, OfficialSessionLabels, SidebarTranslate, Worksp
 export interface WorkspaceState {
   items: readonly WorkspaceView[]
   archivedSessionIds: readonly string[]
+  /** 注册表全局的置顶集合，最近置顶在最前 */
+  pinnedSessionIds: readonly string[]
   /**
    * 工作区列表的到达阶段
    *
@@ -186,6 +188,17 @@ export interface RegionActions {
   focusEntry: (address: RootEntryAddress) => Promise<WorkspaceGroupsSnapshot>
   /** 切换一个根节点条目的置顶，置顶与取消置顶是同一个方法 */
   togglePinned: (address: RootEntryAddress) => Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 置顶一个会话，或取消它的置顶
+   *
+   * 走官方工作区控制器的 `pinSession` / `unpinSession`，不另造 RPC
+   * 置顶集合归官方注册表，本包只负责渲染与上限判断
+   *
+   * 官方这两个方法回 void，新集合经官方快照的推送到达（本包已经从同一份快照里读 `pinnedSessionIds`）
+   * @param sessionId - 目标会话
+   * @param pinned - 目标状态，true 表示置顶
+   */
+  setSessionPinned: (sessionId: string, pinned: boolean) => Promise<void>
   /** 重命名工作区 */
   renameWorkspace: (workspaceId: string, title: string) => Promise<void>
   /** 删除工作区注册，文件夹与会话记录保留 */
@@ -213,7 +226,7 @@ export interface RegionActions {
    */
   tSidebar: SidebarTranslate
   /**
-   * 官方三项会话操作与相对时间的解析器
+   * 官方会话操作与相对时间的解析器
    *
    * 是函数而不是值，渲染器会把注册项的 inject 结果缓存整个注册生命周期，因此在 inject 里读到的服务会冻结在首次渲染那一刻
    * 而官方 `ui-workspace` 的加载顺序并不受本包约束，延迟到渲染时解析才能拿到真正在场的服务
@@ -280,7 +293,7 @@ export interface OfficialSessionActions {
   forkSession: (sessionId: string) => void
   /** 官方菜单「归档会话」 */
   archiveSession: (sessionId: string) => Promise<void>
-  /** 官方三项操作与重命名对话框的文案 */
+  /** 官方会话操作与重命名对话框的文案 */
   labels: OfficialSessionLabels
   /**
    * 格式化为官方风格的相对时间

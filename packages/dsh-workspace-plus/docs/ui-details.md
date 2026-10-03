@@ -30,7 +30,7 @@
 
 分组行的 `...` 与工作区行一样是**管理操作菜单**，不承担建造型操作：「新建分组」属于工作区行，分组行的高频建造操作就是行内那枚新建会话按钮。
 
-**会话行尾的 `...` 打开会话操作菜单**：外观、位置与悬停行为都对齐官方，菜单里既有官方三项操作，也有本包的归组项（见本文「会话操作菜单」）。
+**会话行尾的 `...` 打开会话操作菜单**：外观、位置与悬停行为都对齐官方，菜单里既有官方操作块（置顶 / 重命名 / 分叉 / 归档），也有本包的归组项（见本文「会话操作菜单」）。
 
 **只有用户创建过分组，才会出现分组结构。** 没有分组时，会话直接平铺在工作区下，与原生列表一致；未归组的会话也平铺在工作区下，不会被塞进一个凭空造出来的「未分组」分组。
 
@@ -38,10 +38,11 @@
 
 ## 会话操作菜单
 
-行尾 `...` 打开菜单，内容分两段：官方三项 + 一条分隔线 + 本包的归组项。行右键唤出的是同一份条目与同一段分派（见本文「行右键菜单」）。
+行尾 `...` 打开菜单，内容分两段：官方操作块 + 一条分隔线 + 本包的归组项。行右键唤出的是同一份条目与同一段分派（见本文「行右键菜单」）。
 
 | 段 | 项 | 行为 |
 | --- | --- | --- |
+| 官方 | 置顶会话 / 取消置顶 | 官方工作区控制器的 `pinSession` / `unpinSession`，文案与图钉两态字形取自官方 |
 | 官方 | 重命名 | 打开重命名对话框，提交走官方会话对象 |
 | 官方 | 分叉会话 | 官方 `ctx.uiWorkspace.forkSession`，分叉后打开子会话 |
 | 官方 | 归档会话 | 官方 `ctx.uiWorkspace.archiveSession` |
@@ -51,13 +52,15 @@
 
 会话行与工作区行的归组一级项**共用「移动到…」这一句文案**（`moveToGroup` 与 `moveToVirtualWorkspace` 两个键同值）：两处都是「点下去还要选一个目标」的二级菜单父项，措辞分工一致；层级由所在菜单本身区分（会话行菜单只有一个工作区内的分组概念，工作区行菜单只有一个工作区分组概念），文案不必再各自加限定词。二级子菜单也都只列目标分组，不混进「移出 / 取消」——那是解散当前归属，本包作为一级项平级渲染。
 
-**官方三项不抄官方实现，而是直接复用官方接口**（本仓库「优先复用官方既有接口」约定的延伸）：
+**官方操作块不抄官方实现，而是直接复用官方接口**（本仓库「优先复用官方既有接口」约定的延伸）：
 
 - 动作调用官方既有面 —— 分叉/归档走 `ctx.uiWorkspace` 服务，重命名走 `ctx.sessions.binding(id).session.rename()`。这三处正是官方会话菜单内部调的同一批接口，因此官方改行为时本包**自动跟随**，不需要重新对齐。
-- 文案与图标取官方 —— 绑官方 `workspace` 命名空间（`rename` / `menu.fork` / `menu.archiveSession` / `rename.session.title` / `field.sessionName`），图标取 primitives 的 `IconEditOutlineRegular` / `IconBranchOutlineRegular` / `IconArchiveOutlineRegular`。重命名对话框的「取消 / 关闭」是通用词，走官方 `common` 命名空间的回退链。
+- 文案与图标取官方 —— 绑官方 `workspace` 命名空间（`menu.pinSession` / `menu.unpinSession` / `rename` / `menu.fork` / `menu.archiveSession` / `rename.session.title` / `field.sessionName`），图标取 primitives 的 `IconPinOutlineRegular` / `IconPinFillRegular` / `IconEditOutlineRegular` / `IconBranchOutlineRegular` / `IconArchiveOutlineRegular`。重命名对话框的「取消 / 关闭」是通用词，走官方 `common` 命名空间的回退链。
 - **只在类型层依赖官方包**：`package.json` 把 `dsh-client-ui-workspace` 列为 peer + dev 依赖，但只 import type。因此官方一旦改键名或改服务签名，`tsc` 会直接报错，而不是运行期静默显示成原始键名。运行期产物里不含官方代码（bundle 的 `require` 仍只有 primitives / react / react/jsx-runtime）。
 
-「未分组」桶里的会话没有工作区归属、没有分组可落，因此那里只留官方三项。宿主未加载官方 `ui-workspace` 时（本包的区域本来就依赖它供的 `useWorkspaces` 等全局 hook），官方三项与行尾时间**整体不渲染**，不留点不动的死按钮。
+「未分组」桶里的会话没有工作区归属、没有分组可落，因此那里只留官方操作块。宿主未加载官方 `ui-workspace` 时（本包的区域本来就依赖它供的 `useWorkspaces` 等全局 hook），官方操作块与行尾时间**整体不渲染**，不留点不动的死按钮。
+
+置顶项**排在官方操作块的最前**（重命名之前），与官方 `PinSessionMenuItem` 在官方会话菜单里的次序一致。达到置顶上限时该项禁用，但已置顶的行不受影响：上限只拦新增，取消置顶始终可点。
 
 ## 行右键菜单
 
@@ -67,7 +70,7 @@
 | --- | --- |
 | 工作区 | 新建会话 / 新建分组 / 重命名 / 移动到分组… / 移动到… / 删除工作区 |
 | 分组 | 新建会话 / 重命名分组 / 删除分组 |
-| 会话 | 重命名 / 分叉 / 归档（+ 移动到… / 取消分组） |
+| 会话 | 置顶会话 / 重命名 / 分叉 / 归档（+ 移动到… / 取消分组） |
 
 容器行比 `...` 菜单**多一项「新建会话」**：在行内它对应那枚按钮，没有菜单形态，右键时补在最前，使右键能触达该行全部动作。那枚按钮本身不变，仍只以按钮形态存在。没有新建入口的行（如「未分组」桶的工作区行）不补这一项，否则就是个点不动的死按钮。
 
@@ -86,6 +89,7 @@
 | 新建分组 | 本包 `newGroup` | `IconPlusOutlineRegular`（同官方 `menu.addWorkspace`） |
 | 重命名 | 官方 `workspace` 的 `rename` | `IconEditOutlineRegular` |
 | 删除工作区 / 分组 | 官方 `delete.workspace` / 本包 `deleteGroup` | `IconTrashOutlineRegular` |
+| 置顶会话 / 取消置顶 | 官方 `workspace` 的 `menu.pinSession` / `menu.unpinSession` | `IconPinOutlineRegular` / `IconPinFillRegular`（按是否已置顶取态） |
 | 分叉 / 归档 | 官方 `workspace` 的 `menu.fork` / `menu.archiveSession` | `IconBranchOutlineRegular` / `IconArchiveOutlineRegular` |
 
 「新建会话」的文案取官方 `sidebar` 新建按钮的**动词短语** `session.new.label`，与行内那枚按钮的无障碍标签（官方 `actions.newSession.aria`，带对象名）分工不同：菜单项是一次性动作，读作动词短语，与「新建分组 / 重命名 / 删除工作区」一致。图标取官方 `IconNewChatOutlineRegular`（官方新建会话按钮的字形），与本包行内那枚按钮同一个字形；菜单里「新建分组」带的是 `+`，两项因此一眼可分。因此 `regionLabels` 多绑一个官方 `sidebar` 命名空间（`tSidebar`），与本包 `t`、官方 `workspace` 三个座位并列。
@@ -350,7 +354,7 @@ header 第一行的「工作区」旁有一个向下的箭头，它打开一个�
 | 按工作区（默认） | 工作区分组 → 工作区块 → 撑开体（子工作区 / 会话分组 / 平铺会话），与没有这个特性时一致 |
 | 平铺 | 全部可见会话排成一条列表，没有工作区分组头，每一行各自带它的工作区上下文 |
 
-平铺的成员集合与工作区组织方式无关，因此「未分组」桶里的会话也在其中；可见性判定（归档、子代理来源、只保留当前选中的空白会话）与排序（空白行最前、其余按最近更新倒序）两条路径读同一份实现（`flatSessionRows` 与 `compareSessionRows`），不会各说一套。行的归组菜单在平铺下没有分组上下文，与未分组桶里的行同一取舍：只留官方三项。
+平铺的成员集合与工作区组织方式无关，因此「未分组」桶里的会话也在其中；可见性判定（归档、子代理来源、只保留当前选中的空白会话）与排序（空白行最前、其余按最近更新倒序）两条路径读同一份实现（`flatSessionRows` 与 `compareSessionRows`），不会各说一套。行的归组菜单在平铺下没有分组上下文，与未分组桶里的行同一取舍：只留官方操作块。
 
 **平铺行没有状态位时行首那一格不占位**，标题从行左缘起排——官方 `.flatSessionRowWithoutStatus` 就是这个含义。有状态位时它照常占一格，两种方式下逐行一致。
 

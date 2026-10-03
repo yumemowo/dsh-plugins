@@ -182,10 +182,29 @@ describe('buildSessionMenuItems', () => {
   /** 官方三项操作的文案（取自官方 workspace 命名空间） */
   const official = officialSessionLabels(workspaceTranslate())
 
-  it('lists the official three actions before the package own group item', () => {
+  it('lists the official four actions before the package own group item', () => {
+    const items = buildSessionMenuItems({
+      grouping: grouping(''),
+      official,
+      pin: { pinned: false, canPin: true },
+    })
+
+    // 官方操作块在前（它们作用于会话本身），分组项是叠加其上的归类操作
+    // 置顶在最前，与官方 `PinSessionMenuItem` 的 order 一致
+    expect(items.map((item) => (item as { id?: string }).id)).toEqual([
+      'pin',
+      'rename',
+      'fork',
+      'archive',
+      'separator',
+      'group',
+    ])
+  })
+
+  it('offers the pin item only when the row can toggle its pin', () => {
+    // 未给定置顶状态或切换动作时，菜单里不该出现一个点不动的入口
     const items = buildSessionMenuItems({ grouping: grouping(''), official })
 
-    // 官方三项在前（它们是会话本身的操作），分组项是叠加其上的归类操作
     expect(items.map((item) => (item as { id?: string }).id)).toEqual([
       'rename',
       'fork',
@@ -193,6 +212,29 @@ describe('buildSessionMenuItems', () => {
       'separator',
       'group',
     ])
+  })
+
+  it('switches the pin item to the unpin wording once the row is pinned', () => {
+    const items = buildSessionMenuItems({
+      official,
+      pin: { pinned: true, canPin: true },
+    })
+
+    const item = items.find((entry) => (entry as { id?: string }).id === 'pin')
+    expect(item).toMatchObject({ label: '取消置顶' })
+  })
+
+  it('disables the pin item at the limit but leaves unpinning available', () => {
+    const blocked = buildSessionMenuItems({ official, pin: { pinned: false, canPin: false } })
+    const pinnedRow = buildSessionMenuItems({ official, pin: { pinned: true, canPin: false } })
+
+    // 上限只拦新增：已置顶的行永远可以取消
+    expect(blocked.find((entry) => (entry as { id?: string }).id === 'pin')).toMatchObject({
+      disabled: true,
+    })
+    expect(pinnedRow.find((entry) => (entry as { id?: string }).id === 'pin')).toMatchObject({
+      disabled: false,
+    })
   })
 
   it('separates the official actions from the group item', () => {
@@ -215,9 +257,14 @@ describe('buildSessionMenuItems', () => {
 
   it('keeps the official actions for a row without grouping context', () => {
     // 「未分组」桶里的会话没有分组可归，但官方三项照常可用
-    const items = buildSessionMenuItems({ official })
+    const items = buildSessionMenuItems({ official, pin: { pinned: false, canPin: true } })
 
-    expect(items.map((item) => (item as { id?: string }).id)).toEqual(['rename', 'fork', 'archive'])
+    expect(items.map((item) => (item as { id?: string }).id)).toEqual([
+      'pin',
+      'rename',
+      'fork',
+      'archive',
+    ])
   })
 
   it('falls back to the group item alone when official services are absent', () => {

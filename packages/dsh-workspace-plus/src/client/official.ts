@@ -21,8 +21,12 @@ export type WorkspaceTranslate = TranslateNS<'workspace'>
  */
 export type SidebarTranslate = TranslateNS<'sidebar'>
 
-/** 官方那三项会话操作与相关对话框的文案 */
+/** 官方那四项会话操作与相关对话框的文案 */
 export interface OfficialSessionLabels {
+  /** 菜单里的「置顶会话」项，未置顶的行用它 */
+  pin: string
+  /** 菜单里的「取消置顶」项，已置顶的行用它 */
+  unpin: string
   /** 菜单里的「重命名」项，也是重命名对话框的确认按钮 */
   rename: string
   /** 重命名会话对话框的标题 */
@@ -124,7 +128,7 @@ export interface OfficialHoverLabels {
 }
 
 /**
- * 把官方语言包绑成三项操作的文案表
+ * 把官方语言包绑成会话菜单的文案表
  *
  * 对话框的「取消 / 关闭」不在这里：它们走官方 `common` 命名空间，由拿到
  * `t` 座位的对话框组件直接解析
@@ -132,6 +136,8 @@ export interface OfficialHoverLabels {
  */
 export function officialSessionLabels(t: WorkspaceTranslate): OfficialSessionLabels {
   return {
+    pin: t('menu.pinSession'),
+    unpin: t('menu.unpinSession'),
     rename: t('rename'),
     renameTitle: t('rename.session.title'),
     sessionNamePrompt: t('field.sessionName'),

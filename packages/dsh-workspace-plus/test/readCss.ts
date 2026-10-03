@@ -26,6 +26,23 @@ function collect(dir: string): string[] {
   return out
 }
 
+/** 全部组件样式表，相对 `src/client`，按路径排序 */
+export function moduleCssFiles(): string[] {
+  return collect(CLIENT_DIR)
+    .sort()
+    .map((file) => file.slice(CLIENT_DIR.length + 1).split('\\').join('/'))
+}
+
+/**
+ * 去掉 `/* … *\/` 注释后的样式表文本
+ *
+ * 注释里会举类名当例子（如「列表里的行由 .workspaceBody > .sessions > .row 让出这一格」），
+ * 照字面收进「本模块定义的类名」会让跨模块引用的检查漏判
+ */
+export function stripComments(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, '')
+}
+
 /**
  * 全部组件样式表的合并文本，按路径排序因此顺序稳定
  *

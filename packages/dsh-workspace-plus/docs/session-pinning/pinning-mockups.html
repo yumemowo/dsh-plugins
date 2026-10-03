@@ -1,0 +1,1695 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>会话置顶的呈现方案 · 对照稿</title>
+<style>
+  :root{
+    --fg-primary:#0f1115; --fg-secondary:#61666b; --fg-tertiary:#81858c; --fg-caption:#adb2b8;
+    --hover:#2631480f; --line:#0000000a;
+    --st-ongoing:#4176e6; --st-done:#22c55e; --st-warn:#f59e0b; --st-idle:#d4d4d4;
+    --sidebar:#f9fafb;
+    /* 负空间用暖色斜纹，一眼与侧栏内容区分开 */
+    --neg:#f6c86a; --neg-ink:#7a5310;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:#e9ebee;color:var(--fg-primary);
+       font:14px/1.5 -apple-system,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+       display:flex;flex-direction:column}
+
+  /* ── 页头：最小 60px，左侧标题，只有全局控件 ─────────── */
+  .bar{flex:none;min-height:60px;display:flex;align-items:center;gap:16px;
+       padding:8px 20px;background:#fff;border-bottom:1px solid #00000014}
+  .bar h1{margin:0;font-size:15px;font-weight:600;white-space:nowrap}
+  .bar .spacer{flex:1}
+  .bar label{display:inline-flex;gap:6px;align-items:center;cursor:pointer;user-select:none;font-size:13px}
+  .bar select{font:inherit;font-size:13px;padding:3px 8px;border-radius:7px;
+              border:1px solid #0000001f;background:#fff}
+  .bar button{font:inherit;font-size:13px;padding:4px 12px;border-radius:7px;cursor:pointer;
+              border:1px solid #0000001f;background:#fff}
+  .bar button:hover{background:#0000000a}
+  .sep{width:1px;height:20px;background:#00000014;flex:none}
+  .slider{display:inline-flex;gap:7px;align-items:center;font-size:12.5px;color:var(--fg-secondary)}
+  .slider input[type=range]{width:88px;accent-color:#c98a12}
+  .slider span{font-variant-numeric:tabular-nums;color:var(--fg-caption);min-width:36px}
+
+  /* ── 主展示区：九列并排、横向滚动，每列是完整视口高的侧边栏 ── */
+  #stageScroll{flex:1;min-height:0;overflow-x:auto;overflow-y:hidden;padding:16px 20px 4px}
+  #stageScroll::-webkit-scrollbar{height:11px}
+  #stageScroll::-webkit-scrollbar-track{background:#0000000a;border-radius:6px}
+  #stageScroll::-webkit-scrollbar-thumb{background:#0000003d;border-radius:6px;
+    border:2px solid transparent;background-clip:content-box}
+  #stageScroll::-webkit-scrollbar-thumb:hover{background:#00000066;background-clip:content-box}
+  #stage{display:flex;gap:16px;align-items:stretch;flex-wrap:nowrap;width:max-content;height:100%}
+
+  /* 一列 = 侧边栏复刻。宽度取官方 clampWidth 的默认档 280px */
+  .side{width:280px;flex:none;display:flex;flex-direction:column;
+        background:var(--sidebar);border:1px solid #00000012;border-radius:12px;overflow:hidden;
+        box-shadow:0 1px 2px #0000000a;--ind-inset:4px;--ind-inset-icon:6px}
+  /* 列头是各列的对齐基准：**定高、不限行**——重点是高度一致，不是把描述压成一行
+     方案名在上、描述在下可自由换行，超出定高的部分才截断
+     定高取「名称一行 + 描述两行」：实测六条的描述在两行内都放得下（见 measure 的断言）
+     列宽保持 280px 复刻真实侧边栏，不为了塞下描述而放宽——宽度不是这份对照稿的比对对象 */
+  .cap{flex:none;height:97px;padding:8px 10px;background:#fff;border-bottom:1px solid #00000010;
+       display:flex;flex-direction:column;justify-content:flex-start;gap:2px;overflow:hidden}
+  /* 名称也不截断：280px 下⑥ 那条（「⑥ 就地置顶 + 折叠计数」）正好放不满一行，
+     写 nowrap + 省略号会在别的字号或语言下静默截掉编号，编号恰恰是比对时的索引 */
+  .cap .name{font-size:12.5px;font-weight:600;line-height:17px}
+  /* 两行描述：`desc` 说这个方案做了什么，`note` 说它的后果
+     分开着色，读者先看做法再看代价 */
+  .cap .desc{font-weight:400;font-size:11px;line-height:15px;color:var(--fg-secondary)}
+  .cap .note{font-weight:400;font-size:11px;line-height:15px;color:var(--fg-caption)}
+
+  /* 负空间：上方与下方各一块，斜纹暖色，高度由滑块给 */
+  .neg{flex:none;overflow:hidden;position:relative;
+       background:repeating-linear-gradient(45deg,var(--neg) 0 7px,#f8d894 7px 14px);
+       color:var(--neg-ink);display:flex;align-items:center;justify-content:center;
+       font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .neg span{background:#fff9;padding:0 7px;border-radius:6px;line-height:16px}
+  .neg[data-h="0"]{display:none}
+
+  /* 区域本体（header + 列表），与 dsh 侧栏里那一块同构
+     给一个下限：负空间拉满时 pane 不会塌成 0 而让 header 溢出列外，
+     此时列内容整体被推出可视区，读起来是「这里真的放不下了」而不是渲染坏了 */
+  .pane{flex:1;min-height:132px;display:flex;flex-direction:column;
+        padding-right:12px;font-size:14px;color:var(--fg-primary)}
+
+  /* ── 区域 header：照 header.module.css 复刻 ───────────── */
+  .hdr{flex:none;display:flex;align-items:center;justify-content:flex-end;gap:4px;
+       height:auto;margin:2px -4px 4px 0;border-radius:12px;overflow:hidden;
+       color:var(--fg-tertiary)}
+  .hdrTitle{min-width:0;max-width:45%;flex:none;display:flex;flex-direction:column;
+            align-items:flex-start;padding:2px 4px;border:none;background:0 0;
+            border-radius:8px;text-align:left;cursor:pointer}
+  .hdrHeading{display:flex;align-items:center;gap:2px;color:var(--fg-tertiary);min-width:0;max-width:100%}
+  .hdrLabel{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+            font-size:14px;line-height:20px}
+  .hdrCaret{flex:none}
+  .hdrFocus{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+            color:var(--fg-secondary);font-size:12px;line-height:17px}
+  /* 搜索槽：收起时 28px，自己那个 margin-left:auto 把右侧入口组推到栏右缘 */
+  .hdrSearch{flex:1;min-width:0;max-width:28px;display:flex;align-items:center;margin-left:auto}
+  .hdrIcon{width:28px;height:28px;flex:none;display:inline-flex;align-items:center;justify-content:center;
+           border:none;background:0 0;border-radius:50%;color:var(--fg-secondary);cursor:pointer;padding:0}
+  .hdrIcon:hover{background:var(--hover)}
+  /* 三个 28px 入口 + 两格 4px 间距 = 92px */
+  .hdrActions{max-width:92px;flex:none;display:flex;align-items:center;gap:4px;overflow:hidden}
+
+  /* 常驻段：与 header 平级、在滚动区之外，因此列表怎么滚它都留在原位
+     ⑤ 的置顶区放这里；其余方案它是空的，高度为 0，不占位置 */
+  .topSlot{flex:none;min-height:0}
+  .topSlot:empty{display:none}
+
+  /* 列表区：只有这一块滚动，header 与常驻段都保持钉在顶部 */
+  .list{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding-bottom:8px}
+
+  /* ── 容器行 ─────────────────────────────────────────── */
+  .head{display:flex;align-items:center;gap:6px;height:34px;padding:0 8px;border-radius:8px;
+        position:relative;color:var(--fg-primary);cursor:pointer;user-select:none}
+  .workspaceHead{padding-left:calc(8px + 16px * var(--wg-depth,0))}
+  .groupHead{padding-left:calc(24px + 16px * var(--wg-depth,0))}
+  .vwHead{padding:0 8px}
+  .slot{flex:none;width:16px;height:20px;display:inline-flex;align-items:center;justify-content:center;color:var(--fg-tertiary)}
+  .chev{transition:transform .15s ease-in-out}
+  .chev.open{transform:rotate(90deg)}
+  .wtitle,.glabel{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:20px}
+  .wtitle{color:var(--fg-primary)}
+  .glabel{color:var(--fg-tertiary)}
+  .count{flex:none;color:var(--fg-tertiary);font-size:12px;line-height:20px;margin-right:-6px}
+  /* 折叠透出的置顶计数：与上面那个数字同格同形，只在⑥出现的第二枚
+     加一枚胶囊底：它与会话数是两个并排的裸数字，不加底会粘成一个数（3 与 1 读成 31） */
+  /* 不写 margin-right:-6px：分组头是 gap:6px 的行，会话数自己那一条 -6px 是把它推到行右缘用的
+     置顶计数若也吃一份，两个数字会贴成 0 间距——那正是它要避免的读数 */
+  .pinCount{flex:none;display:inline-flex;align-items:center;gap:2px;color:var(--st-ongoing);
+            font-size:11.5px;line-height:16px;padding:0 5px;border-radius:8px;
+            background:color-mix(in srgb,var(--st-ongoing) 12%,transparent)}
+  .pinCount svg{width:11px;height:11px}
+
+  /* ── 会话行 ─────────────────────────────────────────── */
+  .row{position:relative;display:flex;align-items:center;gap:0;height:32px;padding:0 8px;
+       border-radius:8px;color:var(--fg-primary);cursor:pointer}
+  .rowTitle{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+            margin:0 6px 0 4px;font-size:14px;line-height:20px}
+  .rowTime{flex:none;color:var(--fg-tertiary);font-size:12px;line-height:20px}
+  /* 置顶行尾的图钉。行首那一格已经不占流（指示器绝对定位），图钉因此排到行尾 */
+  /* 置顶按钮的几何取实现里的 .rowPin：16px 方块、4px 圆角、caption 配色
+     已置顶时常驻显示、未置顶时连宽度一起收掉——不为一个看不见的状态图标留空位，
+     行尾因此不会凭空多出一格（早先的版本给未置顶的图钉留 18px，与实现不一致） */
+  .rowPin{flex:none;display:inline-flex;align-items:center;justify-content:center;
+          height:16px;padding:0;border:none;background:0 0;
+          border-radius:4px;cursor:pointer;overflow:hidden;
+          color:var(--fg-caption)}
+  .rowPinOn{width:16px;opacity:1}
+  .rowPinOn:hover{color:var(--fg-primary)}
+  .rowPinOff{width:0;opacity:0;pointer-events:none;color:var(--fg-caption)}
+  /* 未置顶的图钉与操作位同时出现：两者都由「行被悬停 / 行内有键盘焦点」驱动
+     用 :focus-within 而不是 :focus——鼠标点过之后焦点会留在按钮上，那样图钉会一直亮着 */
+  .row:hover > .rowPinOff,
+  .row:focus-within > .rowPinOff,
+  .rowPinOff:focus-visible{width:16px;opacity:1;pointer-events:auto}
+  .rowPinOff:disabled{cursor:default}
+
+  /* 操作位：静止收成 0 宽，行悬停 / 键盘聚焦 / 菜单展开时展开
+     与实现的 .rowActionSlot 同一套互换规则（16px、无过渡） */
+  .rowActionSlot{flex:none;width:0;height:20px;overflow:hidden;display:inline-flex;
+                 align-items:center;justify-content:center}
+  .rowAction{width:16px;height:16px;flex:none;padding:0;border:none;background:0 0;
+             border-radius:4px;color:var(--fg-tertiary);cursor:pointer;
+             display:inline-flex;align-items:center;justify-content:center}
+  .rowAction:hover{color:var(--fg-primary)}
+  .row:hover > .rowActionSlot,
+  .row:has(.rowAction:focus-visible) > .rowActionSlot{width:16px}
+  /* 行悬停时时间让位给操作位，与官方同一取舍 */
+  .row:hover > .rowTime{display:none}
+  /* 「不标」档：常驻图钉全部不画，按钮也不在（见 pinButtonMarkup 与 STATE.pinStyle） */
+
+  /* ── 置顶小区段头（标记方式之一） ──────────────────── */
+  .pinHead{display:flex;align-items:center;gap:5px;height:22px;padding:0 8px;font-size:11.5px;
+           color:var(--st-ongoing);user-select:none}
+  .pinHead svg{width:12px;height:12px}
+  .wsBody > .sessions > .pinHead{padding-left:calc(24px + 16px * var(--wg-depth,0))}
+  .groupBody > .sessions > .pinHead{padding-left:calc(40px + 16px * var(--wg-depth,0))}
+  .flatList > .pinHead,.topSection > .pinHead{padding-left:24px}
+
+  /* ── 折叠透出的幽灵行（⑤） ─────────────────────────── */
+  .ghostRow{opacity:.72}
+  /* 上限取 40%：够放下两三层容器名，又给标题留下大半行
+     在这一行里两者不可能都完整，因此「都放不下」正是⑤在 280px 列宽下的实测结论 */
+  .ghostPath{flex:0 1 auto;min-width:0;max-width:40%;color:var(--fg-caption);
+             font-size:11.5px;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* 竖线绝对定位：它若参与 flex 流会把标题右推十几像素，幽灵行就不再与同段真实行同列 */
+  .ghostMark{position:absolute;top:7px;bottom:7px;width:2px;border-radius:1px;
+             background:color-mix(in srgb,var(--st-ongoing) 45%,transparent);
+             left:calc(var(--wg-row-start) - 6px)}
+  /* 幽灵行渲染在容器之后（容器收起时不渲染 .wsBody / .groupBody）
+     因此缩进档位必须由幽灵行自己带上，不能写成 `.wsBody > .ghostRun`——那条永远不匹配
+     档位也不是「折叠的是工作区还是分组」，而是「这一行原本在容器的哪一段」 */
+  .ghostRun{display:flex;flex-direction:column}
+  .ghostRow{--wg-row-start:calc(24px + 16px * var(--wg-depth,0));padding-left:var(--wg-row-start)}
+  .ghostRow.ghostInGroup{--wg-row-start:calc(40px + 16px * var(--wg-depth,0))}
+  /* 幽灵行里标题是正文、路径只是提示，因此由路径让出宽度上限，标题不被它无限挤占
+     实测深度 2 的那一条可支配宽度 171px、标题需 148px：路径若不封顶，
+     一条长路径会把标题压到几像素，屏幕上只剩路径、认不出置顶的是哪条会话
+     收紧右边距是为了把这一格还给标题 */
+  .ghostRow > .rowTitle{margin-right:4px}
+
+  /* ── 工作区顶的置顶段（③） ─────────────────────────── */
+  .hoistHead{display:flex;align-items:center;gap:5px;height:22px;font-size:11.5px;color:var(--fg-secondary)}
+  .hoistHead svg{width:12px;height:12px}
+  .hoistHead .loose{color:var(--fg-caption)}
+  .wsBody > .hoistRun > .hoistHead{--wg-row-start:calc(24px + 16px * var(--wg-depth,0));padding-left:var(--wg-row-start)}
+  .hoistRun{display:flex;flex-direction:column}
+  .wsBody > .hoistRun > .row{--wg-row-start:calc(24px + 16px * var(--wg-depth,0));padding-left:var(--wg-row-start)}
+  .rowHoisted::before{content:'';position:absolute;left:calc(16px + 16px * var(--wg-depth,0));
+                      top:7px;bottom:7px;width:2px;border-radius:1px;
+                      background:color-mix(in srgb,var(--st-ongoing) 45%,transparent)}
+
+  /* ── 区域顶的合成置顶段（④） ─────────────────────────
+     这一段的每一行都是一条会话行，因此几何必须与真实会话行逐格相同：
+     行内左缘让出 24px 给绝对定位的指示器，否则 16px 宽的指示器盒会压在标题上 */
+  /* --wg-pin-head 是段头高，浮出落点与段常驻高都读它：两种段头高（26px / 30px）因此共用同一套定位 */
+  .topSection{display:flex;flex-direction:column;--wg-pin-head:26px}
+  /* 段头与容器行同一套词汇：16px 图标列（放箭头）+ 名字 + 行尾提示
+     左边距取 24px，与深度 0 的会话行同列，因此它读起来是「列表的一段」而不是一条会话 */
+  .topHead{display:flex;align-items:center;gap:6px;height:var(--wg-pin-head);font-size:11.5px;
+           color:var(--fg-secondary);padding:0 8px 0 24px;border-radius:8px;
+           cursor:pointer;user-select:none;position:relative}
+  /* 箭头槽取实现里 .pinHeadSlot 的 16px 方块；槽里的箭头按官方图标默认的 14px 画 */
+  .topHead .slot{width:16px;height:16px;color:var(--fg-caption)}
+  .topHead svg{width:14px;height:14px}
+  .topHead .spacer{flex:1}
+  /* 提示取实现的 .pinHeadHint：12px / 400，与段头名字（14px / 600）分开 */
+  .topHead .hint{color:var(--fg-secondary);font-size:12px;font-weight:400;line-height:20px}
+  .topHead:hover{background-color:var(--hover)}
+  /* 收起态：只剩段头一行，行尾提示改成条数，读者仍知道里面有几条
+     实现不为收起态单独换色，对照稿因此也不换 */
+  .topCollapsed .topHead{color:var(--fg-secondary)}
+
+  /* ── 置顶区与工作区区的层级区分（顶部那个下拉切换） ─────────────
+     问题：段头原先与容器行同一套词汇（16px 图标列里的箭头 + 名字 + 行尾计数）、
+     左缘也是 24px（与深度 0 的会话行同列），于是它读起来就是「又一个分组」，
+     而它其实是区域级的一整块，不是某个工作区里的一段
+
+     三个可调的轴，逐档叠加：
+       a) 段头左缘提到 8px（区域级缩进）—— 与 header 的两行标题同列，脱离内容缩进链
+       b) 字号提到 14px 并加粗 —— 与工作区名同级，而不是与分组名同级
+       c) 分隔线 / 底纹 —— 把这一块与下面切开
+     箭头始终留在最前：它是「可收起」的唯一指示，位置不能跟着字号变 */
+
+  /* ① 细线分割：不动段头，只把界线上移、加重 */
+  .panelstyle-rule .topDivider{height:1px;background:#0000001f;margin:6px 8px}
+
+  /* ② 区域级标题：段头脱离内容缩进链，字号与字重提到工作区名那一档 */
+  .panelstyle-loudHead .topHead,
+  .panelstyle-loudRule .topHead,
+  .panelstyle-loudBand .topHead,
+  .panelstyle-loudGap .topHead{padding-left:8px;height:30px;gap:4px}
+  /* 段头一提，定位与常驻高跟着走：这三档的段头是 30px，不是基础档的 26px */
+  .panelstyle-loudHead .topSection,
+  .panelstyle-loudRule .topSection,
+  .panelstyle-loudBand .topSection,
+  .panelstyle-loudGap .topSection{--wg-pin-head:30px}
+  .panelstyle-loudHead .topHead .topName,
+  .panelstyle-loudRule .topHead .topName,
+  .panelstyle-loudBand .topHead .topName,
+  .panelstyle-loudGap .topHead .topName{font-size:14px;font-weight:600;color:var(--fg-primary)}
+  /* 箭头仍排在名字之前（与工作区行同一语序），实现就是这么排的
+     早先这几档把箭头重排到名字之后，读成「置顶 ▾」；实现没有采纳这个语序，
+     对照稿因此不再重排——文档要能直接与实现逐项比对 */
+  .topHead .slot,
+  .topHead .topName{order:0}
+  .topHead .spacer{order:1}
+  .topHead .hint{order:2}
+
+  /* ③ 区域级标题 + 细线：在 ② 之上再把界线加重 */
+  .panelstyle-loudRule .topDivider{height:1px;background:#0000001f;margin:6px 8px}
+
+  /* ⑤ 区域级标题 + 空白区分：与 ③ 同一套几何，只把那条线改成透明
+     占位照旧（height 与 margin 一个字都不动），因此两种分割的垂直高度完全相同，
+     可以直接并排比较「有线」与「无线」的观感差异，而不必考虑间距不同带来的干扰 */
+  .panelstyle-loudGap .topDivider{height:1px;background:transparent;margin:6px 8px}
+
+  /* ④ 区域级标题 + 底纹：用一整块浅底把置顶区切成独立的一段
+     底纹比细线更能表达「这是一个独立区域」——它给出面的边界，而不只是一条线 */
+  /* 底纹取 #0000000a（约 4% 黑）：实测 #00000005 只有 5 个色阶差（244 vs 249），
+     截图里几乎读不出来——「有边界」这件事必须一眼看见，差 5 个色阶等于没画 */
+  .panelstyle-loudBand .topSection{background:#0000000a;border-radius:10px;padding:2px 0 4px}
+  .panelstyle-loudBand .topSection .topHead{margin-bottom:2px}
+  /* 底纹已经给出了「一段」的边界，那条分隔线就是多余的：留着会把同一处画两次 */
+  .panelstyle-loudBand .topDivider{height:0;margin:0}
+  /* ⑤ 的滚动区在底纹里时不能再加一层自己的边界 */
+  .panelstyle-loudBand .topScroll{background:none}
+  /* 行间距 2px，与实现一致：5 条正好落在 168px，正是段常驻高那一份的来源
+     漏掉它时行步进是 32px，量出来的段高会比实现少 8px
+     间距只落在行与行之间，段头与第一行之间没有：实现那边行在 .pinScroll 里，
+     段头在它之外，168px 是「5 条 + 4 个间距」 */
+  .topScroll>*+*,.topRow+.topRow{margin-top:2px}
+  .topRow{position:relative;display:flex;align-items:center;gap:0;height:32px;
+          padding:0 8px 0 24px;border-radius:8px;cursor:pointer;color:var(--fg-primary)}
+  .topRow .rowTitle{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+                    margin:0 6px 0 4px;font-size:14px;line-height:20px}
+  .topRow .rowTime{flex:none;color:var(--fg-tertiary);font-size:12px;line-height:20px}
+  /* 合成段与下面的真实结构之间那条分界 */
+  .topDivider{height:1px;background:#00000012;margin:8px 8px}
+  /* ⑦：这一段的最大高度恒定——超过 TOP_VISIBLE 条就在段内滚动
+     32px 行高 + 2px 行距，5 行正好落在 168px 上下；给一个能整除的固定值，
+     段高度因此只由这一个常数决定，与置顶条数无关（那正是⑦与④的差别） */
+  .topCapped .topScroll{max-height:168px;overflow-y:auto;overscroll-behavior:contain}
+
+  /* ── ⑥ 置顶面板：默认 5 条，指针进入「预览行」时整块向下浮出 ────────
+     与 ⑤ 的差别是**超出部分怎么给**：⑤ 让用户自己拖着滚，
+     ⑥ 认为「我在找东西」时一次给全比让人滚更省事
+     静止时它占的高度与 ⑤ 完全相同（5 条 = 168px）
+
+     三处交互决定，都是「别打断手感」：
+
+     一、触发区是**预览行本身**，不含段头。段头是一块独立的交互区，
+         用它是为了收起 / 展开这一整段；把展开也挂在段头上，两者会互相干扰
+     二、静止态**不可滚**。指针一放上去就展开，滚动在这里没有承载对象；
+         段内滚动因此只属于展开态（置顶特别多、超过视口上限时才需要）
+     三、展开态**不占任何额外内边距、不加描边**。早先给了 4px 内边距与 1px 描边环，
+         那会把行整体推偏 4px——指针下的那一行在展开瞬间动了，手感就断了
+         展开态因此只是「把被裁掉的部分露出来」，前 5 行的落点逐格不变 */
+  .topHover .topScroll{max-height:168px;overflow:hidden}
+  /* 定位锚点必须挂在 .topHover **自己**身上：它就是 .topSection，
+     写成 `.topHover .topSection`（后代）永远不匹配——那样绝对定位会去找更外层的定位祖先，
+     面板落到 y=737 而不是紧贴段底 y=415（实测踩过）
+     段高按段头高算，不写死：六档段头有 26px 与 30px 两种，写死会在另一档下差 4px */
+  .topHover{position:relative;min-height:calc(var(--wg-pin-head,26px) + 168px)}
+  /* 展开态同时挂在 :hover / :focus-within 与一个显式类上：
+     前两者是真实交互路径，后者让键盘与实测脚本也能驱动到同一状态 */
+  .topHover > .topScroll:hover,
+  .topHover > .topScroll:focus-within,
+  .topHover.topHoverOpen > .topScroll{
+    /* 落点取**段头正下方**，不是 top:100%：那一段为了不推挤下面留了空位，
+       用 top:100% 会让面板落在空位之下、中间空出一整段预览高度——
+       实测踩过（面板 y=415，段头只到 247） */
+    position:absolute;left:0;right:0;top:var(--wg-pin-head,26px);z-index:30;
+    /* 上限两侧都必须是合法长度：早先写成 min(60vh, 60 * 32px)，
+       `60 * 32px` 不是合法表达式，整条声明被判无效、静默退回 168px，面板根本没展开 */
+    max-height:min(60vh, 640px);overflow-y:auto;
+    background:var(--sidebar);
+    /* 只圆下缘、且不加描边：上缘与段头齐平，读成「预览被拉长」而不是「另开一个盒子」 */
+    border-radius:0 0 10px 10px;
+    box-shadow:0 10px 22px #0000001f;
+  }
+  /* ── ⑦ 点击档：把 ⑥ 的悬停 / 聚焦触发全部禁掉，只认显式点击 ────────
+     触屏没有悬停；而悬停本身也有「鼠标扫过就展开」的误触。
+     因此这一档的展开条件只有 `.topClickOpen` 一个，其余路径一律不生效 */
+  .topClick > .topScroll:hover,
+  .topClick > .topScroll:focus-within,
+  .topClick.topHoverOpen > .topScroll{position:static;max-height:168px;overflow:hidden;
+    background:none;border-radius:0;box-shadow:none}
+  .topClick.topClickOpen > .topScroll{
+    position:absolute;left:0;right:0;top:var(--wg-pin-head,26px);z-index:30;
+    max-height:min(60vh, 640px);overflow-y:auto;
+    background:var(--sidebar);border-radius:0 0 10px 10px;
+    box-shadow:0 10px 22px #0000001f;
+  }
+  /* 点击档的预览行是可点的，给一个明确的命中提示 */
+  .topClick > .topScroll{cursor:pointer}
+  .topClick.topClickOpen > .topScroll{cursor:default}
+
+  /* 段内滚动条的几何照官方的会话列表：窄条、贴右缘、悬停才显色 */
+  .topCapped .topScroll::-webkit-scrollbar{width:8px}
+  .topCapped .topScroll::-webkit-scrollbar-track{background:transparent}
+  .topCapped .topScroll::-webkit-scrollbar-thumb{background:#0000003d;border-radius:4px;
+    border:2px solid transparent;background-clip:content-box}
+  .topCapped .topScroll::-webkit-scrollbar-thumb:hover{background:#00000066;background-clip:content-box}
+
+  /* ── 体 / 段 ────────────────────────────────────────── */
+  .wsBody,.groupBody,.vwBody,.nest,.sessions{display:flex;flex-direction:column;position:relative}
+  .wsBody,.groupBody{padding-top:2px}
+  .wsBody>*+*,.groupBody>*+*,.vwBody>*+*,.nest>*+*,.sessions>*+*{margin-top:2px}
+  .wsBody::before,.groupBody::before{content:'';position:absolute;top:4px;bottom:4px;width:1px;
+                                     background:var(--line);pointer-events:none}
+  .wsBody::before{left:calc(16px + 16px * var(--wg-depth,0))}
+  .groupBody::before{left:calc(32px + 16px * var(--wg-depth,0))}
+  .wsBody>.sessions>.row{padding-left:calc(24px + 16px * var(--wg-depth,0))}
+  .groupBody>.sessions>.row{padding-left:calc(40px + 16px * var(--wg-depth,0))}
+  .emptyState{color:var(--fg-tertiary);padding:10px 12px 10px calc(24px + 16px * var(--wg-depth,0));font-size:12px}
+
+  /* ── 状态字形 ───────────────────────────────────────── */
+  .dot{position:relative;display:inline-block;flex:none;width:10px;height:10px;color:var(--st-idle)}
+  .dot::after{content:'';position:absolute;inset:20%;border-radius:50%;background:currentColor}
+  .dot[data-state="done"]{color:var(--st-done)}
+  .dot[data-state="warning"]{color:var(--st-warn)}
+  .spinner{flex:none;color:var(--st-ongoing)}
+  .spinner .spin{transform-origin:center;animation:dsh-spin 1.5s linear infinite}
+  .spinner .track,.spinner .arc{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+  .spinner .track{opacity:.25}
+  .spinner .arc{stroke-dasharray:12 150;animation:dsh-dash 1.5s ease-in-out infinite}
+  @keyframes dsh-spin{to{transform:rotate(360deg)}}
+  @keyframes dsh-dash{0%{stroke-dasharray:12 150;stroke-dashoffset:0}
+                     50%{stroke-dasharray:24 150;stroke-dashoffset:-6}
+                     100%{stroke-dasharray:12 150;stroke-dashoffset:0}}
+
+  /* 指示器与新版一致：绝对定位在行最左缘，不占行内流（见 layout-and-styling.md 的「状态指示器」） */
+  .absInd{position:absolute;left:var(--ind-inset-icon);top:50%;margin-top:-8px;
+          width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;
+          pointer-events:none;z-index:1}
+  .row[data-state="ongoing"],.topRow[data-state="ongoing"]{background-color:#4176e61a}
+  .row[data-state="warning"],.topRow[data-state="warning"]{background-color:#f59e0b1a}
+  .row:hover,.head:hover,.topRow:hover{background-color:var(--hover)}
+  .row.selected[data-state="ongoing"],.topRow.selected[data-state="ongoing"]{
+    background-color:color-mix(in srgb,var(--st-ongoing) 26%,transparent)}
+  .row.selected[data-state="warning"],.topRow.selected[data-state="warning"]{
+    background-color:color-mix(in srgb,var(--st-warn) 26%,transparent)}
+  .row.selected[data-state="done"],.row.selected[data-state="idle"],
+  .topRow.selected[data-state="done"],.topRow.selected[data-state="idle"]{background-color:var(--hover)}
+
+  /* ── 平铺 ───────────────────────────────────────────── */
+  .flatList{display:flex;flex-direction:column}
+  .flatList>*+*{margin-top:2px}
+  .flatList>.row{--wg-row-start:24px;padding-left:var(--wg-row-start)}
+
+  /* ── 覆盖面板：说明与方案对比，只盖住左侧，右侧各列仍可对比 ── */
+  #doc{position:fixed;left:0;top:60px;bottom:0;width:min(560px,52vw);z-index:20;
+       overflow-y:auto;background:#fffffff2;backdrop-filter:blur(10px);
+       border-right:1px solid #00000018;box-shadow:12px 0 32px #0000001f;padding:18px 22px 28px}
+  #doc[hidden]{display:none}
+  #doc h2{font-size:14px;margin:18px 0 6px}
+  #doc h2:first-of-type{margin-top:6px}
+  #doc p{margin:0 0 10px;font-size:12.5px;color:var(--fg-secondary);line-height:1.65}
+  #doc ul{margin:0 0 10px;padding-left:18px;font-size:12.5px;color:var(--fg-secondary);line-height:1.65}
+  #doc code{background:#0000000d;padding:1px 4px;border-radius:4px;font-size:11.5px}
+  #doc table{border-collapse:collapse;margin:8px 0 12px;font-size:11.5px;width:100%}
+  #doc th,#doc td{border:1px solid #00000018;padding:3px 8px;text-align:left;vertical-align:top}
+  #doc th{background:#f4f5f7;font-weight:600;color:var(--fg-secondary)}
+  #doc td.ok{color:#1a7f37}
+  #doc td.no{color:#ec1313}
+  #doc td.ic{color:var(--fg-caption)}
+  #measure{display:none}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <h1>会话置顶的呈现方案 · 对照稿</h1>
+  <button type="button" id="docToggle">说明与方案对比</button>
+  <div class="spacer"></div>
+  <span class="slider">置顶区区分
+    <select id="sepStyle">
+      <option value="plain">现状（同容器行词汇）</option>
+      <option value="rule">① 细线分割</option>
+      <option value="loudHead">② 区域级标题（加粗）</option>
+      <option value="loudRule">③ 区域级标题 + 细线</option>
+      <option value="loudBand">④ 区域级标题 + 底纹</option>
+      <option value="loudGap" selected>⑤ 区域级标题 + 空白区分（实现采用这一档）</option>
+    </select>
+  </span>
+  <div class="sep"></div>
+  <span class="slider">折叠场景
+    <select id="collapseScene">
+      <option value="inner">收起内层（会话分组 + 深层子工作区）</option>
+      <option value="all">全部收起</option>
+      <option value="none">全部展开</option>
+      <option value="custom">自定义（手动开合）</option>
+    </select>
+  </span>
+  <div class="sep"></div>
+  <label><input type="checkbox" id="flatMode"> 平铺展示方式</label>
+  <div class="sep"></div>
+  <span class="slider">置顶标记
+    <select id="pinStyle">
+      <option value="pin">行尾图钉</option>
+      <option value="head">小区段头「置顶」</option>
+      <option value="none">不标（只靠位置）</option>
+    </select>
+  </span>
+  <div class="sep"></div>
+  <span class="slider">上方负空间
+    <input type="range" id="negTop" min="0" max="240" step="8" value="0">
+    <span id="negTopVal">0px</span>
+  </span>
+  <span class="slider">下方负空间
+    <input type="range" id="negBottom" min="0" max="240" step="8" value="0">
+    <span id="negBottomVal">0px</span>
+  </span>
+</div>
+
+<div id="stageScroll"><div id="stage"></div></div>
+
+<div id="doc" hidden>
+  <p>
+    同一棵树（<b>三条会话已置顶</b>，分布在三个不同深度：工作区未归组段、工作区分组内、深层子工作区的分组内），
+    九个方案并排。每列都是<b>完整视口高的侧边栏复刻</b>：280px 宽（官方 <code>clampWidth</code> 的默认档），
+    含实现里的区域 header（两行标题 + 搜索槽 + 三个 28px 入口）、行高、缩进公式、引导线、色阶，
+    指示器按落地版绝对定位在行最左缘。
+    <b>九列的元素完全相同</b>，只有置顶的呈现方式不同，因此可以直接横向比对。
+  </p>
+  <p>
+    <b>负空间</b>：侧栏里工作区区域的上方与下方还叠着其他插件的槽位，用顶部两个滑块模拟。
+    斜纹暖色块不属于侧边栏内容，只占位，用来观察列表可视高度被挤到多少。
+  </p>
+  <p>
+    <b>与实现的对齐</b>：影响布局的部分按已落地实现取值，不是原始设计稿的取值。
+    九列并排是为了选型，只有 ⑥（置顶面板，悬停展开）那一列的取值与实现逐项相同：
+    段头高 <code>30px</code>、左缘 <code>8px</code>、箭头 <code>16px</code> 槽里放 <code>14px</code> 字形且排在名字之前、
+    行尾提示 <code>12px</code>、行距 <code>2px</code>、行尾统一为「时间 → 操作位 → 图钉」、
+    图钉 <code>16px</code>（未置顶时连宽度一起收掉）、字形取官方的 <code>IconPinOutlineRegular</code> /
+    <code>IconPinFillRegular</code>、颜色取 <code>caption</code> 档。
+    顶部「置顶区区分」默认停在实现采纳的「区域级标题 + 空白区分」那一档。
+    页面末尾的 <code>#measure</code> 里有一组「段落几何」断言逐条核对这几项。
+  </p>
+
+  <h2>九个方案</h2>
+  <table>
+    <tr><th>#</th><th>做法</th><th>置顶升到哪一层</th><th>折叠后还看得见吗</th><th>新增常驻高度</th></tr>
+    <tr><td>①</td><td>现状（无置顶）</td><td class="ic">—</td><td class="ic">—</td><td class="ok">0</td></tr>
+    <tr><td><b>②</b></td><td>就地置顶</td><td>它所在的<strong>那一段</strong>（会话分组内 / 工作区未归组段内）</td><td class="no">看不见</td><td class="ok">0</td></tr>
+    <tr><td>③</td><td>工作区顶置顶</td><td>所属<strong>工作区</strong>的顶，跨出会话分组</td><td class="no">看不见</td><td class="ok">0</td></tr>
+    <tr><td>④</td><td>区域顶合成段</td><td><strong>区域</strong>的顶，跨出工作区</td><td class="ok">看得见</td><td class="no">有（随置顶条数增长）</td></tr>
+    <tr><td>⑤</td><td>④ + 置顶区定高滚动</td><td>同④</td><td class="ok">看得见</td><td class="no">有（恒定 5 条）</td></tr>
+    <tr><td><b>⑥</b></td><td>置顶面板（悬停展开）</td><td>同④</td><td class="ok">看得见</td><td class="no">有（恒定 5 条，指针进入时浮出）</td></tr>
+    <tr><td>⑦</td><td>置顶面板（点击展开）</td><td>同④</td><td class="ok">看得见</td><td class="no">同⑥，触发改为点击</td></tr>
+    <tr><td>⑧</td><td>就地置顶 + 折叠透出</td><td>同②</td><td class="ok">看得见（带路径）</td><td class="ok">0</td></tr>
+    <tr><td>⑨</td><td>就地置顶 + 折叠计数</td><td>同②</td><td>看得到「有」，看不到「是什么」</td><td class="ok">0</td></tr>
+  </table>
+  <p>①~③ 与 ⑧⑨ 都不给置顶新建常驻区域，差别只在置顶行落在哪一层、以及折叠时要不要把它透出来。
+     ④ 是唯一新增常驻一段内容的方案，也是唯一在收起态仍然看得见置顶标的方案；⑤⑥⑦ 在它之上把段高封顶。
+     ⑦⑧⑨ 只作对照，最终不采用（理由见<a href="design-options.md">设计过程</a>）。</p>
+
+  <h2>三个约束</h2>
+  <ul>
+    <li><b>垂直空间已经是负资产。</b>区域上方已叠着四个其他插件的槽位，区域自己的 header 在宽栏是两行标题加四个入口。
+        任何常驻的一段都要从列表可视高度里扣——这是④的主要代价，用上面那两个滑块可以现场看到被挤到多少。</li>
+    <li><b>「用户显式折叠优先」是本包既有不变量</b>（见 <a href="../data-storage.md">数据存储</a>）。
+        「置顶了就自动展开祖先容器」这条不能用，能走的只有「折叠容器把置顶行透出来」，即⑤⑥。</li>
+    <li><b>「置顶」这个词已被选择器面板占用</b>（管根节点条目的排序）。会话置顶进来后同屏会有两个不同作用域的「置顶」，
+        必须先决定是统一成一个概念还是刻意分开命名。</li>
+  </ul>
+
+  <h2>②③ 的共同代价：会话分组被自我否定</h2>
+  <p>② 把置顶行升到「它所在那一段」的顶。若那一段是用户自己建的会话分组，置顶就在分组内部重排，分组语义保住。</p>
+  <p>③ 再往上抬一层，置顶行会跨出它所在的会话分组。这不是排版差异，而是语义取舍：用户建分组就是为了「我把它放这儿」，
+     ③ 等于让置顶覆盖这个意图。③ 用左侧一条短竖线标出「它其实在别处」，但那条线只说明发生了脱组，说明不了它原来在哪，
+     因此这一段的行尾还要补上来源路径。</p>
+  <p>③ 还有一处必须先定死的范围：它只提本工作区名下的置顶，不递归进子工作区。子工作区有自己的顶，
+     它名下的置顶由它自己那道工作区行承担。若递归进去，深层子工作区里的一条会被每一层祖先各提一次，同一个标题在屏幕上出现多遍。</p>
+
+  <h2>提走与摘除必须成套</h2>
+  <p>③ 与 ④ 都把行提到别处，因此原位要把它们摘掉。只提不摘会让同一条会话在屏幕上出现两次——
+     原分组里一次、提上去的那一段一次，那不是置顶而是复制。对照稿把这条收在一处分派（<code>sessionsRunInPlace</code>）里，
+     工作区层与会话分组层两处渲染都走它，因此不会出现「有一处忘了摘」。</p>
+
+  <h2>④ 的实测几何</h2>
+  <p>④ 的合成段落在列表最前，段头与它的行都从 <code>24px</code> 起——与一条深度 0 的会话行同列。
+     这一格不能省：指示器是 16px 宽的绝对定位盒，内缩 6px 后占 <code>6–22px</code>，
+     行内左缘不到 24px 时它会压在标题上（对照稿早先的版本就是这样）。</p>
+  <p>这一段随内容滚动，不给它固定高度；代价是纵向位置上它占的是列表第一屏，置顶一多，最先看到的就是置顶而不是最近用的那个工作区。</p>
+
+  <h2>⑤ 的实测几何</h2>
+  <p>⑤ 的幽灵行缩进跟它原本所在的那一段走（未归组段 <code>24 + 16d</code>、会话分组内 <code>40 + 16d</code>），
+     因此标题左缘与它替换掉的那一行完全一致。按对照稿样式实测（相对列表左缘）：</p>
+  <table>
+    <tr><th>收起的容器</th><th>原本所在段</th><th>幽灵行标题</th><th>展开态真实行标题</th></tr>
+    <tr><td>工作区 <code>dsh_plugins</code>（<code>d=1</code>）</td><td>未归组段</td><td>44</td><td>44</td></tr>
+    <tr><td>子工作区 <code>packages</code>（<code>d=2</code>）</td><td>会话分组内</td><td>76</td><td>76</td></tr>
+    <tr><td>会话分组 <code>工作区侧栏</code>（<code>d=1</code>）</td><td>会话分组内</td><td>60</td><td>60</td></tr>
+  </table>
+  <p>三档都对齐，但这条结论依赖两个细节，写错任一处幽灵行都会与真实行错开一格：档位不是「折叠的是工作区还是分组」，
+     而是「这一行原本在容器的哪一段」；深度也继承不到——幽灵段渲染在折叠容器之外，<code>--wg-depth</code> 与档位
+     都得由每条幽灵行自己带上。</p>
+  <p>另有选择器上的一处静默失效：幽灵段渲染在容器之后（容器收起时 <code>.wsBody</code> / <code>.groupBody</code> 根本不渲染），
+     因此缩进档位不能写成 <code>.wsBody &gt; .ghostRun</code>——那条选择器永远不匹配，<code>padding-left</code> 退回 0，
+     幽灵行整段贴到最左缘，且控制台没有任何报错。</p>
+  <p>幽灵行右侧补一个来源路径，说明它来自哪个折叠的容器。这是 ⑤ 唯一的空间代价：
+     路径标签占的正是行尾相对时间那一格，两者在同一行里不能并存。</p>
+
+  <h2>⑥ 的计数与分组行的会话数会粘成一个数</h2>
+  <p>⑥ 把置顶条数放在折叠容器行尾，而复用「会话数 / 工作区数」那一槽的行尾已经有一个裸数字。
+     两个裸数字并排会被读成一个数（<code>3</code> 与 <code>1</code> 读成 <code>31</code>）。
+     对照稿给置顶计数加了一枚胶囊底，把它读成一枚独立的标记。</p>
+
+  <h2>置顶标记的三种画法</h2>
+  <p>行首那一格已经没有了。指示器落地时改成了绝对定位在行最左缘（见
+     <a href="../session-row-indicator/README.md">会话行指示器的备选方案</a>），
+     因此置顶标记不能像官方那样占行首图标列，只能往行尾或段头走。</p>
+  <table>
+    <tr><th>画法</th><th>落点</th><th>代价</th></tr>
+    <tr><td>行尾图钉</td><td>行内，排在时间之前</td><td>与行尾时间争同一格；行悬停时让位给操作位，图钉会跟着消失</td></tr>
+    <tr><td>小区段头「置顶」</td><td>置顶段之上、占一整行</td><td>每多一段就多 22px；只在置顶行连续成段时才成立</td></tr>
+    <tr><td>不标</td><td class="ic">—</td><td>零成本；置顶行与普通行完全同形，只能靠位置推断</td></tr>
+  </table>
+  <p>顶部那个下拉可以现场切这三档。</p>
+
+  <h2>与状态底色、选中态的优先级</h2>
+  <p>置顶行不引入新的底色。状态底色（运行 / 待交互）与选中加深都已占用 <code>background-color</code>，
+     见 <a href="../layout-and-styling.md">布局与样式对齐</a>。
+     置顶是位置事实，靠排序与（可选的）标记表达，不再叠一层颜色——叠上去会与状态色互相稀释，
+     而状态是当前正在发生的事，优先级高于「我收藏过它」。</p>
+
+  <h2>平铺展示方式</h2>
+  <p>平铺下没有容器，②③⑤⑥ 全部退化成同一件事——置顶行排到列表最前，方案之间的差别归零。
+     ④ 更是完全失去意义：它合成的段与平铺列表本身同形。
+     因此平铺这一档只说明一件事：别为了让平铺也分得开而在平铺里再叠一层置顶段。</p>
+
+  <h2>采用的方案</h2>
+  <p><b>基座取 ②，把「顶」定在所在会话分组的顶</b>：保住分组语义，置顶不覆盖用户显式建的结构；
+     零新增常驻区域、零命名冲突、零与既有折叠约定的冲突；与官方同构，语义上不需要额外解释。</p>
+  <p><b>「埋得深」当独立问题解，用 ⑥ 的轻量版</b>（折叠行尾的置顶计数 + 直达）。这样 ② 唯一的缺点被补掉，
+     且不碰「显式折叠优先」那条不变量。⑤ 的带路径透出更精确，但它占掉行尾时间那一格，
+     且会在折叠容器下面再长出一段内容，视觉噪音高于收益，因此不作为基座、只作为 ⑥ 不够用时的备选。</p>
+  <p><b>不做常驻的全局置顶区（④）</b>。理由三条：垂直空间已经是负资产；与选择器的「置顶」同名冲突；
+     全局平铺与本包「分得开」的主张相抵。若最终一定要全局，只接受零常驻高度的形态（选择器的置顶分区或 header 浮层），
+     不要插在 header 与列表之间——那会隔断标题第二行「当前聚焦对象」与它下面那片列表的视觉连接。</p>
+
+  <h2>尚未决定</h2>
+  <ul>
+    <li>会话置顶与选择器的根节点置顶是一个概念还是两个，文案与图标要不要区分。</li>
+    <li>置顶标记的最终画法（上面三选一），以及与状态底色、选中态的优先级。</li>
+    <li>归档会话、空白会话能不能置顶；会话在分组间移动后置顶归属怎么走。</li>
+    <li>置顶条数上限——不做上限时，置顶一多就会把列表挤没。</li>
+    <li>置顶之间怎么排序：按置顶时刻、按最近使用，还是允许手动拖动。</li>
+    <li>置顶是否需要跨端同步（本包的 <code>picker.pinned</code> 走宿主存储域，而会话置顶若不落盘则只在本浏览器有效）。</li>
+  </ul>
+</div>
+
+<pre id="measure"></pre>
+
+<script>
+/* ── 方案 ──────────────────────────────────────────────── */
+const VARIANTS = [
+  { id:'none', name:'① 现状（无置顶）', note:'基线：不读置顶',
+    desc:'全部会话按最近更新排序，没有置顶这个概念' },
+  { id:'run', name:'② 就地置顶', note:'分组语义保住；折叠后看不见',
+    desc:'置顶升到它所在那一段的顶（会话分组内 / 工作区未归组段内）' },
+  { id:'workspace', name:'③ 工作区顶置顶', note:'更显眼，但会话分组失去意义',
+    desc:'置顶升到所属工作区的顶，跨出自己的会话分组' },
+  /* ④⑤ 是同一个做法（区域顶合成段）：
+     ⑤ 只多一条「最大高度恒定、超出滚动」，因此两列必须相邻才好直接看出这一条差别 */
+  { id:'global', name:'④ 区域顶合成段', note:'收起态仍看得见；置顶一多就挤占首屏',
+    desc:'全部置顶在列表最前合成一段，跨出工作区' },
+  { id:'capped', name:'⑤ ④ + 置顶区定高滚动', note:'首屏不再被置顶占满；代价是多一层滚动容器',
+    desc:'同④，但置顶区最多显示 5 条，超出的在区内滚动' },
+  /* ⑥ 与 ⑤ 同一族（都只占固定高度），差别在超出部分怎么给：
+     ⑤ 让用户自己拖着滚，⑥ 悬停时把整块浮出来一次给全 */
+  { id:'hover', name:'⑥ 置顶面板（悬停展开）', note:'寻找时一次给全；代价是展开态会盖住下面的内容',
+    desc:'同⑤占 5 条高度，指针进入预览行时整块浮出、把全部置顶一次列出' },
+  /* ⑦ 与 ⑥ 同一做法，只把触发从悬停换成点击：触屏没有悬停，而悬停本身也有「扫过就展开」的误触
+     实测 ⑦ 的交互体验明显更差，因此它**不进最终设计**，只留在这里作对照 */
+  { id:'click', name:'⑦ 置顶面板（点击展开）', note:'仅对照：实测体验更差，最终不采用',
+    desc:'同⑥，但改为点预览行才浮出，再点收起' },
+  /* ⑧⑨ 是同一个做法（就地置顶 + 折叠态兜底），两者也只差折叠态下的表现 */
+  { id:'through', name:'⑧ 就地置顶 + 折叠透出', note:'仅对照：视觉噪音高于收益，最终不采用',
+    desc:'同②，但折叠的容器把内部的置顶行带路径透出来' },
+  { id:'count', name:'⑨ 就地置顶 + 折叠计数', note:'仅对照：没解决「埋得深」，最终不采用',
+    desc:'同②，但折叠的容器行尾显示置顶条数' },
+]
+
+/* ── 树 ────────────────────────────────────────────────── */
+/*
+ * 全部条目都是编造的，与任何真实工作区无关
+ *
+ * 规模刻意做大（2 个工作区分组 / 7 个工作区 / 约 30 条会话），因为要看的是
+ * 「列表长了之后置顶还读不读得出来」，两三个工作区的样例读不出这件事
+ *
+ * 7 条置顶分布在四个不同深度，且都刻意不排在自然序的第一位（否则置顶前后看不出差别）：
+ *   - p1 在会话分组「交互重构」内
+ *   - p2 在工作区 aurora-web 的未归组段
+ *   - p3 在子工作区 packages 的会话分组「组件库」内
+ *   - p4 在更深一层的 aurora-ui 未归组段
+ *   - p5 在服务分组「鉴权」内
+ *   - p6 在 aurora-etl 未归组段
+ *   - p7 在 notes 未归组段
+ * 7 条是有意的：⑦ 的置顶区上限是 5 条，超出 2 条正好看得出滚动
+ */
+const FOREST = [
+  { kind:'vg', id:'vgA', label:'Aurora 前端',
+    children:[
+      { kind:'ws', id:'w1', label:'aurora-web', depth:1,
+        nest:[
+          { kind:'ws', id:'w2', label:'packages', depth:2,
+            nest:[],
+            groups:[
+              { kind:'group', id:'g2', label:'组件库', depth:2,
+                nest:[
+                  { kind:'ws', id:'w3', label:'aurora-ui', depth:4,
+                    sessions:[
+                      { id:'c1', title:'按钮组件的焦点环', time:'昨天', state:'idle' },
+                      { id:'p4', title:'图标体积裁剪', time:'3小时前', state:'idle', pinned:true },
+                      { id:'c2', title:'表格虚拟滚动', time:'3天前', state:'done' },
+                      { id:'c3', title:'弹层定位改锚点', time:'2天前', state:'idle' },
+                    ] }
+                ],
+                sessions:[
+                  { id:'c4', title:'补齐图标字形', time:'4小时前', state:'idle' },
+                  { id:'p3', title:'组件库文档站', time:'2小时前', state:'warning', pinned:true },
+                  { id:'c5', title:'色阶 token 归并', time:'昨天', state:'idle' },
+                ] }
+            ],
+            sessions:[
+              { id:'c6', title:'打包产物去重', time:'前天', state:'idle' },
+              { id:'c7', title:'依赖版本对齐', time:'前天', state:'idle' },
+              { id:'c8', title:'类型声明导出', time:'3天前', state:'done' },
+            ] }
+        ],
+        groups:[
+          { kind:'group', id:'g1', label:'交互重构', depth:1, nest:[],
+            sessions:[
+              { id:'c9', title:'列表项拖拽排序', time:'6分钟前', state:'idle', current:true },
+              { id:'p1', title:'侧栏折叠动画', time:'1小时前', state:'warning', pinned:true },
+              { id:'c10', title:'快捷键面板', time:'昨天', state:'idle' },
+              { id:'c11', title:'无障碍焦点顺序', time:'2天前', state:'idle' },
+            ] }
+        ],
+        sessions:[
+          { id:'c12', title:'首屏加载耗时', time:'刚刚', state:'ongoing' },
+          { id:'p2', title:'主题切换闪烁', time:'40分钟前', state:'ongoing', pinned:true },
+          { id:'c13', title:'错误边界兜底', time:'5小时前', state:'idle' },
+          { id:'c14', title:'路由参数校验', time:'昨天', state:'idle' },
+        ] },
+      { kind:'ws', id:'w4', label:'aurora-app', depth:1,
+        nest:[],
+        groups:[
+          { kind:'group', id:'g3', label:'发布流程', depth:1, nest:[],
+            sessions:[
+              { id:'c15', title:'灰度和回滚脚本', time:'3小时前', state:'idle' },
+              { id:'c16', title:'版本号自动递增', time:'2天前', state:'idle' },
+            ] }
+        ],
+        sessions:[
+          { id:'c17', title:'启动页骨架屏', time:'昨天', state:'idle' },
+          { id:'c18', title:'崩溃日志上报', time:'3天前', state:'done' },
+        ] },
+    ] },
+  { kind:'vg', id:'vgB', label:'服务与数据',
+    children:[
+      { kind:'ws', id:'w5', label:'aurora-api', depth:1,
+        nest:[],
+        groups:[
+          { kind:'group', id:'g4', label:'鉴权', depth:1, nest:[],
+            sessions:[
+              { id:'c19', title:'刷新令牌轮换', time:'20分钟前', state:'idle' },
+              { id:'p5', title:'单点登出回调', time:'2小时前', state:'ongoing', pinned:true },
+              { id:'c20', title:'权限点清单', time:'前天', state:'idle' },
+            ] }
+        ],
+        sessions:[
+          { id:'c21', title:'分页游标改造', time:'4小时前', state:'idle' },
+          { id:'c22', title:'错误码归一', time:'昨天', state:'idle' },
+          { id:'c23', title:'限流阈值评估', time:'3天前', state:'done' },
+        ] },
+      { kind:'ws', id:'w6', label:'aurora-etl', depth:1,
+        nest:[],
+        groups:[],
+        sessions:[
+          { id:'c24', title:'增量同步水位线', time:'1小时前', state:'idle' },
+          { id:'p6', title:'清洗规则回归', time:'5小时前', state:'warning', pinned:true },
+          { id:'c25', title:'字段血缘图', time:'前天', state:'idle' },
+        ] },
+      { kind:'ws', id:'w7', label:'notes', depth:1,
+        nest:[],
+        groups:[],
+        sessions:[
+          { id:'c26', title:'周会待办整理', time:'刚刚', state:'idle' },
+          { id:'p7', title:'架构决策记录', time:'昨天', state:'idle', pinned:true },
+          { id:'c27', title:'术语表维护', time:'2天前', state:'idle' },
+        ] },
+    ] },
+]
+
+/** 合成根：把两个工作区分组当成同一棵树的两支，`pinnedWithin` 等遍历函数据此写一份 */
+const TREE = { kind:'root', id:'root', children: FOREST }
+
+/* ── 状态 ──────────────────────────────────────────────── */
+/*
+ * 九列的元素完全相同，只有置顶的呈现方式不同
+ * 因此这里没有任何逐列状态：开合、选中、平铺与标记画法都是全局的
+ *
+ * 折叠是**全局场景**而不是逐列开关：⑤⑥ 只在容器收起时才有表现，
+ * 逐列按钮会让九列不再「元素完全相同」，比对的前提随之失效
+ * 三档场景各给一个「九列同时处在同一收起态」的视图，切换时九列一起变
+ */
+const SCENES = {
+  /** 收起一个会话分组与一个深层子工作区：⑤⑥ 同时看得出表现 */
+  inner: ['g1', 'w2'],
+  // 根节点（两个工作区分组）不收起：把它也收掉整棵树只剩两行，就没什么可比的了
+  all: ['w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7', 'g1', 'g2', 'g3', 'g4'],
+  none: [],
+}
+const COLLAPSED = new Set(SCENES.inner)
+/*
+ * 置顶段的开合**不放进 COLLAPSED**：那个集合表示「哪些容器收起了」，
+ * 顶部那个「折叠场景」下拉据它落位；把置顶段混进去会让下拉误判成「自定义」
+ * 而收一个置顶段与收一个工作区是两件事，不该互相干扰
+ */
+const STATE = { flat:false, pinStyle:'pin', scene:'inner', pinCollapsed:false, sepStyle:'loudGap',
+  // 点击档的展开态：悬停档由 CSS 的 :hover 自己管，不需要状态
+  clickOpen:false }
+
+/* ── 字形 ──────────────────────────────────────────────── */
+const FOLDER_OPEN = '<svg class="folder" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">'
+  + '<path d="M1.5 4.3c0-.7.6-1.3 1.3-1.3h2.9l1.3 1.6h6.2c.7 0 1.3.6 1.3 1.3v6c0 .7-.6 1.3-1.3 1.3H2.8c-.7 0-1.3-.6-1.3-1.3V4.3z" fill="currentColor"/></svg>'
+const FOLDER_CLOSE = '<svg class="folder" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">'
+  + '<path d="M1.5 4.3c0-.7.6-1.3 1.3-1.3h2.6l1.2 1.5h4.9c.7 0 1.3.6 1.3 1.3v5.3c0 .7-.6 1.3-1.3 1.3H2.8c-.7 0-1.3-.6-1.3-1.3V4.3z" fill="currentColor"/></svg>'
+/** 容器行与段头的箭头，官方的 IconTriangleRightFillRegular 字形 */
+const CHEV_PATH = 'M5.5 4.5C5.5 4.40714 5.52586 4.31612 5.57467 4.23713C5.62349 4.15815 5.69334 4.09431 5.77639 4.05279C5.85945 4.01126 5.95242 3.99368 6.0449 4.00202C6.13738 4.01036 6.22572 4.04429 6.3 4.1L10.967 7.6C11.0291 7.64657 11.0795 7.70697 11.1142 7.77639C11.1489 7.84582 11.167 7.92238 11.167 8C11.167 8.07762 11.1489 8.15418 11.1142 8.22361C11.0795 8.29303 11.0291 8.35343 10.967 8.4L6.3 11.9C6.22572 11.9557 6.13738 11.9896 6.0449 11.998C5.95242 12.0063 5.85945 11.9887 5.77639 11.9472C5.69334 11.9057 5.62349 11.8419 5.57467 11.7629C5.52586 11.6839 5.5 11.5929 5.5 11.5V4.5Z'
+const chev = (open) => '<svg class="chev' + (open ? ' open' : '') + '" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none">'
+  + '<path d="' + CHEV_PATH + '" fill="currentColor"/></svg>'
+
+/* 图钉，官方的 IconPinOutlineRegular / IconPinFillRegular 字形（16 视图框、1px 描边）
+   已置顶用实心那一档、未置顶用描边那一档，与实现取同一对字形 */
+const PIN_HEAD_PATH = 'M9.96976 1.70572L13.1554 3.93629L10.9019 8.12317L11.5158 11.605L10.7192 12.7427L2.52767 7.00693L3.3243 5.86922L6.80612 5.25528L9.96976 1.70572Z'
+const PIN_NEEDLE_PATH = 'M6.05285 9.47511C6.27284 9.16094 6.70586 9.08458 7.02003 9.30457C7.3342 9.52455 7.41055 9.95757 7.19057 10.2717L3.98587 14.4708L3.21223 13.9291L6.05285 9.47511Z'
+const pinSvg = (headFill) => '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke-width="1">'
+  + '<path d="' + PIN_HEAD_PATH + '"' + (headFill ? ' fill="currentColor"' : '') + ' stroke="currentColor" stroke-linejoin="round"/>'
+  + '<path d="' + PIN_NEEDLE_PATH + '" fill="currentColor"/></svg>'
+const PIN_OUTLINE = pinSvg(false)
+const PIN_FILL = pinSvg(true)
+
+/** 区域 header 右上那三个入口：视图选项 / 新建工作区分组 / 添加工作区 */
+const ICON_SLIDERS = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">'
+  + '<path d="M2 4.5h7M11.5 4.5h2.5M2 11.5h2.5M7 11.5h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>'
+  + '<circle cx="10" cy="4.5" r="1.6" fill="currentColor"/><circle cx="5.5" cy="11.5" r="1.6" fill="currentColor"/></svg>'
+const ICON_VW = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">'
+  + '<path d="M1.5 4.3c0-.7.6-1.3 1.3-1.3h2.6l1.2 1.5h4.9c.7 0 1.3.6 1.3 1.3v5.3c0 .7-.6 1.3-1.3 1.3H2.8c-.7 0-1.3-.6-1.3-1.3V4.3z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2.4 1.8"/></svg>'
+const ICON_ADD = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">'
+  + '<path d="M1.5 4.3c0-.7.6-1.3 1.3-1.3h2.6l1.2 1.5h4.9c.7 0 1.3.6 1.3 1.3v5.3c0 .7-.6 1.3-1.3 1.3H2.8c-.7 0-1.3-.6-1.3-1.3V4.3z" fill="none" stroke="currentColor" stroke-width="1.2"/>'
+  + '<path d="M12.4 9.6v3.4M10.7 11.3h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>'
+const ICON_SEARCH = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">'
+  + '<circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" stroke-width="1.3"/>'
+  + '<path d="M10.2 10.2L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>'
+/** 会话行尾的「更多操作」省略号，官方 IconEllipsisOutlineRegular 的同族外形 */
+const ICON_ELLIPSIS = '<svg viewBox="0 0 16 16" aria-hidden="true">'
+  + '<circle cx="3.6" cy="8" r="1.3" fill="currentColor"/>'
+  + '<circle cx="8" cy="8" r="1.3" fill="currentColor"/>'
+  + '<circle cx="12.4" cy="8" r="1.3" fill="currentColor"/></svg>'
+const ICON_CARET = '<svg class="hdrCaret" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">'
+  + '<path d="M4.2 6.2L8 10l3.8-3.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'
+
+function dotMarkup(state){
+  if (state === 'ongoing') {
+    return '<svg class="spinner" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">'
+      + '<g class="spin"><circle class="track" cx="12" cy="12" r="9.5"/>'
+      + '<circle class="arc" cx="12" cy="12" r="9.5"/></g></svg>'
+  }
+  return '<span class="dot" data-state="' + state + '"></span>'
+}
+
+/* ── 计数 ──────────────────────────────────────────────── */
+function countMarkup(node){
+  if (node.kind === 'vg') return '<span class="count">' + (node.children || []).length + '</span>'
+  if (node.kind === 'group') {
+    const n = (node.sessions || []).length
+    return n > 0 ? '<span class="count">' + n + '</span>' : ''
+  }
+  return ''
+}
+
+/** 一个容器子树里的置顶会话数 */
+function countPinned(node){
+  let n = 0
+  for (const s of node.sessions || []) if (s.pinned) n++
+  for (const c of node.children || []) n += countPinned(c)
+  for (const c of node.nest || []) n += countPinned(c)
+  for (const g of node.groups || []) n += countPinned(g)
+  return n
+}
+
+/** ⑥：折叠的容器行尾那枚置顶计数，没有置顶时不渲染 */
+function pinCountMarkup(node, variant){
+  if (variant !== 'count') return ''
+  const n = countPinned(node)
+  if (n === 0) return ''
+  return '<span class="pinCount">' + PIN_FILL + n + '</span>'
+}
+
+/**
+ * 一个容器子树里的置顶会话，带各自的容器路径与缩进坐标
+ *
+ * `depth` 与 `inGroup` 是渲染坐标，不是语义标签：幽灵段渲染在折叠容器之外，
+ * `--wg-depth` 与「原本在未归组段还是会话分组里」两者都继承不到，必须逐条带出来
+ */
+function pinnedWithin(node, path, inheritedDepth){
+  const out = []
+  const depth = node.depth === undefined ? inheritedDepth : node.depth
+  const inGroup = node.kind === 'group'
+  for (const s of node.sessions || []) if (s.pinned) out.push({ s, path, depth, inGroup })
+  // 子工作区与会话分组的名字都记进路径，因此路径自包含：
+  // 「这条在折叠容器里的哪儿」不必再去借折叠行自己的名字，也就不必重复它
+  for (const c of node.children || []) out.push(...pinnedWithin(c, path.concat(c.label), depth))
+  for (const c of node.nest || []) out.push(...pinnedWithin(c, path.concat(c.label), depth))
+  for (const g of node.groups || []) out.push(...pinnedWithin(g, path.concat(g.label), depth))
+  return out
+}
+
+/* ── 置顶排序 ──────────────────────────────────────────── */
+/** 把一个段落里的会话重排：置顶在前。① 完全不读 pinned，因此原样返回 */
+function orderRun(sessions, variant){
+  if (variant === 'none') return sessions
+  return [...sessions.filter(s => s.pinned), ...sessions.filter(s => !s.pinned)]
+}
+
+/* ── 会话行 ────────────────────────────────────────────── */
+/**
+ * 行尾的置顶按钮，**可点**
+ *
+ * 这是本稿里唯一一处「实际操作置顶」的入口：点它当场改 `s.pinned`，
+ * 九列一起重绘，因此可以直接看出同一动作在各方案下的后果差异
+ * （②只是行内换位、③④把它提到别处、⑤⑥在折叠态下才显出区别）
+ *
+ * 画法由顶部那个下拉切换：图钉 / 段头 / 不标
+ * 「不标」档只隐藏**常驻的图钉**，悬停时仍露出按钮——否则那一档就没法操作了
+ */
+function pinButtonMarkup(s, variant){
+  if (variant === 'none') return ''
+  const on = s.pinned === true
+  const cls = 'rowPin' + (on ? ' rowPinOn' : ' rowPinOff')
+  const title = (on ? '取消置顶：' : '置顶：') + s.title
+  // 字形也分两档：已置顶用实心、未置顶用描边，与实现取同一对
+  return '<button type="button" class="' + cls + '" data-pin="' + s.id + '"'
+    + ' aria-pressed="' + on + '" aria-label="' + title + '" title="' + title + '">'
+    + (on ? PIN_FILL : PIN_OUTLINE) + '</button>'
+}
+
+/**
+ * 会话行
+ *
+ * 行尾三段按「位置是否稳定」排布：
+ *   - 时间：静止时显示，悬停让位给操作位（与真实插件同一套互换）
+ *   - 图钉：**已置顶时钉在最右**，因此它永不移动——时间隐去、操作位展开都不影响它
+ *           未置顶时它跟着操作位一起在悬停时出现，排在操作位左侧
+ *   - 操作位：静止时不占宽，悬停 / 聚焦时展开
+ * 两种排法的差别就是「图钉在操作位之前还是之后」，由 `pinned` 一处决定
+ */
+function sessionRow(s, variant){
+  const selected = s.current === true
+  const absInd = s.state === 'idle' ? '' : '<span class="absInd">' + dotMarkup(s.state) + '</span>'
+  const pinned = s.pinned === true
+  const pin = pinButtonMarkup(s, variant)
+  const action = '<span class="rowActionSlot">'
+    + '<button type="button" class="rowAction" aria-label="更多操作">' + ICON_ELLIPSIS + '</button>'
+    + '</span>'
+  return '<div class="row' + (selected ? ' selected' : '')
+    + '" data-state="' + s.state + '" data-title="' + s.title + '">'
+    + absInd
+    + '<span class="rowTitle">' + s.title + '</span>'
+    + '<span class="rowTime">' + s.time + '</span>'
+    // 两态顺序一致：时间 → 操作位 → 图钉
+    // 图钉恒在最右，未置顶时连宽度一起收掉，因此不为看不见的状态图标留空位
+    + action + pin
+    + '</div>'
+}
+
+/**
+ * ⑤ 的幽灵行：正文同真实行，行尾换成来源路径
+ *
+ * 路径要能回答「它在这个折叠容器的哪里」，因此分三段：
+ * 容器自己有名字（`ownerLabel`，就是折叠的那一行）时以它起头，
+ * 再补上往下经过的会话分组名；两段都空说明它直接躺在该容器的未归组段里
+ */
+function ghostRow(entry, variant){
+  const s = entry.s
+  const absInd = s.state === 'idle' ? '' : '<span class="absInd">' + dotMarkup(s.state) + '</span>'
+  // 路径只说「在这个折叠容器里的哪儿」，容器自己是谁由正上方那一行承担
+  // 因此路径为空时整格不渲染：那表示这条就躺在容器里，重复容器名既冗余又会在 280px 列里被截掉
+  const path = entry.path.length === 0
+    ? ''
+    : '<span class="ghostPath">' + entry.path.join(' / ') + '</span>'
+  return '<div class="ghostRow row' + (s.current === true ? ' selected' : '')
+    + (entry.inGroup ? ' ghostInGroup' : '')
+    + '" style="--wg-depth:' + entry.depth + '" data-state="' + s.state
+    + '" data-title="' + s.title + '">'
+    + absInd
+    + '<span class="ghostMark"></span>'
+    + '<span class="rowTitle">' + s.title + '</span>'
+    + path
+    + pinButtonMarkup(s, variant)
+    + '</div>'
+}
+
+/**
+ * 一个段落（一个 sessions 数组）的渲染
+ *
+ * ③ 与 ④ 会把置顶行提到别处，因此原位要把它们摘掉。摘除必须与「提到哪里」成套：
+ * 只提不摘会让同一条会话在屏幕上出现两次，那不是置顶而是复制
+ */
+function sessionsRun(sessions, variant){
+  // capped / hover 也把置顶行提到区域顶，因此原位要一并摘掉：只提不摘会渲染成两份
+  const hoisted = variant === 'workspace' || variant === 'global'
+    || variant === 'capped' || variant === 'hover' || variant === 'click'
+  const kept = hoisted ? sessions.filter(s => !s.pinned) : sessions
+  const ordered = orderRun(kept, variant)
+  if (ordered.length === 0) return ''
+  const hasPinned = ordered.length > 0 && ordered[0].pinned && variant !== 'none'
+  const head = (hasPinned && STATE.pinStyle === 'head')
+    ? '<div class="pinHead">' + PIN_FILL + '置顶</div>' : ''
+  return '<div class="sessions">' + head
+    + ordered.map(s => sessionRow(s, variant)).join('')
+    + '</div>'
+}
+
+/* ── 容器 ──────────────────────────────────────────────── */
+/**
+ * ③：把本工作区名下的置顶会话提到工作区顶
+ *
+ * 只提「直属本工作区」的那些——包括它的会话分组里的，但不递归进子工作区：
+ * 子工作区有自己的顶，它的置顶由它自己那道工作区行承担，否则深层子工作区里的一条
+ * 会被每一层祖先各提一次，同一个标题在屏幕上出现多遍
+ *
+ * 提上来的行原本在某个会话分组里（或直接在未归组段里），脱组之后仍要能看出它原来在哪，
+ * 因此这一段的行尾不是时间而是来源路径
+ */
+function hoistRun(node, variant){
+  if (variant !== 'workspace') return ''
+  const entries = pinnedWithinShallow(node)
+  if (entries.length === 0) return ''
+  const head = '<div class="hoistHead">' + PIN_FILL + '置顶'
+    + '<span class="loose">· 已脱出原会话分组</span></div>'
+  return '<div class="hoistRun">' + head
+    + entries.map(e => hoistedRow(e, variant, node.label)).join('')
+    + '</div>'
+}
+
+/** 只在本容器内（含其会话分组）找置顶，不递归子工作区 */
+function pinnedWithinShallow(node){
+  const out = []
+  for (const s of node.sessions || []) if (s.pinned) out.push({ s, path: [] })
+  for (const g of node.groups || []) {
+    for (const s of g.sessions || []) if (s.pinned) out.push({ s, path: [g.label] })
+  }
+  return out
+}
+
+/** ③ 提上来的那行：行尾换成来源路径，说明它原来在哪个分组 */
+function hoistedRow(entry, variant, ownerLabel){
+  const s = entry.s
+  const absInd = s.state === 'idle' ? '' : '<span class="absInd">' + dotMarkup(s.state) + '</span>'
+  return '<div class="row rowHoisted' + (s.current === true ? ' selected' : '')
+    + '" data-state="' + s.state + '" data-title="' + s.title + '">'
+    + absInd
+    + '<span class="rowTitle">' + s.title + '</span>'
+    + '<span class="ghostPath">' + [ownerLabel, ...entry.path].join(' / ') + '</span>'
+    + pinButtonMarkup(s, variant)
+    + '</div>'
+}
+
+function workspaceNode(n, variant){
+  const collapsed = COLLAPSED.has(n.id)
+  const body = []
+  if ((n.nest || []).length) {
+    body.push('<div class="nest">'
+      + n.nest.map(c => workspaceNode(c, variant)).join('') + '</div>')
+  }
+  for (const g of (n.groups || [])) body.push(groupNode(g, variant))
+  const run = sessionsRun(n.sessions || [], variant)
+  if (run) body.push(run)
+  if (body.length === 0) body.push('<div class="emptyState">暂无会话</div>')
+
+  // ⑤：折叠时不出内容，改把内部置顶行带路径透出来
+  const ghost = collapsed && variant === 'through' ? ghostRun(n, variant) : ''
+
+  return '<section class="workspace" style="--wg-depth:' + n.depth + '">'
+    + '<div class="head workspaceHead" data-toggle="' + n.id + '" role="button" tabindex="0"'
+    + ' aria-expanded="' + (!collapsed) + '">'
+    + '<span class="slot">' + (collapsed ? FOLDER_CLOSE : FOLDER_OPEN) + chev(!collapsed) + '</span>'
+    + '<span class="wtitle">' + n.label + '</span>'
+    + (collapsed ? pinCountMarkup(n, variant) : '')
+    + countMarkup(n)
+    + '</div>'
+    + (collapsed ? ghost
+        : '<div class="wsBody">' + hoistRun(n, variant) + body.join('') + '</div>')
+    + '</section>'
+}
+
+function groupNode(g, variant){
+  const collapsed = COLLAPSED.has(g.id)
+  const body = []
+  if ((g.nest || []).length) {
+    body.push('<div class="nest">'
+      + g.nest.map(c => workspaceNode(c, variant)).join('') + '</div>')
+  }
+  const run = sessionsRun(g.sessions || [], variant)
+  if (run) body.push(run)
+  const empty = (g.sessions || []).length === 0 && (g.nest || []).length === 0
+  const ghost = collapsed && variant === 'through' ? ghostRun(g, variant) : ''
+  return '<div class="group">'
+    + '<div class="head groupHead" data-toggle="' + g.id + '" role="button" tabindex="0"'
+    + ' aria-expanded="' + (!collapsed) + '">'
+    + '<span class="slot">' + chev(!collapsed) + '</span>'
+    + '<span class="glabel">' + g.label + '</span>'
+    + (collapsed ? pinCountMarkup(g, variant) : '')
+    + countMarkup(g)
+    + '</div>'
+    + (collapsed || empty ? ghost : '<div class="groupBody">' + body.join('') + '</div>')
+    + '</div>'
+}
+
+function vgNode(v, variant){
+  const collapsed = COLLAPSED.has(v.id)
+  const ghost = collapsed && variant === 'through' ? ghostRun(v, variant) : ''
+  return '<div class="virtualWorkspace">'
+    + '<div class="head vwHead" data-toggle="' + v.id + '" role="button" tabindex="0"'
+    + ' aria-expanded="' + (!collapsed) + '">'
+    + '<span class="slot">' + chev(!collapsed) + '</span>'
+    + '<span class="glabel">' + v.label + '</span>'
+    + (collapsed ? pinCountMarkup(v, variant) : '')
+    + countMarkup(v)
+    + '</div>'
+    + (collapsed ? ghost
+        : '<div class="vwBody">'
+          + v.children.map(c => workspaceNode(c, variant)).join('') + '</div>')
+    + '</div>'
+}
+
+/**
+ * ⑤ 的幽灵段：一个折叠容器里全部置顶行，按各自的容器路径列出
+ *
+ * 档位与深度由每条幽灵行自己带上：它渲染在折叠容器之外，
+ * 容器的 --wg-depth 与「原本在未归组段还是会话分组里」两者都继承不到
+ * `ownerLabel` 是折叠的那一行自己的名字，它给路径起头，读者才知道这些行原本在哪
+ */
+function ghostRun(node, variant){
+  const entries = pinnedWithin(node, [], node.depth)
+  if (entries.length === 0) return ''
+  return '<div class="ghostRun">'
+    + entries.map(e => ghostRow(e, variant)).join('')
+    + '</div>'
+}
+
+/**
+ * ④：全部置顶会话在列表最前合成一段
+ *
+ * 它不是任何一个真实容器，因此与下面的真实结构之间画一条分界
+ * 每一行的几何与真实会话行逐格相同（行内左缘 24px 让给指示器），否则指示器会压住标题
+ */
+/**
+ * ④ 与 ⑦：全部置顶会话在列表最前合成一段
+ *
+ * 它不是任何一个真实容器，因此与下面的真实结构之间画一条分界
+ * 每一行的几何与真实会话行逐格相同（行内左缘 24px 让给指示器），否则指示器会压住标题
+ *
+ * ⑦ 与 ④ 的唯一差别是这一段的**最大高度恒定**：超过 {@link TOP_VISIBLE} 条就在段内滚动，
+ * 段本身的高度不再随置顶条数增长。段头的提示因此从「不属于任何容器」换成计数
+ */
+const TOP_VISIBLE = 5
+
+function topSection(variant){
+  // 三档都渲染这一段：④ 不封顶、⑤ 封顶后自己滚、⑥ 封顶但悬停时整块浮出
+  const clickPanel = variant === 'click'
+  const hoverPanel = variant === 'hover'
+  const capped = variant === 'capped' || hoverPanel || clickPanel
+  if (variant !== 'global' && !capped) return ''
+  const entries = pinnedWithin(TREE, [], 0)
+  if (entries.length === 0) return ''
+  const overflow = entries.length > TOP_VISIBLE
+  // 收起时行尾只报总数：本包既有的容器行收起后也是这么做的（分组报会话数、工作区分组报工作区数），
+  // 「7 条中的 5 条」在收起态没有意义——那时一条也没显示
+  const collapsedHint = entries.length + ' 条'
+  // 溢出时直接报「还有几条」，不写「7 条中的 5 条」——后者要读者自己做减法
+  const more = entries.length - TOP_VISIBLE
+  const expandedHint = clickPanel
+    ? (overflow ? entries.length + ' 条 · 点击展开' : entries.length + ' 条')
+    : hoverPanel
+    ? (overflow ? entries.length + ' 条 · 悬停展开' : entries.length + ' 条')
+    : capped
+      ? (overflow ? entries.length + ' 条 · 还有 ' + more + ' 条' : entries.length + ' 条')
+      : '不属于任何容器'
+  // 段头也是可收起的行：与容器行同一套词汇（箭头 + 名字 + 行尾提示），
+  // 因此「点它收起」这件事不需要额外教。收起态全局共用，④⑤ 一起变
+  const collapsed = STATE.pinCollapsed === true
+  const hint = collapsed ? collapsedHint : expandedHint
+  // `topName` 单独包一层：区间标签那几档要把箭头移到名字之后，靠 flex order 重排，
+  // 裸文本节点没法参与重排
+  const head = '<div class="topHead" data-pinhead role="button" tabindex="0"'
+    + ' aria-expanded="' + (!collapsed) + '">'
+    + '<span class="slot">' + chev(!collapsed) + '</span>'
+    + '<span class="topName">置顶</span>'
+    + '<span class="spacer"></span>'
+    + '<span class="hint">' + hint + '</span></div>'
+  // 分隔线在收起态也画：收起时整段只剩段头一行，若连分隔线也没有，
+  // 它与下面的工作区行就完全接在一起了——那正是「拉不开区分度」的一半原因
+  if (collapsed) {
+    return '<div class="topSection topCollapsed">' + head + '</div><div class="topDivider"></div>'
+  }
+  const rows = entries.map(e => {
+    const s = e.s
+    const absInd = s.state === 'idle' ? '' : '<span class="absInd">' + dotMarkup(s.state) + '</span>'
+    return '<div class="topRow row' + (s.current === true ? ' selected' : '')
+      + '" data-state="' + s.state + '" data-title="' + s.title + '">' + absInd
+      + '<span class="rowTitle">' + s.title + '</span>'
+      // 置顶区里的行不给相对时间：这些行已经钉在一段固定的区里，位置本身就说明来源
+      + pinButtonMarkup(s, variant)
+      + '</div>'
+  }).join('')
+  // ⑤ 的行放进滚动容器；⑥ 也放进同一个容器，但悬停时那个容器改成绝对定位浮出；
+  // ④ 直接排开，因此它的高度随置顶条数增长
+  const body = capped ? '<div class="topScroll">' + rows + '</div>' : rows
+  const cls = clickPanel ? ' topHover topClick' : hoverPanel ? ' topHover' : capped ? ' topCapped' : ''
+  return '<div class="topSection' + cls + '">' + head + body
+    + '</div><div class="topDivider"></div>'
+}
+
+/* ── 侧边栏那一列 ──────────────────────────────────────── */
+/**
+ * 区域 header：两行标题（「工作区」+ 当前聚焦对象）+ 搜索槽 + 三个 28px 入口
+ *
+ * 照 header.module.css 复刻，是重要的设计参考指标：它占了列表上方一整块高度，
+ * 任何常驻的置顶区域都要与它争这段垂直空间。picker 的弹出面板不在这里，它不影响布局
+ */
+function headerMarkup(){
+  return '<div class="hdr">'
+    + '<button type="button" class="hdrTitle">'
+    + '<span class="hdrHeading"><span class="hdrLabel">工作区</span>' + ICON_CARET + '</span>'
+    + '<span class="hdrFocus">全部工作区</span>'
+    + '</button>'
+    + '<span class="hdrSearch"><button type="button" class="hdrIcon">' + ICON_SEARCH + '</button></span>'
+    + '<div class="hdrActions">'
+    + '<button type="button" class="hdrIcon">' + ICON_SLIDERS + '</button>'
+    + '<button type="button" class="hdrIcon">' + ICON_VW + '</button>'
+    + '<button type="button" class="hdrIcon">' + ICON_ADD + '</button>'
+    + '</div>'
+    + '</div>'
+}
+
+/** 平铺：全部可见会话排成一条，没有任何容器 */
+function flatList(variant){
+  const all = []
+  walk(TREE, (n) => { for (const s of n.sessions || []) all.push(s) })
+  const ordered = orderRun(all, variant)
+  const hasPinned = ordered.length > 0 && ordered[0].pinned && variant !== 'none'
+  const head = (hasPinned && STATE.pinStyle === 'head')
+    ? '<div class="pinHead">' + PIN_FILL + '置顶</div>' : ''
+  return '<div class="flatList">' + head
+    + ordered.map(s => sessionRow(s, variant)).join('') + '</div>'
+}
+
+function buildSide(v){
+  const side = document.createElement('div')
+  side.className = 'side'
+  side.dataset.variant = v.id
+  side.innerHTML =
+    '<div class="cap"><span class="name">' + v.name + '</span>'
+    + '<span class="desc">' + v.desc + '</span>'
+    + '<span class="note">' + v.note + '</span></div>'
+    + '<div class="neg" data-neg="top" data-h="0"><span></span></div>'
+    + '<div class="pane">' + headerMarkup()
+    + '<div class="topSlot">' + fixedSection(v.id) + '</div>'
+    + '<div class="list">' + scrollableTree(v.id) + '</div>'
+    + '</div>'
+    + '<div class="neg" data-neg="bottom" data-h="0"><span></span></div>'
+  return side
+}
+
+/** 根节点：两个工作区分组依次排下，没有第三层容器 */
+function rootNode(variant){
+  return TREE.children.map(c => vgNode(c, variant)).join('')
+}
+
+/**
+ * 常驻在滚动区之外的那一段（只有⑤用）
+ *
+ * ⑤ 的置顶区要像 header 一样**总是显示**才有实用意义：它若留在 `.list` 里，
+ * 用户往下滚一点它就跟着滑走，那与④的差别就只剩「滚动条位置」了
+ *
+ * 平铺展示方式下整段不渲染，与④同一取舍：平铺列表本身已经把置顶行排在前面，
+ * 再叠一段固定的会让同一条会话出现两次
+ */
+function fixedSection(variant){
+  const sticky = variant === 'capped' || variant === 'hover' || variant === 'click'
+  return sticky && !STATE.flat ? topSection(variant) : ''
+}
+
+/** 随列表滚动的部分。④ 的置顶段在这一层里，因此会跟着滚走；⑤ 的在上一层 */
+function scrollableTree(variant){
+  if (STATE.flat) return flatList(variant)
+  const sticky = variant === 'capped' || variant === 'hover' || variant === 'click'
+  return (sticky ? '' : topSection(variant)) + rootNode(variant)
+}
+
+/** 点击档的展开态写成类，与悬停档共用同一套浮出样式 */
+function applyClickOpen(){
+  for (const side of stageEl.children) {
+    const sec = side.querySelector('.topClick')
+    if (sec !== null) sec.classList.toggle('topClickOpen', STATE.clickOpen === true)
+  }
+}
+
+/** 把「置顶区区分」这一档写成每列上的一个类，样式表按类切换 */
+function applySepStyle(){
+  for (const side of stageEl.children) {
+    for (const st of ['rule','loudHead','loudRule','loudBand','loudGap']) {
+      side.classList.toggle('panelstyle-' + st, STATE.sepStyle === st)
+    }
+  }
+}
+
+function paintAll(){
+  // 先重绘再贴状态类：`innerHTML` 会把先前贴上的类一起丢掉，
+  // 顺序反了就等于「给一批即将被替换掉的元素加类」——实测表现为点了没反应
+  for (const side of stageEl.children) {
+    const v = VARIANTS.find(x => x.id === side.dataset.variant)
+    // 常驻段与滚动段分开重绘：前者在 .pane 里（不随列表滚走），后者在 .list 里
+    side.querySelector('.topSlot').innerHTML = fixedSection(v.id)
+    side.querySelector('.list').innerHTML = scrollableTree(v.id)
+  }
+  applySepStyle()
+  applyClickOpen()
+}
+
+function walk(node, fn){
+  fn(node)
+  for (const c of node.children || []) walk(c, fn)
+  for (const c of node.nest || []) walk(c, fn)
+  for (const g of node.groups || []) walk(g, fn)
+}
+
+/* ── 装配 ──────────────────────────────────────────────── */
+const stageEl = document.getElementById('stage')
+
+function renderAll(){
+  stageEl.innerHTML = ''
+  for (const v of VARIANTS) stageEl.append(buildSide(v))
+  applyNegativeSpace()
+}
+
+/** 负空间：两块占位随滑块伸缩，显示当前高度，0 时整块不渲染 */
+function applyNegativeSpace(){
+  const top = Number(document.getElementById('negTop').value)
+  const bottom = Number(document.getElementById('negBottom').value)
+  for (const side of stageEl.children) {
+    for (const [which, h] of [['top', top], ['bottom', bottom]]) {
+      const el = side.querySelector('[data-neg="' + which + '"]')
+      el.style.height = h + 'px'
+      el.dataset.h = String(h)
+      el.querySelector('span').textContent = which === 'top' ? '上方其他槽位 ' + h + 'px'
+        : '下方其他槽位 ' + h + 'px'
+    }
+  }
+}
+
+document.getElementById('sepStyle').addEventListener('change', (e) => {
+  STATE.sepStyle = e.target.value
+  paintAll()
+})
+document.getElementById('flatMode').addEventListener('change', (e) => {
+  STATE.flat = e.target.checked
+  paintAll()
+})
+document.getElementById('pinStyle').addEventListener('change', (e) => {
+  STATE.pinStyle = e.target.value
+  paintAll()
+})
+/**
+ * 点行尾的图钉：置顶 / 取消置顶
+ *
+ * 只改数据再整体重绘，九列因此一起反映同一个动作——这与「九列元素完全相同」的前提一致
+ * 按钮的点击要拦住冒泡：行本身也有点击行为（真实侧边栏里行是可点的），
+ * 不然点一次图钉会连带触发行的动作
+ */
+stageEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-pin]')
+  if (btn === null) return
+  e.stopPropagation()
+  e.preventDefault()
+  togglePin(btn.dataset.pin)
+})
+
+/** 翻转一条会话的置顶态。数据在九列之间是共享的，因此改一处即改九列 */
+function togglePin(sessionId){
+  walk(TREE, (n) => {
+    for (const s of n.sessions || []) {
+      if (s.id === sessionId) s.pinned = !(s.pinned === true)
+    }
+  })
+  paintAll()
+}
+
+/**
+ * 点容器行收起 / 展开
+ *
+ * 收起集合是**全局**的，因此点哪一列都同步九列——这既让行点得动，
+ * 又不破坏「九列元素完全相同」这个比对前提（逐列各自收开就不是同一屏了）
+ * 事件委托到舞台：行是每次重绘时重新生成的 innerHTML，逐行挂监听会在重绘后全部丢掉
+ */
+stageEl.addEventListener('click', (e) => {
+  // 点击档的预览区：翻转展开态。这一档禁掉了悬停触发（见 CSS），
+  // 因此展开只有这一条路径；点在行内的图钉上时不翻（那是置顶 / 取消置顶）
+  const preview = e.target.closest('.topClick > .topScroll')
+  if (preview !== null && e.target.closest('[data-pin]') === null) {
+    STATE.clickOpen = !STATE.clickOpen
+    paintAll()
+    return
+  }
+  // 置顶段的段头：只翻它自己的开合，不动容器折叠集合
+  const pinHead = e.target.closest('[data-pinhead]')
+  if (pinHead !== null) {
+    STATE.pinCollapsed = !STATE.pinCollapsed
+    paintAll()
+    return
+  }
+  const head = e.target.closest('[data-toggle]')
+  if (head === null) return
+  const id = head.dataset.toggle
+  if (COLLAPSED.has(id)) COLLAPSED.delete(id)
+  else COLLAPSED.add(id)
+  paintAll()
+  syncSceneSelect()
+})
+
+// 容器行是 role=button，键盘也要能开合（与真实侧边栏的行一致）
+stageEl.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return
+  const target = e.target.closest('[data-pinhead],[data-toggle]')
+  if (target === null) return
+  e.preventDefault()
+  target.click()
+})
+
+/** 手动开合之后，顶部那个下拉回到「自定义」——它已经不表示任何一档预置场景了 */
+function syncSceneSelect(){
+  const sel = document.getElementById('collapseScene')
+  const match = Object.entries(SCENES).find(([, ids]) =>
+    ids.length === COLLAPSED.size && ids.every(id => COLLAPSED.has(id)))
+  sel.value = match === undefined ? 'custom' : match[0]
+}
+
+document.getElementById('collapseScene').addEventListener('change', (e) => {
+  STATE.scene = e.target.value
+  // 「自定义」不是预置场景：它只是手动开合后下拉的落位，选中它不改动当前集合
+  if (STATE.scene === 'custom') return
+  COLLAPSED.clear()
+  for (const id of SCENES[STATE.scene]) COLLAPSED.add(id)
+  paintAll()
+})
+for (const id of ['negTop', 'negBottom']) {
+  const range = document.getElementById(id)
+  const out = document.getElementById(id + 'Val')
+  range.addEventListener('input', () => {
+    out.textContent = range.value + 'px'
+    applyNegativeSpace()
+  })
+}
+document.getElementById('docToggle').addEventListener('click', () => {
+  const doc = document.getElementById('doc')
+  doc.hidden = !doc.hidden
+  document.getElementById('docToggle').textContent = doc.hidden ? '说明与方案对比' : '收起说明'
+})
+
+renderAll()
+applySepStyle()
+applyClickOpen()
+
+/*
+ * 实测：各行的标题左缘与指示器的关系
+ * 结果写进 #measure，用 chromium --headless --dump-dom 取出来核对文档里的数字与重合判定
+ *
+ * 按 data-title 精确定位，不用结构选择器：`querySelector('.wsBody > .sessions > .row')`
+ * 会命中文档序里最深的那个容器（w3，depth 4），量出来的是它的缩进而不是目标那一段的
+ */
+function measure(){
+  const out = []
+  // 本次测量会把 COLLAPSED 反复清空重设，先留一份用户当前的集合，收尾照它还原
+  const userCollapsed = new Set(COLLAPSED)
+  const side = (id) => stageEl.querySelector('[data-variant="' + id + '"]')
+  // 取不到时返回 null 而不是抛错：同一条会话在各方案里的位置本就不同，
+  // 某几列取不到是正常情形（它可能被提到了区域顶、或落在收起的容器里）
+  const titleX = (root, title) => {
+    const el = root.querySelector('[data-title="' + title + '"] .rowTitle')
+    if (el === null) return null
+    return Math.round(el.getBoundingClientRect().left - root.getBoundingClientRect().left)
+  }
+  const indX = (root, title) => {
+    const el = root.querySelector('[data-title="' + title + '"] .absInd')
+    if (el === null) return null
+    const r = el.getBoundingClientRect()
+    return { left: Math.round(r.left - root.getBoundingClientRect().left), right: Math.round(r.right - root.getBoundingClientRect().left) }
+  }
+  // 缩进基准要在**展开态**量：固定场景里 g1 与 w2 是收起的，真实行不存在，
+  // 量到的会是⑤的幽灵行或③的提升行，两者都不是基准
+  // 因此这里临时清空收起集合、重绘、量完再恢复，显示的场景不受影响
+  const saved = new Set(COLLAPSED)
+  COLLAPSED.clear()
+  paintAll()
+  // 下面逐档量完统一恢复，恢复用 STATE.scene 而不是硬编码那一份
+  for (const v of VARIANTS) {
+    const root = side(v.id).querySelector('.list')
+    // ⑤ 的置顶行被移到了常驻段（.topSlot）而不是滚动区，因此在 .list 里取不到——
+    // 这不是缺陷，用「常驻」标注，免得把它读成「这一列丢了那几行」
+    const at = (title) => {
+      const x = titleX(root, title)
+      if (x !== null) return String(x)
+      return side(v.id).querySelector('.topSlot [data-title="' + title + '"]') !== null ? '常驻' : 'n/a'
+    }
+    out.push(v.id.padEnd(10)
+      + ' loose=' + at('主题切换闪烁')
+      + ' group=' + at('侧栏折叠动画')
+      + ' deep=' + at('组件库文档站'))
+  }
+  // ⑤ 的幽灵行必须落在它替换掉的那一行原本的位置上，逐档比对
+  const ghostOf = (label) => {
+    COLLAPSED.clear(); COLLAPSED.add(label); paintAll()
+    const root = side('through').querySelector('.list')
+    return { ghost: titleX(root, '侧栏折叠动画'), wide: null }
+  }
+  const g1Ghost = ghostOf('g1').ghost
+  COLLAPSED.clear(); paintAll()
+  const g1Real = titleX(side('through').querySelector('.list'), '侧栏折叠动画')
+  COLLAPSED.clear(); COLLAPSED.add('w2'); paintAll()
+  const w2Ghost = titleX(side('through').querySelector('.list'), '组件库文档站')
+  COLLAPSED.clear(); paintAll()
+  const w2Real = titleX(side('through').querySelector('.list'), '组件库文档站')
+  COLLAPSED.clear(); COLLAPSED.add('w1'); paintAll()
+  const w1Ghost = titleX(side('through').querySelector('.list'), '主题切换闪烁')
+  COLLAPSED.clear(); paintAll()
+  const w1Real = titleX(side('through').querySelector('.list'), '主题切换闪烁')
+  out.push('⑤ g1 ghost=' + g1Ghost + ' real=' + g1Real + (g1Ghost === g1Real ? '  OK' : '  MISMATCH'))
+  out.push('⑤ w2 ghost=' + w2Ghost + ' real=' + w2Real + (w2Ghost === w2Real ? '  OK' : '  MISMATCH'))
+  out.push('⑤ w1 ghost=' + w1Ghost + ' real=' + w1Real + (w1Ghost === w1Real ? '  OK' : '  MISMATCH'))
+  COLLAPSED.clear()
+  for (const id of saved) COLLAPSED.add(id)
+  paintAll()
+  // ⑤ 幽灵行的标题在 280px 列里是否被截断——截断之后认不出置顶的是哪一条
+  {
+    const root = side('through').querySelector('.list')
+    for (const row of root.querySelectorAll('.ghostRow')) {
+      const t = row.querySelector('.rowTitle')
+      out.push('⑤ 幽灵行「' + t.textContent + '」titleSlot=' + Math.round(t.getBoundingClientRect().width)
+        + ' need=' + Math.round(t.scrollWidth)
+        + (t.scrollWidth > t.clientWidth + 1 ? '  被截断' : '  完整'))
+    }
+  }
+  // ④：指示器盒的右缘必须落在标题左缘之前，否则就是压住标题
+  {
+    const g = side('global').querySelector('.list')
+    const t = titleX(g, '主题切换闪烁')
+    const i = indX(g, '主题切换闪烁')
+    out.push('④ indicator=' + (i === null ? 'n/a' : '[l' + i.left + ',r' + i.right + ']')
+      + ' title=' + t
+      + (i === null || t === null ? '  n/a' : (i.right <= t ? '  OK' : '  OVERLAP')))
+  }
+  // 侧栏可用高度：负空间拉满时列表还剩多少——这一档量的是「挤到什么程度就不可用了」
+  const top = Number(document.getElementById('negTop').value)
+  const bottom = Number(document.getElementById('negBottom').value)
+  document.getElementById('negTop').value = '240'
+  document.getElementById('negBottom').value = '240'
+  applyNegativeSpace()
+  const pane = side('run').querySelector('.pane')
+  const list = side('run').querySelector('.list')
+  const hdr = side('run').querySelector('.hdr')
+  out.push('负空间 240+240 时 pane=' + Math.round(pane.getBoundingClientRect().height)
+    + ' header=' + Math.round(hdr.getBoundingClientRect().height)
+    + ' list=' + Math.round(list.getBoundingClientRect().height))
+  document.getElementById('negTop').value = String(top)
+  document.getElementById('negBottom').value = String(bottom)
+  applyNegativeSpace()
+  // 还原用户**手动开合**出来的集合：measure 期间反复清空过 COLLAPSED，
+  // 按预置场景还原会把用户点出来的状态抹掉
+  COLLAPSED.clear()
+  for (const id of userCollapsed) COLLAPSED.add(id)
+  paintAll()
+  // 列头：高度是各列的对齐基准，且信息必须显示全（描述不许被截断）
+  // 这两条在同一条断言里：只保高度就会像早先那样把描述压成一行，只保信息就会让各列起点错开
+  {
+    const bad = []
+    const heights = []
+    for (const col of stageEl.children) {
+      const cap = col.querySelector('.cap')
+      heights.push(Math.round(cap.getBoundingClientRect().height))
+      for (const sel of ['.name', '.desc', '.note']) {
+        const el = cap.querySelector(sel)
+        if (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) {
+          bad.push(col.dataset.variant + sel)
+        }
+      }
+      if (cap.scrollHeight > cap.clientHeight + 1) bad.push(col.dataset.variant + ':cap')
+    }
+    out.push('列头高 = ' + heights.join(',') + (new Set(heights).size === 1 ? '  一致' : '  不一致'))
+    out.push('列头被截断的格 = ' + (bad.length === 0 ? '0  OK' : bad.join(' ')))
+  }
+  // ⑤ 的置顶区必须像 header 一样常驻：在滚动区之外，且列表滚动时位置不动
+  {
+    const col = side('capped')
+    const slot = col.querySelector('.topSlot')
+    const rows = slot.querySelectorAll('.topRow')
+    const inList = slot.closest('.list') !== null
+    const before = Math.round(slot.getBoundingClientRect().top)
+    col.querySelector('.list').scrollTop = 999
+    const after = Math.round(slot.getBoundingClientRect().top)
+    col.querySelector('.list').scrollTop = 0
+    out.push('⑤ 常驻段：置顶行数=' + rows.length + ' 在滚动区之外=' + (!inList ? '是' : '否')
+      + ' 列表滚动后位置=' + before + '→' + after + (before === after ? '  常驻 OK' : '  跟着滚走 MISMATCH'))
+    // 与④对照：④ 的置顶段在滚动区里，会跟着滚走
+    const c4 = side('global')
+    const t4 = c4.querySelector('.topSection')
+    const b4 = Math.round(t4.getBoundingClientRect().top)
+    c4.querySelector('.list').scrollTop = 999
+    const a4 = Math.round(t4.getBoundingClientRect().top)
+    c4.querySelector('.list').scrollTop = 0
+    out.push('④ 对照：置顶段随列表滚动 ' + b4 + '→' + a4 + (b4 !== a4 ? '  已滚走（预期）' : '  未滚动'))
+  }
+  // ④⑤ 的置顶段：可收起（像分组一样），且没有置顶项时整段不显示
+  {
+    const headOf = () => [...stageEl.children].filter(c => c.querySelector('.topHead') !== null).length
+    const rowsOf = () => [...stageEl.children].map(c => c.querySelectorAll('.topRow').length)
+    out.push('置顶段：未收起时 ④⑤ 行数=' + rowsOf()[3] + ',' + rowsOf()[4]
+      + (rowsOf()[3] === 7 && rowsOf()[4] === 7 ? '  OK' : '  MISMATCH'))
+    side('global').querySelector('[data-pinhead]').click()
+    const sec4 = side('global').querySelector('.topSection')
+    out.push('置顶段收起后 ④⑤ 行数=' + rowsOf()[3] + ',' + rowsOf()[4]
+      + ' 段高=' + Math.round(sec4.getBoundingClientRect().height) + '（只剩段头）'
+      + (rowsOf()[3] === 0 && rowsOf()[4] === 0 ? '  OK' : '  MISMATCH'))
+    side('global').querySelector('[data-pinhead]').click()
+
+    // 空置顶：全部取消后 ④⑤ 都不渲染，⑤ 的常驻段高度归零
+    const saved = []
+    walk(TREE, (n) => { for (const x of n.sessions || []) if (x.pinned === true) saved.push(x) })
+    for (const x of saved) x.pinned = false
+    paintAll()
+    const sec5 = side('capped').querySelector('.topSection')
+    const slot5 = side('capped').querySelector('.topSlot')
+    out.push('无置顶时：段头列数=' + headOf()
+      + ' ④段=' + (side('global').querySelector('.topSection') === null ? '不渲染' : '仍在')
+      + ' ⑤段=' + (sec5 === null ? '不渲染' : '仍在')
+      + ' ⑤常驻段高=' + Math.round(slot5.getBoundingClientRect().height)
+      + (headOf() === 0 && sec5 === null ? '  OK' : '  MISMATCH'))
+    for (const x of saved) x.pinned = true
+    paintAll()
+  }
+  // ⑥ 置顶面板：静止占 5 条高度、悬停浮出且不推挤下方
+  {
+    const col = side('hover')
+    const sec = col.querySelector('.topSection')
+    const sc = sec.querySelector('.topScroll')
+    const head = sec.querySelector('.topHead')
+    const list = col.querySelector('.list')
+    const listTop = () => Math.round(list.getBoundingClientRect().top)
+    const before = listTop()
+    // 逐行数「完整可见」的条数，不拿 clientHeight / 行距去估：
+    // 行高 32、行距 0，但面板上下各有 4px padding，除出来的数会偏一
+    const sr = sc.getBoundingClientRect()
+    const full = [...sc.querySelectorAll('.topRow')].filter(r => {
+      const b = r.getBoundingClientRect()
+      return b.top >= sr.top - 0.5 && b.bottom <= sr.bottom + 0.5
+    }).length
+    out.push('⑥ 静止：面板高=' + Math.round(sr.height) + ' 完整可见=' + full + ' 条'
+      + (full === TOP_VISIBLE ? '  OK' : '  MISMATCH（应为 ' + TOP_VISIBLE + '）')
+      + ' 列表顶=' + before)
+    sec.classList.add('topHoverOpen')
+    // 展开带过渡，终值要等它跑完；这里用一次强制重排 + 读样式，避免写异步断言
+    void sc.offsetHeight
+    const gap = sc.getBoundingClientRect().top - head.getBoundingClientRect().bottom
+    out.push('⑥ 展开：紧贴段头下方 间距=' + Math.round(gap) + 'px'
+      + (Math.abs(gap) < 2 ? '  OK' : '  MISMATCH')
+      + ' 列表顶=' + listTop() + (listTop() === before ? '  未被推挤 OK' : '  MISMATCH'))
+    // 展开态必须**逐格**不动：纵向、横向、标题位置都不能因为展开而位移，
+    // 否则指针下的那一行会在展开瞬间跳一下，手感就断了
+    {
+      const G = el => { const b = el.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.width)] }
+      const rows = [...sc.querySelectorAll('.topRow')].slice(0, TOP_VISIBLE)
+      const shrank = rows.map(r => [G(r).join(','), (r.querySelector('.rowTitle') ? G(r.querySelector('.rowTitle')).join(',') : '')].join('|'))
+      sec.classList.remove('topHoverOpen')
+      void sc.offsetHeight
+      const restored = rows.map(r => [G(r).join(','), (r.querySelector('.rowTitle') ? G(r.querySelector('.rowTitle')).join(',') : '')].join('|'))
+      const moved = restored.filter((v, i) => v !== shrank[i]).length
+      out.push('⑥ 展开前后前 ' + TOP_VISIBLE + ' 行逐格比对：位移行数=' + moved
+        + (moved === 0 ? '  OK' : '  MISMATCH'))
+    }
+    // 静止态不可滚：指针一放上去就展开，滚动在这里没有承载对象
+    out.push('⑥ 静止 overflowY=' + getComputedStyle(sc).overflowY
+      + (getComputedStyle(sc).overflowY === 'hidden' ? '  OK（不可滚）' : '  MISMATCH'))
+    // 触发区是预览行本身，不含段头：段头只负责收起 / 展开这一整段
+    out.push('⑥ 段头不参与悬停展开=' + (sec.querySelector('.topHead').closest('.topScroll') === null ? '是 OK' : '否 MISMATCH'))
+    // 直接停在展开态，供下面「收起」那一组断言用
+    sec.classList.add('topHoverOpen')
+  }
+  // 与实现逐项比对的几何：这几项在本对照稿里曾经与实现不一致（图钉尺寸、行尾顺序、
+  // 未置顶图钉占位、段头箭头语序、段高与浮出落点写死 26px），改完之后在这里留一条常驻核对
+  {
+    const b = (el) => { const r = el.getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height) }
+    const col = side('hover')
+    col.classList.add('panelstyle-loudGap')
+    const sec = col.querySelector('.topSection')
+    const head = sec.querySelector('.topHead')
+    const slot = head.querySelector('.slot')
+    const hint = head.querySelector('.hint')
+    out.push('段落几何：段头=' + b(head) + ' 箭头槽=' + b(slot) + ' 箭头=' + b(slot.querySelector('svg'))
+      + ' 提示字号=' + getComputedStyle(hint).fontSize
+      + ' 顺序=' + [...head.children].map((c) => c.className.split(' ')[0]).join('>'))
+    // 段高必须跟着段头高走：写死 26px 那一档在区域级标题下会差 4px
+    const secH = Math.round(sec.getBoundingClientRect().height)
+    out.push('段落几何：段高=' + secH + '（段头 30 + 5 条 168 = 198）'
+      + (secH === 198 ? '  OK' : '  MISMATCH'))
+    const tr = sec.querySelector('.topRow')
+    const on = sec.querySelector('.rowPinOn')
+    const off = col.querySelector('.list .rowPinOff')
+    out.push('图钉：已置顶=' + (on === null ? 'n/a' : b(on)) + ' 未置顶=' + (off === null ? 'n/a' : b(off))
+      + ' 未置顶透明度=' + (off === null ? 'n/a' : getComputedStyle(off).opacity)
+      + ((off !== null && Math.round(off.getBoundingClientRect().width) === 0) ? '  未置顶不占位 OK' : '  MISMATCH'))
+    out.push('置顶区行：子元素=' + [...tr.children].map((c) => c.className.split(' ')[0]).join('>')
+      + (tr.querySelector('.rowTime') === null ? '  无相对时间 OK' : '  仍带相对时间 MISMATCH'))
+    const full = col.querySelector('.list .row')
+    out.push('列表行尾顺序=' + [...full.children].slice(-2).map((c) => c.className.split(' ')[0]).join('>')
+      + ([...full.children].slice(-2).map((c) => c.className.split(' ')[0]).join('>') === 'rowActionSlot>rowPin' ? '  OK' : '  MISMATCH'))
+    col.classList.remove('panelstyle-loudGap')
+    applySepStyle()
+  }
+  document.getElementById('measure').textContent = out.join('\n')
+}
+measure()
+</script>
+</body>
+</html>

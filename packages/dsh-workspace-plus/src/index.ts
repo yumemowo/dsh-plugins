@@ -10,6 +10,8 @@
  * 浏览器半边另有出口（`exports["./client"]`），由 Web 客户端加载，注册进侧边栏的 `sidebar.workspaces` 区域
  */
 import type { Context } from '@deepseek-ai/cordis'
+import { Config } from './config.ts'
+import type { WorkspacePlusConfig } from './config.ts'
 import { createWorkspaceGroupsService } from './service.ts'
 import type { WorkspaceGroupsService } from './service.ts'
 
@@ -18,6 +20,10 @@ export const name = 'workspace-plus'
 
 /** 分组存储依赖宿主已挂载的存储域设施 */
 export const inject = ['storageDomain']
+
+/** 行配置 schema，对外导出以供加载器校验 `config` */
+export { Config }
+export type { WorkspacePlusConfig }
 
 export type { EntryAddress, RootEntryAddress } from './rootEntry.ts'
 export type {
@@ -31,10 +37,12 @@ export type { WorkspaceGroupsService } from './service.ts'
 
 /**
  * 插件入口
+ * @param ctx - 插件自身的 context，作用域限于本行
+ * @param config - 已按 {@link Config} 校验过的行配置
  */
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config: WorkspacePlusConfig = Config({})): void {
   // 域打开是异步的，而 apply 是同步的，先提供一个转发到打开结果的外观对象，这样服务在 Cordis 眼里立即可用，调用方无需感知打开时序
-  const service = createWorkspaceGroupsService(ctx)
+  const service = createWorkspaceGroupsService(ctx, config)
 
   const facade: WorkspaceGroupsService = {
     list: async () => (await service).list(),

@@ -37,9 +37,15 @@ export function mainSessionId(sessions: SessionListState): string | undefined {
 
 /**
  * 判定一个会话是否应该出现在侧边栏
+ *
+ * 导出给置顶区的投影复用
+ * 官方 `pinnedSessionIds` 是注册表全局集合，里面可能有已归档或子代理来源的会话，那些在列表里本就不显示，置顶区也不该显示
+ * 两处共用这一条判据，规则改动时不会只改到一边
+ * @param summary - 会话摘要
+ * @param current - 当前打开的会话 id
  * @param archived - 注册表全局的归档集合
  */
-function isSessionVisible(
+export function isSessionVisible(
   summary: SessionSummary,
   current: string | undefined,
   archived: ReadonlySet<string>,
@@ -115,7 +121,7 @@ function rowFacts(
 }
 
 /** 把一个会话摘要投影成渲染行，输入未变时复用上一次的对象 */
-function toRow(
+export function toSessionRow(
   sessions: SessionListState,
   statuses: SessionStatusSnapshot,
   summary: SessionSummary,
@@ -185,7 +191,7 @@ export function groupSessionsByWorkspace(
       .filter((s): s is SessionSummary =>
         s !== undefined && isSessionVisible(s, current, archived)
       )
-      .map(s => toRow(sessions, statuses, s))
+      .map(s => toSessionRow(sessions, statuses, s))
     result.set(String(workspace.workspaceId), rows)
   }
 
@@ -200,6 +206,34 @@ export function groupSessionsByWorkspace(
 export function compareSessionRows(a: SessionRow, b: SessionRow): number {
   if (a.blank !== b.blank) return a.blank ? -1 : 1
   return b.updatedAt - a.updatedAt
+}
+
+/**
+ * 带就地置顶的显示顺序：置顶会话排最前，其后仍是「空白会话最前、其余按最近更新倒序」
+ *
+ * 置顶顺序由调用方按官方 `pinnedSessionIds` 交进来（最近置顶在最前）
+ * 比较器自己不读任何全局状态，三种段落各有各的成员集合，读全局只会让「这一段里谁在前」取决于别处
+ *
+ * 三种段落都要用它：分组内的行、工作区未归组段的行、平铺列表的行
+ * 只改其中一处不会报错，只表现为「有的地方置顶了、有的没有」
+ * @param pins - 会话 id → 置顶名次，名次小的在前；未置顶的会话不在其中
+ * @param a - 参与比较的一行
+ * @param b - 参与比较的另一行
+ */
+export function compareSessionRowsWithPins(
+  pins: ReadonlyMap<string, number>,
+  a: SessionRow,
+  b: SessionRow,
+): number {
+  const rankA = pins.get(a.id)
+  const rankB = pins.get(b.id)
+  // 置顶整段排在未置顶之前，与「空白最前」同属分区，先分区再在区内比
+  if (rankA !== undefined || rankB !== undefined) {
+    if (rankA === undefined) return 1
+    if (rankB === undefined) return -1
+    if (rankA !== rankB) return rankA - rankB
+  }
+  return compareSessionRows(a, b)
 }
 
 /**
@@ -219,7 +253,7 @@ export function flatSessionRows(
     const key = String(id)
     const summary = byId[key]
     if (summary === undefined || !isSessionVisible(summary, current, archived)) continue
-    rows.push(toRow(sessions, statuses, summary))
+    rows.push(toSessionRow(sessions, statuses, summary))
   }
   return rows
 }
@@ -274,7 +308,7 @@ export function straySessions(
     const summary = byId[key]
     if (summary === undefined || accounted.has(key)) continue
     if (!isSessionVisible(summary, current, archived)) continue
-    rows.push(toRow(sessions, statuses, summary))
+    rows.push(toSessionRow(sessions, statuses, summary))
   }
   return rows
 }

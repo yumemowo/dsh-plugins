@@ -1,4 +1,8 @@
 import { ALL_ENTRIES } from '../src/rootEntry.ts'
+import {
+  DEFAULT_PINNED_LIMIT,
+  DEFAULT_PINNED_VISIBLE_COUNT,
+} from '../src/client/remote.ts'
 import type {
   Group,
   PickerSnapshot,
@@ -23,6 +27,10 @@ export interface SnapshotInit {
   picker?: PickerSnapshot
   /** 是否按子工作区渲染，未给时是开启 */
   nested?: boolean
+  /** 置顶区静止时显示几条，未给时取本包默认值 */
+  pinnedVisibleCount?: number
+  /** 置顶数量上限，未给时取本包默认值 */
+  pinnedLimit?: number
 }
 
 /** 造一份分组快照，未给的部分按空 */
@@ -33,6 +41,8 @@ export function snapshot(init: SnapshotInit = {}): WorkspaceGroupsSnapshot {
     workspaceGroups: init.workspaceGroups ?? [],
     picker: init.picker ?? { focused: ALL_ENTRIES, recent: [], pinned: [] },
     nested: init.nested ?? true,
+    pinnedVisibleCount: init.pinnedVisibleCount ?? DEFAULT_PINNED_VISIBLE_COUNT,
+    pinnedLimit: init.pinnedLimit ?? DEFAULT_PINNED_LIMIT,
   }
 }
 

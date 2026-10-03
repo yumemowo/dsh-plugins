@@ -20,10 +20,13 @@ import {
   IconCheckOutlineRegular,
   IconFlatListOutlineRegular,
   IconFolderCloseRegular,
+  IconPinFillRegular,
+  IconPinOutlineRegular,
   IconWorkspaceTreeOutlineRegular,
   Switch,
 } from '../runtime.ts'
 import type { IndicatorStyle, ViewMode } from '../data/types.ts'
+import type { PinOverflow, PinScope } from '../store/viewMode.ts'
 import { useLocale } from '../useLocale.ts'
 import { useLocalViewOptions } from '../useLocalViewOptions.ts'
 import { useFloatingPanel } from './components/useFloatingPanel.ts'
@@ -55,6 +58,28 @@ const INDICATOR_STYLES: readonly {
   { style: 'bar', icon: <IconBarIndicator16 /> },
 ]
 
+/**
+ * 置顶溢出给法的两个取值
+ *
+ * 字形取官方的图钉两态：浮出对应实心（一次给全），区内滚动对应描边
+ */
+const PIN_OVERFLOWS: readonly {
+  overflow: PinOverflow
+  icon: ReactElement
+}[] = [
+  { overflow: 'expand', icon: <IconPinFillRegular /> },
+  { overflow: 'scroll', icon: <IconPinOutlineRegular /> },
+]
+
+/** 置顶显示方式的两个取值 */
+const PIN_SCOPES: readonly {
+  scope: PinScope
+  icon: ReactElement
+}[] = [
+  { scope: 'section', icon: <IconPinOutlineRegular /> },
+  { scope: 'inline', icon: <IconPinFillRegular /> },
+]
+
 export interface ViewOptionsMenuProps {
   /** 菜单是否打开，开合状态由持有触发器的 header 持有 */
   open: boolean
@@ -76,9 +101,20 @@ export function ViewOptionsMenu({
   onClose,
 }: ViewOptionsMenuProps): ReactElement | null {
   const { labels } = useLocale()
-  const { mode, indicator, setMode, setIndicator } = useLocalViewOptions()
+  const {
+    mode,
+    indicator,
+    setMode,
+    setIndicator,
+    pinOverflow,
+    setPinOverflow,
+    pinScope,
+    setPinScope,
+  } = useLocalViewOptions()
   const viewMode = labels.viewMode
   const indicatorLabels = labels.indicatorStyle
+  const overflowLabels = labels.pinOverflow
+  const scopeLabels = labels.pinScope
   const { panelRef, rect, cancelClose, armClose } = useFloatingPanel({
     open,
     triggerRef,
@@ -95,6 +131,12 @@ export function ViewOptionsMenu({
 
   const styleLabel = (candidate: IndicatorStyle): string =>
     candidate === 'bar' ? indicatorLabels.bar : indicatorLabels.icon
+
+  const overflowLabel = (candidate: PinOverflow): string =>
+    candidate === 'scroll' ? overflowLabels.scroll : overflowLabels.expand
+
+  const scopeText = (candidate: PinScope): string =>
+    candidate === 'inline' ? scopeLabels.inline : scopeLabels.section
 
   /** 分组标题 + 该组的互斥可选项，当前值由 `aria-pressed` 与行尾那个勾共同表达 */
   const optionGroup = <T extends string>(
@@ -152,6 +194,26 @@ export function ViewOptionsMenu({
         })),
         indicator,
         setIndicator,
+      )}
+      <div className={styles.viewSeparator} role="separator" />
+      {/* 置顶溢出：与上面两组同形 */}
+      {optionGroup(
+        overflowLabels.label,
+        PIN_OVERFLOWS.map(({ overflow: value, icon }) => ({
+          value,
+          icon,
+          text: overflowLabel(value),
+        })),
+        pinOverflow,
+        setPinOverflow,
+      )}
+      <div className={styles.viewSeparator} role="separator" />
+      {/* 置顶显示：仅置顶区，或同时在各分组内置顶 */}
+      {optionGroup(
+        scopeLabels.label,
+        PIN_SCOPES.map(({ scope: value, icon }) => ({ value, icon, text: scopeText(value) })),
+        pinScope,
+        setPinScope,
       )}
       <div className={styles.viewSeparator} role="separator" />
       {/* 子工作区嵌套：行不可点——`Switch` 自己已是按钮，嵌进可点的行会叠两层控件 */}

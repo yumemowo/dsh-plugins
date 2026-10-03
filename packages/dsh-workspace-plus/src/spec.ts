@@ -116,6 +116,9 @@ export const workspaceGroupsSpec = defineDomain({
  * 对外快照，按 workspaceId 索引的会话分组与嵌套归属，加根节点的分组列表、菜单状态与嵌套开关
  *
  * `nested` 既回开关本身，也回按该开关归一后的归属，关着时每一条归属都已被清空，渲染侧不必再自行判断
+ *
+ * 末尾两格来自插件的行配置而不是存储域：官方 pin 集合没有上限参数，置顶区显示几条与置顶数量上限
+ * 只能由本包在界面侧实施，因此与 `nested` 走同一条下发路径
  */
 export const snapshotSchema = z.object({
   byWorkspace: z.record(z.string(), z.array(groupSchema)),
@@ -123,6 +126,8 @@ export const snapshotSchema = z.object({
   workspaceGroups: z.array(virtualWorkspaceSchema),
   picker: pickerStateSchema,
   nested: z.boolean(),
+  pinnedVisibleCount: z.number(),
+  pinnedLimit: z.number(),
 })
 
 export type Group = z.infer<typeof groupSchema>

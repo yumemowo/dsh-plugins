@@ -40,25 +40,26 @@ import type { PickerEntry } from '../data/picker.ts'
 import { searchSessions } from '../data/search.ts'
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
 import {
-  compareSessionRows,
+  compareSessionRowsWithPins,
   flatRowsInFocus,
   flatSessionRows,
   groupSessionsByWorkspace,
   mainSessionId,
   straySessions,
 } from '../data/sessions.ts'
+import { frontPinnedRows, pinRanks, pinnedEntries } from '../data/pinned.ts'
 import type { RootLayout, SessionRow } from '../data/types.ts'
 import type { HostInfo } from '../hostInfo.ts'
 import { regionLabels } from '../labels.ts'
 import type { RegionLabels } from '../labels.ts'
 import type { RegionTranslate } from '../locales.ts'
 import { PARENT_GROUP_ITEM, VIRTUAL_WORKSPACE_ITEM, VIRTUAL_WORKSPACE_PREFIX, parseParentGroupId } from '../menus.tsx'
-import { normalizeSnapshot } from '../remote.ts'
+import { DEFAULT_PINNED_LIMIT, DEFAULT_PINNED_VISIBLE_COUNT, normalizeSnapshot } from '../remote.ts'
 import type { WorkspaceGroupsSnapshot } from '../remote.ts'
-import { sameAddress, virtualAddress, workspaceAddress } from '../../rootEntry.ts'
+import { ALL_ENTRIES, sameAddress, virtualAddress, workspaceAddress } from '../../rootEntry.ts'
 import type { RootEntryAddress } from '../../rootEntry.ts'
 import { useFlipMarker } from '../useFlipMarker.ts'
-import { UNGROUPED_KEY, expandedAt, indicatorOf, modeOf, sessionGroupExpansionOf, sessionGroupKey, virtualExpansionOf, workspaceExpansionOf } from '../store/viewMode.ts'
+import { UNGROUPED_KEY, expandedAt, indicatorOf, modeOf, pinOverflowOf, pinScopeOf, pinSectionCollapsedOf, sessionGroupExpansionOf, sessionGroupKey, virtualExpansionOf, workspaceExpansionOf } from '../store/viewMode.ts'
 import type { SessionGroupRef, ViewModeStoreHandle } from '../store/viewMode.ts'
 import { RegionLocaleProvider } from '../useLocale.ts'
 import { ExpansionProvider } from '../useExpansion.ts'
@@ -70,6 +71,7 @@ import { RegionDialogs } from './RegionDialogs.tsx'
 import type { RegionDialogActions, RegionOverlay } from './RegionDialogs.tsx'
 import { RegionHeaderArea, RegionRailHeader } from './RegionHeaderArea.tsx'
 import type { RegionHeaderCommands, RegionHeaderOverlays } from './RegionHeaderArea.tsx'
+import { PinnedSection } from './PinnedSection.tsx'
 import { RegionListArea } from './RegionListArea.tsx'
 import type {
   RegionListCommands,
@@ -101,12 +103,14 @@ interface RegionSources {
   labels: RegionLabels
   workspaces: readonly WorkspaceView[]
   archivedSessionIds: readonly string[]
+  /** 注册表全局的置顶集合，最近置顶在最前 */
+  pinnedSessionIds: readonly string[]
   /** 工作区列表的到达阶段，`pending` 期间 `items` 还是空的，清理记录要看它 */
   phase: WorkspaceListPhase
   sessions: SessionListState
   statusSnapshot: SessionStatusSnapshot
   home: string | undefined
-  /** 官方三项会话操作与相对时间，官方服务不在场时缺省 */
+  /** 官方会话操作与相对时间，官方服务不在场时缺省 */
   official: OfficialSessionActions | undefined
   /** directoryFlow 洞是否被占用，决定「添加工作区」入口是否出现 */
   flowOccupied: boolean
@@ -194,6 +198,9 @@ interface ExpansionValue {
 /** 平铺列表不渲染时交出的空行集，恒定同一份引用，避免每次渲染换新数组 */
 const EMPTY_ROWS: readonly SessionRow[] = []
 
+/** 不做就地置顶时的空名次表，恒定同一份引用 */
+const NO_PINS: ReadonlyMap<string, number> = new Map()
+
 // ── 数据源 ──
 
 /**
@@ -220,6 +227,10 @@ function useRegionSources(props: WorkspaceGroupsProps): RegionSources {
   const workspaces = useWorkspaces((state) => state.items) as readonly WorkspaceView[]
   // 归档集是注册表全局的，归档会话仍留在工作区的 sessionIds 里，必须显式过滤，否则已归档的会话会继续出现在列表里
   const archivedSessionIds = useWorkspaces((state) => state.archivedSessionIds) as readonly string[]
+  // 置顶集合同样是注册表全局的，最近置顶在最前；它与 items / archivedSessionIds 在同一次快照里
+  // 缺格时按空表读：这一格拿不到就抛错的话，整片区域（对照模式下还包括承载它的右侧栏）会一起打挂
+  const pinnedSessionIds =
+    (useWorkspaces((state) => state.pinnedSessionIds) as readonly string[] | undefined) ?? []
   const phase = useWorkspaces((state) => state.phase) as WorkspaceListPhase
   const sessions = useSessions((state) => state) as SessionListState
   // 待交互 / 运行 / 完成提醒是同一个事实源的三个字段，等待审批时会话可能并不在 running，因此必须单独读，不能从会话摘要里推
@@ -237,6 +248,7 @@ function useRegionSources(props: WorkspaceGroupsProps): RegionSources {
     labels,
     workspaces,
     archivedSessionIds,
+    pinnedSessionIds,
     phase,
     sessions,
     statusSnapshot,
@@ -250,21 +262,45 @@ function useRegionSources(props: WorkspaceGroupsProps): RegionSources {
  * 把 store 座位投影成视图选项偏好
  *
  * 读走选择器 hook、写走 actions，与官方 ui-workspace 的 groupBy 同一套
- * 两个字段是「加过的」可选格：持久化引擎读盘时整份替换状态，早于该字段写入的那份 JSON 里没有它
- * 引擎不给合并钩子，因此一律经 {@link modeOf} / {@link indicatorOf} 归一，不直接读字段
+ * 各字段是「加过的」可选格：持久化引擎读盘时整份替换状态，早于该字段写入的那份 JSON 里没有它
+ * 引擎不给合并钩子，因此一律经 `…Of` 归一，不直接读字段
  * @param props - 区域 props，只用它的 store 座位两格
- * @returns 当前值与两个写入口
+ * @returns 当前值与各自的写入口
  */
 function useLocalViewOptionsValue(props: WorkspaceGroupsProps): LocalViewOptions {
   const { useStore, actions } = props
   const mode = modeOf(useStore((state) => state))
   const indicator = indicatorOf(useStore((state) => state))
-  const setMode = actions.setMode
-  const setIndicator = actions.setIndicator
+  const pinOverflow = pinOverflowOf(useStore((state) => state))
+  const pinScope = pinScopeOf(useStore((state) => state))
+  const pinSectionCollapsed = pinSectionCollapsedOf(useStore((state) => state))
+  const { setMode, setIndicator, setPinOverflow, setPinScope, setPinSectionCollapsed } = actions
   // value 身份要稳定：它经 context 交给每一行，每次渲染新建会让行级 memo 全部失效
   return useMemo(
-    () => ({ mode, indicator, setMode, setIndicator }),
-    [mode, indicator, setMode, setIndicator],
+    () => ({
+      mode,
+      indicator,
+      setMode,
+      setIndicator,
+      pinOverflow,
+      setPinOverflow,
+      pinScope,
+      setPinScope,
+      pinSectionCollapsed,
+      setPinSectionCollapsed,
+    }),
+    [
+      mode,
+      indicator,
+      setMode,
+      setIndicator,
+      pinOverflow,
+      setPinOverflow,
+      pinScope,
+      setPinScope,
+      pinSectionCollapsed,
+      setPinSectionCollapsed,
+    ],
   )
 }
 
@@ -281,6 +317,8 @@ const EMPTY_SNAPSHOT: WorkspaceGroupsSnapshot = {
   workspaceGroups: [],
   picker: EMPTY_PICKER_STATE,
   nested: true,
+  pinnedVisibleCount: DEFAULT_PINNED_VISIBLE_COUNT,
+  pinnedLimit: DEFAULT_PINNED_LIMIT,
 }
 
 /**
@@ -1221,10 +1259,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const { wide, expandSidebar, openSession, searchResultLimit, t } = props
 
   const sources = useRegionSources(props)
-  const { labels, workspaces, archivedSessionIds,
+  const { labels, workspaces, archivedSessionIds, pinnedSessionIds,
     sessions, statusSnapshot, home, official } = sources
   const localViewOptions = useLocalViewOptionsValue(props)
-  const { mode: viewMode, indicator } = localViewOptions
+  const { mode: viewMode, indicator, pinOverflow, pinScope, pinSectionCollapsed, setPinSectionCollapsed } = localViewOptions
   const { snapshot, apply } = useSnapshotFeed(props.loadGroups, props.onReady)
   const layout = useRegionLayout(workspaces, snapshot, labels)
   const expansion = useExpansionValue(props, layout.nesting)
@@ -1293,7 +1331,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   )
   // 不属于任何工作区的会话，只有存在时才渲染末尾的「未分组」区段
   // 聚焦时整段不出现（`focusedLayout` 只交出被聚焦的那一片），因此这里也不必为它留位
-  const stray = straySessions(sessions, workspaces, archivedSessionIds, statusSnapshot)
+  // 就地置顶在下面按名次表处理，这里先取列表原序
+  const strayRows = straySessions(sessions, workspaces, archivedSessionIds, statusSnapshot)
   const searching = search.normalized !== ''
 
   /**
@@ -1311,6 +1350,107 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   })()
 
   /**
+   * 置顶区里的行
+   *
+   * 顺序直接沿用官方集合（最近置顶在最前），只滤掉不可见的那些
+   * 两种溢出给法与就地置顶的名次表都从这一份派生，不各算一遍
+   */
+  const pinned = useMemo(
+    () =>
+      pinnedEntries(
+        pinnedSessionIds,
+        sessions,
+        archivedSessionIds,
+        workspaceOfSession,
+        currentSessionId,
+        statusSnapshot,
+      ),
+    [pinnedSessionIds, sessions, archivedSessionIds, workspaceOfSession, currentSessionId, statusSnapshot],
+  )
+
+  /** 置顶集合的原始 id 表，行上的图钉按钮据此判断自己那一格是否已置顶 */
+  const pinnedIds = useMemo(
+    () => new Set(pinnedSessionIds.map(String)),
+    [pinnedSessionIds],
+  )
+
+  /**
+   * 就地置顶用的名次表
+   *
+   * `pinScope === 'inline'` 时才交出它，否则是一张空表
+   * 空表下比较器与不置顶时同序，三种段落因此共用同一个比较器
+   * 名次按官方集合的位置算，最近置顶的排最前
+   */
+  const pinRanksByScope = useMemo(
+    () => (pinScope === 'inline' ? pinRanks(pinned) : NO_PINS),
+    [pinScope, pinned],
+  )
+
+  /**
+   * 末尾「未分组」区段的行
+   *
+   * 这一段的成员不属于任何工作区
+   * 只把已置顶的行提到最前，其余维持会话列表原序
+   */
+  const stray = frontPinnedRows(strayRows, pinRanksByScope)
+
+  /**
+   * 是否还能新增置顶
+   *
+   * 官方 pin 集合没有上限参数，本包无法让宿主拒绝写入，因此上限只表现为达到后把置顶入口置为禁用态
+   * 调低上限不会取消已有的置顶，它只拦新增
+   */
+  const canPin = pinnedSessionIds.length < snapshot.pinnedLimit
+
+  /**
+   * 取消置顶之后要接续的动作，按被取消的那条会话现算
+   *
+   * 存这一格而不是直接闭包进 `toggleSessionPin`：后者要交给每一行，身份必须稳定
+   * 而它依赖当前会话与置顶集合，两者都会变，每次渲染重写一次、回调从它取当次的值
+   */
+  const nextAfterUnpinRef = useRef<(sessionId: string) => (() => void) | undefined>(() => undefined)
+  nextAfterUnpinRef.current = (removedId: string): (() => void) | undefined => {
+    // 只有取消的正是当前打开的那一条时才接续，否则用户在看别处，替他换会话是打断
+    if (removedId !== currentSessionId) return undefined
+    // 顺序按取消之后的集合算，不能用取消前的快照取相邻项
+    const nextIds = pinnedSessionIds.map(String).filter((id) => id !== removedId)
+    const next = pinnedEntries(
+      nextIds,
+      sessions,
+      archivedSessionIds,
+      workspaceOfSession,
+      currentSessionId,
+      statusSnapshot,
+    )[0]
+    if (next !== undefined) return () => openSession(next.id)
+    // 一条不剩：把聚焦切回「全部」，并保持当前会话的打开状态（不导航、不关闭）
+    return () => {
+      void props.focusEntry(ALL_ENTRIES)
+    }
+  }
+
+  /**
+   * 切换一条会话的置顶
+   *
+   * 上限只拦新增，已置顶的照常可以取消
+   * 取消的正是当前打开的会话时，接着打开下一条；一条不剩则把聚焦切回「全部」
+   */
+  const toggleSessionPin = useCallback(
+    (sessionId: string) => {
+      const unpinning = pinnedIds.has(sessionId)
+      if (!unpinning && !canPin) return
+      const followUp = unpinning ? nextAfterUnpinRef.current(sessionId) : undefined
+      void props
+        .setSessionPinned(sessionId, !unpinning)
+        .then(() => followUp?.())
+        .catch((reason: unknown) => {
+          console.error('workspace-plus: pin change failed', reason)
+        })
+    },
+    [pinnedIds, canPin, props.setSessionPinned],
+  )
+
+  /**
    * 平铺列表的行
    *
    * 成员集合与工作区归属无关，因此「未分组」桶里的会话也在其中，且顺序与分组视图共用一套
@@ -1323,7 +1463,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
           flatSessionRows(sessions, archivedSessionIds, statusSnapshot),
           workspaceOfSession,
           focusedWorkspaceIds(layout.rootLayout, layout.pickerEntries, snapshot.picker.focused),
-        ).sort(compareSessionRows)
+        ).sort((a, b) => compareSessionRowsWithPins(pinRanksByScope, a, b))
 
   const session: SessionRowScope = {
     currentSessionId,
@@ -1333,8 +1473,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     revealSessionId: ui.revealSessionId,
     acknowledgeReveal: ui.acknowledgeReveal,
     openSession,
+    pinnedSessionIds: pinnedIds,
+    canPin,
+    onTogglePin: toggleSessionPin,
   }
-
   // 列表侧收的是「编辑哪个对象」，浮层的形状因此不出这一层
   const edits: RegionListEdits = {
     onNewGroup: (workspaceId) =>
@@ -1366,6 +1508,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     currentSessionId,
     home,
     session,
+    // 三段共用同一个比较器：不置顶时名次为空表，比较结果与不置顶时相同
+    compareRows: (a, b) => compareSessionRowsWithPins(pinRanksByScope, a, b),
   }
 
   const headerOverlays: RegionHeaderOverlays = {
@@ -1410,6 +1554,19 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             focusedKey={snapshot.picker.focused}
             addWorkspace={addWorkspace}
             search={search}
+          />
+          {/* 置顶区常驻在滚动区之外：它与 header 平级，不在 .list 里，
+              因此列表怎么滚它都留在原位。无置顶项时组件自己返回 null，
+              段头与分隔都不出现，那一段空间完整交还给列表 */}
+          <PinnedSection
+            entries={pinned}
+            visibleCount={snapshot.pinnedVisibleCount}
+            overflow={pinOverflow}
+            collapsed={pinSectionCollapsed}
+            onToggleCollapsed={() => setPinSectionCollapsed(!pinSectionCollapsed)}
+            onTogglePin={toggleSessionPin}
+            onOpenSession={openSession}
+            statuses={statusSnapshot}
           />
           <RegionListArea
             searching={searching}

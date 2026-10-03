@@ -40,11 +40,14 @@ function installStorage(): Map<string, string> {
   return entries
 }
 
-/** 初值里那三份空表，写进断言里省得每处重复一遍 */
+/** 初值：三份空展开表加上置顶区的三个默认值，写进断言里省得每处重复一遍 */
 const EMPTY_EXPANSION = {
   mode: 'workspace',
   indicator: 'icon',
   expansion: { workspace: {}, virtualWorkspace: {}, group: {} },
+  pinOverflow: 'expand',
+  pinScope: 'section',
+  pinSectionCollapsed: false,
 }
 
 describe('view mode store', () => {
