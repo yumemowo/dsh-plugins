@@ -161,7 +161,7 @@ export function WorkspaceRow({
 
   const row = (
     <div
-      className={clsx(styles.workspaceHead, menuOpen && styles.rowMenuOpen)}
+      className={clsx(styles.workspaceHead)}
       role="button"
       tabIndex={0}
       aria-expanded={expanded}
@@ -184,9 +184,7 @@ export function WorkspaceRow({
         menuItems={menuItems}
         actionsLabel={labels.workspaceActions(title)}
         create={
-          onCreateSession === undefined
-            ? undefined
-            : { label: labels.newSessionIn(title), onCreate: onCreateSession }
+          onCreateSession && { label: labels.newSessionIn(title), onCreate: onCreateSession }
         }
       />
     </div>

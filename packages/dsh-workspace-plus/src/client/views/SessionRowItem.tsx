@@ -1,26 +1,31 @@
 /**
- * 带会话操作菜单的会话行
+ * 会话行条目：一整行加上它的两个面板与悬停卡片
  *
+ * 行本身就是 `SessionRowView`，本组件补的是「这一行能做什么」：
+ *   - 行尾 `...` 菜单与行右键菜单，两者共用同一批条目与同一段分派，因此同一个 id 在两个入口下落到同一件事
+ *   - 悬停卡片，整卡可点即复制标题
  * 菜单内容分两段：官方操作块（置顶 / 重命名 / 分叉 / 归档，转调官方控制器与官方服务）与一条分隔线之后的归组项
  * 归组项只在有分组上下文的行上出现——「未分组」桶里的会话不属于任何工作区，没有分组可落，因此那些行只保留官方操作块
  * 宿主未提供官方服务时官方操作块整体隐藏，同样不留点不动的入口
  *
  * 新建中（空白）会话行没有会话可操作，与官方一样整条行都不挂菜单，那条行只是「准备开始一个新会话」的占位，对它重命名或归档都无从谈起
  *
- * 置顶区里的行也走这一个组件：那些行只给官方操作块，也不挂悬停卡片
+ * 置顶区里的行也走这一个组件：那些行只给官方操作块，也不给卡片
  *
  * 菜单开合状态收敛在本组件内：行组件在 map 回调里生成，把 useState 留在行内会让每行无条件多挂一组 hook 状态，独立组件则按需挂载
  * 重命名对话框也留在这里——只有真正打开过的行才付出这份状态
  */
 import { memo, useEffect, useState } from 'react'
 import type { ReactElement } from 'react'
-import { IconEllipsisOutlineRegular, Menu } from '../runtime.ts'
+import { HoverCard, IconEllipsisOutlineRegular, Menu } from '../runtime.ts'
 import { buildSessionMenuItems } from '../menus.tsx'
 import type { SessionPinMenuInput } from '../menus.tsx'
 import { sameGroupSections } from '../data/layout.ts'
-import { sameSessionStatuses } from '../data/status.ts'
+import { sameSessionStatus, sameSessionStatuses } from '../data/status.ts'
 import { SessionRowView } from './SessionRowView.tsx'
+import type { SessionRowViewProps } from './SessionRowView.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
+import { SessionHoverContent } from './components/HoverCards.tsx'
 import { NameDialog } from './components/dialogs/NameDialog.tsx'
 import { useLocale } from '../useLocale.ts'
 import type { OfficialSessionActions } from '../actions.ts'
@@ -49,55 +54,46 @@ export interface SessionGroupingContext {
   onSelectGroup: (workspaceId: string, sessionId: string, id: string) => void
 }
 
-export interface SessionRowMenuProps {
-  row: SessionRow
-  /**
-   * 行上显示的标题
-   *
-   * 传 null 表示这是一条新建中的空白会话，标题由行组件取语言包的固定名
-   */
-  title: string | null
-  selected: boolean
-  /** 该行要显示的状态位，空闲时为 undefined */
-  status?: SessionStatus | undefined
-  /** 行尾相对时间文案，空白行不显示 */
+/**
+ * 本组件自己算、因此不收的几格
+ *
+ * `sessionId` 由 `row` 派生；`action` 与 `onContextMenu` 就是下面那两个面板本身，调用方给不了
+ */
+type ComputedHere = 'sessionId' | 'action' | 'onContextMenu'
+
+/**
+ * 悬停卡片的输入
+ *
+ * 不给整格表示这一行不挂卡片（置顶区里的行如此）。卡片由本组件挂而不是行组件：
+ * 它要在行内 `...` 菜单或右键菜单开着时让位，而那两个状态都在本组件里
+ */
+export interface SessionRowCardInput {
+  /** 相对时间文案（`5分钟前`），缺省时卡片里不显示这一行 */
   time?: string | undefined
-  /** 该行悬停卡片里逐条列出的状态，缺省回退成只有 `status` 一条 */
+  /**
+   * 卡片里逐条列出的状态，缺省回退成只有行上那一条
+   *
+   * 与行首那枚指示器分开传：行上空闲不画指示器，卡片里却要像官方一样把「空闲」也列出来
+   */
   statuses?: readonly SessionStatus[] | undefined
-  /** 悬停卡片里的相对时间文案（`5分钟前`），缺省时卡片里不显示这一行 */
-  hoverTime?: string | undefined
+  /** 可复制的内容，取会话标题；缺省表示卡片只读（新建中的空白行） */
+  copy?: string | undefined
+}
+
+export interface SessionRowItemProps extends Omit<SessionRowViewProps, ComputedHere> {
+  row: SessionRow
   /** 归组上下文，缺省时菜单里没有归组项 */
   grouping?: SessionGroupingContext | undefined
   /** 官方会话操作，缺省时菜单里没有官方操作块 */
   official?: OfficialSessionActions | undefined
-  /** 该行不挂悬停卡片 */
-  disableHoverCard?: boolean | undefined
+  /** 悬停卡片，缺省表示这一行不挂卡片 */
+  card?: SessionRowCardInput | undefined
   /**
    * 行上面板开合变化的回报，缺省表示调用方不关心
    *
    * 面板 portal 到 body，行外面看不到它，需要据它维持别处状态的调用方只能靠这一格
    */
   onPanelOpenChange?: ((sessionId: string, open: boolean) => void) | undefined
-  /** 该行是否已置顶 */
-  pinned?: boolean | undefined
-  /** 是否还能新增置顶，达到上限时图钉转禁用态 */
-  canPin?: boolean | undefined
-  /** 切换这一行的置顶 */
-  onTogglePin?: ((sessionId: string) => void) | undefined
-  /**
-   * 该行是否被容器裁在高度之外
-   *
-   * 缺省表示不涉及裁剪，含义与 `SessionRowView` 的同名 prop 相同
-   */
-  clipped?: boolean | undefined
-  /**
-   * 打开会话
-   *
-   * 传动作本身而不是绑好 id 的闭包：绑好的闭包每次渲染都是新引用，行级 memo 因此永远判定为变过
-   */
-  onOpenSession: (sessionId: string) => void
-  /** 请求把这一行滚进可视区，只在从搜索结果打开时下发 */
-  onReveal?: (() => void) | undefined
 }
 
 /**
@@ -137,68 +133,74 @@ function sameGrouping(
 }
 
 /**
+ * 比较两张悬停卡片是否表示同一件事
+ *
+ * 卡片对象每次渲染新建，`statuses` 又是新数组，因此按内容比；不给卡片是稳定的一种状态
+ */
+function sameCard(
+  a: SessionRowCardInput | undefined,
+  b: SessionRowCardInput | undefined,
+): boolean {
+  if (a === b) return true
+  if (a === undefined || b === undefined) return false
+  if (a.time !== b.time || a.copy !== b.copy) return false
+  return sameSessionStatuses(a.statuses ?? [], b.statuses ?? [])
+}
+
+/**
  * 行级 memo 的比较器
  *
- * 传进来的都是原语或稳定引用，因此逐格比即可，状态位与归组上下文按内容比
+ * 传进来的都是原语或稳定引用，因此逐格比即可，状态位、归组上下文与卡片按内容比
+ * 逐格列出而不是从行那个比较器派生：memo 按结构比对，比较器是唯一无法整体转发的一处
  */
-function sameRowMenuProps(prev: SessionRowMenuProps, next: SessionRowMenuProps): boolean {
-  const prevStatuses = prev.statuses ?? (prev.status === undefined ? [] : [prev.status])
-  const nextStatuses = next.statuses ?? (next.status === undefined ? [] : [next.status])
+function sameRowItemProps(prev: SessionRowItemProps, next: SessionRowItemProps): boolean {
   return (
     prev.row === next.row &&
     prev.title === next.title &&
     prev.selected === next.selected &&
     prev.time === next.time &&
+    sameSessionStatus(prev.status, next.status) &&
     prev.pinned === next.pinned &&
     prev.canPin === next.canPin &&
     prev.clipped === next.clipped &&
     prev.onTogglePin === next.onTogglePin &&
-    prev.hoverTime === next.hoverTime &&
-    prev.disableHoverCard === next.disableHoverCard &&
-    prev.onPanelOpenChange === next.onPanelOpenChange &&
-    sameSessionStatuses(prevStatuses, nextStatuses) &&
-    prev.official === next.official &&
     prev.onOpenSession === next.onOpenSession &&
     prev.onReveal === next.onReveal &&
+    prev.onPanelOpenChange === next.onPanelOpenChange &&
+    prev.official === next.official &&
+    sameCard(prev.card, next.card) &&
     sameGrouping(prev.grouping, next.grouping)
   )
 }
 
-function SessionRowMenuView({
+function SessionRowItemView({
   row,
-  title,
-  selected,
-  status,
-  time,
-  statuses,
-  hoverTime,
   grouping,
   official,
-  disableHoverCard,
+  card,
   onPanelOpenChange,
-  pinned,
-  canPin,
-  clipped,
-  onTogglePin,
-  onOpenSession,
-  onReveal,
-}: SessionRowMenuProps): ReactElement {
+  ...rowProps
+}: SessionRowItemProps): ReactElement {
   const { labels } = useLocale()
   const [menuOpen, setMenuOpen] = useState(false)
   const [renameDraft, setRenameDraft] = useState<string | null>(null)
 
-  const items = buildSessionMenuItems({
-    grouping:
-      grouping === undefined
-        ? undefined
-        : {
-            ...grouping,
-            groupLabel: labels.moveToGroup,
-            ungroupLabel: labels.ungroup,
-          },
-    official: official?.labels,
-    pin: pinMenuInput(pinned, canPin, onTogglePin),
-  })
+  // 新建中的空白会话没有会话可操作：官方对它整条省略号都不渲染
+  // 条目在这里就清空，右键路径与行尾按钮才会一起落空——只拦按钮的话右键仍会弹出一份同样的菜单
+  const items = row.blank
+    ? []
+    : buildSessionMenuItems({
+        grouping:
+          grouping === undefined
+            ? undefined
+            : {
+                ...grouping,
+                groupLabel: labels.moveToGroup,
+                ungroupLabel: labels.ungroup,
+              },
+        official: official?.labels,
+        pin: pinMenuInput(rowProps.pinned, rowProps.canPin, rowProps.onTogglePin),
+      })
 
   /**
    * 菜单选中项的分派
@@ -209,7 +211,7 @@ function SessionRowMenuView({
   const select = (id: string): void => {
     setMenuOpen(false)
     if (id === 'pin') {
-      onTogglePin?.(row.id)
+      rowProps.onTogglePin?.(row.id)
       return
     }
     if (id === 'rename') {
@@ -244,31 +246,17 @@ function SessionRowMenuView({
     [onPanelOpenChange, row.id],
   )
 
-  return (
-    <>
-      <SessionRowView
-        sessionId={row.id}
-        title={title}
-        selected={selected}
-        status={status}
-        time={time}
-        statuses={statuses}
-        hoverTime={hoverTime}
-        // 空白行由调用方整段不渲染，因此走到这里的标题一定是会话内容，可复制
-        hoverCopy={title ?? undefined}
-        // 宿主没加载官方 ui-workspace 时官方文案整体拿不到，浮出一个空壳不如不浮
-        hover={!disableHoverCard && official !== undefined}
-        menuOpen={menuOpen}
-        // 卡片要在两种面板开着时都让位：行内 `...` 菜单与行右键菜单
-        hoverDisabled={panelOpen}
-        pinned={pinned}
-        canPin={canPin}
-        clipped={clipped}
-        onTogglePin={onTogglePin}
-        onOpenSession={onOpenSession}
-        onReveal={onReveal}
-        onContextMenu={contextMenu.onContextMenu}
-        action={
+  const shownTitle = rowProps.title ?? labels.newSession
+  // 条目为空时连锚点按钮一起不渲染，不留点不动的省略号
+  const hasMenu = items.length > 0
+
+  const line = (
+    <SessionRowView
+      {...rowProps}
+      sessionId={row.id}
+      onContextMenu={contextMenu.onContextMenu}
+      action={
+        hasMenu ? (
           <Menu
             open={menuOpen}
             onClose={() => setMenuOpen(false)}
@@ -285,6 +273,9 @@ function SessionRowMenuView({
                 type="button"
                 className={rowsStyles.rowAction}
                 aria-label={labels.sessionActions(row.title)}
+                // 面板开着时行要留住这一格：锚点只靠 :hover 显示，指针一旦移开按钮就会消失
+                // 样式按这个属性选档，不再另给行挂一个开合标记
+                aria-expanded={menuOpen}
                 onClick={(event) => {
                   event.stopPropagation()
                   setMenuOpen((open) => !open)
@@ -295,8 +286,33 @@ function SessionRowMenuView({
             }
             items={items}
           />
-        }
-      />
+        ) : undefined
+      }
+    />
+  )
+
+  return (
+    <>
+      {/* 卡片只包住行本身：右键面板与重命名对话框都是行外的浮层，包进去会多出两个子节点 */}
+      {card === undefined ? (
+        line
+      ) : (
+        <HoverCard
+          anchor={line}
+          content={
+            <SessionHoverContent
+              title={shownTitle}
+              time={card.time}
+              statuses={card.statuses ?? (rowProps.status === undefined ? [] : [rowProps.status])}
+            />
+          }
+          // 行内 `...` 菜单与行右键菜单开着时都让位，否则同一处会叠两层浮层
+          disabled={panelOpen}
+          copyText={card.copy}
+          copyLabel={labels.hover.copy}
+          copiedLabel={labels.hover.copied}
+        />
+      )}
       {contextMenu.menu}
       {renameDraft === null || official === undefined ? null : (
         <NameDialog
@@ -320,8 +336,9 @@ function SessionRowMenuView({
 }
 
 /**
- * 裹上 memo 的会话行
+ * 裹上 memo 的会话行条目
  *
  * 流式期间每次活动都会重渲染整片区域，未变的行若跟着重算，长列表就会在每次活动时付出与行数成正比的代价，主线程因此被整段占住
+ * memo 挂在这一层而不是行外壳那一层：卡片与菜单都在这一层，行外壳只是被它渲染的子树，外层挡下就够
  */
-export const SessionRowMenu = memo(SessionRowMenuView, sameRowMenuProps)
+export const SessionRowItem = memo(SessionRowItemView, sameRowItemProps)

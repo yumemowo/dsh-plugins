@@ -279,13 +279,32 @@ describe('pinned section', () => {
 
   it('shows only the header row once collapsed', async () => {
     const store = viewModeStoreStub()
-    store.setPinSectionCollapsed(true)
+    store.setPinSectionExpanded(false)
     const { container, root } = await mount({ ...storeViewModeProps(store) })
 
     expect(container.querySelector('.pinnedSection')).not.toBeNull()
     expect(container.querySelector('.pinScroll')).toBeNull()
     // 收起后行尾提示改为只报总数
     expect(container.querySelector('.pinHeadHint')?.textContent).toBe('2 条')
+    await act(async () => root.unmount())
+  })
+
+  it('flips the section open and shut from the header', async () => {
+    // 段头是这一块的唯一开合入口，而开合态写在浏览器 store 里：这条路径断了界面上只是「点了没反应」
+    const store = viewModeStoreStub()
+    const { container, root } = await mount({ ...storeViewModeProps(store) })
+    const head = container.querySelector('.pinHead') as HTMLElement
+
+    expect(head.getAttribute('aria-expanded')).toBe('true')
+    expect(container.querySelector('.pinScroll')).not.toBeNull()
+
+    await act(async () => head.click())
+    expect(head.getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelector('.pinScroll')).toBeNull()
+
+    await act(async () => head.click())
+    expect(head.getAttribute('aria-expanded')).toBe('true')
+    expect(container.querySelector('.pinScroll')).not.toBeNull()
     await act(async () => root.unmount())
   })
 
@@ -571,6 +590,18 @@ describe('menu on a pinned row', () => {
       'fork',
       'archive',
     ])
+    await act(async () => root.unmount())
+  })
+
+  it('marks the anchor with aria-expanded so the stylesheet can hold it open', async () => {
+    // 菜单展开期间那一格样式认锚点按钮自己的 aria-expanded（见 rows.module.css 的 .rowAction 显隐规则）
+    // 按钮上少了这个属性，样式就再也留不住锚点，而这在界面上只表现为「展开菜单时省略号消失」，不会有任何报错
+    const { container, root } = await mount()
+    const button = actionButton(container)
+
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    await act(async () => button.click())
+    expect(actionButton(container).getAttribute('aria-expanded')).toBe('true')
     await act(async () => root.unmount())
   })
 

@@ -247,7 +247,9 @@ describe('client stylesheet', () => {
 
     expect(reveal).toContain('.rowAction:focus-visible')
     expect(reveal.some((s) => s.includes(':hover'))).toBe(true)
-    expect(reveal).toContain('.rowMenuOpen .rowAction')
+    // 菜单展开那条按锚点按钮自己的 aria-expanded 命中，持有者不必再往行上挂开合标记
+    expect(reveal.some((s) => s.includes(".rowAction[aria-expanded='true']"))).toBe(true)
+    expect(reveal.some((s) => s.startsWith('.row'))).toBe(true)
 
     // 这些写法会让按钮在鼠标点过之后常驻：:focus / :focus-within 在点击后持续为真
     // 而选中态与点击无关（当前会话一直是选中的）
@@ -333,7 +335,7 @@ describe('client stylesheet', () => {
     expect(hasRule('.rowActionSlot', /overflow:\s*hidden/)).toBe(true)
 
     // 时间隐藏与操作位展开必须由同一组触发条件驱动，任一时刻只有一方占行尾
-    const triggers = ['hover', 'rowMenuOpen', 'focus-visible']
+    const triggers = ['hover', ".rowAction[aria-expanded='true']", 'focus-visible']
     for (const trigger of triggers) {
       const hidesTime = rules.some(
         (rule) =>
@@ -548,7 +550,7 @@ describe('client stylesheet', () => {
           rule.body.replace(/\s/g, '').includes('display:none'),
       )
     expect(hides('.groupHead:hover .groupCount')).toBe(true)
-    expect(hides('.groupHead.rowMenuOpen .groupCount')).toBe(true)
+    expect(hides(".groupHead:has(.rowAction[aria-expanded='true']) .groupCount")).toBe(true)
     expect(hides('.groupHead:has(.rowAction:focus-visible) .groupCount')).toBe(true)
     // 会话行的时间也走同一组触发条件，两者互换关系一致
     expect(hides('.row:hover .rowTime')).toBe(true)
@@ -566,7 +568,7 @@ describe('client stylesheet', () => {
       rules.some((rule) => rule.selectors.includes(selector) && /width:\s*auto/.test(rule.body))
 
     expect(expands('.groupHead:hover .rowActionSlot')).toBe(true)
-    expect(expands('.groupHead.rowMenuOpen .rowActionSlot')).toBe(true)
+    expect(expands(".groupHead:has(.rowAction[aria-expanded='true']) .rowActionSlot")).toBe(true)
     expect(
       expands('.groupHead:has(.rowAction:focus-visible) .rowActionSlot'),
     ).toBe(true)

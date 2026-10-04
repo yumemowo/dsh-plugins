@@ -56,8 +56,8 @@ src/client/
     ├── VirtualWorkspaceSection.tsx   一个工作区分组（根节点分组头 + 组内工作区）
     ├── GroupSection.tsx            一个会话分组（分组头 + 组内会话）
     ├── RowActions.tsx              容器行行尾操作位（`...` 菜单 + 可选 `+`），三类行共用
-    ├── SessionRowView.tsx          会话行外壳（状态位列、标题、时间、操作位、悬停卡片）
-    ├── SessionRowMenu.tsx          带会话操作菜单的会话行
+    ├── SessionRowView.tsx          会话行外壳（状态位列、标题、时间、操作位）
+    ├── SessionRowItem.tsx          会话行条目（行 + 两个菜单 + 悬停卡片）
     ├── PinnedSection.tsx           区域顶部的置顶区（段头 + 置顶会话行，两种溢出给法共用一个控件）
     ├── WorkspaceRail.tsx           窄栏展开入口
     ├── header.module.css           区域头部样式（宽栏两行标题 / 入口组 / 窄栏）
@@ -84,7 +84,7 @@ src/client/
 
 ## 状态归属
 
-状态的归属只有一处：搜索状态（查询 / 展开 / 聚焦时机 / 揭示标记）与两张面板的开合都收在同文件内的 `useRegionUiState`，由主组件持有并把状态与读写入口向下传。折叠态（工作区 / 会话分组 / 工作区分组三份）不逐层传：它是浏览器本地 store 里的值，由容器合成一次后放进 `useExpansion.ts` 的 provider，用到的地方自己 `useExpansion()` 取——与 `useLocalViewOptions.ts` 同一套做法。八个互斥浮层（三个草稿框、五个确认框）收在一个 `RegionOverlay` 可辨识联合里，因此「任意时刻至多开一个」由类型保证，而不是靠 `Modal` 挡住第二个入口。菜单开合留在持有行组件内（行内 `...` 菜单与右键菜单各一份，都由 `useRowContextMenu` 与行自己的 `useState` 持有），行的外观组件保持无状态。搜索状态之所以不留在 header 内部：窄栏入口要触发宽栏输入框的聚焦，这一跨形态的联动需要一个共同宿主；选择器的开合同理——面板要读菜单的三个分区，而那些分区由区域组件从快照算出来。
+状态的归属只有一处：搜索状态（查询 / 展开 / 聚焦时机 / 揭示标记）与两张面板的开合都收在同文件内的 `useRegionUiState`，由主组件持有并把状态与读写入口向下传。折叠态（工作区 / 会话分组 / 工作区分组三份）不逐层传：它是浏览器本地 store 里的值，由容器合成一次后放进 `useExpansion.ts` 的 provider，用到的地方自己 `useExpansion()` 取——与 `useLocalViewOptions.ts` 同一套做法。八个互斥浮层（三个草稿框、五个确认框）收在一个 `RegionOverlay` 可辨识联合里，因此「任意时刻至多开一个」由类型保证，而不是靠 `Modal` 挡住第二个入口。菜单开合留在持有行组件内（行内 `...` 菜单与右键菜单各一份，都由 `useRowContextMenu` 与行自己的 `useState` 持有）：行外壳不认识菜单，菜单展开期间那一档由锚点按钮自己的 `aria-expanded` 驱动样式，不必再往行上挂开合标记。搜索状态之所以不留在 header 内部：窄栏入口要触发宽栏输入框的聚焦，这一跨形态的联动需要一个共同宿主；选择器的开合同理——面板要读菜单的三个分区，而那些分区由区域组件从快照算出来。
 
 文案不下传：容器把本包翻译函数与投影后的文案表合成一个 `RegionLocale` 交给 `useLocale.ts` 的 `RegionLocaleProvider`，需要文案的组件用 `useLocale()` 自取，因此组件接口里没有 `t` / `labels` 这两格。浏览器内持久化状态收在 `store/`——插槽的 `store` 座位只接受一个 `StoreDecl`，而 `persist` 整份序列化状态，后续新增的本地状态要并进同一个状态对象（展示方式、指示器样式与三层折叠态现在共用它）。**这类状态一律不逐层传 props，统一经 provider + 具名 hook 取**：`useLocalViewOptions.ts` 装展示方式与指示器样式，`useExpansion.ts` 装三层折叠态。store 之外的状态仍按各渲染区实际消费的形状下发。
 

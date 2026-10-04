@@ -44,8 +44,8 @@ export function viewModeProps(
       setPinScope: (next: PinScope) => {
         state = { ...state, pinScope: next }
       },
-      setPinSectionCollapsed: (collapsed: boolean) => {
-        state = { ...state, pinSectionCollapsed: collapsed }
+      setPinSectionExpanded: (expanded: boolean) => {
+        state = { ...state, pinSectionExpanded: expanded }
       },
       setWorkspaceExpanded: (key: string, expanded: boolean) => {
         state = { ...state, expansion: { ...state.expansion, workspace: { ...state.expansion?.workspace, [key]: expanded } } }
@@ -86,7 +86,7 @@ export interface ViewModeStoreStub {
   /** 写入置顶区的三个本地偏好，用于验证「改了之后界面真的换了」 */
   setPinOverflow: (overflow: PinOverflow) => void
   setPinScope: (scope: PinScope) => void
-  setPinSectionCollapsed: (collapsed: boolean) => void
+  setPinSectionExpanded: (expanded: boolean) => void
   /** 写入某一层的显式展开选择，用于验证「点开之后写盘」 */
   setWorkspaceExpanded: (key: string, expanded: boolean) => void
   setVirtualWorkspaceExpanded: (key: string, expanded: boolean) => void
@@ -119,7 +119,7 @@ export function viewModeStoreStub(
     setIndicator: (next) => commit({ ...state, indicator: next }),
     setPinOverflow: (next) => commit({ ...state, pinOverflow: next }),
     setPinScope: (next) => commit({ ...state, pinScope: next }),
-    setPinSectionCollapsed: (collapsed) => commit({ ...state, pinSectionCollapsed: collapsed }),
+    setPinSectionExpanded: (expanded) => commit({ ...state, pinSectionExpanded: expanded }),
     setWorkspaceExpanded: (key, expanded) =>
       commit({
         ...state,
@@ -179,7 +179,7 @@ export function storeViewModeProps(store: ViewModeStoreStub): {
       setIndicator: (next: IndicatorStyle) => store.setIndicator(next),
       setPinOverflow: (next: PinOverflow) => store.setPinOverflow(next),
       setPinScope: (next: PinScope) => store.setPinScope(next),
-      setPinSectionCollapsed: (collapsed: boolean) => store.setPinSectionCollapsed(collapsed),
+      setPinSectionExpanded: (expanded: boolean) => store.setPinSectionExpanded(expanded),
       setWorkspaceExpanded: (key: string, expanded: boolean) =>
         store.setWorkspaceExpanded(key, expanded),
       setVirtualWorkspaceExpanded: (key: string, expanded: boolean) =>

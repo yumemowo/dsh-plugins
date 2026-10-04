@@ -77,7 +77,7 @@ export function GroupSection({
   return (
     <div className={styles.group}>
       <div
-        className={clsx(styles.groupHead, menuOpen && styles.rowMenuOpen)}
+        className={clsx(styles.groupHead)}
         // 参与所在撑开体的逐个淡入，序号由撑开体按文档序下发
         data-wg-stagger=""
         role="button"
@@ -106,9 +106,7 @@ export function GroupSection({
             menuItems={menuItems}
             actionsLabel={labels.groupActions(section.label)}
             create={
-              onCreateSession === undefined
-                ? undefined
-                : { label: labels.newSessionInGroup(section.label), onCreate: onCreateSession }
+              onCreateSession && { label: labels.newSessionInGroup(section.label), onCreate: onCreateSession }
             }
           />
         </span>

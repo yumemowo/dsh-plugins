@@ -136,6 +136,8 @@
 
 行内操作按钮默认隐藏（并同时 `pointer-events: none`，否则会留下看不见却能点中的热区），只在三种情况下显示：**所在行悬停**、**菜单展开期间**、**键盘导航聚焦**（`:focus-visible`）。
 
+「菜单展开期间」那一档读锚点按钮自己的 `aria-expanded`（`.row:has(.rowAction[aria-expanded='true'])`）：开合状态与它所属的按钮同源，持有菜单的行组件因此不必再往行上挂一个开合标记。
+
 这里刻意**不用** `:focus`、`:focus-within` 和选中态：鼠标点过按钮后焦点会留在按钮或行上，这三条会让按钮一直显示；`:focus-visible` 只在键盘操作时命中，既消除鼠标残留，又保留清晰可见的键盘焦点。官方 `ui-workspace` 同理 —— 它只认 `:hover` 与菜单展开态。
 
 三种显示状态都需要「行」自身获得焦点或悬停，因此行与容器行的 `onKeyDown` 会忽略由行内按钮冒泡上来的按键（`event.target !== event.currentTarget`），否则在按钮上按 Enter 会连带折叠工作区或打开会话。

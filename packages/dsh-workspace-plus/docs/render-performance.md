@@ -74,7 +74,7 @@ export function sameSessionStatus(a, b): boolean {
 | 文案表 `labels` | `useMemo(() => regionLabels(t, tWorkspace, tSidebar), […])` | 缓存的是投影结果而不是译文；几个 `t` 都在调用时才读当前语言 |
 | 区域文案 `{ t, labels }` | 容器用一层 `useMemo` 合成 `RegionLocale` 交给 `RegionLocaleProvider` | 文案不再逐层传参，组件改从 `useLocale()` 取，Provider 的 value 因此成了唯一那格 prop |
 | 折叠态的读与取反 | `useExpansionValue` 里一层 `useMemo` 合成，交给 `ExpansionProvider` | 目前没有 `memo` 组件消费它（`RegionListArea` / `WorkspaceSection` 都是普通组件），因此这层稳定化是**为将来留的**，不是当下的收益；真正让它必须写成 `useMemo` 的是依赖列语义，见下条 |
-| 视图选项偏好 | `useLocalViewOptionsValue` 里一层 `useMemo` 合成，交给 `LocalViewOptionsProvider` | **这条是承重的**：`SessionRowView` 被 `memo` 包住且消费指示器样式，value 每次新建会让它的比对失效 |
+| 视图选项偏好 | `useLocalViewOptionsValue` 里一层 `useMemo` 合成，交给 `LocalViewOptionsProvider` | **这条是承重的**：会话行外壳被 `memo` 包住且消费指示器样式，value 每次新建会让它的比对失效 |
 | 归组动作 | `useCallback(..., [apply, moveSession])` | 它会随归组上下文传到每一行 |
 | 行打开动作 | 传**未绑定**的 `openSession`，由行自己绑 id | 绑好的闭包每次渲染都是新引用 |
 | 归组上下文 | 动作传未绑定的版本，行自己在组件内绑 id | 同上；`onSelectGroup` 因此对所有行是同一个引用 |
@@ -85,14 +85,14 @@ export function sameSessionStatus(a, b): boolean {
 
 被 `memo` 包住的组件默认按引用比对 props，但 **context 的变化穿透 `memo`**：provider 每次渲染新建 value 时，消费该 context 的 memo 行会跟着父组件一遍遍重渲染。
 
-`test/providerMemo.test.tsx` 用一个形状与 `SessionRowView` 一致的行把这条机制钉住（真 `react-dom` + jsdom，数的是行组件函数体的执行次数）：
+`test/providerMemo.test.tsx` 用一个形状与会话行外壳一致的行把这条机制钉住（真 `react-dom` + jsdom，数的是行组件函数体的执行次数）：
 
 | provider value | 两次父组件重渲染后，被 `memo` 包住的行重渲染次数 |
 | --- | --- |
 | 保持同一身份 | 0 |
 | 每次新建 | 2 |
 
-**但这条只在真有 `memo` 消费方时才承重。** 区域内被 `memo` 包住的只有 `SessionRowView` 与 `SessionRowMenu` 两个行组件：前者消费 `LocalViewOptions` 与 `RegionLocale`，后者消费 `RegionLocale`，**两个都不消费 `Expansion`**。因此折叠态那份 value 的稳定性目前不产生任何收益——`useExpansion()` 的消费方都是普通函数组件，context 变化只会让它们走一趟本就要走的重渲染。同理，`ExpansionCommands` 的成员是被单独读取的（`expansion.expandWorkspace`），两个命令 hook 的依赖数组里写的也是成员而不是整袋，整袋身份从来没被观察过。
+**但这条只在真有 `memo` 消费方时才承重。** 区域内被 `memo` 包住的只有会话行条目与外层行外壳两个组件：条目消费 `RegionLocale`，行外壳消费 `RegionLocale` 与 `LocalViewOptions`，**两个都不消费 `Expansion`**。因此折叠态那份 value 的稳定性目前不产生任何收益——`useExpansion()` 的消费方都是普通函数组件，context 变化只会让它们走一趟本就要走的重渲染。同理，`ExpansionCommands` 的成员是被单独读取的（`expansion.expandWorkspace`），两个命令 hook 的依赖数组里写的也是成员而不是整袋，整袋身份从来没被观察过。
 
 规则「只对真有 `memo` 消费方的 provider 引入 value 稳定化」记在[开发约定](conventions.md#性能优化)。折叠态那份仍然留着 `useMemo`，理由不是缓存收益，而是**依赖列语义**：函数在 memo 内部定义，依赖只列输入（三份记录、三个 setter、`nesting`），往袋里加一层不会出现「加了函数忘了补依赖」而静默持有旧闭包。视图选项与文案那两份则是真的为了缓存。
 
@@ -102,7 +102,7 @@ export function sameSessionStatus(a, b): boolean {
 
 这是错的。被 `memo` 挡下的行再也不会重渲染，而 `time` 依赖渲染当刻的时间：别的会话在流式输出时，这一行的时间会一直停住。对照模式下与官方并排就是肉眼可见的不一致。
 
-结论：推导放在哪一层，取决于这个值是否会独立于本行数据变化。3.3ms 买「时间始终正确」是划算的。现在 `status` / `time` 由父组件算好传入（内容稳定，可参与比对），这个权衡在 `SessionRowView` 的模块注释里写明了原因。
+结论：推导放在哪一层，取决于这个值是否会独立于本行数据变化。3.3ms 买「时间始终正确」是划算的。现在 `status` / `time` 由父组件算好传入（内容稳定，可参与比对），这个权衡在会话行外壳的模块注释里写明了原因。
 
 ## 什么时候 `memo` 才值得
 

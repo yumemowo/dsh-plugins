@@ -73,7 +73,7 @@ export function VirtualWorkspaceSection({
   return (
     <div className={styles.virtualWorkspace}>
       <div
-        className={clsx(styles.groupHead, styles.virtualWorkspaceHead, menuOpen && styles.rowMenuOpen)}
+        className={clsx(styles.groupHead, styles.virtualWorkspaceHead)}
         role="button"
         tabIndex={0}
         aria-expanded={expanded}
@@ -93,7 +93,7 @@ export function VirtualWorkspaceSection({
         <span className={styles.virtualWorkspaceLabel}>{section.label}</span>
         {/* 工作区数自己成格贴在行右，与会话分组的会话数、session 行的时间同格同形
             空分组不显示 */}
-        {section.workspaceIds.length <= 0 ? null : (
+        {section.workspaceIds.length > 0 && (
           <span className={styles.groupCount}>{section.workspaceIds.length}</span>
         )}
         {/* 操作位收进 session 行同一套可收放槽位：静止时不占宽，上面的工作区数因此贴到行右，悬停/菜单展开/键盘聚焦时槽位展开，工作区数隐去 */}

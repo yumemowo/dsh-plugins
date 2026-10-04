@@ -46,8 +46,8 @@ function options(fresh = false): LocalViewOptions {
     setPinOverflow: () => {},
     pinScope: 'section',
     setPinScope: () => {},
-    pinSectionCollapsed: false,
-    setPinSectionCollapsed: () => {},
+    pinSectionExpanded: true,
+    setPinSectionExpanded: () => {},
   }
   return fresh ? { ...shared } : shared
 }

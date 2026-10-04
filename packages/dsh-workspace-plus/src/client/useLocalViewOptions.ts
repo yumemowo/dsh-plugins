@@ -31,12 +31,12 @@ export interface LocalViewOptions {
   pinScope: PinScope
   setPinScope: (scope: PinScope) => void
   /**
-   * 置顶区是否收起
+   * 置顶区是否展开
    *
-   * 收起态是全局的（不按工作区分别记），因此是一个裸布尔而不是展开记录
+   * 展开态是全局的（不按工作区分别记），因此是一个裸布尔而不是展开记录
    */
-  pinSectionCollapsed: boolean
-  setPinSectionCollapsed: (collapsed: boolean) => void
+  pinSectionExpanded: boolean
+  setPinSectionExpanded: (expanded: boolean) => void
 }
 
 const LocalViewOptionsContext = createContext<LocalViewOptions | null>(null)

@@ -405,9 +405,14 @@
   overflow: hidden;
 }
 
-/* 时间与操作位共用同一组触发条件，保证任一时刻只有一方占据行尾 */
+/* 时间与操作位共用同一组触发条件，保证任一时刻只有一方占据行尾
+   菜单展开那条读锚点按钮自己的 aria-expanded
+   状态与它所属的按钮同源，不必再由持有者往行上另挂一个开合标记
+
+   判等是必须的：React 把闭合态渲染成 aria-expanded="false"，属性照旧在场
+   写成 [aria-expanded]（只判存在）会让每一行都命中，操作位与图钉从此常驻 */
 .row:hover .rowTime,
-.rowMenuOpen .rowTime,
+.row:has(.rowAction[aria-expanded='true']) .rowTime,
 .row:has(.rowAction:focus-visible) .rowTime { display: none; }
 
 /* ── 行尾的图钉 ───────────────────────────────────────────
@@ -468,18 +473,18 @@
 
 /* 分组的会话数与 time 一样让位，三条触发条件与上面那组一一对应，行类换成分组行 */
 .groupHead:hover .groupCount,
-.groupHead.rowMenuOpen .groupCount,
+.groupHead:has(.rowAction[aria-expanded='true']) .groupCount,
 .groupHead:has(.rowAction:focus-visible) .groupCount { display: none; }
 
 /* 分组行的操作位也收进同一套可收放槽位，展开宽度取自然宽
    里面是省略号和加号两个按钮（16 + 12 + 16），不是会话行的单个 16px
    槽位收着时操作位不占宽，会话数因此与 time 一样贴在行右，展开后由它接替行尾 */
 .groupHead:hover .rowActionSlot,
-.groupHead.rowMenuOpen .rowActionSlot,
+.groupHead:has(.rowAction[aria-expanded='true']) .rowActionSlot,
 .groupHead:has(.rowAction:focus-visible) .rowActionSlot { width: auto; }
 
 .row:hover .rowActionSlot,
-.rowMenuOpen .rowActionSlot,
+.row:has(.rowAction[aria-expanded='true']) .rowActionSlot,
 .row:has(.rowAction:focus-visible) .rowActionSlot { width: 16px; }
 
 /* 行内操作按钮
@@ -520,11 +525,14 @@
 }
 
 /* 显示路径只有三条：所在行悬停、菜单展开期间（否则锚点按钮会在菜单还开着时消失）、以及键盘聚焦
-   工作区行与分组行各有自己的行类，因此悬停选择器要分别列出 */
+   工作区行与分组行各有自己的行类，因此悬停选择器要分别列出
+   菜单展开那条读锚点按钮自己的 aria-expanded，持有者因此不必再往行上另挂一个开合标记 */
 .row:hover .rowAction,
 .workspaceHead:hover .rowAction,
 .groupHead:hover .rowAction,
-.rowMenuOpen .rowAction,
+.row:has(.rowAction[aria-expanded='true']) .rowAction,
+.workspaceHead:has(.rowAction[aria-expanded='true']) .rowAction,
+.groupHead:has(.rowAction[aria-expanded='true']) .rowAction,
 .rowAction:focus-visible { opacity: 1; pointer-events: auto; }
 
 /* 一行条目，与工作区行同形——行本身是可点的 div（.row 那一套）

@@ -59,7 +59,7 @@ import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { ALL_ENTRIES, sameAddress, virtualAddress, workspaceAddress } from '../../rootEntry.ts'
 import type { RootEntryAddress } from '../../rootEntry.ts'
 import { useFlipMarker } from '../useFlipMarker.ts'
-import { UNGROUPED_KEY, expandedAt, indicatorOf, modeOf, pinOverflowOf, pinScopeOf, pinSectionCollapsedOf, sessionGroupExpansionOf, sessionGroupKey, virtualExpansionOf, workspaceExpansionOf } from '../store/viewMode.ts'
+import { UNGROUPED_KEY, expandedAt, indicatorOf, modeOf, pinOverflowOf, pinScopeOf, pinSectionExpandedOf, sessionGroupExpansionOf, sessionGroupKey, virtualExpansionOf, workspaceExpansionOf } from '../store/viewMode.ts'
 import type { SessionGroupRef, ViewModeStoreHandle } from '../store/viewMode.ts'
 import { RegionLocaleProvider } from '../useLocale.ts'
 import { ExpansionProvider } from '../useExpansion.ts'
@@ -273,8 +273,8 @@ function useLocalViewOptionsValue(props: WorkspaceGroupsProps): LocalViewOptions
   const indicator = indicatorOf(useStore((state) => state))
   const pinOverflow = pinOverflowOf(useStore((state) => state))
   const pinScope = pinScopeOf(useStore((state) => state))
-  const pinSectionCollapsed = pinSectionCollapsedOf(useStore((state) => state))
-  const { setMode, setIndicator, setPinOverflow, setPinScope, setPinSectionCollapsed } = actions
+  const pinSectionExpanded = pinSectionExpandedOf(useStore((state) => state))
+  const { setMode, setIndicator, setPinOverflow, setPinScope, setPinSectionExpanded } = actions
   // value 身份要稳定：它经 context 交给每一行，每次渲染新建会让行级 memo 全部失效
   return useMemo(
     () => ({
@@ -286,8 +286,8 @@ function useLocalViewOptionsValue(props: WorkspaceGroupsProps): LocalViewOptions
       setPinOverflow,
       pinScope,
       setPinScope,
-      pinSectionCollapsed,
-      setPinSectionCollapsed,
+      pinSectionExpanded,
+      setPinSectionExpanded,
     }),
     [
       mode,
@@ -298,8 +298,8 @@ function useLocalViewOptionsValue(props: WorkspaceGroupsProps): LocalViewOptions
       setPinOverflow,
       pinScope,
       setPinScope,
-      pinSectionCollapsed,
-      setPinSectionCollapsed,
+      pinSectionExpanded,
+      setPinSectionExpanded,
     ],
   )
 }
@@ -1262,7 +1262,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const { labels, workspaces, archivedSessionIds, pinnedSessionIds,
     sessions, statusSnapshot, home, official } = sources
   const localViewOptions = useLocalViewOptionsValue(props)
-  const { mode: viewMode, indicator, pinOverflow, pinScope, pinSectionCollapsed, setPinSectionCollapsed } = localViewOptions
+  const { mode: viewMode, indicator, pinOverflow, pinScope, pinSectionExpanded, setPinSectionExpanded } = localViewOptions
   const { snapshot, apply } = useSnapshotFeed(props.loadGroups, props.onReady)
   const layout = useRegionLayout(workspaces, snapshot, labels)
   const expansion = useExpansionValue(props, layout.nesting)
@@ -1562,8 +1562,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             entries={pinned}
             visibleCount={snapshot.pinnedVisibleCount}
             overflow={pinOverflow}
-            collapsed={pinSectionCollapsed}
-            onToggleCollapsed={() => setPinSectionCollapsed(!pinSectionCollapsed)}
+            expanded={pinSectionExpanded}
+            onToggle={() => setPinSectionExpanded(!pinSectionExpanded)}
             onTogglePin={toggleSessionPin}
             canPin={canPin}
             official={official}

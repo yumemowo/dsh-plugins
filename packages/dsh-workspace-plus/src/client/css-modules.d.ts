@@ -160,7 +160,6 @@ declare module '*/rows.module.css' {
     readonly "rowActionDanger": string
     readonly "rowActionSlot": string
     readonly "rowActions": string
-    readonly "rowMenuOpen": string
     readonly "rowPin": string
     readonly "rowPinOff": string
     readonly "rowPinOn": string

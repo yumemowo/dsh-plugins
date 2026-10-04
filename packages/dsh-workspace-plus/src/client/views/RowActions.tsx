@@ -4,8 +4,8 @@
  * 工作区行与分组行共用同一份布局与显隐语义（`.rowActions` 的 12px 间距、`.rowAction` 的悬停显隐）
  * 差异只在菜单条目与两个无障碍文案，因此收在这里而不是各写一遍
  *
- * 菜单开合状态由持有行的组件持有：行组件要给行加上 `rowMenuOpen`
- * 该标记同时负责「菜单开着时锚点按钮不消失」（见 `rows.module.css` 的 `.rowMenuOpen`）
+ * 菜单开合状态由持有行的组件持有，本组件只把它转成锚点按钮上的 `aria-expanded`
+ * 样式据此把展开期间的操作位留住（见 `rows.module.css` 的 `.rowAction` 显隐规则）
  */
 import type { ReactElement } from 'react'
 import {
@@ -44,7 +44,7 @@ export function RowActions({
 
   return (
     <span className={rowsStyles.rowActions}>
-      {menuItems === undefined ? null : (
+      {menuItems && (
         <Menu
           open={menuOpen}
           onClose={() => onMenuOpen(false)}
@@ -61,6 +61,7 @@ export function RowActions({
               type="button"
               className={rowsStyles.rowAction}
               aria-label={actionsLabel}
+              aria-expanded={menuOpen}
               onClick={(event) => {
                 event.stopPropagation()
                 onMenuOpen(!menuOpen)
@@ -72,7 +73,7 @@ export function RowActions({
           items={menuItems}
         />
       )}
-      {create === undefined ? null : (
+      {create && (
         <IconButton
           ariaLabel={create.label}
           // 取官方工作区行新建会话按钮的字形，与本包行内那枚按钮一致

@@ -77,7 +77,7 @@ export interface SessionPinMenuInput {
  * 会话菜单的构造输入：三段都可缺省
  *
  * `grouping` 缺省表示该行没有分组可归（「未分组」桶），`official` 缺省表示宿主未提供官方会话操作
- * 三段都缺时菜单为空——调用方此时应当直接渲染 `SessionRowView` 而不挂菜单
+ * 三段都缺时菜单为空，`SessionRowItem` 据此连锚点按钮与右键面板一起不挂
  */
 export interface SessionMenuInput {
   grouping?: GroupMenuInput | undefined

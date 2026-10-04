@@ -30,8 +30,7 @@ import type { PinnedEntry } from '../data/pinned.ts'
 import { DEFAULT_EXPAND_MOTION, expandMotionVars } from '../utils/expandMotion.ts'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import { useLocale } from '../useLocale.ts'
-import { SessionRowMenu } from './SessionRowMenu.tsx'
-import { SessionRowView } from './SessionRowView.tsx'
+import { SessionRowItem } from './SessionRowItem.tsx'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { PinnedLabels, RegionLabels } from '../labels.ts'
 import styles from './PinnedSection.module.css'
@@ -62,9 +61,9 @@ export interface PinnedSectionProps {
   visibleCount: number
   /** 溢出给法，来自浏览器本地 store */
   overflow: 'expand' | 'scroll'
-  /** 是否收起，来自浏览器本地 store */
-  collapsed: boolean
-  onToggleCollapsed: () => void
+  /** 是否展开，来自浏览器本地 store */
+  expanded: boolean
+  onToggle: () => void
   /** 切换一条会话的置顶 */
   onTogglePin: (sessionId: string) => void
   /** 是否还能新增置顶，达到上限时该项禁用 */
@@ -83,16 +82,16 @@ export interface PinnedSectionProps {
  * 溢出时报「N 条 · 还有 M 条」而不是「N 条中的 X 条」：后者要读者自己做减法
  * @param total - 置顶总条数
  * @param shown - 静止时显示几条
- * @param collapsed - 是否处于收起态
+ * @param expanded - 是否处于展开态
  * @param labels - 置顶区文案
  */
 function hintText(
   total: number,
   shown: number,
-  collapsed: boolean,
+  expanded: boolean,
   labels: PinnedLabels,
 ): string {
-  if (collapsed || total <= shown) return labels.count(total)
+  if (!expanded || total <= shown) return labels.count(total)
   return labels.more(total, total - shown)
 }
 
@@ -117,8 +116,8 @@ export function PinnedSection({
   entries,
   visibleCount,
   overflow,
-  collapsed,
-  onToggleCollapsed,
+  expanded,
+  onToggle,
   onTogglePin,
   canPin,
   official,
@@ -164,18 +163,18 @@ export function PinnedSection({
     <button
       type="button"
       className={styles.pinHead}
-      aria-expanded={!collapsed}
-      onClick={onToggleCollapsed}
+      aria-expanded={expanded}
+      onClick={onToggle}
     >
       <span className={styles.pinHeadSlot}>
         <IconTriangleRightFillRegular
-          className={clsx(styles.pinArrow, !collapsed && styles.pinArrowOpen)}
+          className={clsx(styles.pinArrow, expanded && styles.pinArrowOpen)}
         />
       </span>
       <span className={styles.pinHeadName}>{labels.pinned.section}</span>
       <span className={styles.pinHeadSpacer} />
       <span className={styles.pinHeadHint}>
-        {hintText(entries.length, visibleCount, collapsed, labels.pinned)}
+        {hintText(entries.length, visibleCount, expanded, labels.pinned)}
       </span>
     </button>
   )
@@ -211,13 +210,13 @@ export function PinnedSection({
 
   return (
     <div
-      className={clsx(styles.pinnedSection, collapsed ? undefined : pinExpandClass)}
+      className={clsx(styles.pinnedSection, expanded && pinExpandClass)}
       style={sizing}
       data-wg-overflow={overflow}
     >
       {head}
       {/* 收起后只剩段头一行。分隔仍留着：不留它就与下面的工作区行接在一起了 */}
-      {collapsed ? null : (
+      {expanded && (
         <div
           className={clsx(styles.pinScroll, pinScrollClass)}
           // 触发区是预览行本身，不含段头；没有行被裁掉时不接悬停，那种浮出只是白闪一下
@@ -253,13 +252,12 @@ export function PinnedSection({
 /**
  * 置顶区里的一行
  *
- * 复用会话行组件，因此状态位、几何与键盘行为与列表里的行完全一致
+ * 复用会话行条目组件，因此状态位、几何与键盘行为与列表里的行完全一致
  * 每一条本就已置顶，于是走「已置顶」那条排布：图钉钉在最右，位置不随时间与操作位变
  * 不挂悬停卡片：这些行已经钉在一段固定的区里，来源由位置说明，卡片在这里只多一层浮层
  *
- * 行上有官方操作可做时挂上带菜单的行，与列表里的行同一套条目与分派
- * 官方服务不在场或这一条是新建中的空白会话时退回无菜单的行，只留图钉
- * 取消置顶必须仍然可点，因此图钉不能跟着菜单一起省掉
+ * 官方服务不在场、或这一条是新建中的空白会话时，条目组件自己就不生成菜单，这里因此不分叉
+ * 取消置顶必须仍然可点：图钉与菜单的有无无关，不受影响
  */
 function PinnedRow({
   entry,
@@ -285,32 +283,13 @@ function PinnedRow({
 }): ReactElement {
   const view = statusViewOfRow(entry.row, statuses, labels.status)
 
-  if (official === undefined || entry.blank) {
-    return (
-      <SessionRowView
-        sessionId={entry.id}
-        title={entry.blank ? null : entry.title}
-        selected={entry.current}
-        status={view.dot}
-        statuses={view.statuses}
-        hover={false}
-        pinned
-        clipped={clipped}
-        onTogglePin={onTogglePin}
-        onOpenSession={onOpenSession}
-      />
-    )
-  }
-
   return (
-    <SessionRowMenu
+    <SessionRowItem
       row={entry.row}
       title={entry.blank ? null : entry.title}
       selected={entry.current}
       status={view.dot}
-      statuses={view.statuses}
       official={official}
-      disableHoverCard
       pinned
       canPin={canPin}
       clipped={clipped}

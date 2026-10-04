@@ -31,9 +31,8 @@ import { useLocale } from '../useLocale.ts'
 import { useLocalViewOptions } from '../useLocalViewOptions.ts'
 import { ExpandableBody } from './components/ExpandableBody.tsx'
 import { SearchResults } from './SearchControl.tsx'
-import { SessionRowMenu } from './SessionRowMenu.tsx'
-import type { SessionGroupingContext } from './SessionRowMenu.tsx'
-import { SessionRowView } from './SessionRowView.tsx'
+import { SessionRowItem } from './SessionRowItem.tsx'
+import type { SessionGroupingContext } from './SessionRowItem.tsx'
 import { VirtualWorkspaceSection } from './VirtualWorkspaceSection.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
 import { WorkspaceSection } from './WorkspaceSection.tsx'
@@ -421,52 +420,44 @@ export function sessionRowElement(
   const view = statusViewOfRow(row, context.statusSnapshot, labels.status)
   const { time, hoverTime } = rowTimes(row, context, labels)
   // 置顶两格由行的上下文统一下发：行本身不知道自己在不在置顶集合里
-  const pin = {
-    pinned: context.pinnedSessionIds.has(row.id),
-    canPin: context.canPin,
-    onTogglePin: context.onTogglePin,
-  }
-  if (row.blank) {
-    return (
-      <SessionRowView
-        key={row.id}
-        sessionId={row.id}
-        title={null}
-        selected={row.id === context.currentSessionId}
-        status={view.dot}
-        time={time}
-        statuses={view.statuses}
-        hoverTime={hoverTime}
-        hover={context.official !== undefined}
-        onOpenSession={context.openSession}
-        onReveal={reveal}
-      />
-    )
-  }
+  // 空白会话是「准备开始一个新会话」的占位，不提供置顶入口
+  const pin = row.blank
+    ? {}
+    : {
+        pinned: context.pinnedSessionIds.has(row.id),
+        canPin: context.canPin,
+        onTogglePin: context.onTogglePin,
+      }
   return (
-    <SessionRowMenu
+    <SessionRowItem
       key={row.id}
       row={row}
-      title={row.title}
+      title={row.blank ? null : row.title}
       selected={row.id === context.currentSessionId}
       status={view.dot}
       time={time}
-      statuses={view.statuses}
-      hoverTime={hoverTime}
       grouping={grouping}
       official={context.official}
+      // 宿主没加载官方 ui-workspace 时官方文案整体拿不到，浮出一个空壳不如不浮
+      // 空白会话的标题是语言包的占位文案，不是会话内容，复制它没有意义
+      card={
+        context.official && {
+          time: hoverTime,
+          statuses: view.statuses,
+          copy: row.blank ? undefined : row.title,
+        }
+      }
       {...pin}
       onOpenSession={context.openSession}
       onReveal={reveal}
     />
-  )
+  );
 }
 
 /**
  * 渲染未分组桶里的一个会话行
  *
  * 这些会话不属于任何工作区，没有分组可归，因此菜单里只有官方操作块（归组项无处落）
- * 宿主未提供官方服务时菜单会是空的，那时直接渲染无菜单的行，不留点不动的省略号
  * 与工作区内的行分开成两处：那里的行按分组上下文渲染，这里的行没有那层上下文
  */
 export function ungroupedRowElement(
@@ -478,38 +469,29 @@ export function ungroupedRowElement(
   const reveal =
     row.id === context.revealSessionId ? () => context.acknowledgeReveal(row.id) : undefined
   const { time, hoverTime } = rowTimes(row, context, labels)
-  if (context.official === undefined || row.blank) {
-    return (
-      <SessionRowView
-        key={row.id}
-        sessionId={row.id}
-        title={row.blank ? null : row.title}
-        selected={row.id === context.currentSessionId}
-        status={view.dot}
-        time={time}
-        statuses={view.statuses}
-        hoverTime={hoverTime}
-        hoverCopy={row.blank ? undefined : row.title}
-        hover={context.official !== undefined}
-        onOpenSession={context.openSession}
-        onReveal={reveal}
-      />
-    )
-  }
   return (
-    <SessionRowMenu
+    <SessionRowItem
       key={row.id}
       row={row}
-      title={row.title}
+      title={row.blank ? null : row.title}
       selected={row.id === context.currentSessionId}
       status={view.dot}
       time={time}
-      statuses={view.statuses}
-      hoverTime={hoverTime}
       official={context.official}
-      pinned={context.pinnedSessionIds.has(row.id)}
-      canPin={context.canPin}
-      onTogglePin={context.onTogglePin}
+      // 宿主没加载官方 ui-workspace 时官方文案整体拿不到，浮出一个空壳不如不浮
+      card={
+        context.official === undefined
+          ? undefined
+          : { time: hoverTime, statuses: view.statuses, copy: row.blank ? undefined : row.title }
+      }
+      // 空白会话是「准备开始一个新会话」的占位，不提供置顶入口
+      {...(row.blank
+        ? {}
+        : {
+            pinned: context.pinnedSessionIds.has(row.id),
+            canPin: context.canPin,
+            onTogglePin: context.onTogglePin,
+          })}
       onOpenSession={context.openSession}
       onReveal={reveal}
     />

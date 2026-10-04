@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as React from 'react'
 import type { ReactElement } from 'react'
 import { GroupSection } from '../src/client/views/GroupSection.tsx'
-import { SessionRowMenu } from '../src/client/views/SessionRowMenu.tsx'
+import { SessionRowItem } from '../src/client/views/SessionRowItem.tsx'
 import { WorkspaceSection } from '../src/client/views/WorkspaceSection.tsx'
 import type { WorkspaceSectionProps } from '../src/client/views/WorkspaceSection.tsx'
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
@@ -508,7 +508,7 @@ function sessionRowNode(options: {
   grouping?: boolean
   groupSections?: { id: string; label: string; sessions: [] }[]
 } = {}): unknown {
-  return withLocale(React.createElement(SessionRowMenu, {
+  return withLocale(React.createElement(SessionRowItem, {
     row: {
       id: 's1',
       title: '会话一',
@@ -1170,6 +1170,20 @@ describe('WorkspaceGroupsRegion render', () => {
     ])
   })
 
+  it('leaves the blank session row without a right-click menu either', () => {
+    // 右键面板与行尾按钮共用同一批条目，因此空白行必须两处都不给
+    // 只拦按钮的话右键仍会弹出一份「重命名 / 分叉 / 归档」，而官方对空白行两处都不挂
+    const withBlank = { menus: [] as unknown[], text: [] as string[], contextMenus: [] as unknown[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true, { blankCurrent: true })), withBlank)
+    const without = { menus: [] as unknown[], text: [] as string[], contextMenus: [] as unknown[] }
+    render(React.createElement(WorkspaceGroupsRegion, props(true)), without)
+
+    // 多出这条占位行后右键菜单数不变：空白行一份都不贡献
+    // 三份分别是工作区行、那条常规会话行、未分组桶里的会话行
+    expect(withBlank.contextMenus).toHaveLength((without.contextMenus ?? []).length)
+    expect(withBlank.contextMenus).toHaveLength(3)
+  })
+
   it('shows the summary title once the session leaves the blank state', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
@@ -1670,11 +1684,16 @@ describe('hover cards', () => {
    * 一张卡片是给哪种行挂的
    *
    * 锚点就是那行本身，因此按行类名认，卡片按文档序发出，工作区行在会话行之前
+   * 会话行的锚点是一整个行组件（行本身由它渲染），类名要穿过它才读得到；
+   * 那一层的 `sessionId` 足以认出它是会话行，不必再把它渲染一遍
    */
   function anchorClass(card: unknown): string {
-    const anchor = (card as { props: { anchor?: { props?: Record<string, unknown> } } }).props
-      .anchor
-    return String(anchor?.props?.['className'] ?? '')
+    const anchor = (card as { props: { anchor?: unknown } }).props.anchor as
+      | { props?: Record<string, unknown> }
+      | undefined
+    const direct = anchor?.props?.['className']
+    if (typeof direct === 'string') return direct
+    return anchor?.props?.['sessionId'] === undefined ? '' : 'row'
   }
 
   it('hangs one card on the workspace row and one on each session row', () => {
@@ -1802,7 +1821,7 @@ describe('hover cards', () => {
   it('suppresses the card on a row while either of its panels is open', () => {
     // 单行渲染，测试替身按组件类型给状态分桶，同一类型的多个实例共用一份状态
     // 整片列表里所有会话行会一起「被右键」，那样断言不出「只有这一行让位」
-    const node = withLocale(React.createElement(SessionRowMenu, {
+    const node = withLocale(React.createElement(SessionRowItem, {
       row: {
         id: 's1',
         title: '会话一',
@@ -1814,9 +1833,8 @@ describe('hover cards', () => {
       },
       title: '会话一',
       selected: false,
-        statuses: [{ state: 'done', label: '空闲' }],
-      hoverTime: '5分钟前',
       onOpenSession: () => {},
+      card: { statuses: [{ state: 'done', label: '空闲' }], time: '5分钟前' },
       official: {
         renameSession: async () => {},
         forkSession: () => {},
@@ -1848,7 +1866,7 @@ describe('hover cards', () => {
 
   it('suppresses the card while the row own menu is open', () => {
     // 行内 `...` 菜单是另一处浮在行上的面板，两条路径都要让位
-    const node = withLocale(React.createElement(SessionRowMenu, {
+    const node = withLocale(React.createElement(SessionRowItem, {
       row: {
         id: 's1',
         title: '会话一',
@@ -1860,8 +1878,8 @@ describe('hover cards', () => {
       },
       title: '会话一',
       selected: false,
-        hoverTime: '5分钟前',
       onOpenSession: () => {},
+      card: { time: '5分钟前' },
       official: {
         renameSession: async () => {},
         forkSession: () => {},

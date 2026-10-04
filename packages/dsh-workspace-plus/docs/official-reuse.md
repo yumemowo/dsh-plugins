@@ -102,7 +102,7 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 
 | hook | 装什么 | 消费方 |
 | --- | --- | --- |
-| `useLocalViewOptions.ts` | 展示方式、指示器样式 | `ViewOptionsMenu`（两项设置在面板里）、`SessionRowView`（指示器样式影响每行的字形）、`RegionListArea`（展示方式决定三条分支） |
+| `useLocalViewOptions.ts` | 展示方式、指示器样式 | `ViewOptionsMenu`（两项设置在面板里）、会话行外壳（指示器样式影响每行的字形）、`RegionListArea`（展示方式决定三条分支） |
 | `useExpansion.ts` | 三层折叠态的读与取反 | `RegionListArea`（虚拟分组段、未分组桶、工作区行）、`WorkspaceSection`（组内会话分组） |
 
 驱动这条规则的是**消费方散布**，不是「store 的东西特殊」：这两类值的消费点都穿过整棵渲染树，逐层传会让每一层都被迫声明一圈与自己无关的签名，而中间层（例如 `WorkspaceSection`）还得为此多收一个它不用的 `workspaceId`（现在它确实要拿这个 id 才能定位组内分组，但那本来就是它作为「一个工作区区块」应有的身份）。

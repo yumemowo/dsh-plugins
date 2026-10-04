@@ -75,7 +75,7 @@ export interface ViewModeState {
   expansion?: ExpansionState | undefined
   pinOverflow?: PinOverflow | undefined
   pinScope?: PinScope | undefined
-  pinSectionCollapsed?: boolean | undefined
+  pinSectionExpanded?: boolean | undefined
 }
 
 /** 展示方式，旧数据缺这一格时按「按工作区」 */
@@ -115,12 +115,12 @@ export function pinScopeOf(state: ViewModeState): PinScope {
 }
 
 /**
- * 置顶区的收起态
+ * 置顶区的展开态
  *
  * 全局一个布尔，不按工作区分别记；旧数据缺这一格时是展开
  */
-export function pinSectionCollapsedOf(state: ViewModeState): boolean {
-  return state.pinSectionCollapsed === true
+export function pinSectionExpandedOf(state: ViewModeState): boolean {
+  return state.pinSectionExpanded !== false
 }
 
 /** 工作区层的展开记录，旧数据缺这一格时是空表（等于用户一层都没碰过） */
@@ -172,7 +172,7 @@ export function createViewModeStore() {
       // 置顶区的三项同样显式写下默认值，理由与上一行相同
       pinOverflow: 'expand',
       pinScope: 'section',
-      pinSectionCollapsed: false,
+      pinSectionExpanded: true,
     }),
     persist: VIEW_MODE_PERSIST_KEY,
     actions: {
@@ -188,8 +188,8 @@ export function createViewModeStore() {
       setPinScope: (draft, scope: PinScope) => {
         draft.pinScope = scope
       },
-      setPinSectionCollapsed: (draft, collapsed: boolean) => {
-        draft.pinSectionCollapsed = collapsed
+      setPinSectionExpanded: (draft, expanded: boolean) => {
+        draft.pinSectionExpanded = expanded
       },
       /**
        * 记下工作区层的选择
