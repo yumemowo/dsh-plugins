@@ -27,13 +27,17 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
     Menu: ({
       items,
       onSelect,
+      anchor,
     }: {
       items?: { id: string; label?: React.ReactNode; disabled?: boolean }[]
       onSelect?: (id: string) => void
+      anchor?: React.ReactNode
     }) =>
       h(
         'div',
         { 'data-wg-test-menu': '' },
+        // 真原语把锚点按钮渲染在面板旁，这里照做：行尾那枚 `...` 因此留在文档里可点
+        anchor,
         (items ?? []).map((item) =>
           h(
             'button',
@@ -533,6 +537,167 @@ describe('pin in the row menu', () => {
     // 上限只拦新增：未置顶行禁用，已置顶的照常可以取消
     expect(item(rowWithPin(container, false), 'pin').disabled).toBe(true)
     expect(item(rowWithPin(container, true), 'pin').disabled).toBe(false)
+    await act(async () => root.unmount())
+  })
+})
+
+describe('menu on a pinned row', () => {
+  /** 置顶区第一行行尾那枚 `...` 按钮 */
+  function actionButton(container: HTMLElement, index = 0): HTMLButtonElement {
+    const found = pinnedRows(container)[index]?.querySelector<HTMLButtonElement>('.rowAction')
+    if (found === null || found === undefined) throw new Error('pinned row has no action button')
+    return found
+  }
+
+  /** 一行上渲染出来的菜单项 id，去重后取集合 */
+  function itemIds(row: HTMLElement): string[] {
+    return [
+      ...new Set(
+        Array.from(row.querySelectorAll('[data-wg-test-item]')).map(
+          (entry) => entry.getAttribute('data-wg-test-item') ?? '',
+        ),
+      ),
+    ]
+  }
+
+  it('puts the action slot and the official items on a pinned row', async () => {
+    const { container, root } = await mount()
+
+    // 行尾的操作位与列表里的会话行同形，条目也来自同一段构造
+    expect(actionButton(container)).not.toBeNull()
+    expect(itemIds(pinnedRows(container)[0] as HTMLElement)).toEqual([
+      'pin',
+      'rename',
+      'fork',
+      'archive',
+    ])
+    await act(async () => root.unmount())
+  })
+
+  it('pins a row from the menu the same way the tail button does', async () => {
+    const pinned: { id: string; value: boolean }[] = []
+    const { container, root } = await mount({
+      setSessionPinned: async (id, value) => {
+        pinned.push({ id, value })
+      },
+    })
+    const row = pinnedRows(container)[0] as HTMLElement
+
+    await act(async () => {
+      row.querySelector<HTMLButtonElement>('[data-wg-test-item="pin"]')?.click()
+    })
+
+    // 置顶区里的行本已置顶，菜单项因此落到取消置顶
+    expect(pinned).toEqual([{ id: 'a', value: false }])
+    await act(async () => root.unmount())
+  })
+
+  it('opens a pinned row with the official fork instead of the row menu', async () => {
+    const forked: string[] = []
+    const opened: string[] = []
+    const { container, root } = await mount({
+      openSession: (id) => opened.push(id),
+      official: () => ({
+        renameSession: async () => {},
+        forkSession: (id) => forked.push(id),
+        archiveSession: async () => {},
+        labels: officialSessionLabels(workspaceTranslate()),
+        relativeTime: (updatedAt, now) => timeLabel(updatedAt, now, workspaceTranslate()),
+      }),
+    })
+
+    await act(async () => {
+      pinnedRows(container)[0]?.querySelector<HTMLButtonElement>('[data-wg-test-item="fork"]')?.click()
+    })
+
+    expect(forked).toEqual(['a'])
+    // 点菜单项不该连带把行打开：面板挂在行内，行本身也可点
+    expect(opened).toEqual([])
+    await act(async () => root.unmount())
+  })
+
+  it('opens the row context menu on a pinned row', async () => {
+    const { container, root } = await mount()
+    const row = pinnedRows(container)[0] as HTMLElement
+
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 40, clientY: 50 }))
+    })
+
+    // 右键是行尾操作位的捷径，同一批条目因此在右键下也拿得到
+    expect(itemIds(row)).toEqual(['pin', 'rename', 'fork', 'archive'])
+    await act(async () => root.unmount())
+  })
+
+  it('keeps the pinned row free of a hover card', async () => {
+    const { container, root } = await mount()
+
+    // 这些行已经钉在一段固定的区里，来源由位置说明，卡片在这里只多一层浮层
+    expect(container.querySelector('.pinScroll [data-wg-hover-anchor]')).toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('holds the popover open while a panel is open on a pinned row', async () => {
+    // 7 条置顶、可见 5 条：指针离开预览区时浮出本该收回
+    const { container, root } = await mount({
+      useWorkspaces: workspaceSource({ pinned: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }),
+    })
+    const scroll = container.querySelector<HTMLElement>('.pinScroll')
+    await act(async () => {
+      // 必须派发 pointerover：React 收不到 pointerenter
+      scroll?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
+    })
+
+    await act(async () => actionButton(container).click())
+    // 面板 portal 到 body，指针移上去就离开了预览区
+    await act(async () => {
+      scroll?.dispatchEvent(new PointerEvent('pointerout', { bubbles: true }))
+    })
+
+    expect(container.querySelector('.pinScroll')?.className).toContain('pinScrollOpen')
+
+    // 面板一关，指针也确实不在预览区上，浮出这时才收回
+    await act(async () => {
+      pinnedRows(container)[0]
+        ?.querySelector<HTMLButtonElement>('[data-wg-test-item="rename"]')
+        ?.click()
+    })
+    await act(async () => {
+      scroll?.dispatchEvent(new PointerEvent('pointerout', { bubbles: true }))
+    })
+
+    expect(container.querySelector('.pinScroll')?.className).not.toContain('pinScrollOpen')
+    await act(async () => root.unmount())
+  })
+
+  it('renders a plain row while the official service is absent', async () => {
+    const { container, root } = await mount({ official: () => undefined })
+
+    // 宿主未加载官方 ui-workspace 时菜单会是空的，那时不留点不动的省略号
+    expect(container.querySelector('.pinScroll .rowAction')).toBeNull()
+    expect(pinnedRows(container)).toHaveLength(2)
+    await act(async () => root.unmount())
+  })
+
+  it('leaves a blank pinned session without a menu but keeps its unpin button', async () => {
+    // 新建中的空白会话可以置顶，但它只是「准备开始一个新会话」的占位，没有会话可重命名或归档
+    const subs = ['blank', 'a']
+    const byId: Record<string, unknown> = {
+      blank: summary('blank', 1_000, { blank: true, retainedBy: { mainView: 1 } }),
+      a: { ...(SUMMARIES['a'] as object), retainedBy: {} },
+    }
+    const { container, root } = await mount({
+      useWorkspaces: workspaceSource({ pinned: ['blank', 'a'] }),
+      useSessions: ((select: (s: unknown) => unknown) =>
+        select({ ids: subs, byId, phase: 'ready' })) as never,
+    })
+
+    expect(pinnedRows(container)).toHaveLength(2)
+    // 只有这一行没有菜单，同一个区里那条普通会话照常带着操作位
+    expect(pinnedRows(container)[0]?.querySelector('.rowAction')).toBeNull()
+    expect(pinnedRows(container)[1]?.querySelector('.rowAction')).not.toBeNull()
+    // 取消置顶必须仍然可点
+    expect(pinnedRows(container)[0]?.querySelector('.rowPinOn')).not.toBeNull()
     await act(async () => root.unmount())
   })
 })

@@ -7,10 +7,12 @@
  *
  * 新建中（空白）会话行没有会话可操作，与官方一样整条行都不挂菜单，那条行只是「准备开始一个新会话」的占位，对它重命名或归档都无从谈起
  *
+ * 置顶区里的行也走这一个组件：那些行只给官方操作块，也不挂悬停卡片
+ *
  * 菜单开合状态收敛在本组件内：行组件在 map 回调里生成，把 useState 留在行内会让每行无条件多挂一组 hook 状态，独立组件则按需挂载
  * 重命名对话框也留在这里——只有真正打开过的行才付出这份状态
  */
-import { memo, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import type { ReactElement } from 'react'
 import { IconEllipsisOutlineRegular, Menu } from '../runtime.ts'
 import { buildSessionMenuItems } from '../menus.tsx'
@@ -68,12 +70,26 @@ export interface SessionRowMenuProps {
   grouping?: SessionGroupingContext | undefined
   /** 官方会话操作，缺省时菜单里没有官方操作块 */
   official?: OfficialSessionActions | undefined
+  /** 该行不挂悬停卡片 */
+  disableHoverCard?: boolean | undefined
+  /**
+   * 行上面板开合变化的回报，缺省表示调用方不关心
+   *
+   * 面板 portal 到 body，行外面看不到它，需要据它维持别处状态的调用方只能靠这一格
+   */
+  onPanelOpenChange?: ((sessionId: string, open: boolean) => void) | undefined
   /** 该行是否已置顶 */
   pinned?: boolean | undefined
   /** 是否还能新增置顶，达到上限时图钉转禁用态 */
   canPin?: boolean | undefined
   /** 切换这一行的置顶 */
   onTogglePin?: ((sessionId: string) => void) | undefined
+  /**
+   * 该行是否被容器裁在高度之外
+   *
+   * 缺省表示不涉及裁剪，含义与 `SessionRowView` 的同名 prop 相同
+   */
+  clipped?: boolean | undefined
   /**
    * 打开会话
    *
@@ -135,8 +151,11 @@ function sameRowMenuProps(prev: SessionRowMenuProps, next: SessionRowMenuProps):
     prev.time === next.time &&
     prev.pinned === next.pinned &&
     prev.canPin === next.canPin &&
+    prev.clipped === next.clipped &&
     prev.onTogglePin === next.onTogglePin &&
     prev.hoverTime === next.hoverTime &&
+    prev.disableHoverCard === next.disableHoverCard &&
+    prev.onPanelOpenChange === next.onPanelOpenChange &&
     sameSessionStatuses(prevStatuses, nextStatuses) &&
     prev.official === next.official &&
     prev.onOpenSession === next.onOpenSession &&
@@ -155,8 +174,11 @@ function SessionRowMenuView({
   hoverTime,
   grouping,
   official,
+  disableHoverCard,
+  onPanelOpenChange,
   pinned,
   canPin,
+  clipped,
   onTogglePin,
   onOpenSession,
   onReveal,
@@ -208,6 +230,20 @@ function SessionRowMenuView({
 
   const contextMenu = useRowContextMenu({ items, onSelect: select })
 
+  // 两种面板任一开着都算「行上有面板」，回报给需要据它维持别处状态的调用方
+  const panelOpen = menuOpen || contextMenu.open
+  useEffect(() => {
+    if (onPanelOpenChange === undefined) return
+    onPanelOpenChange(row.id, panelOpen)
+  }, [onPanelOpenChange, panelOpen, row.id])
+  // 行被卸载时若面板还开着，宿主收不到「关」的那一次回报，这里补上
+  useEffect(
+    () => () => {
+      onPanelOpenChange?.(row.id, false)
+    },
+    [onPanelOpenChange, row.id],
+  )
+
   return (
     <>
       <SessionRowView
@@ -221,12 +257,13 @@ function SessionRowMenuView({
         // 空白行由调用方整段不渲染，因此走到这里的标题一定是会话内容，可复制
         hoverCopy={title ?? undefined}
         // 宿主没加载官方 ui-workspace 时官方文案整体拿不到，浮出一个空壳不如不浮
-        hover={official !== undefined}
+        hover={!disableHoverCard && official !== undefined}
         menuOpen={menuOpen}
         // 卡片要在两种面板开着时都让位：行内 `...` 菜单与行右键菜单
-        hoverDisabled={menuOpen || contextMenu.open}
+        hoverDisabled={panelOpen}
         pinned={pinned}
         canPin={canPin}
+        clipped={clipped}
         onTogglePin={onTogglePin}
         onOpenSession={onOpenSession}
         onReveal={onReveal}

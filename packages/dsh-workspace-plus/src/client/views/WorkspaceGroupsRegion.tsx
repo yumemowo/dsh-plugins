@@ -1565,6 +1565,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             collapsed={pinSectionCollapsed}
             onToggleCollapsed={() => setPinSectionCollapsed(!pinSectionCollapsed)}
             onTogglePin={toggleSessionPin}
+            canPin={canPin}
+            official={official}
             onOpenSession={openSession}
             statuses={statusSnapshot}
           />

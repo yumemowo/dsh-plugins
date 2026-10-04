@@ -17,9 +17,12 @@
  * `expand` 的浮出用绝对定位、不推挤下方内容
  * 浮出态不加内边距也不加描边环——前几行必须逐格不变，否则指针下的行会在展开瞬间动一下
  *
+ * 行上有面板开着（行内 `...` 菜单或右键菜单）时浮出不收回
+ * 面板 portal 到 body，指针移上去就离开了预览区，否则那一段会在菜单还开着时当场收回
+ *
  * 无置顶项时整块返回 `null`，段头与分隔都不出现，那一段空间完整交还给列表
  */
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { ReactElement } from 'react'
 import { IconTriangleRightFillRegular } from '../runtime.ts'
 import { statusViewOfRow } from '../data/rows.ts'
@@ -27,7 +30,9 @@ import type { PinnedEntry } from '../data/pinned.ts'
 import { DEFAULT_EXPAND_MOTION, expandMotionVars } from '../utils/expandMotion.ts'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import { useLocale } from '../useLocale.ts'
+import { SessionRowMenu } from './SessionRowMenu.tsx'
 import { SessionRowView } from './SessionRowView.tsx'
+import type { OfficialSessionActions } from '../actions.ts'
 import type { PinnedLabels, RegionLabels } from '../labels.ts'
 import styles from './PinnedSection.module.css'
 import clsx from 'clsx'
@@ -48,6 +53,9 @@ const HEAD_HEIGHT = 30
 /** 分隔高度，与样式表里的 `.pinDivider` 同值（1px 线 + 上下各 6px margin） */
 const DIVIDER_HEIGHT = 13
 
+/** 没有行开着面板时的空集合，恒为同一引用，供下面那条回报的比对用 */
+const NO_PANELS: ReadonlySet<string> = new Set()
+
 export interface PinnedSectionProps {
   entries: readonly PinnedEntry[]
   /** 静止时显示几条，来自宿主 settings */
@@ -59,6 +67,10 @@ export interface PinnedSectionProps {
   onToggleCollapsed: () => void
   /** 切换一条会话的置顶 */
   onTogglePin: (sessionId: string) => void
+  /** 是否还能新增置顶，达到上限时该项禁用 */
+  canPin: boolean
+  /** 官方会话操作，缺省时行上不挂菜单 */
+  official?: OfficialSessionActions | undefined
   onOpenSession: (sessionId: string) => void
   /** 会话行状态快照，与列表里的行取同一份 */
   statuses: SessionStatusSnapshot
@@ -108,12 +120,32 @@ export function PinnedSection({
   collapsed,
   onToggleCollapsed,
   onTogglePin,
+  canPin,
+  official,
   onOpenSession,
   statuses,
 }: PinnedSectionProps): ReactElement | null {
   const { labels } = useLocale()
   // 指针是否落在预览行上。只在 expand 模式下有意义，用它把整块浮出
   const [hoverOpen, setHoverOpen] = useState(false)
+  // 有面板开着的行。面板 portal 到 body，指针移上去就离开了预览区，据这一格把浮出留住
+  const [panelOpenIds, setPanelOpenIds] = useState<ReadonlySet<string>>(NO_PANELS)
+
+  /**
+   * 行上面板开合的回报
+   *
+   * 引用必须稳定：这一格会传进行级 memo 的比对，每次渲染新建一个会让每一行都判定为变过
+   * 集合没变时返回原对象，卸载时那一串「关」的回报因此不会引起额外的重渲染
+   */
+  const onPanelOpenChange = useCallback((sessionId: string, open: boolean) => {
+    setPanelOpenIds((prev) => {
+      if (open === prev.has(sessionId)) return prev
+      const next = new Set(prev)
+      if (open) next.add(sessionId)
+      else next.delete(sessionId)
+      return next
+    })
+  }, [])
 
   // 无置顶项时整块不渲染：段头、分隔线都不出现，那一段空间完整交还给列表
   if (entries.length === 0) return null
@@ -126,7 +158,7 @@ export function PinnedSection({
    * 指针进入的瞬间换掉定位与底色，读起来是一次没有反馈的闪动，这一档因此不接悬停
    */
   const canExpand = overflow === 'expand' && overflowing
-  const open = canExpand && hoverOpen
+  const open = canExpand && (hoverOpen || panelOpenIds.size > 0)
 
   const head = (
     <button
@@ -205,6 +237,9 @@ export function PinnedSection({
               // 超出可见条数的那几条：只在 `expand` 档静止时有意义，`scroll` 档它们本就在裁剪高度里可滚
               clipped={overflow === 'expand' && index >= visibleCount}
               onTogglePin={onTogglePin}
+              canPin={canPin}
+              official={official}
+              onPanelOpenChange={onPanelOpenChange}
               onOpenSession={onOpenSession}
             />
           ))}
@@ -221,6 +256,10 @@ export function PinnedSection({
  * 复用会话行组件，因此状态位、几何与键盘行为与列表里的行完全一致
  * 每一条本就已置顶，于是走「已置顶」那条排布：图钉钉在最右，位置不随时间与操作位变
  * 不挂悬停卡片：这些行已经钉在一段固定的区里，来源由位置说明，卡片在这里只多一层浮层
+ *
+ * 行上有官方操作可做时挂上带菜单的行，与列表里的行同一套条目与分派
+ * 官方服务不在场或这一条是新建中的空白会话时退回无菜单的行，只留图钉
+ * 取消置顶必须仍然可点，因此图钉不能跟着菜单一起省掉
  */
 function PinnedRow({
   entry,
@@ -228,6 +267,9 @@ function PinnedRow({
   statuses,
   clipped,
   onTogglePin,
+  canPin,
+  official,
+  onPanelOpenChange,
   onOpenSession,
 }: {
   entry: PinnedEntry
@@ -236,21 +278,44 @@ function PinnedRow({
   /** 超出静止可见条数：静止时被裁在高度之外，由样式表连可见性一起收掉 */
   clipped: boolean
   onTogglePin: (sessionId: string) => void
+  canPin: boolean
+  official: OfficialSessionActions | undefined
+  onPanelOpenChange: (sessionId: string, open: boolean) => void
   onOpenSession: (sessionId: string) => void
 }): ReactElement {
   const view = statusViewOfRow(entry.row, statuses, labels.status)
 
+  if (official === undefined || entry.blank) {
+    return (
+      <SessionRowView
+        sessionId={entry.id}
+        title={entry.blank ? null : entry.title}
+        selected={entry.current}
+        status={view.dot}
+        statuses={view.statuses}
+        hover={false}
+        pinned
+        clipped={clipped}
+        onTogglePin={onTogglePin}
+        onOpenSession={onOpenSession}
+      />
+    )
+  }
+
   return (
-    <SessionRowView
-      sessionId={entry.id}
+    <SessionRowMenu
+      row={entry.row}
       title={entry.blank ? null : entry.title}
       selected={entry.current}
       status={view.dot}
       statuses={view.statuses}
-      hover={false}
+      official={official}
+      disableHoverCard
       pinned
+      canPin={canPin}
       clipped={clipped}
       onTogglePin={onTogglePin}
+      onPanelOpenChange={onPanelOpenChange}
       onOpenSession={onOpenSession}
     />
   )
