@@ -25,7 +25,7 @@
 | 只用 pnpm（`packageManager: pnpm@11.24.0`） | 锁文件与 store 布局错乱 | 仓库根 `package.json` 锁定 |
 | 改完 `src/` 必须重新构建产物 | GUI 仍加载旧 `lib/client.js`，界面完全没变；而 `vitest` 直接 import 源码，**测试照样全绿** | `pnpm run build`；`lib/` 在 `.gitignore` 内，`git status` 看不出差异 |
 | 改宿主半边要重启 `dsh` | `dsh-client-hmr` 只推客户端 bundle，宿主仍是旧版本 | 见[客户端集成](client-integration.md#热重载与两端不同步) |
-| `.tsx` 必须写进两个 tsconfig 的 `include` | `tsc` **静默不检查** `.tsx` 文件 | `tsconfig.json` / `tsconfig.test.json` 都已含 `src/**/*.tsx` |
+| `.tsx` 必须写进各 tsconfig 的 `include` | `tsc` **静默不检查** `.tsx` 文件 | 三个工程都已含 `src/**/*.tsx`：`tsconfig.json` / `tsconfig.test.json` / `src/client/tsconfig.json` |
 | 查客户端类型要走 `pnpm run typecheck`，不能只看 `build` / `test` | 客户端类型错误在 `build` 与 `test` 下全是假绿，产物照出、用例照过 | 见下面「客户端半边只由 `tsconfig.test.json` 检查」 |
 | 新增基线模块要同步两处 | 漏 `EXTERNAL` 会把官方包打进产物（第二份引擎实例）；漏 `BASELINE` 断言失效 | `scripts/build-client.mjs` 的 `EXTERNAL` 与 `test/bundle.test.ts` 的 `BASELINE` 必须同时列出全部基线模块。node 取不到真包的那两个（primitives、client-store）还要在 `vitest.config.ts` 的 `resolve.alias` 配替身 |
 
@@ -38,6 +38,7 @@
 | 配置 / 命令 | 覆盖 `src/client/**` | 说明 |
 | --- | --- | --- |
 | `tsconfig.json` | 否 | `exclude: ["src/client/**"]`——宿主半边不 import 客户端，排除它不会带走被引用的文件 |
+| `src/client/tsconfig.json` | **是** | 只为编辑器存在，见下面「为什么客户端要有一份自己的 tsconfig.json」。不参与构建与类型检查 |
 | `tsconfig.test.json` | **是** | 第二个工程，`include` 里含 `src/**/*` 与 `test/**/*`，客户端类型只在这里被检查 |
 | `pnpm run build` | 否 | 客户端走 `scripts/build-client.mjs` 的 esbuild，只剥类型不检查 |
 | `vitest run` | 否 | vitest 同样只转译 |
@@ -45,6 +46,18 @@
 | `pnpm run check` | **是** | typecheck 是其中一步 |
 
 后果是**客户端类型错误在 `build` 与 `test` 下全都不报**：产物照常生成、655 条用例照常全绿，只有 `pnpm run typecheck` 会拒绝。仓库目前没有 CI，`pnpm run check` 是唯一闸门。
+
+### 为什么客户端要有一份自己的 `tsconfig.json`
+
+**tsserver 只把文件名恰为 `tsconfig.json` / `jsconfig.json` 的文件当工程配置**（`getBaseConfigFileName`），`tsconfig.test.json` 在编辑器眼里不存在。而包根的 `tsconfig.json` 又 `exclude` 了 `src/client/**`。两条一夹，客户端文件就没有归属工程，被丢进一个**默认选项的 inferred project**：读不到同目录的两份 ambient 声明（`css-modules.d.ts`、`primitives-env.d.ts`），于是每个 `.module.css` 导入都报 `TS2307 Cannot find module './x.module.css'`，并伴随 `TS5097`、primitives 找不到等一连串假报错。
+
+| 检查项 | 结论 |
+| --- | --- |
+| 加 `src/client/tsconfig.json` 前 | 文件归属 `/dev/null/inferredProject1*`，`menus.tsx` 报 1 条 `TS2307` |
+| 加之后 | 归属 `./src/client/tsconfig.json`，客户端文件诊断 0 条 |
+| `moduleResolution` 是不是原因 | **不是**。改 `bundler` / `node10` / `classic` 都无效：推断工程根本没加载那份声明，换解析方式无从谈起 |
+
+`tsc -p tsconfig.json` 仍只产出宿主半边：实测加这份配置后 `lib/` 里没有 `client/` 目录，`lib/client.js` 仍是 581250 字节。改 `include` / `exclude` 边界时照此复核一遍。
 
 曾有一次实测：往 `src/client/data/picker.ts` 注入 `const x: string = 42`，`tsc -p tsconfig.json --noEmit`、`pnpm run build`、`vitest run` 三者全部通过，只有 `tsc -p tsconfig.test.json` 报出 `TS2322`。**因此只跑 `build` 或 `test` 就宣称「类型检查通过」是无效结论。**
 
