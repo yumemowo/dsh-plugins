@@ -20,7 +20,7 @@
 .searchSlotExpanded { max-width: 100%; }
 
 /* 搜索框本体
-   收起时是 28px 正圆（与相邻的 header 图标按钮同形），展开后是 30px 高的圆角输入框
+   收起时是 28px 的圆角方块（与相邻的 header 图标按钮同形），展开后是 30px 高的圆角输入框
    border 从「无」切到 .5px，因此收起态不能写 border: none，那会让展开瞬间抖 1px */
 .search {
   box-sizing: border-box;
@@ -37,8 +37,7 @@
   color: var(--dsw-alias-label-secondary);
   background: 0 0;
   border: none;
-  border-radius: 50%;
-  corner-shape: round;
+  border-radius: var(--dsw-radius-sm);
   transition:
     width .18s var(--ds-ease-in-out, ease-in-out),
     padding .18s var(--ds-ease-in-out, ease-in-out),
@@ -54,7 +53,7 @@
   color: var(--dsw-alias-label-caption);
   background: 0 0;
   border: .5px solid var(--dsw-alias-border-l4);
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-md);
 }
 
 .searchButton {
@@ -66,14 +65,21 @@
   color: inherit;
   background: 0 0;
   border: none;
-  border-radius: 50%;
-  corner-shape: round;
+  border-radius: var(--dsw-radius-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
 .searchExpanded .searchButton { width: 28px; height: 30px; }
+
+/* 搜索框自己带 overflow: hidden（收起时裁掉输入框与清除按钮），外扩的焦点环会被裁掉
+   两枚按钮因此把环收在内侧，与官方 .searchButton / .clearButton 同一条做法 */
+.searchButton:focus-visible,
+.searchClear:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
 
 .searchButton:hover { background: var(--dsw-alias-interactive-bg-hover); }
 
@@ -114,8 +120,7 @@
   color: var(--dsw-alias-label-secondary);
   background: 0 0;
   border: none;
-  border-radius: 50%;
-  corner-shape: round;
+  border-radius: var(--dsw-radius-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -137,7 +142,7 @@
   color: var(--dsw-alias-label-primary);
   background: 0 0;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-lg);
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -242,11 +247,13 @@
   margin: 0 0 12px;
   color: var(--dsw-alias-label-primary);
   border-color: transparent;
+  border-radius: var(--dsw-radius-md);
 }
 
 .searchRail .searchButton {
   width: 36px;
   height: 36px;
+  border-radius: var(--dsw-radius-md);
   color: var(--dsw-alias-label-primary);
 }
 

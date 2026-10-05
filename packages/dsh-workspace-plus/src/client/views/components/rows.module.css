@@ -102,7 +102,7 @@
   cursor: pointer;
   user-select: none;
   color: var(--dsw-alias-label-primary);
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-md);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -262,7 +262,7 @@
   cursor: pointer;
   user-select: none;
   color: var(--dsw-alias-label-primary);
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-md);
   height: 32px;
   display: flex;
   align-items: center;
@@ -430,7 +430,7 @@
   padding: 0;
   background: 0 0;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-xs);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -503,7 +503,7 @@
   padding: 0;
   background: 0 0;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-xs);
   color: var(--dsw-alias-label-tertiary);
   display: inline-flex;
   align-items: center;
@@ -521,7 +521,7 @@
   height: 20px;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 /* 显示路径只有三条：所在行悬停、菜单展开期间（否则锚点按钮会在菜单还开着时消失）、以及键盘聚焦
@@ -539,20 +539,20 @@
    三枚 16px 操作按钮嵌在行内的操作位里（.rowActions / .rowAction）
    行的可点区与按钮的可点区因此是包含关系，而不是并排的两个热区
 
-   行高与内边距取官方菜单项的几何（min-height 34px、内边距 5px 10px、圆角 10px）
+   行高与内边距取官方菜单项的几何（min-height 34px、内边距 6px 8px、圆角 --dsw-radius-md）
    比列表里的工作区行略高一点，菜单项外围还有面板自己的 4px 内边距 */
 .pickerRow {
   box-sizing: border-box;
   min-height: 34px;
   height: auto;
-  gap: 8px;
-  padding: 5px 10px;
+  gap: 6px;
+  padding: 6px 8px;
   /* 子工作区按层级缩进，每层让出一个图标列，与列表里的步进同一个 16px
      右内边距不跟着变，行尾那三枚按钮因此仍对齐在同一条竖线上 */
-  padding-left: calc(10px + 16px * var(--wg-picker-depth, 0));
-  border-radius: 10px;
-  font-size: 14px;
-  line-height: 22px;
+  padding-left: calc(8px + 16px * var(--wg-picker-depth, 0));
+  border-radius: var(--dsw-radius-md);
+  font-size: 13px;
+  line-height: 20px;
 }
 
 /* 操作位里的三枚按钮沿用工作区行那一套显隐（.rowAction 默认透明、悬停/菜单展开/键盘聚焦时浮现）
@@ -568,8 +568,9 @@
 .pickerRow .rowActionDanger:hover { color: var(--dsw-alias-state-error-primary); }
 
 /* 操作位在菜单里常驻占位（宽度按自然宽），不像列表行那样从 0 宽展开
-   菜单是浮层、没有「行尾时间」要给它腾地方，收放反而让每行标题的右缘不一样齐 */
-.pickerRow .rowActions { height: 22px; gap: 8px; }
+   菜单是浮层、没有「行尾时间」要给它腾地方，收放反而让每行标题的右缘不一样齐
+   高度与间距取共享容器那一档，条目本身 20px 行高 */
+.pickerRow .rowActions { height: 20px; gap: 10px; }
 
 /* 官方浮层都固定向右展开，对照模式下区域挂在右侧栏、贴近窗口右缘，它们会开到屏幕外
    区域量出自己的矩形后、在放不下时才于 body 上挂 data-wg-flip 标记

@@ -7,9 +7,7 @@
   color: var(--dsw-alias-label-primary);
   background: 0 0;
   border: none;
-  border-radius: 50%;
-  /* 正圆必须配对 round，否则会被主题的全局超级椭圆磨成方圆角 */
-  corner-shape: round;
+  border-radius: var(--dsw-radius-md);
   display: inline-flex;
   align-items: center;
   justify-content: center;

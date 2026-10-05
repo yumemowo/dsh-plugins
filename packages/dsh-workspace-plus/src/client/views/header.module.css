@@ -16,7 +16,7 @@
   margin-top: 2px;
   margin-right: -4px;
   color: var(--dsw-alias-label-tertiary);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-md);
   overflow: hidden;
 }
 
@@ -40,7 +40,7 @@
   align-items: flex-start;
   background: 0 0;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-sm);
   text-align: left;
   transition:
     max-width .18s var(--ds-ease-in-out, ease-in-out),
@@ -150,7 +150,7 @@
   transform: translate(4px);
 }
 
-/* header 里的图标按钮，官方 .iconButton 的几何（28px 正圆、label-secondary，悬停出底色）
+/* header 里的图标按钮，官方 .iconButton 的几何（28px、radius-sm、label-secondary，悬停出底色）
    与行内 16px 按钮分开，因为尺寸与命中区都不是一套 */
 .headerAction {
   cursor: pointer;
@@ -161,12 +161,17 @@
   color: var(--dsw-alias-label-secondary);
   background: 0 0;
   border: none;
-  border-radius: 50%;
-  /* 正圆必须配对 round，否则会被主题的全局超级椭圆磨成方圆角 */
-  corner-shape: round;
+  border-radius: var(--dsw-radius-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+/* 入口组的宽度与搜索框的圆角都要动画，两者都带 overflow: hidden，外扩的焦点环会被裁掉
+   这几枚按钮因此把环收在内侧，与官方 .iconButton 同一条做法 */
+.headerAction:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
 }
 
 .headerAction:hover { background: var(--dsw-alias-interactive-bg-hover); }
@@ -188,9 +193,11 @@
   padding-left: 0;
 }
 
+/* 官方 rail 下这个入口是 36px、label-primary、radius-md（宽栏 28px、label-secondary、radius-sm） */
 .headerRail .headerAction {
   width: 36px;
   height: 36px;
+  border-radius: var(--dsw-radius-md);
   color: var(--dsw-alias-label-primary);
 }
 

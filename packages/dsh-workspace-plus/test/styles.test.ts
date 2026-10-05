@@ -259,6 +259,33 @@ describe('client stylesheet', () => {
     expect(reveal.some((s) => s.includes('rowSelected'))).toBe(false)
   })
 
+  it('takes every row radius from the official radius tokens', () => {
+    // 官方在 0.2 起把圆角收进 --dsw-radius-*，数值也随之改了（行 8px → radius-md 的 12px）
+    // 写死字面量时官方再改一次不会报错，只是行看起来比官方更方
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const bodyOf = (selector: string): string =>
+      [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+        .filter((m) => (m[1] ?? '').split(',').map((s) => s.trim()).includes(selector))
+        .map((m) => m[2] ?? '')
+        .find((body) => body.includes('border-radius')) ?? ''
+
+    // 容器行与会话行同属官方那一条 projectRow/sessionRow 规则：radius-md
+    for (const selector of ['.workspaceHead', '.row']) {
+      expect(bodyOf(selector), `${selector} must take the official radius token`).toMatch(
+        /border-radius:\s*var\(--dsw-radius-md\)/,
+      )
+    }
+    // 行内 16px 按钮是官方 .iconButton 那一档：radius-xs
+    expect(bodyOf('.rowPin')).toMatch(/border-radius:\s*var\(--dsw-radius-xs\)/)
+    expect(bodyOf('.rowAction')).toMatch(/border-radius:\s*var\(--dsw-radius-xs\)/)
+    // 搜索结果行是官方 .searchResultRow 那一档：radius-lg（16px）
+    expect(bodyOf('.searchResult')).toMatch(/border-radius:\s*var\(--dsw-radius-lg\)/)
+    // header 的 28px 入口与面板各取自己那一档
+    expect(bodyOf('.headerAction')).toMatch(/border-radius:\s*var\(--dsw-radius-sm\)/)
+    expect(bodyOf('.pickerMenu')).toMatch(/border-radius:\s*var\(--dsw-radius-lg\)/)
+    expect(bodyOf('.viewMenu')).toMatch(/border-radius:\s*var\(--dsw-radius-lg\)/)
+  })
+
   it('indents each hierarchy level by one icon-column step', () => {
     // 注释会连同其后的选择器一起落进 [^{}]+ 里，先把注释剥掉再解析规则
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
@@ -382,7 +409,7 @@ describe('client stylesheet', () => {
     expect(declared('.root', '--dsh-session-list-edge-inset')).toBe(
       'var(--dsh-sidebar-inline-padding, 12px)',
     )
-    expect(declared('.root', '--dsh-session-list-scrollbar-width')).toBe('8px')
+    expect(declared('.root', '--dsh-session-list-scrollbar-width')).toBe('5px')
     expect(declared('.root', '--dsh-session-list-scrollbar-offset')).toBe('2px')
     expect(declared('.root', 'padding-right')).toBe('var(--dsh-session-list-edge-inset)')
 
@@ -427,7 +454,7 @@ describe('client stylesheet', () => {
   })
 
   it('gives the header entry the official icon-button geometry', () => {
-    // 官方 header 图标按钮是 28px 正圆（.iconButton），与行内 16px 按钮不是一套
+    // 官方 header 图标按钮是 28px、radius-sm（.iconButton），与行内 16px 按钮不是一套
     // 这些几何按官方外观取，不能被行内那套带跑
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
@@ -438,9 +465,10 @@ describe('client stylesheet', () => {
     expect(base).toBeDefined()
     expect(base?.body).toMatch(/width:\s*28px/)
     expect(base?.body).toMatch(/height:\s*28px/)
-    expect(base?.body).toMatch(/border-radius:\s*50%/)
-    // 正圆必须配对 round，否则会被主题的全局超级椭圆磨成方圆角
-    expect(base?.body).toMatch(/corner-shape:\s*round/)
+    // 圆角与官方一样接令牌，不写字面量：官方在 0.2 起把这些值收进 --dsw-radius-*
+    expect(base?.body).toMatch(/border-radius:\s*var\(--dsw-radius-sm\)/)
+    // 不再是正圆，因此不该再写 corner-shape: round
+    expect(base?.body).not.toMatch(/corner-shape/)
 
     // 这一组里的入口都是可用的，每个都有自己的悬停高亮，没有 disabled 占位
     const hover = rules.find((rule) =>
@@ -448,6 +476,34 @@ describe('client stylesheet', () => {
     )
     expect(hover).toBeDefined()
     expect(rules.some((rule) => rule.selectors.includes('.headerAction:disabled'))).toBe(false)
+  })
+
+  it('keeps the focus ring of the clipped header controls inside their box', () => {
+    // 入口组的宽度要动画、搜索框的圆角要动画，两者都带 overflow: hidden
+    // 外扩的焦点环会被裁掉，键盘导航时看不见焦点。官方为此把这几枚按钮的环收在内侧
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    /** 命中选择器的规则里，是否有声明块同时匹配两条模式 */
+    const hasRule = (selector: string, ...patterns: RegExp[]): boolean =>
+      rules.some(
+        (rule) => rule.selectors.includes(selector) && patterns.every((p) => p.test(rule.body)),
+      )
+
+    for (const selector of [
+      '.headerAction:focus-visible',
+      '.searchButton:focus-visible',
+      '.searchClear:focus-visible',
+    ]) {
+      expect(hasRule(selector, /outline:\s*var\(--dsw-focus-ring-width\)/), `${selector} is missing`).toBe(
+        true,
+      )
+      expect(hasRule(selector, /outline-offset:\s*-2px/), `${selector} must inset the ring`).toBe(
+        true,
+      )
+    }
   })
 
   it('sizes the header entry group for every entry it can show', () => {
@@ -740,13 +796,13 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    // 收起态是 28px 正圆（与 header 图标按钮同形），展开后拉满并把圆角收成 10px
+    // 收起态是 28px 的圆角方块（与 header 图标按钮同形），展开后拉满，圆角提到 radius-md
     expect(bodyOf('.searchSlot')).toMatch(/max-width:\s*28px/)
     expect(bodyOf('.searchSlotExpanded')).toMatch(/max-width:\s*100%/)
     expect(bodyOf('.search')).toMatch(/height:\s*28px/)
-    expect(bodyOf('.search')).toMatch(/border-radius:\s*50%/)
+    expect(bodyOf('.search')).toMatch(/border-radius:\s*var\(--dsw-radius-sm\)/)
     expect(bodyOf('.searchExpanded')).toMatch(/height:\s*30px/)
-    expect(bodyOf('.searchExpanded')).toMatch(/border-radius:\s*10px/)
+    expect(bodyOf('.searchExpanded')).toMatch(/border-radius:\s*var\(--dsw-radius-md\)/)
 
     // 时长与缓动取官方那套（.18s 展开 / .12s 淡入，--ds-ease-in-out）
     expect(bodyOf('.search')).toMatch(/\.18s var\(--ds-ease-in-out/)
@@ -769,10 +825,10 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    // 官方 .searchResultRow：48px 起、两行内容、8px 圆角
+    // 官方 .searchResultRow：48px 起、两行内容、radius-lg 圆角
     const row = bodyOf('.searchResult')
     expect(row).toMatch(/min-height:\s*48px/)
-    expect(row).toMatch(/border-radius:\s*8px/)
+    expect(row).toMatch(/border-radius:\s*var\(--dsw-radius-lg\)/)
     expect(row).toMatch(/flex-direction:\s*column/)
 
     // 第二行整体缩进一个状态位槽（16 + 4），与标题左缘对齐
@@ -1010,11 +1066,14 @@ describe('client stylesheet', () => {
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
     // 条目行是 `.row` 那一套再加上菜单项的几何：行本身可点，三枚按钮嵌在行内
+    // 几何逐项取官方 .item（min-height 34px、内边距 6px 8px、gap 6px、13px/20px）
     expect(bodyOf('.pickerRow')).toMatch(/min-height:\s*34px/)
-    expect(bodyOf('.pickerRow')).toMatch(/gap:\s*8px/)
-    expect(bodyOf('.pickerRow')).toMatch(/padding:\s*5px 10px/)
+    expect(bodyOf('.pickerRow')).toMatch(/gap:\s*6px/)
+    expect(bodyOf('.pickerRow')).toMatch(/padding:\s*6px 8px/)
+    expect(bodyOf('.pickerRow')).toMatch(/font-size:\s*13px/)
+    expect(bodyOf('.pickerRow')).toMatch(/border-radius:\s*var\(--dsw-radius-md\)/)
     // 操作位在菜单里常驻占位（不是列表行那种从 0 宽展开）
-    expect(bodyOf('.pickerRow .rowActions')).toMatch(/gap:\s*8px/)
+    expect(bodyOf('.pickerRow .rowActions')).toMatch(/gap:\s*10px/)
 
     // 旧的两个并排热区已经不存在，行按钮 + 兄弟按钮那套选择器不该留残骸
     for (const gone of ['.wg-picker-item', '.wg-picker-action', '.wg-picker-row-focused']) {
@@ -1076,9 +1135,10 @@ describe('client stylesheet', () => {
     // 少了它后面的会话会清晰地穿过来，面板读起来像没上底色
     expect(body).toMatch(/backdrop-filter:\s*var\(--dsw-menu-backdrop-filter\)/)
 
-    // 圆角与最小宽度取官方 .list / .submenu 面板的同一组值
-    expect(body).toMatch(/border-radius:\s*20px/)
-    expect(body).toMatch(/min-width:\s*218px/)
+    // 圆角取官方菜单面板那一档（MenuSurface 的 radius-lg），宽度下限取官方 .list 的同一组
+    expect(body).toMatch(/border-radius:\s*var\(--dsw-radius-lg\)/)
+    expect(body).toMatch(/min-width:\s*144px/)
+    expect(body).toMatch(/max-width:\s*360px/)
   })
 
   it('paints the view options panel with the official menu surface tokens', () => {

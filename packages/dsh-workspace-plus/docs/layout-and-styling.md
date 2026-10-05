@@ -76,38 +76,51 @@
 
 ## 样式对齐
 
-样式取值取自官方侧边栏组件（`dsh-client-ui-sidebar` 与 `dsh-client-ui-workspace` 0.1.7-rc.1）的实际规则，而不是自定数值：
+样式取值取自官方侧边栏组件（`dsh-client-ui-sidebar` 与 `dsh-client-ui-workspace` **0.2.0-rc.2**）的实际规则，而不是自定数值。官方在 0.2 起把圆角收进了 `--dsw-radius-*` 令牌，**本包一律引用令牌、不写字面量**——数值仍由官方掌握，官方改令牌时本包自动跟随：
+
+| 令牌 | 值 | 本包用在哪 |
+| --- | --- | --- |
+| `--dsw-radius-xs` | `4px` | 行内 16px 操作按钮（同官方 `.iconButton`） |
+| `--dsw-radius-sm` | `8px` | header 28px 入口、搜索框与它的两枚按钮 |
+| `--dsw-radius-md` | `12px` | 容器行 / 会话行、section header、窄栏 36px 入口与搜索块、菜单条目行 |
+| `--dsw-radius-lg` | `16px` | 搜索结果行、两块自绘面板 |
+
+不接令牌的两处是本包自绘、官方没有对应先例的形状：状态指示器的色条（`2px`）与置顶浮出面板（`10px`）。
 
 | 项 | 取值 |
 | --- | --- |
 | 区域右侧整块留白 | `var(--dsh-session-list-edge-inset)`（侧栏里 = 12px，同官方根节点） |
-| 区域 section header 高 / 圆角 / 控件间距 | 窄栏 `36px`；宽栏 `auto` / `12px` / `4px`（同官方 `.sectionHeader`，高度因两行标题放开，见「区域头部」） |
+| 区域 section header 高 / 圆角 / 控件间距 | 窄栏 `36px`；宽栏 `auto` / `--dsw-radius-md` / `4px`（同官方 `.sectionHeader`，高度因两行标题放开，见「区域头部」） |
 | 两行标题（上行「工作区」+ 下行聚焦对象） | 上行 `14px` / `20px` + `label-tertiary`，下行 `12px` / `17px` + `label-secondary`（两个层级的信息）；宽度上限 `45%` 挂在整个标题块上 |
-| 标题块（一个按钮） | 命中余量 `padding: 2px 4px`、圆角 `8px`、悬停 `--dsw-alias-interactive-bg-hover` |
+| 标题块（一个按钮） | 命中余量 `padding: 2px 4px`、圆角 `--dsw-radius-sm`、悬停 `--dsw-alias-interactive-bg-hover` |
 | 标题旁的菜单箭头 | `16px`，`--dsw-alias-label-tertiary`；开合时旋转 `180°` |
-| 工作区选择器面板 | 底色 `--dsw-specific-menu` + 背面模糊 `--dsw-menu-backdrop-filter`、投影 `--dsw-elevation-prominent`、圆角 `20px`、内边距 `4px`、`min-width: 218px` / `max-width: 360px`、高度上限 `calc(100vh - 24px)`、边距 `12px`、缝隙 `4px`、`z-index: 1100` |
+| 工作区选择器面板 | 底色 `--dsw-specific-menu` + 背面模糊 `--dsw-menu-backdrop-filter`、投影 `--dsw-elevation-prominent`、圆角 `--dsw-radius-lg`、内边距 `4px`、`min-width: 144px` / `max-width: 360px`、高度上限 `calc(100vh - 24px)`、边距 `12px`、缝隙 `4px`、`z-index: 1100` |
 | 官方 `Menu` 的二级面板 | 底色换成**不透明**的 `--dsw-alias-bg-layer-3` 并撤掉 `backdrop-filter`：它嵌在带模糊的一级面板里、又落在父层盒子之外，模糊采不到内容（见 [与官方实现的复用关系](official-reuse.md)） |
-| 选择器条目行 / 分区头 | 条目 `min-height: 34px`、`5px 10px`、圆角 `10px`、14px/22px；分区头 `32px`、`8px 10px`、12px/16px（同官方 `.item` / `.label`） |
+| 选择器条目行 / 分区头 | 条目 `min-height: 34px`、`6px 8px`、圆角 `--dsw-radius-md`、13px/20px、`gap: 6px`（同官方 `.item`）；分区头 `32px`、`8px`、圆角 `--dsw-radius-sm`、12px/16px（本包自绘：这一行可点且带箭头，官方 `.label` 是纯标签，因此只对齐水平内边距） |
 | 条目行尾的置顶按钮 | `20px` 方块、`--dsw-alias-label-tertiary`；未置顶时 `opacity: 0` 且关掉指针事件，已置顶常驻可见 |
-| header 图标按钮 | `28px` 正圆、`--dsw-alias-label-secondary`、悬停 `-hover`（同官方 `.iconButton`） |
-| 窄栏 header 图标按钮 | `36px` 正圆、`--dsw-alias-label-primary`（同官方 `.rail .iconButton`） |
-| 搜索框（收起 / 展开） | `28px` 正圆 → `30px` 高、圆角 `10px`、`.5px` 边框 `--dsw-alias-border-l4`（同官方 `.search` / `.searchExpanded`） |
+| header 图标按钮 | `28px`、圆角 `--dsw-radius-sm`、`--dsw-alias-label-secondary`、悬停 `-hover`（同官方 `.iconButton`） |
+| 窄栏 header 图标按钮 | `36px`、圆角 `--dsw-radius-md`、`--dsw-alias-label-primary`（同官方 `.rail .iconButton`） |
+| 搜索框（收起 / 展开） | `28px` / 圆角 `--dsw-radius-sm` → `30px` 高、圆角 `--dsw-radius-md`、`.5px` 边框 `--dsw-alias-border-l4`（同官方 `.search` / `.searchExpanded`） |
+| 被裁容器的焦点环 | header 入口组与搜索框都带 `overflow: hidden`，外扩的环会被裁掉，因此这三枚按钮写 `outline-offset: -2px` 把环收在内侧（同官方 `.iconButton` / `.searchButton` / `.clearButton`） |
 | 搜索槽位宽度 | 收起 `28px`、展开 `100%`（同官方 `.searchSlot` / `.searchSlotExpanded`） |
-| 搜索结果行 | `min-height: 48px`、圆角 `8px`、两行（标题 14px/20px + 路径 12px/17px，同官方 `.searchResultRow`） |
+| 搜索结果行 | `min-height: 48px`、圆角 `--dsw-radius-lg`、两行（标题 14px/20px + 路径 12px/17px，同官方 `.searchResultRow`） |
 | 结果路径的两段色阶 | 工作区 `--dsw-alias-label-secondary`、分组 `--dsw-alias-label-caption`（官方那格只有 tertiary 一档，本包拆成两档做对比） |
 | 工作区行、会话分组行与工作区分组行行高 | `34px` |
 | 会话行高 | `32px` |
-| 行内水平内边距 / 圆角 | `8px` / `8px` |
+| 行内水平内边距 / 圆角 | `8px` / `--dsw-radius-md` |
 | 图标列宽 | `16px`（`height: 20px`） |
-| 行尾相对时间 | `12px` / `20px`，`--dsw-alias-label-tertiary`（同官方 `.time`） |
+| 行内操作按钮间距 | `gap: 10px`（同官方 `.rowActions`；官方写过 12px，0.2 起收成 10px） |
+| 行尾相对时间 | `12px` / `20px`，`--dsw-alias-label-tertiary` |
 | 分组行尾会话数与工作区分组行尾工作区数 | 同上的 `12px` / `20px` 与 `--dsw-alias-label-tertiary`，与行尾时间同格同形 |
 | 工作区分组头缩进 | `8px`（根节点；会话分组头是 `24px`，因为它落在工作区内部） |
 | 悬停与选中底色 | `--dsw-alias-interactive-bg-hover` |
 | 展开且含当前会话的文件夹 | `--dsw-alias-state-business-primary` |
 | 文本色阶 | `--dsw-alias-label-primary` / `-secondary` / `-tertiary` |
-| 滚动条留白 | `--dsh-session-list-scrollbar-width` / `-offset` |
+| 滚动条留白 | `--dsh-session-list-scrollbar-width`（`5px`）/ `-offset`（`2px`） |
 | 过渡 | `--ds-ease-in-out`，并遵守 `prefers-reduced-motion` |
 | 面板级淡入 | `.2s`、同 `--ds-ease-in-out`（同官方 `.treeBody` 的 `wide-in`）；常规列表与搜索结果各挂一份 |
+
+**行尾时间那两档是本包有意停在旧值上的**：官方 0.2 把它压到 `10px/16px`，那是配合它自己那套跑马灯标题做的；本包没有跑马灯，10px 在这个侧栏里偏小，因此暂留 `12px/20px`，待单独一轮再定。
 
 右侧那 12px 值得单说，它是最容易抄错的一处：**官方的右留白不由 shell 提供，而由 `WorkspaceBrowser` 的根节点自己拥有**——shell 的 `regionArea` 先把 `margin-right` 设为 `-12px` 抵消掉，根节点再 `padding-right: 12px` 加回来。本包接替了这个根节点，就必须把那份留白连同三个自定义属性（`--dsh-session-list-edge-inset` / `-scrollbar-width` / `-scrollbar-offset`，官方定义在同一个根节点上、随它一起消失）一起重建，否则 header 的入口按钮与列表行都会一路贴到侧栏右缘。
 

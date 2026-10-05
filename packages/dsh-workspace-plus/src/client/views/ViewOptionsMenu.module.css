@@ -6,7 +6,8 @@
   box-sizing: border-box;
   position: fixed;
   z-index: 1100;
-  min-width: 218px;
+  /* 官方 .viewOptionsMenu 自己那条宽度下限，本包这块是它的自绘对应物 */
+  min-width: 200px;
   padding: 4px;
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-3));
@@ -14,12 +15,14 @@
   backdrop-filter: var(--dsw-menu-backdrop-filter);
   /* 投影里那圈描边跟着面板自己的圆角走，因此在这里重设一次 */
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
-  border-radius: 20px;
+  border-radius: var(--dsw-radius-lg);
   box-shadow: var(--dsw-elevation-prominent);
   display: flex;
   flex-direction: column;
-  font-size: 14px;
-  line-height: 22px;
+  /* 条目行继承这一档，取官方 .item 的 13px/20px
+     两块面板的条目因此同格，不会一块比另一块大一号 */
+  font-size: 13px;
+  line-height: 20px;
 }
 
 /* 面板里的一个开关条目，图标 + 设置名 + 官方的 Switch 原语
@@ -28,17 +31,18 @@
 .viewOption {
   box-sizing: border-box;
   min-height: 34px;
-  padding: 5px 10px;
-  border-radius: 10px;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-md);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 /* 分组标题，官方菜单的 label 条目同一角色，说明下面这一组选的是哪件事
-   字号与官方那一条同档（比条目小一档、tertiary 色阶），它不可点也不是停点 */
+   字号与官方那一条同档（比条目小一档、tertiary 色阶），它不可点也不是停点
+   左右内边距必须与条目行同值，两组的文字左缘才落在同一条竖线上 */
 .viewGroupLabel {
-  padding: 3px 10px 5px;
+  padding: 6px 8px;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
   line-height: 20px;
@@ -49,14 +53,14 @@
   box-sizing: border-box;
   width: 100%;
   min-height: 34px;
-  padding: 5px 10px;
+  padding: 6px 8px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font: inherit;
   color: inherit;
   text-align: left;
@@ -73,10 +77,11 @@
   color: var(--dsw-alias-label-primary);
 }
 
-/* 图标列与开关行共用同一个位置与宽度，两组的行文字因此落在同一条竖线上 */
+/* 图标列与开关行共用同一个位置与宽度，两组的行文字因此落在同一条竖线上
+   高度同列表的 .slot（20px），与条目行的行高一致 */
 .viewOptionIcon {
   width: 16px;
-  height: 22px;
+  height: 20px;
   flex: none;
   color: var(--dsw-alias-label-tertiary);
   display: inline-flex;
@@ -92,8 +97,8 @@
   white-space: nowrap;
 }
 
-/* 分隔线取官方菜单 separator 同一档（0.5px、border-l2），两侧各留 3px
-   与条目之间那条 gap: 3px 同一节奏，四边缩进则与条目的内边距对齐 */
+/* 分隔线取官方菜单 separator 同一档（0.5px、border-l2、上下 3px）
+   左右缩进与条目的内边距对齐，线因此与上下文字同宽 */
 .viewSeparator {
   flex: none;
   height: 0.5px;
