@@ -79,11 +79,12 @@ const page = `<!doctype html>
   <div class="${prefix}_pinDivider"></div>
 </div>
 <script>
-  // 组件按可见条数下发的那四个变量：可见 5 条 = 168，全部 7 条 = 236，段头 30，分隔 13
+  // 组件按可见条数下发的那五个变量：可见 5 条 = 168，全部 7 条 = 236，段头 30，段头空隙 6，分隔 13
   const section = document.querySelector('.${prefix}_pinnedSection')
   section.style.setProperty('--wg-pin-rest', '168px')
   section.style.setProperty('--wg-pin-full', '236px')
   section.style.setProperty('--wg-pin-head', '30px')
+  section.style.setProperty('--wg-pin-gap', '6px')
   section.style.setProperty('--wg-pin-divider', '13px')
 </script>
 `
@@ -173,12 +174,12 @@ await step('闸门关闭（没有行被裁掉）+ 指针在预览行上', async 
 })
 
 const expected = [
-  ['168px', 'hidden'],
-  ['236px', 'visible'],
-  ['168px', 'hidden'],
-  ['236px', 'visible'],
-  ['168px', 'hidden'],
-  ['168px', 'visible'],
+  ['174px', 'hidden'],
+  ['242px', 'visible'],
+  ['174px', 'hidden'],
+  ['242px', 'visible'],
+  ['174px', 'hidden'],
+  ['174px', 'visible'],
 ]
 console.log(`媒体档：(hover: hover) = ${hoverCapable}`)
 if (!hoverCapable) {

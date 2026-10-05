@@ -15,7 +15,7 @@
  *
  * 两种模式占据的高度完全相同，因此切换它们不改变布局
  * `expand` 的浮出用绝对定位、不推挤下方内容
- * 浮出态不加内边距也不加描边环——前几行必须逐格不变，否则指针下的行会在展开瞬间动一下
+ * 浮出不推挤行也不加描边环——前几行必须逐格不变，否则指针下的行会在展开瞬间动一下
  *
  * 浮出只由指针触发。行上的面板开着是唯一的例外：面板 portal 到 body，指针移上去时预览区已不在命中链里，
  * 那一段不能当场收回——两条来源都由样式表判定（`:hover` 与行上的面板标记），组件里不留悬停状态
@@ -48,6 +48,9 @@ const ROW_GAP = 2
 
 /** 段头高度，与样式表里的 `.pinHead` 同值 */
 const HEAD_HEIGHT = 30
+
+/** 段头与预览区之间的常驻间距，与样式表里的 `--wg-pin-gap` 同值 */
+const HEAD_GAP = 6
 
 /** 分隔高度，与样式表里的 `.pinDivider` 同值（1px 线 + 上下各 6px margin） */
 const DIVIDER_HEIGHT = 13
@@ -156,7 +159,7 @@ export function PinnedSection({
    * 收起态不渲染预览区，高度由段头自己撑，因此这一份只在展开时有用
    * 高度在这里算而不是写死在样式里：可见条数来自宿主 settings，是可调的
    *
-   * 四项分开发是因为样式表要分别用到：
+   * 几项分开发是因为样式表要分别用到：
    *   - 静止高度由段自己常驻（浮出时预览区脱离了流）
    *   - 浮出上限取「全部行叠起来」的实高，不取视口上限
    * 上限若取视口上限（`min(60vh, 640px)`），内容远矮于它时可见高度会在过渡前段就走完
@@ -166,6 +169,7 @@ export function PinnedSection({
     '--wg-pin-rest': `${stackHeight(Math.min(entries.length, visibleCount))}px`,
     '--wg-pin-full': `${stackHeight(entries.length)}px`,
     '--wg-pin-head': `${HEAD_HEIGHT}px`,
+    '--wg-pin-gap': `${HEAD_GAP}px`,
     '--wg-pin-divider': `${DIVIDER_HEIGHT}px`,
     // 浮出与收回的节奏取撑开体的同一份参数：变量名与时长都只有一处定义
     // 置顶区不在任何撑开体之内，缺了这几项样式表会落到自己的回退值上，两边从此可以悄悄分叉

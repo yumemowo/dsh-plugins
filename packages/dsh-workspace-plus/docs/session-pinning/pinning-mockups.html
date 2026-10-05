@@ -300,7 +300,7 @@
   /* ── ⑥ 置顶面板：默认 5 条，指针进入「预览行」时整块向下浮出 ────────
      与 ⑤ 的差别是**超出部分怎么给**：⑤ 让用户自己拖着滚，
      ⑥ 认为「我在找东西」时一次给全比让人滚更省事
-     静止时它占的高度与 ⑤ 完全相同（5 条 = 168px）
+     静止时它占 5 条 = 168px，另加段头与首行之间常驻的 6px 空隙（对照稿其余档没有这一段）
 
      三处交互决定，都是「别打断手感」：
 
@@ -308,15 +308,19 @@
          用它是为了收起 / 展开这一整段；把展开也挂在段头上，两者会互相干扰
      二、静止态**不可滚**。指针一放上去就展开，滚动在这里没有承载对象；
          段内滚动因此只属于展开态（置顶特别多、超过视口上限时才需要）
-     三、展开态**不占任何额外内边距、不加描边**。早先给了 4px 内边距与 1px 描边环，
+     三、展开态**不占任何新增内边距、不加描边**。早先给了 4px 内边距与 1px 描边环，
          那会把行整体推偏 4px——指针下的那一行在展开瞬间动了，手感就断了
-         展开态因此只是「把被裁掉的部分露出来」，前 5 行的落点逐格不变 */
+         段头与首行之间那条 6px 空隙是常驻的（两态都占），展开瞬间没有任何行会动
+         面板圆角因此画满四角：顶部的圆弧落在这段空隙里，既不压段头也不削首行 */
   .topHover .topScroll{max-height:168px;overflow:hidden}
   /* 定位锚点必须挂在 .topHover **自己**身上：它就是 .topSection，
      写成 `.topHover .topSection`（后代）永远不匹配——那样绝对定位会去找更外层的定位祖先，
      面板落到 y=737 而不是紧贴段底 y=415（实测踩过）
-     段高按段头高算，不写死：六档段头有 26px 与 30px 两种，写死会在另一档下差 4px */
-  .topHover{position:relative;min-height:calc(var(--wg-pin-head,26px) + 168px)}
+     段高按段头高算，不写死：六档段头有 26px 与 30px 两种，写死会在另一档下差 4px
+     段头空隙只落在 ⑥（:not(.topClick) 排除点击档），⑦~⑨ 保留原始取值 */
+  .topHover{position:relative}
+  .topHover:not(.topClick){min-height:calc(var(--wg-pin-head,26px) + 6px + 168px)}
+  .topHover:not(.topClick) > .topScroll{padding-top:6px;max-height:174px}
   /* 展开态同时挂在 :hover / :focus-within 与一个显式类上：
      前两者是真实交互路径，后者让键盘与实测脚本也能驱动到同一状态 */
   .topHover > .topScroll:hover,
@@ -330,8 +334,9 @@
        `60 * 32px` 不是合法表达式，整条声明被判无效、静默退回 168px，面板根本没展开 */
     max-height:min(60vh, 640px);overflow-y:auto;
     background:var(--sidebar);
-    /* 只圆下缘、且不加描边：上缘与段头齐平，读成「预览被拉长」而不是「另开一个盒子」 */
-    border-radius:0 0 10px 10px;
+    /* 圆角画满四缘、不加描边：段头与首行之间的 6px 常驻空隙给上缘圆弧留了地方，
+       弧线既不压段头也不削首行（读成一块完整的圆角矩形） */
+    border-radius:10px;
     box-shadow:0 10px 22px #0000001f;
   }
   /* ── ⑦ 点击档：把 ⑥ 的悬停 / 聚焦触发全部禁掉，只认显式点击 ────────
@@ -1670,9 +1675,10 @@ function measure(){
       + ' 提示字号=' + getComputedStyle(hint).fontSize
       + ' 顺序=' + [...head.children].map((c) => c.className.split(' ')[0]).join('>'))
     // 段高必须跟着段头高走：写死 26px 那一档在区域级标题下会差 4px
+    // 段头与首行之间还有 6px 常驻空隙（实现用它给浮出面板的上缘圆角留位），也在这 204 里
     const secH = Math.round(sec.getBoundingClientRect().height)
-    out.push('段落几何：段高=' + secH + '（段头 30 + 5 条 168 = 198）'
-      + (secH === 198 ? '  OK' : '  MISMATCH'))
+    out.push('段落几何：段高=' + secH + '（段头 30 + 空隙 6 + 5 条 168 = 204）'
+      + (secH === 204 ? '  OK' : '  MISMATCH'))
     const tr = sec.querySelector('.topRow')
     const on = sec.querySelector('.rowPinOn')
     const off = col.querySelector('.list .rowPinOff')

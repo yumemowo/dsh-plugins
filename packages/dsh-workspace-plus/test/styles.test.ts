@@ -1269,10 +1269,11 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    // 常驻高度由段头 + 预览区 + 分隔三项相加，三项都是变量、可由组件按可见条数改写
+    // 常驻高度由段头 + 段头空隙 + 预览区 + 分隔四项相加，四项都是变量、可由组件按可见条数改写
     const section = bodyOf('.pinExpand')
     expect(section).toMatch(/min-height:\s*calc\(/)
     expect(section).toContain('--wg-pin-head')
+    expect(section).toContain('--wg-pin-gap')
     expect(section).toContain('--wg-pin-rest')
     expect(section).toContain('--wg-pin-divider')
 
@@ -1302,6 +1303,14 @@ describe('client stylesheet', () => {
     )
     expect(expanded).toHaveLength(1)
     expect(expanded[0]?.selectors).toEqual(openSelectors)
+
+    // 浮出面板是一块四缘完整的圆角矩形：段头与首行之间有常驻空隙撑着，上缘圆弧不削行、不压段头
+    // 圆角只允许写全值一种；写半值（如 0 0 10px 10px）上缘会被裁成直角
+    // 过渡目标必须含段头空隙：面板顶上的那一段空隙也要算进可见高度里
+    const openBody = expanded[0]?.body ?? ''
+    expect(openBody).toMatch(/border-radius:\s*10px\s*;/)
+    expect(openBody).toMatch(/calc\(var\(--wg-pin-full[^)]*\)\s*\+\s*var\(--wg-pin-gap/)
+    expect(openBody).not.toMatch(/border-radius:\s*0/)
 
     // 浮出整条包在 (hover: hover) 里：没有悬停能力时它一条都不该生效
     // 不包的话触屏回退那一档就得把这批选择器抄一份去压它，那份拷贝会把闸门属性写进 (hover: none) 块里

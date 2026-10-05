@@ -6,7 +6,7 @@
  * 几何照对照稿采用的那一档（区域级标题 + 空白区分）：
  *   段头 30px、左缘 8px（脱离内容缩进链）、字号 14px / 字重 600
  *   分隔是一条 1px 的透明线加 6px 上下 margin，与「细线」那一档几何逐项相同，只差颜色
- *   段本身 30 + 168 = 198px，加分隔 13px 正好常驻 211px
+ *   段本身 30 + 6 + 168 = 204px，加分隔 13px 正好常驻 217px
  * 静止高度因此是一个常数，与置顶条数无关（条数少于可见条数时由组件算小一些） */
 
 .pinnedSection {
@@ -98,11 +98,15 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  max-height: var(--wg-pin-rest, 168px);
-  /* 常驻滚动条沟槽：浮出时滚动条才出现的话，前几行会被横向挤左一格
-     预留了宽度就要还回去，否则行右缘比列表短一条沟槽
+  /* 段头与首行之间常驻的空隙
+     浮出面板要画出完整的四个圆角（见浮出那条规则），就得有这一段给它，否则上缘与段头齐平、首行压在圆弧上
+     放在容器里而不是面板上：两态、两种溢出给法都吃这一段，行间与面板内的几何不因它再分叉 */
+  padding-top: var(--wg-pin-gap, 6px);
+  max-height: calc(var(--wg-pin-rest, 168px) + var(--wg-pin-gap, 6px));
+  /* 常驻滚动条沟槽
+     浮出时滚动条才出现的话，前几行会被横向挤左一格，预留了宽度就要还回去，否则行右缘比列表短一条沟槽
      下面两项与 .list 逐项同源（见 WorkspaceGroupsRegion.module.css）：
-     把 .listArea 那层 -edge-inset 折进 margin-right，
+     把 .listArea 那层 -edge-inset 折进 margin-right
      再由 padding-right 把内容推回离栏缘 edge-inset 处
      段头不在这个滚动容器里，因此它保持 .pinnedSection 的原右缘，与列表段头一致 */
   scrollbar-gutter: stable;
@@ -154,11 +158,13 @@
    后代选择器在这里不匹配，绝对定位会去找更外层的定位祖先，浮出面板就落到别处去了
 
    段自己常驻住静止高度：浮出态里预览区脱离了流，
-   高度只由预览区撑着时，指针一进入整段就塌成「段头 + 分隔」 */
+   高度只由预览区撑着时，指针一进入整段就塌成「段头 + 分隔」
+   常驻高把段头空隙也算进去：那一段在预览区里，跟着它一起脱离了流 */
 .pinExpand {
   position: relative;
   min-height: calc(
-    var(--wg-pin-head, 30px) + var(--wg-pin-rest, 168px) + var(--wg-pin-divider, 13px)
+    var(--wg-pin-head, 30px) + var(--wg-pin-gap, 6px) + var(--wg-pin-rest, 168px) +
+      var(--wg-pin-divider, 13px)
   );
 }
 
@@ -196,16 +202,21 @@
 @media (hover: hover) {
   .pinExpand[data-wg-expandable] .pinScroll:hover,
   .pinExpand[data-wg-expandable]:has(.pinScroll [data-wg-panel-open]) .pinScroll {
-    /* 上限取「全部行叠起来」的实高，视口上限只作为第三项防呆
+    /* 上限取「全部行叠起来」的实高加段头空隙，视口上限只作为第三项防呆
        内容远矮于视口上限时，可见高度会在过渡前段就走完
        每一项都必须是合法长度，否则整条声明被判无效、静默退回静止高度 */
-    max-height: min(var(--wg-pin-full, 168px), 60vh, 640px);
+    max-height: min(
+      calc(var(--wg-pin-full, 168px) + var(--wg-pin-gap, 6px)),
+      60vh,
+      640px
+    );
     overflow-y: auto;
     overscroll-behavior: contain;
     background: var(--dsw-alias-bg-base);
-    /* 只圆下缘、不加描边、不加内边距：上缘与段头齐平，读成「预览被拉长」而不是「另开一个盒子」
-       前几行因此逐格不变 */
-    border-radius: 0 0 10px 10px;
+    /* 圆角画满四缘、不加描边：段头与面板之间已有常驻空隙（.pinScroll 的 padding-top），
+       上缘的圆弧不再压着段头；行落在空隙之下，不被圆弧削到
+       面板因此读成一块完整的圆角矩形，前几行仍逐格不变 */
+    border-radius: 10px;
     box-shadow: 0 10px 22px #0000001f;
   }
 }
@@ -239,7 +250,7 @@
 @media (hover: none) {
   .pinExpand .pinScroll {
     position: static;
-    max-height: var(--wg-pin-rest, 168px);
+    max-height: calc(var(--wg-pin-rest, 168px) + var(--wg-pin-gap, 6px));
     overflow-y: auto;
     overscroll-behavior: contain;
     background: none;

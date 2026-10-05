@@ -317,8 +317,10 @@ describe('pinned section', () => {
     const section = container.querySelector<HTMLElement>('.pinnedSection')
 
     // 静止 5 条 = 5*32 + 4*2 = 168，全部 7 条 = 7*32 + 6*2 = 236
+    // 两者加段头空隙 6px 才是样式表真正过渡到的那两个高度
     expect(section?.style.getPropertyValue('--wg-pin-rest')).toBe('168px')
     expect(section?.style.getPropertyValue('--wg-pin-full')).toBe('236px')
+    expect(section?.style.getPropertyValue('--wg-pin-gap')).toBe('6px')
     expect(section?.style.getPropertyValue('--wg-expand-duration')).not.toBe('')
     expect(section?.style.getPropertyValue('--wg-expand-easing')).not.toBe('')
     await act(async () => root.unmount())
@@ -383,7 +385,7 @@ describe('pinned section', () => {
     const section = container.querySelector<HTMLElement>('.pinnedSection')
 
     // 静止 5 条 = 5*32 + 4*2 = 168，全部 7 条 = 7*32 + 6*2 = 236
-    // 两项与段头、分隔都由样式表算进常驻高度，指针在不在上面都不变
+    // 段头空隙是独立一项：样式表把它加在两态的过渡高度与段的常驻高里
     expect(section?.style.getPropertyValue('--wg-pin-rest')).toBe('168px')
     expect(section?.style.getPropertyValue('--wg-pin-full')).toBe('236px')
     expect(section?.style.getPropertyValue('--wg-pin-head')).toBe('30px')
