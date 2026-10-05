@@ -1,7 +1,7 @@
 /**
  * 区域顶部的置顶区：段头 + 若干置顶会话行
  *
- * 一个控件、两种溢出给法（`overflow` prop）
+ * 一个控件、两种溢出给法（`pinned.overflow`）
  * 依据是三种做法去掉模式标记后 DOM 结构完全相同
  * 差别只有模式类、行尾提示字符串，以及超出可见条数的行怎么露出来：
  *   - `expand`：静止时占可见条数那么高，指针移到预览行上时整块向下浮出、一次列出全部
@@ -17,12 +17,11 @@
  * `expand` 的浮出用绝对定位、不推挤下方内容
  * 浮出态不加内边距也不加描边环——前几行必须逐格不变，否则指针下的行会在展开瞬间动一下
  *
- * 行上有面板开着（行内 `...` 菜单或右键菜单）时浮出不收回
- * 面板 portal 到 body，指针移上去就离开了预览区，否则那一段会在菜单还开着时当场收回
+ * 浮出只由指针触发。行上的面板开着是唯一的例外：面板 portal 到 body，指针移上去时预览区已不在命中链里，
+ * 那一段不能当场收回——两条来源都由样式表判定（`:hover` 与行上的面板标记），组件里不留悬停状态
  *
  * 无置顶项时整块返回 `null`，段头与分隔都不出现，那一段空间完整交还给列表
  */
-import { useCallback, useState } from 'react'
 import type { ReactElement } from 'react'
 import { IconTriangleRightFillRegular } from '../runtime.ts'
 import { statusViewOfRow } from '../data/rows.ts'
@@ -30,6 +29,7 @@ import type { PinnedEntry } from '../data/pinned.ts'
 import { DEFAULT_EXPAND_MOTION, expandMotionVars } from '../utils/expandMotion.ts'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import { useLocale } from '../useLocale.ts'
+import { useLocalViewOptions } from '../useLocalViewOptions.ts'
 import { SessionRowItem } from './SessionRowItem.tsx'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { PinnedLabels, RegionLabels } from '../labels.ts'
@@ -52,19 +52,10 @@ const HEAD_HEIGHT = 30
 /** 分隔高度，与样式表里的 `.pinDivider` 同值（1px 线 + 上下各 6px margin） */
 const DIVIDER_HEIGHT = 13
 
-/** 没有行开着面板时的空集合，恒为同一引用，供下面那条回报的比对用 */
-const NO_PANELS: ReadonlySet<string> = new Set()
-
 export interface PinnedSectionProps {
   entries: readonly PinnedEntry[]
   /** 静止时显示几条，来自宿主 settings */
   visibleCount: number
-  /** 溢出给法，来自浏览器本地 store */
-  overflow: 'expand' | 'scroll'
-  /** 是否展开，来自浏览器本地 store */
-  expanded: boolean
-  onToggle: () => void
-  /** 切换一条会话的置顶 */
   onTogglePin: (sessionId: string) => void
   /** 是否还能新增置顶，达到上限时该项禁用 */
   canPin: boolean
@@ -82,7 +73,7 @@ export interface PinnedSectionProps {
  * 溢出时报「N 条 · 还有 M 条」而不是「N 条中的 X 条」：后者要读者自己做减法
  * @param total - 置顶总条数
  * @param shown - 静止时显示几条
- * @param expanded - 是否处于展开态
+ * @param expanded - 整块是否展开
  * @param labels - 置顶区文案
  */
 function hintText(
@@ -115,9 +106,6 @@ function stackHeight(rowCount: number): number {
 export function PinnedSection({
   entries,
   visibleCount,
-  overflow,
-  expanded,
-  onToggle,
   onTogglePin,
   canPin,
   official,
@@ -125,29 +113,8 @@ export function PinnedSection({
   statuses,
 }: PinnedSectionProps): ReactElement | null {
   const { labels } = useLocale()
-  // 指针是否落在预览行上。只在 expand 模式下有意义，用它把整块浮出
-  const [hoverOpen, setHoverOpen] = useState(false)
-  // 有面板开着的行。面板 portal 到 body，指针移上去就离开了预览区，据这一格把浮出留住
-  const [panelOpenIds, setPanelOpenIds] = useState<ReadonlySet<string>>(NO_PANELS)
-
-  /**
-   * 行上面板开合的回报
-   *
-   * 引用必须稳定：这一格会传进行级 memo 的比对，每次渲染新建一个会让每一行都判定为变过
-   * 集合没变时返回原对象，卸载时那一串「关」的回报因此不会引起额外的重渲染
-   */
-  const onPanelOpenChange = useCallback((sessionId: string, open: boolean) => {
-    setPanelOpenIds((prev) => {
-      if (open === prev.has(sessionId)) return prev
-      const next = new Set(prev)
-      if (open) next.add(sessionId)
-      else next.delete(sessionId)
-      return next
-    })
-  }, [])
-
-  // 无置顶项时整块不渲染：段头、分隔线都不出现，那一段空间完整交还给列表
-  if (entries.length === 0) return null
+  const { pinnedOptions, setPinned } = useLocalViewOptions()
+  const { overflow, sectionExpanded } = pinnedOptions
 
   const overflowing = entries.length > visibleCount
   /**
@@ -155,26 +122,30 @@ export function PinnedSection({
    *
    * 全部行都已在静止高度里显示时，浮出只是把一个等高的盒子重新定位一遍
    * 指针进入的瞬间换掉定位与底色，读起来是一次没有反馈的闪动，这一档因此不接悬停
+   *
+   * 它只作为样式表的闸门下发给 `data-wg-expandable`：真正的浮出由 `:hover` 触发
    */
   const canExpand = overflow === 'expand' && overflowing
-  const open = canExpand && (hoverOpen || panelOpenIds.size > 0)
+
+  // 无置顶项时整块不渲染，段头、分隔线都不出现，那一段空间完整交还给列表
+  if (entries.length === 0) return null
 
   const head = (
     <button
       type="button"
       className={styles.pinHead}
-      aria-expanded={expanded}
-      onClick={onToggle}
+      aria-expanded={sectionExpanded}
+      onClick={() => setPinned({ sectionExpanded: !sectionExpanded })}
     >
       <span className={styles.pinHeadSlot}>
         <IconTriangleRightFillRegular
-          className={clsx(styles.pinArrow, expanded && styles.pinArrowOpen)}
+          className={clsx(styles.pinArrow, sectionExpanded && styles.pinArrowOpen)}
         />
       </span>
       <span className={styles.pinHeadName}>{labels.pinned.section}</span>
       <span className={styles.pinHeadSpacer} />
       <span className={styles.pinHeadHint}>
-        {hintText(entries.length, visibleCount, expanded, labels.pinned)}
+        {hintText(entries.length, visibleCount, sectionExpanded, labels.pinned)}
       </span>
     </button>
   )
@@ -203,25 +174,21 @@ export function PinnedSection({
 
   // 模式类只在这里算一次：它在 JSX 里出现多次，写成逐个三元会在每处重复一遍同一个条件
   const pinExpandClass = overflow === 'expand' ? styles.pinExpand : undefined
-  const pinScrollClass = clsx(
-    overflow === 'expand' && styles.pinScrollClipped,
-    open && styles.pinScrollOpen,
-  )
+  const pinScrollClass = clsx(styles.pinScroll, overflow === 'expand' && styles.pinScrollClipped)
 
   return (
     <div
-      className={clsx(styles.pinnedSection, expanded && pinExpandClass)}
+      className={clsx(styles.pinnedSection, sectionExpanded && pinExpandClass)}
       style={sizing}
       data-wg-overflow={overflow}
+      // 能不能浮出的闸门：样式表的 `:hover` 规则只在这一档生效
+      data-wg-expandable={canExpand ? '' : undefined}
     >
       {head}
       {/* 收起后只剩段头一行。分隔仍留着：不留它就与下面的工作区行接在一起了 */}
-      {expanded && (
+      {sectionExpanded && (
         <div
-          className={clsx(styles.pinScroll, pinScrollClass)}
-          // 触发区是预览行本身，不含段头；没有行被裁掉时不接悬停，那种浮出只是白闪一下
-          onPointerEnter={canExpand ? () => setHoverOpen(true) : undefined}
-          onPointerLeave={canExpand ? () => setHoverOpen(false) : undefined}
+          className={pinScrollClass}
           // 溢出与否只影响提示文案与能否滚动，DOM 结构不变
           data-wg-overflowing={overflowing ? '' : undefined}
         >
@@ -238,7 +205,6 @@ export function PinnedSection({
               onTogglePin={onTogglePin}
               canPin={canPin}
               official={official}
-              onPanelOpenChange={onPanelOpenChange}
               onOpenSession={onOpenSession}
             />
           ))}
@@ -267,7 +233,6 @@ function PinnedRow({
   onTogglePin,
   canPin,
   official,
-  onPanelOpenChange,
   onOpenSession,
 }: {
   entry: PinnedEntry
@@ -278,7 +243,6 @@ function PinnedRow({
   onTogglePin: (sessionId: string) => void
   canPin: boolean
   official: OfficialSessionActions | undefined
-  onPanelOpenChange: (sessionId: string, open: boolean) => void
   onOpenSession: (sessionId: string) => void
 }): ReactElement {
   const view = statusViewOfRow(entry.row, statuses, labels.status)
@@ -294,7 +258,6 @@ function PinnedRow({
       canPin={canPin}
       clipped={clipped}
       onTogglePin={onTogglePin}
-      onPanelOpenChange={onPanelOpenChange}
       onOpenSession={onOpenSession}
     />
   )

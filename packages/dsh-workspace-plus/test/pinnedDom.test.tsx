@@ -279,7 +279,7 @@ describe('pinned section', () => {
 
   it('shows only the header row once collapsed', async () => {
     const store = viewModeStoreStub()
-    store.setPinSectionExpanded(false)
+    store.setPinned({ sectionExpanded: false })
     const { container, root } = await mount({ ...storeViewModeProps(store) })
 
     expect(container.querySelector('.pinnedSection')).not.toBeNull()
@@ -333,7 +333,48 @@ describe('pinned section', () => {
     await act(async () => root.unmount())
   })
 
-  it('keeps the reserved height while the section is hovered open', async () => {
+  it('flags the section as expandable only while rows are cut off', async () => {
+    // 2 条置顶、可见 5 条：没有行被裁掉，浮出只是把一个等高的盒子重新定位一遍，这一档不接悬停
+    const narrow = await mount()
+    expect(narrow.container.querySelector('.pinnedSection')?.hasAttribute('data-wg-expandable')).toBe(false)
+    await act(async () => narrow.root.unmount())
+
+    // 7 条置顶、可见 5 条：有行被裁掉，闸门打开，样式表那条 `:hover` 规则才开始生效
+    const wide = await mount({
+      useWorkspaces: workspaceSource({ pinned: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }),
+    })
+    expect(wide.container.querySelector('.pinnedSection')?.hasAttribute('data-wg-expandable')).toBe(true)
+    // 标记是静态的：它只说明「这一行超出静止可见条数」，怎么收起来交给样式表
+    expect(wide.container.querySelectorAll('.pinScroll [data-wg-clipped]')).toHaveLength(2)
+    await act(async () => wide.root.unmount())
+  })
+
+  it('leaves the popover markup untouched by pointer events', async () => {
+    // 浮出交给样式表的 `:hover`：组件里不再有悬停状态，因此指针事件不该改动任何 DOM
+    // 这一条挡的是「把悬停记进 state」那类写法——值一旦能被记下来，就能在内容变化后失真，整块会自己浮出
+    const { container, root } = await mount({
+      useWorkspaces: workspaceSource({ pinned: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }),
+    })
+    const section = container.querySelector<HTMLElement>('.pinnedSection')
+    const before = section?.outerHTML
+
+    await act(async () => {
+      const scroll = section?.querySelector('.pinScroll')
+      scroll?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
+      scroll?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }))
+    })
+    expect(section?.outerHTML).toBe(before)
+
+    await act(async () => {
+      section?.querySelector('.pinScroll')?.dispatchEvent(
+        new PointerEvent('pointerout', { bubbles: true }),
+      )
+    })
+    expect(section?.outerHTML).toBe(before)
+    await act(async () => root.unmount())
+  })
+
+  it('keeps the resting height variables for both pin counts', async () => {
     // 浮出态里预览区是绝对定位、脱离流，段必须自己常驻住静止高度
     // 高度只由那个预览区撑着的话，指针一进入整段就塌成「段头 + 分隔」，下方内容整体上移
     const { container, root } = await mount({
@@ -341,64 +382,18 @@ describe('pinned section', () => {
     })
     const section = container.querySelector<HTMLElement>('.pinnedSection')
 
-    // 静止态：常驻高度由段自己撑着（三项之和由样式表算，这里只认变量已下发）
+    // 静止 5 条 = 5*32 + 4*2 = 168，全部 7 条 = 7*32 + 6*2 = 236
+    // 两项与段头、分隔都由样式表算进常驻高度，指针在不在上面都不变
     expect(section?.style.getPropertyValue('--wg-pin-rest')).toBe('168px')
+    expect(section?.style.getPropertyValue('--wg-pin-full')).toBe('236px')
     expect(section?.style.getPropertyValue('--wg-pin-head')).toBe('30px')
-
-    await act(async () => {
-      section?.querySelector('.pinScroll')?.dispatchEvent(
-        // React 的 onPointerEnter 由 root 上的 pointerover/pointerout 合成而来
-        // 必须派发 pointerover：React 收不到 pointerenter
-        new PointerEvent('pointerover', { bubbles: true }),
-      )
-    })
-
-    // 浮出后 DOM 里换成全部 7 行，但段本身与那三个变量都没变，高度因此不变
     expect(pinnedRows(container)).toHaveLength(7)
-    expect(section?.style.getPropertyValue('--wg-pin-rest')).toBe('168px')
-    await act(async () => root.unmount())
-  })
-
-  it('does not open on hover while nothing is left over', async () => {
-    // 2 条置顶、可见 5 条：没有行被裁掉，浮出只是把一个等高的盒子重新定位一遍
-    const { container, root } = await mount()
-    const scroll = container.querySelector<HTMLElement>('.pinScroll')
-
-    await act(async () => {
-      // 必须派发 pointerover：React 收不到 pointerenter
-      scroll?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
-    })
-
-    expect(container.querySelector('.pinScroll')?.className).not.toContain('pinScrollOpen')
-    expect(pinnedRows(container)).toHaveLength(2)
-    await act(async () => root.unmount())
-  })
-
-  it('opens on hover once rows are actually cut off', async () => {
-    const { container, root } = await mount({
-      useWorkspaces: workspaceSource({ pinned: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }),
-    })
-    const scroll = container.querySelector<HTMLElement>('.pinScroll')
-
-    // 标记是静态的：它只说明「这一行超出静止可见条数」，怎么收起来交给样式表
-    expect(scroll?.querySelectorAll('[data-wg-clipped]')).toHaveLength(2)
-
-    await act(async () => {
-      // React 的 onPointerEnter 由 root 上的 pointerover/pointerout 合成而来
-      // 必须派发 pointerover：React 收不到 pointerenter
-      scroll?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
-    })
-
-    // 展开靠这一个类：样式表里收起可见性的规则挂在 `.pinScroll:not(.pinScrollOpen)` 上
-    // 类一加，被裁掉的行自然回到可见
-    expect(container.querySelector('.pinScroll')?.className).toContain('pinScrollOpen')
-    expect(container.querySelectorAll('.pinScroll [data-wg-clipped]')).toHaveLength(2)
     await act(async () => root.unmount())
   })
 
   it('allows scrolling in place in scroll mode', async () => {
     const store = viewModeStoreStub()
-    store.setPinOverflow('scroll')
+    store.setPinned({ overflow: 'scroll' })
     const { container, root } = await mount({
       ...storeViewModeProps(store),
       // 7 条置顶、可见 5 条：区内滚动靠的是超出裁剪高度的那些行，因此全部都要在 DOM 里
@@ -408,6 +403,8 @@ describe('pinned section', () => {
     // scroll 模式不套 expand 那两个类，靠样式表里那条 data 属性规则允许滚动
     expect(container.querySelector('.pinnedSection')?.className).not.toContain('pinExpand')
     expect(container.querySelector('.pinScroll')?.className).not.toContain('pinScrollClipped')
+    // 悬停展开的闸门也不下发：这一档没有浮出可言，它的几条规则只认 expand
+    expect(container.querySelector('.pinnedSection')?.hasAttribute('data-wg-expandable')).toBe(false)
     expect(pinnedRows(container)).toHaveLength(7)
     await act(async () => root.unmount())
   })
@@ -668,36 +665,36 @@ describe('menu on a pinned row', () => {
     await act(async () => root.unmount())
   })
 
-  it('holds the popover open while a panel is open on a pinned row', async () => {
-    // 7 条置顶、可见 5 条：指针离开预览区时浮出本该收回
+  it('marks the pinned row while a panel is open so the popover cannot collapse under it', async () => {
+    // 两种面板都 portal 到 body：指针移上去时预览区已不在命中链里，`:hover` 当场为假
+    // 行上留下这个标记，样式表那条 `:has()` 规则据此把浮出留住
     const { container, root } = await mount({
       useWorkspaces: workspaceSource({ pinned: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }),
     })
-    const scroll = container.querySelector<HTMLElement>('.pinScroll')
-    await act(async () => {
-      // 必须派发 pointerover：React 收不到 pointerenter
-      scroll?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
-    })
+    const row = pinnedRows(container)[0] as HTMLElement
+    expect(row.hasAttribute('data-wg-panel-open')).toBe(false)
 
     await act(async () => actionButton(container).click())
-    // 面板 portal 到 body，指针移上去就离开了预览区
-    await act(async () => {
-      scroll?.dispatchEvent(new PointerEvent('pointerout', { bubbles: true }))
-    })
+    expect(row.hasAttribute('data-wg-panel-open')).toBe(true)
 
-    expect(container.querySelector('.pinScroll')?.className).toContain('pinScrollOpen')
-
-    // 面板一关，指针也确实不在预览区上，浮出这时才收回
     await act(async () => {
-      pinnedRows(container)[0]
-        ?.querySelector<HTMLButtonElement>('[data-wg-test-item="rename"]')
-        ?.click()
+      row.querySelector<HTMLButtonElement>('[data-wg-test-item="rename"]')?.click()
     })
-    await act(async () => {
-      scroll?.dispatchEvent(new PointerEvent('pointerout', { bubbles: true }))
-    })
+    expect(row.hasAttribute('data-wg-panel-open')).toBe(false)
+    await act(async () => root.unmount())
+  })
 
-    expect(container.querySelector('.pinScroll')?.className).not.toContain('pinScrollOpen')
+  it('marks the pinned row from the context menu as well', async () => {
+    // 行内 `...` 菜单与右键菜单是两处面板：只标记前者的话，右键唤出的菜单会在指针移上去时被收回
+    const { container, root } = await mount({
+      useWorkspaces: workspaceSource({ pinned: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }),
+    })
+    const row = pinnedRows(container)[0] as HTMLElement
+
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 40, clientY: 50 }))
+    })
+    expect(row.hasAttribute('data-wg-panel-open')).toBe(true)
     await act(async () => root.unmount())
   })
 
@@ -808,7 +805,7 @@ describe('in-place pinning', () => {
 
   it('fronts pinned sessions inside their own section when the display mode includes groups', async () => {
     const store = viewModeStoreStub()
-    store.setPinScope('inline')
+    store.setPinned({ scope: 'inline' })
     const { container, root } = await mount({ ...storeViewModeProps(store) })
 
     // 置顶排到它所在那一段的最前：a、b 按置顶名次在前，其后才是按更新时间的其余会话
@@ -827,7 +824,7 @@ describe('in-place pinning', () => {
   it('fronts pinned sessions in the flat list as well', async () => {
     // 平铺是第三个排序消费点，只改另外两处不会报错，只表现为「平铺里没置顶」
     const store = viewModeStoreStub()
-    store.setPinScope('inline')
+    store.setPinned({ scope: 'inline' })
     store.set('flat')
     const { container, root } = await mount({ ...storeViewModeProps(store) })
 
@@ -847,7 +844,7 @@ describe('in-place pinning', () => {
     // 末尾「未分组」桶是第四个渲染段，走的不是工作区那条分支
     // 它既有的行为是「保持会话列表原序」，因此这里只把置顶那条提前，其余逐格不动
     const store = viewModeStoreStub()
-    store.setPinScope('inline')
+    store.setPinned({ scope: 'inline' })
     const ungrouped = ['u1', 'u2', 'u3']
     const { container, root } = await mount({
       ...storeViewModeProps(store),

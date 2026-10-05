@@ -16,7 +16,7 @@
 import { createContext, createElement, useContext } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import type { IndicatorStyle, ViewMode } from './data/types.ts'
-import type { PinOverflow, PinScope } from './store/viewMode.ts'
+import type { PinnedOptions } from './store/viewMode.ts'
 
 /** 视图选项偏好：当前值与各自的写入口 */
 export interface LocalViewOptions {
@@ -24,19 +24,14 @@ export interface LocalViewOptions {
   indicator: IndicatorStyle
   setMode: (mode: ViewMode) => void
   setIndicator: (style: IndicatorStyle) => void
-  /** 置顶区的溢出给法 */
-  pinOverflow: PinOverflow
-  setPinOverflow: (overflow: PinOverflow) => void
-  /** 置顶会话的显示方式：仅在置顶区，或同时在各分组内置顶 */
-  pinScope: PinScope
-  setPinScope: (scope: PinScope) => void
   /**
-   * 置顶区是否展开
+   * 置顶区的三项偏好
    *
-   * 展开态是全局的（不按工作区分别记），因此是一个裸布尔而不是展开记录
+   * 名字带全 `Options`：消费它的文件里另有一个 `pinned`（置顶行的数组），叫短了会在那里撞名
    */
-  pinSectionExpanded: boolean
-  setPinSectionExpanded: (expanded: boolean) => void
+  pinnedOptions: PinnedOptions
+  /** 写入置顶区偏好，只带要改的那几格 */
+  setPinned: (patch: Partial<PinnedOptions>) => void
 }
 
 const LocalViewOptionsContext = createContext<LocalViewOptions | null>(null)

@@ -59,7 +59,7 @@ import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { ALL_ENTRIES, sameAddress, virtualAddress, workspaceAddress } from '../../rootEntry.ts'
 import type { RootEntryAddress } from '../../rootEntry.ts'
 import { useFlipMarker } from '../useFlipMarker.ts'
-import { UNGROUPED_KEY, expandedAt, indicatorOf, modeOf, pinOverflowOf, pinScopeOf, pinSectionExpandedOf, sessionGroupExpansionOf, sessionGroupKey, virtualExpansionOf, workspaceExpansionOf } from '../store/viewMode.ts'
+import { UNGROUPED_KEY, expandedAt, indicatorOf, modeOf, pinnedOf, sessionGroupExpansionOf, sessionGroupKey, virtualExpansionOf, workspaceExpansionOf } from '../store/viewMode.ts'
 import type { SessionGroupRef, ViewModeStoreHandle } from '../store/viewMode.ts'
 import { RegionLocaleProvider } from '../useLocale.ts'
 import { ExpansionProvider } from '../useExpansion.ts'
@@ -271,36 +271,12 @@ function useLocalViewOptionsValue(props: WorkspaceGroupsProps): LocalViewOptions
   const { useStore, actions } = props
   const mode = modeOf(useStore((state) => state))
   const indicator = indicatorOf(useStore((state) => state))
-  const pinOverflow = pinOverflowOf(useStore((state) => state))
-  const pinScope = pinScopeOf(useStore((state) => state))
-  const pinSectionExpanded = pinSectionExpandedOf(useStore((state) => state))
-  const { setMode, setIndicator, setPinOverflow, setPinScope, setPinSectionExpanded } = actions
+  const pinnedOptions = pinnedOf(useStore((state) => state))
+  const { setMode, setIndicator, setPinned } = actions
   // value 身份要稳定：它经 context 交给每一行，每次渲染新建会让行级 memo 全部失效
   return useMemo(
-    () => ({
-      mode,
-      indicator,
-      setMode,
-      setIndicator,
-      pinOverflow,
-      setPinOverflow,
-      pinScope,
-      setPinScope,
-      pinSectionExpanded,
-      setPinSectionExpanded,
-    }),
-    [
-      mode,
-      indicator,
-      setMode,
-      setIndicator,
-      pinOverflow,
-      setPinOverflow,
-      pinScope,
-      setPinScope,
-      pinSectionExpanded,
-      setPinSectionExpanded,
-    ],
+    () => ({ mode, indicator, setMode, setIndicator, pinnedOptions, setPinned }),
+    [mode, indicator, setMode, setIndicator, pinnedOptions, setPinned],
   )
 }
 
@@ -1262,7 +1238,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const { labels, workspaces, archivedSessionIds, pinnedSessionIds,
     sessions, statusSnapshot, home, official } = sources
   const localViewOptions = useLocalViewOptionsValue(props)
-  const { mode: viewMode, indicator, pinOverflow, pinScope, pinSectionExpanded, setPinSectionExpanded } = localViewOptions
+  const { mode: viewMode, indicator, pinnedOptions } = localViewOptions
   const { snapshot, apply } = useSnapshotFeed(props.loadGroups, props.onReady)
   const layout = useRegionLayout(workspaces, snapshot, labels)
   const expansion = useExpansionValue(props, layout.nesting)
@@ -1377,13 +1353,13 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   /**
    * 就地置顶用的名次表
    *
-   * `pinScope === 'inline'` 时才交出它，否则是一张空表
+   * `pinnedOptions.scope === 'inline'` 时才交出它，否则是一张空表
    * 空表下比较器与不置顶时同序，三种段落因此共用同一个比较器
    * 名次按官方集合的位置算，最近置顶的排最前
    */
   const pinRanksByScope = useMemo(
-    () => (pinScope === 'inline' ? pinRanks(pinned) : NO_PINS),
-    [pinScope, pinned],
+    () => (pinnedOptions.scope === 'inline' ? pinRanks(pinned) : NO_PINS),
+    [pinnedOptions.scope, pinned],
   )
 
   /**
@@ -1561,9 +1537,6 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
           <PinnedSection
             entries={pinned}
             visibleCount={snapshot.pinnedVisibleCount}
-            overflow={pinOverflow}
-            expanded={pinSectionExpanded}
-            onToggle={() => setPinSectionExpanded(!pinSectionExpanded)}
             onTogglePin={toggleSessionPin}
             canPin={canPin}
             official={official}

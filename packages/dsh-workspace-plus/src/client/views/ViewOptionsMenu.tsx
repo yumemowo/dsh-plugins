@@ -101,16 +101,8 @@ export function ViewOptionsMenu({
   onClose,
 }: ViewOptionsMenuProps): ReactElement | null {
   const { labels } = useLocale()
-  const {
-    mode,
-    indicator,
-    setMode,
-    setIndicator,
-    pinOverflow,
-    setPinOverflow,
-    pinScope,
-    setPinScope,
-  } = useLocalViewOptions()
+  const { mode, indicator, setMode, setIndicator, pinnedOptions, setPinned } = useLocalViewOptions()
+  const { overflow: pinOverflow, scope: pinScope } = pinnedOptions
   const viewMode = labels.viewMode
   const indicatorLabels = labels.indicatorStyle
   const overflowLabels = labels.pinOverflow
@@ -205,7 +197,7 @@ export function ViewOptionsMenu({
           text: overflowLabel(value),
         })),
         pinOverflow,
-        setPinOverflow,
+        (value) => setPinned({ overflow: value }),
       )}
       <div className={styles.viewSeparator} role="separator" />
       {/* 置顶显示：仅置顶区，或同时在各分组内置顶 */}
@@ -213,7 +205,7 @@ export function ViewOptionsMenu({
         scopeLabels.label,
         PIN_SCOPES.map(({ scope: value, icon }) => ({ value, icon, text: scopeText(value) })),
         pinScope,
-        setPinScope,
+        (value) => setPinned({ scope: value }),
       )}
       <div className={styles.viewSeparator} role="separator" />
       {/* 子工作区嵌套：行不可点——`Switch` 自己已是按钮，嵌进可点的行会叠两层控件 */}

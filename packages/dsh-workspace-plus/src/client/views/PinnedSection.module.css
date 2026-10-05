@@ -178,36 +178,53 @@
   overflow: hidden;
 }
 
-/* 浮出态放开滚动
+/* 浮出态：指针在预览行上，或行上开着面板
  *
- * 选择器必须带 .pinExpand 前缀
- * 常驻那条 overflow: hidden 的优先级比单个 .pinScrollOpen 高，不带前缀时 overflow-y: auto 会被压掉 */
-.pinExpand .pinScrollOpen {
-  overflow-y: auto;
-}
-
-/* 浮出态：只改「露出来」相关的几项，定位与落点由上面那条常驻规则负责 */
-.pinScrollOpen {
-  /* 上限取「全部行叠起来」的实高，视口上限只作为第三项防呆
-     内容远矮于视口上限时，可见高度会在过渡前段就走完
-     每一项都必须是合法长度，否则整条声明被判无效、静默退回静止高度 */
-  max-height: min(var(--wg-pin-full, 168px), 60vh, 640px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  background: var(--dsw-alias-bg-base);
-  /* 只圆下缘、不加描边、不加内边距：上缘与段头齐平，读成「预览被拉长」而不是「另开一个盒子」
-     前几行因此逐格不变 */
-  border-radius: 0 0 10px 10px;
-  box-shadow: 0 10px 22px #0000001f;
+ * 闸门 data-wg-expandable 只在这一档有话可说：只在 expand 溢出时才下发
+ * 指针那条交给 :hover 而不是组件里的一个布尔
+ * 浏览器按命中测试现算
+ * 元素被摘掉、被撑大、指针移开都会如实重算，陈旧值在结构上不存在
+ *
+ * 面板那条从行上反向读（data-wg-panel-open 由行按自己的开合状态下发）
+ * 面板 portal 到 body，指针移上去时预览区已不在命中链里，:hover 当场为假
+ * 用 :has() 读而不是把开合状态提升一份到段里：真值只有行上那一处，不会与面板实际开合漂移
+ *
+ * 选择器都带 .pinExpand 前缀：常驻那条 overflow: hidden 的优先级比单个类规则高，不带前缀会被压掉
+ *
+ * 整条规则包在 (hover: hover) 里，没有悬停能力时它一条都不该生效
+ * 这样触屏回退那一档只需覆盖常驻规则，不必把同一批选择器再抄一份去压它 */
+@media (hover: hover) {
+  .pinExpand[data-wg-expandable] .pinScroll:hover,
+  .pinExpand[data-wg-expandable]:has(.pinScroll [data-wg-panel-open]) .pinScroll {
+    /* 上限取「全部行叠起来」的实高，视口上限只作为第三项防呆
+       内容远矮于视口上限时，可见高度会在过渡前段就走完
+       每一项都必须是合法长度，否则整条声明被判无效、静默退回静止高度 */
+    max-height: min(var(--wg-pin-full, 168px), 60vh, 640px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--dsw-alias-bg-base);
+    /* 只圆下缘、不加描边、不加内边距：上缘与段头齐平，读成「预览被拉长」而不是「另开一个盒子」
+       前几行因此逐格不变 */
+    border-radius: 0 0 10px 10px;
+    box-shadow: 0 10px 22px #0000001f;
+  }
 }
 
 /* 静止时被裁在高度之外的那些行
  *
  * 它们留在文档里（收回方向要有东西可收），但不能被 Tab 聚焦到看不见的位置
- * 可见性只在静止态收起，延时到收回结束才生效 */
-.pinScroll:not(.pinScrollOpen) > [data-wg-clipped] {
+ * 可见性只在静止态收起，延时到收回结束才生效
+ *
+ * 判据与上面那条浮出规则同源：指针不在预览行上、行上也没有面板开着
+ * 这一条不包 (hover: hover)：没有悬停能力时 :hover 恒为假，收起后由下面那条触屏规则放开可见性 */
+.pinScroll:not(:hover) > [data-wg-clipped] {
   visibility: hidden;
   transition-delay: var(--wg-expand-duration);
+}
+
+.pinExpand:has(.pinScroll [data-wg-panel-open]) .pinScroll:not(:hover) > [data-wg-clipped] {
+  visibility: visible;
+  transition-delay: 0s;
 }
 
 .pinScroll > [data-wg-clipped] {
@@ -216,10 +233,11 @@
   transition-timing-function: linear;
 }
 
-/* 触屏回退：(hover: none) 的设备没有悬停，浮出模式在那里不可用，按区内滚动渲染 */
+/* 触屏回退：(hover: none) 的设备没有悬停，浮出模式在那里不可用，按区内滚动渲染
+ *
+ * 只覆盖常驻的定位与静止高度：悬停那两条规则已经整条包在 (hover: hover) 里，在这里不必再提 */
 @media (hover: none) {
-  .pinExpand .pinScroll,
-  .pinScrollOpen {
+  .pinExpand .pinScroll {
     position: static;
     max-height: var(--wg-pin-rest, 168px);
     overflow-y: auto;
@@ -227,6 +245,12 @@
     background: none;
     border-radius: 0;
     box-shadow: none;
+  }
+
+  /* 触屏上没有悬停，被裁掉的行由容器滚动露出来，不靠可见性收起 */
+  .pinScroll:not(:hover) > [data-wg-clipped] {
+    visibility: visible;
+    transition-delay: 0s;
   }
 }
 
@@ -241,7 +265,7 @@
     transition: none;
   }
 
-  .pinScroll:not(.pinScrollOpen) > [data-wg-clipped] {
+  .pinScroll:not(:hover) > [data-wg-clipped] {
     transition-delay: 0s;
   }
 }

@@ -30,7 +30,6 @@ declare module '*/PinnedSection.module.css' {
     readonly "pinHeadSpacer": string
     readonly "pinScroll": string
     readonly "pinScrollClipped": string
-    readonly "pinScrollOpen": string
     readonly "pinnedSection": string
   }
   export default classes

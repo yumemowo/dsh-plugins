@@ -45,9 +45,7 @@ const EMPTY_EXPANSION = {
   mode: 'workspace',
   indicator: 'icon',
   expansion: { workspace: {}, virtualWorkspace: {}, group: {} },
-  pinOverflow: 'expand',
-  pinScope: 'section',
-  pinSectionExpanded: true,
+  pinned: { overflow: 'expand', scope: 'section', sectionExpanded: true },
 }
 
 describe('view mode store', () => {

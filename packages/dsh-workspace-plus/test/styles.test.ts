@@ -602,8 +602,11 @@ describe('client stylesheet', () => {
 
     // 这套做法不依赖任何写死的尺寸或序号。只查折叠相关的规则：
     // 样式表里别处出现 max-height（如下拉菜单的高度上限）与这条取舍无关
+    // 按类前缀挑，不看子串：置顶区那条闸门属性叫 data-wg-expandable，名字里也含 expand，但它与这套轨道动画无关
     const expandBodies = rules
-      .filter((rule) => rule.selectors.some((selector) => selector.includes('expand')))
+      .filter((rule) =>
+        rule.selectors.some((selector) => /(^|[\s>+~])\.expand[A-Za-z]*/.test(selector)),
+      )
       .map((rule) => rule.body)
       .join('\n')
     expect(expandBodies).not.toMatch(/max-height/)
@@ -1281,18 +1284,50 @@ describe('client stylesheet', () => {
     expect(popover).toContain('top: var(--wg-pin-head')
 
     // 上限取内容实高而不是视口上限，否则可见高度在过渡前段就走完
-    const open = bodyOf('.pinScrollOpen')
-    expect(open).toContain('--wg-pin-full')
+    // 浮出有两条来源：指针在预览行上，或行上有面板开着（面板 portal 到 body，`:hover` 够不着它）
+    const openSelectors = [
+      '.pinExpand[data-wg-expandable] .pinScroll:hover',
+      '.pinExpand[data-wg-expandable]:has(.pinScroll [data-wg-panel-open]) .pinScroll',
+    ]
+    for (const selector of openSelectors) {
+      expect(bodyOf(selector)).toContain('--wg-pin-full')
+    }
+
+    // 两条来源写在同一条规则里：浮出那几个属性因此只有一处定义，两态不会各自漂移
+    // 触屏回退那一档不再重复这批选择器，因此按「声明了 --wg-pin-full」挑
+    const expanded = rules.filter(
+      (rule) =>
+        rule.selectors.some((sel) => openSelectors.includes(sel)) &&
+        rule.body.includes('--wg-pin-full'),
+    )
+    expect(expanded).toHaveLength(1)
+    expect(expanded[0]?.selectors).toEqual(openSelectors)
+
+    // 浮出整条包在 (hover: hover) 里：没有悬停能力时它一条都不该生效
+    // 不包的话触屏回退那一档就得把这批选择器抄一份去压它，那份拷贝会把闸门属性写进 (hover: none) 块里
+    const hoverOnly = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const hoverBlock = hoverOnly.match(/@media \(hover:\s*hover\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
+    for (const selector of openSelectors) {
+      expect(hoverBlock).toContain(selector)
+    }
+    const touchBlock = hoverOnly.match(/@media \(hover:\s*none\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
+    expect(touchBlock).not.toBe('')
+    // 闸门属性不出现在触屏回退档：它只属于 expand 且溢出那一档，与有没有悬停能力无关
+    expect(touchBlock).not.toContain('data-wg-expandable')
+    expect(touchBlock).not.toContain(':has(')
 
     // 过渡挂在两态都成立的那条规则上，展开与收回因此都有动画
     expect(bodyOf('.pinScroll')).toMatch(/transition:\s*max-height/)
 
     // 被裁掉的行留在文档里（收回要有东西可收），但静止时不可见
+    // 判据与浮出同源：指针不在预览行上时收起；行上有面板开着时仍要可见（面板 portal 出去，`:hover` 已经为假）
     const clipped = rules
       .filter((rule) => rule.selectors.some((sel) => sel.includes('[data-wg-clipped]')))
       .map((rule) => rule.body)
       .join('\n')
     expect(clipped).toMatch(/visibility:\s*hidden/)
+    expect(clipped).toMatch(/visibility:\s*visible/)
+    expect(clipped).not.toContain('pinScrollOpen')
   })
 
   it('drops the popover motion under prefers-reduced-motion', () => {

@@ -15,7 +15,7 @@
  * 菜单开合状态收敛在本组件内：行组件在 map 回调里生成，把 useState 留在行内会让每行无条件多挂一组 hook 状态，独立组件则按需挂载
  * 重命名对话框也留在这里——只有真正打开过的行才付出这份状态
  */
-import { memo, useEffect, useState } from 'react'
+import { memo, useState } from 'react'
 import type { ReactElement } from 'react'
 import { HoverCard, IconEllipsisOutlineRegular, Menu } from '../runtime.ts'
 import { buildSessionMenuItems } from '../menus.tsx'
@@ -58,14 +58,15 @@ export interface SessionGroupingContext {
  * 本组件自己算、因此不收的几格
  *
  * `sessionId` 由 `row` 派生；`action` 与 `onContextMenu` 就是下面那两个面板本身，调用方给不了
+ * `panelOpen` 同理：它由这两个面板的开合状态算出来，收下来既会被覆盖、又让调用方以为它说了算
  */
-type ComputedHere = 'sessionId' | 'action' | 'onContextMenu'
+type ComputedHere = 'sessionId' | 'action' | 'onContextMenu' | 'panelOpen'
 
 /**
  * 悬停卡片的输入
  *
- * 不给整格表示这一行不挂卡片（置顶区里的行如此）。卡片由本组件挂而不是行组件：
- * 它要在行内 `...` 菜单或右键菜单开着时让位，而那两个状态都在本组件里
+ * 不给整格表示这一行不挂卡片（置顶区里的行如此）
+ * 卡片由本组件挂而不是行组件，它要在行内 `...` 菜单或右键菜单开着时让位，而那两个状态都在本组件里
  */
 export interface SessionRowCardInput {
   /** 相对时间文案（`5分钟前`），缺省时卡片里不显示这一行 */
@@ -88,12 +89,6 @@ export interface SessionRowItemProps extends Omit<SessionRowViewProps, ComputedH
   official?: OfficialSessionActions | undefined
   /** 悬停卡片，缺省表示这一行不挂卡片 */
   card?: SessionRowCardInput | undefined
-  /**
-   * 行上面板开合变化的回报，缺省表示调用方不关心
-   *
-   * 面板 portal 到 body，行外面看不到它，需要据它维持别处状态的调用方只能靠这一格
-   */
-  onPanelOpenChange?: ((sessionId: string, open: boolean) => void) | undefined
 }
 
 /**
@@ -166,7 +161,6 @@ function sameRowItemProps(prev: SessionRowItemProps, next: SessionRowItemProps):
     prev.onTogglePin === next.onTogglePin &&
     prev.onOpenSession === next.onOpenSession &&
     prev.onReveal === next.onReveal &&
-    prev.onPanelOpenChange === next.onPanelOpenChange &&
     prev.official === next.official &&
     sameCard(prev.card, next.card) &&
     sameGrouping(prev.grouping, next.grouping)
@@ -178,7 +172,6 @@ function SessionRowItemView({
   grouping,
   official,
   card,
-  onPanelOpenChange,
   ...rowProps
 }: SessionRowItemProps): ReactElement {
   const { labels } = useLocale()
@@ -232,19 +225,8 @@ function SessionRowItemView({
 
   const contextMenu = useRowContextMenu({ items, onSelect: select })
 
-  // 两种面板任一开着都算「行上有面板」，回报给需要据它维持别处状态的调用方
+  // 两种面板任一开着都算「行上有面板」，卡片与行尾锚点的显隐都据它让位
   const panelOpen = menuOpen || contextMenu.open
-  useEffect(() => {
-    if (onPanelOpenChange === undefined) return
-    onPanelOpenChange(row.id, panelOpen)
-  }, [onPanelOpenChange, panelOpen, row.id])
-  // 行被卸载时若面板还开着，宿主收不到「关」的那一次回报，这里补上
-  useEffect(
-    () => () => {
-      onPanelOpenChange?.(row.id, false)
-    },
-    [onPanelOpenChange, row.id],
-  )
 
   const shownTitle = rowProps.title ?? labels.newSession
   // 条目为空时连锚点按钮一起不渲染，不留点不动的省略号
@@ -254,6 +236,8 @@ function SessionRowItemView({
     <SessionRowView
       {...rowProps}
       sessionId={row.id}
+      // 面板开合下发给行：置顶区靠行上的标记判断浮出要不要留住（两种面板都 portal 到 body）
+      panelOpen={panelOpen}
       onContextMenu={contextMenu.onContextMenu}
       action={
         hasMenu ? (

@@ -1,9 +1,8 @@
 import { useSyncExternalStore } from 'react'
 import type { IndicatorStyle, ViewMode } from '../src/client/data/types.ts'
-import { sessionGroupKey } from '../src/client/store/viewMode.ts'
+import { pinnedOf, sessionGroupKey } from '../src/client/store/viewMode.ts'
 import type {
-  PinOverflow,
-  PinScope,
+  PinnedOptions,
   SessionGroupRef,
   ViewModeActions,
   ViewModeState,
@@ -38,14 +37,8 @@ export function viewModeProps(
       setIndicator: (next: IndicatorStyle) => {
         state = { ...state, indicator: next }
       },
-      setPinOverflow: (next: PinOverflow) => {
-        state = { ...state, pinOverflow: next }
-      },
-      setPinScope: (next: PinScope) => {
-        state = { ...state, pinScope: next }
-      },
-      setPinSectionExpanded: (expanded: boolean) => {
-        state = { ...state, pinSectionExpanded: expanded }
+      setPinned: (patch: Partial<PinnedOptions>) => {
+        state = { ...state, pinned: { ...pinnedOf(state), ...patch } }
       },
       setWorkspaceExpanded: (key: string, expanded: boolean) => {
         state = { ...state, expansion: { ...state.expansion, workspace: { ...state.expansion?.workspace, [key]: expanded } } }
@@ -83,10 +76,8 @@ export interface ViewModeStoreStub {
   subscribe: (listener: () => void) => () => void
   set: (mode: ViewMode) => void
   setIndicator: (style: IndicatorStyle) => void
-  /** 写入置顶区的三个本地偏好，用于验证「改了之后界面真的换了」 */
-  setPinOverflow: (overflow: PinOverflow) => void
-  setPinScope: (scope: PinScope) => void
-  setPinSectionExpanded: (expanded: boolean) => void
+  /** 写入置顶区的偏好，用于验证「改了之后界面真的换了」 */
+  setPinned: (patch: Partial<PinnedOptions>) => void
   /** 写入某一层的显式展开选择，用于验证「点开之后写盘」 */
   setWorkspaceExpanded: (key: string, expanded: boolean) => void
   setVirtualWorkspaceExpanded: (key: string, expanded: boolean) => void
@@ -117,9 +108,7 @@ export function viewModeStoreStub(
     },
     set: (next) => commit({ ...state, mode: next }),
     setIndicator: (next) => commit({ ...state, indicator: next }),
-    setPinOverflow: (next) => commit({ ...state, pinOverflow: next }),
-    setPinScope: (next) => commit({ ...state, pinScope: next }),
-    setPinSectionExpanded: (expanded) => commit({ ...state, pinSectionExpanded: expanded }),
+    setPinned: (patch) => commit({ ...state, pinned: { ...pinnedOf(state), ...patch } }),
     setWorkspaceExpanded: (key, expanded) =>
       commit({
         ...state,
@@ -177,9 +166,7 @@ export function storeViewModeProps(store: ViewModeStoreStub): {
     actions: {
       setMode: (next: ViewMode) => store.set(next),
       setIndicator: (next: IndicatorStyle) => store.setIndicator(next),
-      setPinOverflow: (next: PinOverflow) => store.setPinOverflow(next),
-      setPinScope: (next: PinScope) => store.setPinScope(next),
-      setPinSectionExpanded: (expanded: boolean) => store.setPinSectionExpanded(expanded),
+      setPinned: (patch: Partial<PinnedOptions>) => store.setPinned(patch),
       setWorkspaceExpanded: (key: string, expanded: boolean) =>
         store.setWorkspaceExpanded(key, expanded),
       setVirtualWorkspaceExpanded: (key: string, expanded: boolean) =>

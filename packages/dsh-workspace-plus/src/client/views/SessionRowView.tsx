@@ -87,6 +87,14 @@ export interface SessionRowViewProps {
    * 缺省表示不涉及裁剪
    */
   clipped?: boolean | undefined
+  /**
+   * 这一行上是否有面板开着（行内 `...` 菜单或右键菜单）
+   *
+   * 两种面板都 portal 到 body，行外面看不到它们；置顶区借这一格判断「指针是不是还在预览区附近」，
+   * 面板开着时它不能收回（见 PinnedSection 样式表里那条 `:has` 规则）
+   * 缺省表示该行不涉及面板
+   */
+  panelOpen?: boolean | undefined
 }
 
 /**
@@ -118,6 +126,7 @@ function SessionRowViewImpl({
   pinned = false,
   canPin = true,
   clipped = false,
+  panelOpen = false,
   onTogglePin,
   onContextMenu,
   onOpenSession,
@@ -171,6 +180,8 @@ function SessionRowViewImpl({
       // 参与所在撑开体的逐个淡入，序号由撑开体按文档序下发
       data-wg-stagger=""
       data-wg-clipped={clipped ? '' : undefined}
+      // 面板开合标在行自己身上：置顶区用 `:has()` 从段里反向读它，真值因此只有行上这一处
+      data-wg-panel-open={panelOpen ? '' : undefined}
       role="button"
       tabIndex={0}
       onClick={open}
@@ -205,6 +216,7 @@ function sameRowViewProps(prev: SessionRowViewProps, next: SessionRowViewProps):
     prev.pinned === next.pinned &&
     prev.canPin === next.canPin &&
     prev.clipped === next.clipped &&
+    prev.panelOpen === next.panelOpen &&
     prev.onTogglePin === next.onTogglePin &&
     prev.action === next.action &&
     prev.onContextMenu === next.onContextMenu &&

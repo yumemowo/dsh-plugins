@@ -42,12 +42,8 @@ function options(fresh = false): LocalViewOptions {
     indicator: 'icon',
     setMode: () => {},
     setIndicator: () => {},
-    pinOverflow: 'expand',
-    setPinOverflow: () => {},
-    pinScope: 'section',
-    setPinScope: () => {},
-    pinSectionExpanded: true,
-    setPinSectionExpanded: () => {},
+    pinnedOptions: { overflow: 'expand', scope: 'section', sectionExpanded: true },
+    setPinned: () => {},
   }
   return fresh ? { ...shared } : shared
 }

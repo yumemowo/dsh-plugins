@@ -70,16 +70,70 @@ schema 里一个 volatile 字段都没有时，这个插件整条不出现在设
 两者的差别是可区分的：列表序 `u1,u2,u3`、时间倒序 `u3,u2,u1`，置顶 `u2` 时
 `frontPinnedRows` 给出 `u2,u1,u3`，而整段套比较器会给出 `u2,u3,u1`。
 
-## 五、悬停展开只在该展开时才接
+## 五、悬停展开：闸门用属性下发，浮出交给 `:hover` 与行上的面板标记
 
 计划把「指针移到预览行上时整块浮出」写成无条件行为。全部置顶项都已在静止高度里显示时，
 浮出只是把一个等高的盒子重新定位一遍：指针进入的瞬间换掉定位与底色，读起来是一次没有反馈的闪动。
-改成「只有真有行被裁掉时才接悬停」（`canExpand = overflow === 'expand' && overflowing`），
-两种溢出给法的布局仍然完全相同。
+因此加一道闸门（`canExpand = overflow === 'expand' && overflowing`），两种溢出给法的布局仍然完全相同。
+
+闸门最初写成组件里的一个布尔（`hoverOpen`），由 `onPointerEnter` / `onPointerLeave` 维护。
+那条路有一个静默失效的模式：两个回调按「能不能浮出」条件挂载，于是不能浮出的那一段里
+`onPointerLeave` 也被摘掉，指针离开不会有回报，布尔会一直留在 `true`。
+此后只要行再被裁掉（多置顶一条）或整块再展开，挂着的旧值就把整块直接顶开——
+看起来是「什么都没做它自己展开了」。补一个「不能浮出时清掉」的 effect 能压住，
+但那只是枚举失效点，漏一个入口就复发。
+
+现在改成两条来源都由样式表判定，组件里不留悬停状态：
+
+```css
+@media (hover: hover) {
+  .pinExpand[data-wg-expandable] .pinScroll:hover,
+  .pinExpand[data-wg-expandable]:has(.pinScroll [data-wg-panel-open]) .pinScroll { … }
+}
+```
+
+- 指针那条交给 `:hover`：浏览器按命中测试现算，元素被摘掉、被撑大、指针移开都会如实重算，陈旧值在结构上不存在。
+  闸门因此不再用「挂不挂回调」表达，而是 `data-wg-expandable` 一个属性。
+- 面板那条从行上反向读：行内 `...` 菜单与右键菜单都 portal 到 body，指针移上去时预览区已不在命中链里，
+  `:hover` 当场为假。行按自己的开合状态下发 `data-wg-panel-open`，段用 `:has()` 读它——
+  真值只有行上那一处，不会与面板实际开合漂移。这与 `rows.module.css` 里
+  `.row:has(.rowAction[aria-expanded='true'])` 是同一套手法。
+- 整条规则包在 `(hover: hover)` 里：没有悬停能力时它一条都不该生效。
+  不包的话，触屏回退那一档就得把这批选择器再抄一份去压它（`.pinExpand .pinScroll` 的特异度只有 2，
+  压不过带 `[data-wg-expandable]` 与 `:hover` 的那两条），而抄出来的那一份会把闸门属性写进
+  `(hover: none)` 块里——读起来像「这个属性在触屏档也有意义」，实际它只属于 expand 溢出这一档。
+
+闸门属性只由 `overflow === 'expand' && overflowing` 下发，因此 scroll 模式与「没有行被裁掉」两档都不带它，
+样式里那几条规则对它们自然不生效，每条规则不必自己再重复一遍那两个条件。
+
+实测（真实 Chromium，注入产物里那份编译后的样式表；复现脚本见下）：
+
+| 状态 | `max-height` | 被裁行可见性 | 段高 |
+| --- | --- | --- | --- |
+| 静止 | 168px | hidden | 211 |
+| 指针在预览行上 | **236px** | visible | 211 |
+| 指针离开 | 168px | hidden | 211 |
+| 面板开着、指针在段外 | **236px** | visible | 211 |
+| 面板关闭 | 168px | hidden | 211 |
+| 闸门关闭 + 指针在预览行上 | 168px | visible | 211 |
+
+（`236px` 是 7 条叠起来的实高，`168px` 是静止 5 条的高度，两者都由组件按可见条数下发。）
+
+这张表由 `scripts/probes/pin-hover.mjs` 复现：它读产物、现造一个只含 7 条假会话的最小页面、
+用 CDP 移动指针并读 `getComputedStyle`，页面内容与宿主数据无关。
+headless 默认报 `(hover: none)`，而浮出规则整条包在 `(hover: hover)` 里，
+因此启动浏览器要带 `--blink-settings=primaryHoverType=2,availableHoverTypes=2,…` 把它当成有指针的设备
+（完整命令见 `docs/conventions.md`）。
+
+jsdom 不算版式、也不算 `:hover`，因此几何只能在真实浏览器里量。
+仓库里守它的是 `test/styles.test.ts` 的 `reserves the resting height on the section itself`：
+它断言浮出那几个属性只在带闸门的那条 `:hover` / `:has` 规则上声明一次，
+以及被裁行同时有 hidden 与 visible 两条可见性规则。
 
 ## 六、浮出时那一段的常驻高度由段自己撑住
 
-预览区浮出时是绝对定位、脱离了流。原先只有静止态那条规则给高度（`.pinScroll:not(.pinScrollOpen)`），
+预览区浮出时是绝对定位、脱离了流。原先只有静止态那条规则给高度（当时的 `.pinScroll:not(.pinScrollOpen)`，
+现在同一条判据写在 `.pinScroll:not(:hover)` 上），
 于是指针一进入，整段从 `211px` 塌成段头那 `43px`，下方工作区列表整体上移 `168px`——
 那不是展开，是抽走一块。
 
@@ -126,7 +180,8 @@ jsdom 不算版式，因此几何本身只能在真实浏览器里量；用例�
 
 这里踩到一个反向的坑：只把定位写进浮出态那一条规则时，**展开方向**好了，**收回方向**却坏了——摘掉那条规则，面板就回到流里，段当场从 `211px` 涨到 `279px`、下方列表跟着下移。两态同一定位才两个方向都对。
 
-顺带一条：`overflow-y: auto` 必须写成 `.pinExpand .pinScrollOpen`。常驻那条 `overflow: hidden` 是 (0,2,0)，单个 `.pinScrollOpen` 是 (0,1,0)，不加前缀抬优先级的话浮出态永远滚不动。
+顺带一条：`overflow-y: auto` 必须写在带 `.pinExpand` 前缀的选择器上（当时是 `.pinExpand .pinScrollOpen`）。
+常驻那条 `overflow: hidden` 是 (0,2,0)，单个类规则是 (0,1,0)，不加前缀抬优先级的话浮出态永远滚不动。
 
 **三、收回方向要有东西可收。** 计划原先写「溢出时只渲染 `visibleCount` 条」，那样指针移开时第 6 条直接消失、没有可过渡的内容。改成全部行都留在文档里，静止时超出的那些打 `data-wg-clipped`，由样式表用 `visibility` 收起、并延后到收回结束才生效（否则收回途中就已经 Tab 不到）。
 

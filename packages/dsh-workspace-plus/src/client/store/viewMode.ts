@@ -73,9 +73,7 @@ export interface ViewModeState {
   mode?: ViewMode | undefined
   indicator?: IndicatorStyle | undefined
   expansion?: ExpansionState | undefined
-  pinOverflow?: PinOverflow | undefined
-  pinScope?: PinScope | undefined
-  pinSectionExpanded?: boolean | undefined
+  pinned?: PinnedOptions | undefined
 }
 
 /** 展示方式，旧数据缺这一格时按「按工作区」 */
@@ -104,23 +102,28 @@ export type PinOverflow = 'expand' | 'scroll'
  */
 export type PinScope = 'section' | 'inline'
 
-/** 溢出给法，旧数据缺这一格时按「浮出」 */
-export function pinOverflowOf(state: ViewModeState): PinOverflow {
-  return state.pinOverflow ?? 'expand'
-}
-
-/** 置顶会话显示方式，旧数据缺这一格时按「仅置顶区域」 */
-export function pinScopeOf(state: ViewModeState): PinScope {
-  return state.pinScope ?? 'section'
-}
-
 /**
- * 置顶区的展开态
- *
- * 全局一个布尔，不按工作区分别记；旧数据缺这一格时是展开
+ * 置顶区的三项偏好
  */
-export function pinSectionExpandedOf(state: ViewModeState): boolean {
-  return state.pinSectionExpanded !== false
+export interface PinnedOptions {
+  /** 溢出给法 */
+  overflow: PinOverflow
+  /** 显示方式 */
+  scope: PinScope
+  /** 整块是否展开 */
+  sectionExpanded: boolean
+}
+
+/** 置顶区三项偏好的默认值，旧数据整格缺席时由 {@link pinnedOf} 交出 */
+const DEFAULT_PIN_OPTIONS: PinnedOptions = {
+  overflow: 'expand',
+  scope: 'section',
+  sectionExpanded: true,
+}
+
+/** 置顶区的三项偏好，旧数据整格缺席时落到默认值 */
+export function pinnedOf(state: ViewModeState): PinnedOptions {
+  return state.pinned ?? DEFAULT_PIN_OPTIONS
 }
 
 /** 工作区层的展开记录，旧数据缺这一格时是空表（等于用户一层都没碰过） */
@@ -170,9 +173,7 @@ export function createViewModeStore() {
       // 三格显式落成空表：它们与上面两格不同，读回旧数据时整格缺席是常态，写成空表让首份落盘就带全形状
       expansion: { workspace: {}, virtualWorkspace: {}, group: {} },
       // 置顶区的三项同样显式写下默认值，理由与上一行相同
-      pinOverflow: 'expand',
-      pinScope: 'section',
-      pinSectionExpanded: true,
+      pinned: { overflow: 'expand', scope: 'section', sectionExpanded: true },
     }),
     persist: VIEW_MODE_PERSIST_KEY,
     actions: {
@@ -182,14 +183,14 @@ export function createViewModeStore() {
       setIndicator: (draft, indicator: IndicatorStyle) => {
         draft.indicator = indicator
       },
-      setPinOverflow: (draft, overflow: PinOverflow) => {
-        draft.pinOverflow = overflow
-      },
-      setPinScope: (draft, scope: PinScope) => {
-        draft.pinScope = scope
-      },
-      setPinSectionExpanded: (draft, expanded: boolean) => {
-        draft.pinSectionExpanded = expanded
+      /**
+       * 写入置顶区的偏好
+       *
+       * 收补丁而不是整份：调用点每次只改一格，整份要求它把另外两项也带上
+       * 起点取 {@link pinnedOf}：旧数据里整格可能缺席，直接往缺的格子上摊会得到一份只有一格的记录
+       */
+      setPinned: (draft, patch: Partial<PinnedOptions>) => {
+        draft.pinned = { ...pinnedOf(draft), ...patch }
       },
       /**
        * 记下工作区层的选择

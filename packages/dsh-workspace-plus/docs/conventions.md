@@ -18,6 +18,25 @@
 
 `docs/render-performance.md` 里的毫秒数属于「历史测量记录」那一类；provider value 那条机制则是可复现的。
 
+**jsdom 算不了的东西另用真实浏览器探针**（尚不属 CI，手动跑）：`scripts/probes/` 下每个文件量一组只能在真实浏览器里看的结论，
+比如 `pin-hover.mjs` 量置顶区悬停展开的六条路径。它们**不进 `package.json` 的 scripts**：跑一次要自带浏览器、
+要读构建产物、结论也不是「通过 / 失败」那种能进 CI 的断言，写成一个命令会让人以为随便跑跑就行。
+
+`pin-hover.mjs` 的用法（它先把探针页面写进 `.preview/`，再驱动浏览器）：
+
+```sh
+pnpm run build          # 探针读 lib/ 里那份编译后的样式表
+# headless 默认报 (hover: none)，而浮出规则整条包在 (hover: hover) 里
+# 用 blink-settings 把它当成一台有指针的设备来启动
+/usr/bin/chromium --headless=new --no-sandbox --disable-gpu \
+  --remote-debugging-port=9222 --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 \
+  --user-data-dir=.preview/chrome-profile about:blank &
+node scripts/probes/pin-hover.mjs
+```
+
+退出码非零即有用例不符。页面内容由脚本自己现造（假会话 `session-a`…`session-g`），
+不读宿主配置、不依赖真实工作区数据，因此换台机器也跑得出同一份结论。
+
 ## 构建与产物
 
 | 约束 | 违反后 | 怎么被发现 |
