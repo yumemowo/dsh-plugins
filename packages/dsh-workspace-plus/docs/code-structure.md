@@ -15,6 +15,7 @@ src/client/
 ├── directoryFlow.ts            官方 directoryFlow 洞的占用者读数（添加工作区的交互来源）
 ├── hostInfo.ts                 宿主固定事实（home 目录）的读数（悬停卡片的路径缩写要用）
 ├── useFlipMarker.ts            量区域矩形、按需在 body 上挂浮层翻转标记
+├── useHoverCapable.ts          设备是否具备悬停能力（置顶区 expand 档的可用前提）
 ├── actions.ts                  RegionActions / RegionDataHooks（组件与宿主的接口）
 ├── useLocale.ts                区域文案的唯一读取入口（RegionLocaleProvider + useLocale）
 ├── useLocalViewOptions.ts      浏览器 store 里展示方式 / 指示器样式的读取入口（同上）

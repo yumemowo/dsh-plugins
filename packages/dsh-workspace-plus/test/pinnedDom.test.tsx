@@ -7,7 +7,9 @@ import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
+import { setHoverCapable } from './matchMedia-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { pinnedOf } from '../src/client/store/viewMode.ts'
 import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
 
 /**
@@ -408,6 +410,53 @@ describe('pinned section', () => {
     // 悬停展开的闸门也不下发：这一档没有浮出可言，它的几条规则只认 expand
     expect(container.querySelector('.pinnedSection')?.hasAttribute('data-wg-expandable')).toBe(false)
     expect(pinnedRows(container)).toHaveLength(7)
+    await act(async () => root.unmount())
+  })
+
+  it('hands a hover-less device the same markup as scroll mode', async () => {
+    // 无悬停时 expand 不可用，回退由组件派生：下发的必须是 scroll 那一套 DOM
+    // 回退没有样式表那份实现，这条逐字节等价就是它的全部依据
+    // 用户偏好没有被改写回 store，因此这里仍以 expand 偏好挂载
+    const pinned = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+    const expandStore = viewModeStoreStub()
+    setHoverCapable(false)
+    const fallback = await mount({
+      ...storeViewModeProps(expandStore),
+      useWorkspaces: workspaceSource({ pinned }),
+    })
+    const fallbackSection = fallback.container.querySelector('.pinnedSection')
+    const fallbackMarkup = fallbackSection?.outerHTML
+    // 先卸掉再切档：悬停开关是全局的，留着挂载的话这一棵会跟着重渲染成 expand
+    await act(async () => fallback.root.unmount())
+
+    // 真 scroll 档：同一份数据，只是偏好本身就是 scroll
+    const scrollStore = viewModeStoreStub()
+    scrollStore.setPinned({ overflow: 'scroll' })
+    setHoverCapable(true)
+    const scroll = await mount({
+      ...storeViewModeProps(scrollStore),
+      useWorkspaces: workspaceSource({ pinned }),
+    })
+    const scrollSection = scroll.container.querySelector('.pinnedSection')
+
+    // 逐项相同：data-wg-overflow、模式类、闸门属性与被裁行的标记都在这一份标记里
+    expect(fallbackMarkup).toBe(scrollSection?.outerHTML ?? '')
+    expect(fallbackSection?.getAttribute('data-wg-overflow')).toBe('scroll')
+    await act(async () => scroll.root.unmount())
+  })
+
+  it('keeps the stored preference while a hover-less device renders the fallback', async () => {
+    // 派生而不是写入：回退若把强制值写回 store，插上鼠标后用户原本选的 expand 就再也回不来了
+    const store = viewModeStoreStub()
+    setHoverCapable(false)
+    const { container, root } = await mount({
+      ...storeViewModeProps(store),
+      useWorkspaces: workspaceSource({ pinned: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }),
+    })
+
+    expect(container.querySelector('.pinnedSection')?.getAttribute('data-wg-overflow')).toBe('scroll')
+    // store 里那一格从头到尾没被碰过，读数仍落在默认的 expand 上
+    expect(pinnedOf(store.getSnapshot()).overflow).toBe('expand')
     await act(async () => root.unmount())
   })
 })

@@ -7,6 +7,9 @@
  *   - `expand`：静止时占可见条数那么高，指针移到预览行上时整块向下浮出、一次列出全部
  *   - `scroll`：同一个高度里自行滚动
  *
+ * 没有悬停能力的设备上 `expand` 不可用，按 `scroll` 渲染
+ * 这一档在这里就落定（见下面 `effectiveOverflow`），组件下发的就是 `scroll` 那套 DOM，样式表不必再改一遍
+ *
  * 两种给法都把全部行放进 DOM：`scroll` 靠超出的行撑出滚动，`expand` 靠它们做展开与收回的过渡
  * 超出可见条数的行由样式表在静止时收起可见性
  *
@@ -28,6 +31,7 @@ import { statusViewOfRow } from '../data/rows.ts'
 import type { PinnedEntry } from '../data/pinned.ts'
 import { DEFAULT_EXPAND_MOTION, expandMotionVars } from '../utils/expandMotion.ts'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import { useHoverCapable } from '../useHoverCapable.ts'
 import { useLocale } from '../useLocale.ts'
 import { useLocalViewOptions } from '../useLocalViewOptions.ts'
 import { SessionRowItem } from './SessionRowItem.tsx'
@@ -118,6 +122,14 @@ export function PinnedSection({
   const { labels } = useLocale()
   const { pinnedOptions, setPinned } = useLocalViewOptions()
   const { overflow, sectionExpanded } = pinnedOptions
+  const hoverCapable = useHoverCapable()
+
+  /**
+   * 当前生效的溢出给法
+   *
+   * `overflow` 是持久化的用户偏好，无悬停能力时不能把强制值写回 store
+   */
+  const effectiveOverflow = overflow === 'expand' && hoverCapable !== false ? 'expand' : 'scroll'
 
   const overflowing = entries.length > visibleCount
   /**
@@ -128,7 +140,7 @@ export function PinnedSection({
    *
    * 它只作为样式表的闸门下发给 `data-wg-expandable`：真正的浮出由 `:hover` 触发
    */
-  const canExpand = overflow === 'expand' && overflowing
+  const canExpand = effectiveOverflow === 'expand' && overflowing
 
   // 无置顶项时整块不渲染，段头、分隔线都不出现，那一段空间完整交还给列表
   if (entries.length === 0) return null
@@ -176,15 +188,17 @@ export function PinnedSection({
     ...expandMotionVars(DEFAULT_EXPAND_MOTION),
   } as Record<string, string>
 
-  // 模式类只在这里算一次：它在 JSX 里出现多次，写成逐个三元会在每处重复一遍同一个条件
-  const pinExpandClass = overflow === 'expand' ? styles.pinExpand : undefined
-  const pinScrollClass = clsx(styles.pinScroll, overflow === 'expand' && styles.pinScrollClipped)
+  const pinExpandClass = effectiveOverflow === 'expand' ? styles.pinExpand : undefined
+  const pinScrollClass = clsx(
+    styles.pinScroll,
+    effectiveOverflow === 'expand' && styles.pinScrollClipped,
+  )
 
   return (
     <div
       className={clsx(styles.pinnedSection, sectionExpanded && pinExpandClass)}
       style={sizing}
-      data-wg-overflow={overflow}
+      data-wg-overflow={effectiveOverflow}
       // 能不能浮出的闸门：样式表的 `:hover` 规则只在这一档生效
       data-wg-expandable={canExpand ? '' : undefined}
     >
@@ -205,7 +219,7 @@ export function PinnedSection({
               labels={labels}
               statuses={statuses}
               // 超出可见条数的那几条：只在 `expand` 档静止时有意义，`scroll` 档它们本就在裁剪高度里可滚
-              clipped={overflow === 'expand' && index >= visibleCount}
+              clipped={effectiveOverflow === 'expand' && index >= visibleCount}
               onTogglePin={onTogglePin}
               canPin={canPin}
               official={official}

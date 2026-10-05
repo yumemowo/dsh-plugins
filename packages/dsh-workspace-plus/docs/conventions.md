@@ -26,7 +26,7 @@
 
 ```sh
 pnpm run build          # 探针读 lib/ 里那份编译后的样式表
-# headless 默认报 (hover: none)，而浮出规则整条包在 (hover: hover) 里
+# headless 默认报 (hover: none)，而这一档组件不下发 .pinExpand，浮出那条规则匹配不到任何东西
 # 用 blink-settings 把它当成一台有指针的设备来启动
 /usr/bin/chromium --headless=new --no-sandbox --disable-gpu \
   --remote-debugging-port=9222 --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 \

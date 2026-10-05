@@ -1295,7 +1295,7 @@ describe('client stylesheet', () => {
     }
 
     // 两条来源写在同一条规则里：浮出那几个属性因此只有一处定义，两态不会各自漂移
-    // 触屏回退那一档不再重复这批选择器，因此按「声明了 --wg-pin-full」挑
+    // 按「声明了 --wg-pin-full」挑，避免把别的规则也算进来
     const expanded = rules.filter(
       (rule) =>
         rule.selectors.some((sel) => openSelectors.includes(sel)) &&
@@ -1311,19 +1311,6 @@ describe('client stylesheet', () => {
     expect(openBody).toMatch(/border-radius:\s*10px\s*;/)
     expect(openBody).toMatch(/calc\(var\(--wg-pin-full[^)]*\)\s*\+\s*var\(--wg-pin-gap/)
     expect(openBody).not.toMatch(/border-radius:\s*0/)
-
-    // 浮出整条包在 (hover: hover) 里：没有悬停能力时它一条都不该生效
-    // 不包的话触屏回退那一档就得把这批选择器抄一份去压它，那份拷贝会把闸门属性写进 (hover: none) 块里
-    const hoverOnly = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
-    const hoverBlock = hoverOnly.match(/@media \(hover:\s*hover\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
-    for (const selector of openSelectors) {
-      expect(hoverBlock).toContain(selector)
-    }
-    const touchBlock = hoverOnly.match(/@media \(hover:\s*none\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
-    expect(touchBlock).not.toBe('')
-    // 闸门属性不出现在触屏回退档：它只属于 expand 且溢出那一档，与有没有悬停能力无关
-    expect(touchBlock).not.toContain('data-wg-expandable')
-    expect(touchBlock).not.toContain(':has(')
 
     // 过渡挂在两态都成立的那条规则上，展开与收回因此都有动画
     expect(bodyOf('.pinScroll')).toMatch(/transition:\s*max-height/)

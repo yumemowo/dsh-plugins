@@ -40,6 +40,8 @@ const dispatcher = {
   useMemo: (fn: () => unknown) => fn(),
   // 上下文在渲染期读取，返回值按提供者追不下去也用不到：断言只关心结构
   useContext: (context: { _currentValue?: unknown }) => context._currentValue,
+  // 悬停能力那条订阅在 node 环境没有可订阅的对象，替身按 getSnapshot 现读一次
+  useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
 }
 
 /**
@@ -93,6 +95,8 @@ function renderingDispatcher(): {
     useRef: (initial: unknown) => ({ current: initial }),
     useMemo: (fn: () => unknown) => fn(),
     useContext: (context: { _currentValue?: unknown }) => context._currentValue,
+    // 悬停能力那条订阅在 node 环境没有可订阅的对象，替身按 getSnapshot 现读一次
+    useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
   }
 
   /** 切到一个组件的状态桶，返回恢复父组件桶的函数 */

@@ -143,7 +143,8 @@
   padding-left: var(--wg-row-start);
 }
 
-/* 区内滚动：同一个高度里自行滚动。溢出与否只影响这条规则是否真的滚得动，DOM 结构不变 */
+/* 区内滚动：同一个高度里自行滚动。溢出与否只影响这条规则是否真的滚得动，DOM 结构不变
+   没有悬停能力的设备也落在这一条上：组件那时下发的就是 scroll 这套 DOM，样式表不再另写一份 */
 .pinnedSection[data-wg-overflow='scroll'] .pinScroll[data-wg-overflowing] {
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -195,30 +196,25 @@
  * 面板 portal 到 body，指针移上去时预览区已不在命中链里，:hover 当场为假
  * 用 :has() 读而不是把开合状态提升一份到段里：真值只有行上那一处，不会与面板实际开合漂移
  *
- * 选择器都带 .pinExpand 前缀：常驻那条 overflow: hidden 的优先级比单个类规则高，不带前缀会被压掉
- *
- * 整条规则包在 (hover: hover) 里，没有悬停能力时它一条都不该生效
- * 这样触屏回退那一档只需覆盖常驻规则，不必把同一批选择器再抄一份去压它 */
-@media (hover: hover) {
-  .pinExpand[data-wg-expandable] .pinScroll:hover,
-  .pinExpand[data-wg-expandable]:has(.pinScroll [data-wg-panel-open]) .pinScroll {
-    /* 上限取「全部行叠起来」的实高加段头空隙，视口上限只作为第三项防呆
-       内容远矮于视口上限时，可见高度会在过渡前段就走完
-       每一项都必须是合法长度，否则整条声明被判无效、静默退回静止高度 */
-    max-height: min(
-      calc(var(--wg-pin-full, 168px) + var(--wg-pin-gap, 6px)),
-      60vh,
-      640px
-    );
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    background: var(--dsw-alias-bg-base);
-    /* 圆角画满四缘、不加描边：段头与面板之间已有常驻空隙（.pinScroll 的 padding-top），
-       上缘的圆弧不再压着段头；行落在空隙之下，不被圆弧削到
-       面板因此读成一块完整的圆角矩形，前几行仍逐格不变 */
-    border-radius: 10px;
-    box-shadow: 0 10px 22px #0000001f;
-  }
+ * 选择器都带 .pinExpand 前缀：常驻那条 overflow: hidden 的优先级比单个类规则高，不带前缀会被压掉 */
+.pinExpand[data-wg-expandable] .pinScroll:hover,
+.pinExpand[data-wg-expandable]:has(.pinScroll [data-wg-panel-open]) .pinScroll {
+  /* 上限取「全部行叠起来」的实高加段头空隙，视口上限只作为第三项防呆
+     内容远矮于视口上限时，可见高度会在过渡前段就走完
+     每一项都必须是合法长度，否则整条声明被判无效、静默退回静止高度 */
+  max-height: min(
+    calc(var(--wg-pin-full, 168px) + var(--wg-pin-gap, 6px)),
+    60vh,
+    640px
+  );
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--dsw-alias-bg-base);
+  /* 圆角画满四缘、不加描边：段头与面板之间已有常驻空隙（.pinScroll 的 padding-top），
+     上缘的圆弧不再压着段头；行落在空隙之下，不被圆弧削到
+     面板因此读成一块完整的圆角矩形，前几行仍逐格不变 */
+  border-radius: 10px;
+  box-shadow: 0 10px 22px #0000001f;
 }
 
 /* 静止时被裁在高度之外的那些行
@@ -226,8 +222,7 @@
  * 它们留在文档里（收回方向要有东西可收），但不能被 Tab 聚焦到看不见的位置
  * 可见性只在静止态收起，延时到收回结束才生效
  *
- * 判据与上面那条浮出规则同源：指针不在预览行上、行上也没有面板开着
- * 这一条不包 (hover: hover)：没有悬停能力时 :hover 恒为假，收起后由下面那条触屏规则放开可见性 */
+ * 判据与上面那条浮出规则同源：指针不在预览行上、行上也没有面板开着 */
 .pinScroll:not(:hover) > [data-wg-clipped] {
   visibility: hidden;
   transition-delay: var(--wg-expand-duration);
@@ -242,27 +237,6 @@
   transition-property: visibility;
   transition-duration: 0s;
   transition-timing-function: linear;
-}
-
-/* 触屏回退：(hover: none) 的设备没有悬停，浮出模式在那里不可用，按区内滚动渲染
- *
- * 只覆盖常驻的定位与静止高度：悬停那两条规则已经整条包在 (hover: hover) 里，在这里不必再提 */
-@media (hover: none) {
-  .pinExpand .pinScroll {
-    position: static;
-    max-height: calc(var(--wg-pin-rest, 168px) + var(--wg-pin-gap, 6px));
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    background: none;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  /* 触屏上没有悬停，被裁掉的行由容器滚动露出来，不靠可见性收起 */
-  .pinScroll:not(:hover) > [data-wg-clipped] {
-    visibility: visible;
-    transition-delay: 0s;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

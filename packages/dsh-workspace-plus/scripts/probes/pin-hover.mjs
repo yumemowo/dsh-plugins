@@ -17,9 +17,20 @@
  *
  * 跑之前先 `pnpm run build`：读的是 `lib/` 里那份编译产物。
  *
- * 媒体档的处理：浮出规则整条包在 `(hover: hover)` 里，而 headless 恒定报 `(hover: none)`，
- * 于是它在默认环境里根本不生效。这里用 CDP 的媒体模拟把页面当成一台有指针的设备来量——
- * 量的是「真机上有悬停时会发生什么」，触屏档本身由 `test/styles.test.ts` 的用例守着。
+ * 媒体档的处理：本探针量的是 expand 档，而 `data-wg-expandable` 与 `.pinExpand` 在无悬停设备上
+ * 组件根本不下发（那条回退在组件侧落定，见 `src/client/useHoverCapable.ts`）。
+ * 因此浏览器必须按「有指针」启动——启动命令里那串 `--blink-settings=primaryHoverType=2,…` 才是
+ * 唯一真正生效的手段。headless 默认报 `(hover: none)`，不带它时本脚本量不到 expand 档。
+ *
+ * 实测记录（Chromium 153.0.8010.52，2026-09-30）：`Emulation.setEmulatedMedia` 对
+ * `hover` / `any-hover` / `pointer` / `any-pointer` 一律静默忽略——回执是 `ok {}` 而不报错，
+ * 翻不动。同一个调用对 `prefers-color-scheme` 是生效的，因此不是参数写错；
+ * 参数形状（单项 / 四项 / 带 `media`）、设置时机（导航前 / 后）与 headless 与否都不改变这个结果。
+ * 想真去「禁掉悬停能力」只能用 `Emulation.setTouchEmulationEnabled`，而它把
+ * `(hover: hover)` 翻成 false 之后，关掉模拟也仍卡在 false，要重载页面才恢复。
+ *
+ * 已知缺口：媒体档没生效时本脚本照样把六条路径逐条印成 `ok`（那时静止态与「指针在预览行上」
+ * 量到同一个值，恰好对上期望里的前几项），只有退出码非零能识别出来。未修。
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -122,7 +133,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
 await send('Runtime.enable')
 await send('Page.enable')
-// 在导航之前设好媒体模拟：媒体特性在文档加载时求值，导航之后再设对已加载的页面无效
+// 这一手是死的：实测 setEmulatedMedia 对 hover / pointer 类特性静默忽略（回执 ok、不生效，见文件头）
+// 真正把浏览器定成有指针的是启动命令里那串 --blink-settings；留着是因为它无害，且换到认这类特性的
+// 版本上就自动生效了。下面的 hoverCapable 读数是这条路的哨兵
 await send('Emulation.setEmulatedMedia', {
   features: [
     { name: 'hover', value: 'hover' },

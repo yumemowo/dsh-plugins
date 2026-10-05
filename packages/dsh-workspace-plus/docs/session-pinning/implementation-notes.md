@@ -88,10 +88,8 @@ schema 里一个 volatile 字段都没有时，这个插件整条不出现在设
 现在改成两条来源都由样式表判定，组件里不留悬停状态：
 
 ```css
-@media (hover: hover) {
-  .pinExpand[data-wg-expandable] .pinScroll:hover,
-  .pinExpand[data-wg-expandable]:has(.pinScroll [data-wg-panel-open]) .pinScroll { … }
-}
+.pinExpand[data-wg-expandable] .pinScroll:hover,
+.pinExpand[data-wg-expandable]:has(.pinScroll [data-wg-panel-open]) .pinScroll { … }
 ```
 
 - 指针那条交给 `:hover`：浏览器按命中测试现算，元素被摘掉、被撑大、指针移开都会如实重算，陈旧值在结构上不存在。
@@ -100,12 +98,9 @@ schema 里一个 volatile 字段都没有时，这个插件整条不出现在设
   `:hover` 当场为假。行按自己的开合状态下发 `data-wg-panel-open`，段用 `:has()` 读它——
   真值只有行上那一处，不会与面板实际开合漂移。这与 `rows.module.css` 里
   `.row:has(.rowAction[aria-expanded='true'])` 是同一套手法。
-- 整条规则包在 `(hover: hover)` 里：没有悬停能力时它一条都不该生效。
-  不包的话，触屏回退那一档就得把这批选择器再抄一份去压它（`.pinExpand .pinScroll` 的特异度只有 2，
-  压不过带 `[data-wg-expandable]` 与 `:hover` 的那两条），而抄出来的那一份会把闸门属性写进
-  `(hover: none)` 块里——读起来像「这个属性在触屏档也有意义」，实际它只属于 expand 溢出这一档。
+- 这一批选择器不包 `(hover: hover)`：触屏回退不在这里表达，见第十一节。
 
-闸门属性只由 `overflow === 'expand' && overflowing` 下发，因此 scroll 模式与「没有行被裁掉」两档都不带它，
+闸门属性只由 `effectiveOverflow === 'expand' && overflowing` 下发，因此 scroll 模式与「没有行被裁掉」两档都不带它，
 样式里那几条规则对它们自然不生效，每条规则不必自己再重复一遍那两个条件。
 
 实测（真实 Chromium，注入产物里那份编译后的样式表；复现脚本见下）：
@@ -123,7 +118,7 @@ schema 里一个 volatile 字段都没有时，这个插件整条不出现在设
 
 这张表由 `scripts/probes/pin-hover.mjs` 复现：它读产物、现造一个只含 7 条假会话的最小页面、
 用 CDP 移动指针并读 `getComputedStyle`，页面内容与宿主数据无关。
-headless 默认报 `(hover: none)`，而浮出规则整条包在 `(hover: hover)` 里，
+headless 默认报 `(hover: none)`，而这一档组件不下发 `.pinExpand`，
 因此启动浏览器要带 `--blink-settings=primaryHoverType=2,availableHoverTypes=2,…` 把它当成有指针的设备
 （完整命令见 `docs/conventions.md`）。
 
@@ -246,6 +241,47 @@ jsdom 不算版式，因此几何本身只能在真实浏览器里量；用例�
 
 圆弧下探 `10px`，会扫过首行顶部 `4px`：行自身的 `border-radius: 8px`（`rows.module.css` 的 `.row`）比它收得深，
 背景不被削到，悬停或选中的底色同理。代价是整块常驻高从 `211px` 变为 `217px`。
+
+## 十一、触屏回退改由组件派生，样式表里那份复刻已删
+
+初版把「设备有没有悬停能力」这个判定交给样式层：组件在触屏上也照发 `expand` 那套 DOM，
+再由 `PinnedSection.module.css` 里的 `@media (hover: none)` 块把 `position` / `max-height` /
+`overflow-y` / `overscroll-behavior` / `background` / `border-radius` / `box-shadow` 七项改回 `scroll` 的样子，
+外加一条 `visibility: visible` 把被裁行的隐藏机制放开。
+
+同一个外观因此写在两处，靠人工保持一致。**实测两边最终计算样式逐项相同**（12 项，含段高与第 6 行落点），
+但那份一致没有机制保证：真 `scroll` 档有 `allows scrolling in place in scroll mode` 守着，
+触屏复刻那份没有任何等价守卫，把 `overscroll-behavior: contain` 从触屏块里去掉不会有任何用例变红。
+
+改成分层归位：**能力判定在组件里做，样式表只认模式。** `overflow` 是持久化的用户偏好，
+无悬停时不能把强制值写回 store，因此只派生：
+
+```ts
+const effectiveOverflow = overflow === 'expand' && hoverCapable ? 'expand' : 'scroll'
+```
+
+`effectiveOverflow` 一处算出，替掉组件里全部五处直接读 `overflow` 的地方
+（`canExpand`、`pinExpand` 类、`pinScrollClipped` 类、`data-wg-overflow`、行上的 `clipped`）。
+其中 `data-wg-overflow` 那一处是关键：它换成 `scroll` 之后，触屏档自动命中已有的
+`.pinnedSection[data-wg-overflow='scroll'] .pinScroll[data-wg-overflowing]`，
+同时 `.pinExpand` 与 `.pinScrollClipped` 都不再出现、被裁行也不再打标记。
+
+由此得到的性质比原来强：**无悬停档下发的 DOM 与真 `scroll` 档逐字节相同**，
+所以 `(hover: none)` 块不是被别处替代，而是变成多余的，整块删除。
+浮出那批选择器外层的 `(hover: hover)` 包裹也一并撤掉——触屏档已不下发 `.pinExpand`，
+它匹配不到任何东西，留着就是同一个决定又写回两层。
+
+悬停能力由 `src/client/useHoverCapable.ts` 交出：`useSyncExternalStore` 订阅
+`matchMedia('(hover: hover)')`，因此插上鼠标后不必刷新。jsdom 没有 `matchMedia`，
+`test/setup.ts` 装了替身（默认有悬停），用例可切档；
+`test/matchMedia-stub.ts` 里的档位是按当前值现读的，替身建好之后再切也跟得上。
+
+守卫是 `test/pinnedDom.test.tsx` 里的两条：`hands a hover-less device the same markup as scroll mode` 逐字节比对
+两种来路（无悬停 + `expand` 偏好 vs 有悬停 + `scroll` 偏好）的 `outerHTML`；
+`keeps the stored preference while a hover-less device renders the fallback` 守住「派生不写入」。
+去掉派生里的 `hoverCapable` 后两条立刻变红，量的是真东西。
+
+置顶溢出那一组菜单项本次不动：触屏用户仍看得见「悬停展开」，选中后界面上不发生变化（当前生效值仍是 `scroll`）。
 
 ## 与计划一致的取舍
 
