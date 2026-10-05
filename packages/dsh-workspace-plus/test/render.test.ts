@@ -9,13 +9,13 @@ import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { compareSessionRows } from '../src/client/data/sessions.ts'
-import { RegionLocaleProvider } from '../src/client/useLocale.ts'
+import { RegionLocaleProvider } from '../src/client/hooks/useLocale.ts'
 import { regionLabels } from '../src/client/labels.ts'
 import { regionTranslate, sidebarTranslate, translateWith, workspaceTranslate } from './locale-stub.ts'
 import { menuLabelArrow, menuLabelText } from './menu-label.ts'
 import { snapshot } from './snapshot-stub.ts'
-import { ExpansionProvider } from '../src/client/useExpansion.ts'
-import type { Expansion } from '../src/client/useExpansion.ts'
+import { ExpansionProvider } from '../src/client/hooks/useExpansion.ts'
+import type { Expansion } from '../src/client/hooks/useExpansion.ts'
 import { viewModeProps } from './viewMode-stub.ts'
 
 /**

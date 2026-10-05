@@ -15,7 +15,7 @@ import { IconCloseFillRegular, IconSearchOutlineRegular, StateDot, Tooltip } fro
 import { sanitizeSearchQuery, SEARCH_QUERY_MAX_CODE_UNITS } from '../data/search.ts'
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
 import type { SessionStatus } from '../data/status.ts'
-import { useLocale } from '../useLocale.ts'
+import { useLocale } from '../hooks/useLocale.ts'
 import searchStyles from './SearchControl.module.css'
 import regionStyles from './WorkspaceGroupsRegion.module.css'
 import rowsStyles from './components/rows.module.css'

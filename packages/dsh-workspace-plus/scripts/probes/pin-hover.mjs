@@ -18,7 +18,7 @@
  * 跑之前先 `pnpm run build`：读的是 `lib/` 里那份编译产物。
  *
  * 媒体档的处理：本探针量的是 expand 档，而 `data-wg-expandable` 与 `.pinExpand` 在无悬停设备上
- * 组件根本不下发（那条回退在组件侧落定，见 `src/client/useHoverCapable.ts`）。
+ * 组件根本不下发（那条回退在组件侧落定，见 `src/client/hooks/useHoverCapable.ts`）。
  * 因此浏览器必须按「有指针」启动——启动命令里那串 `--blink-settings=primaryHoverType=2,…` 才是
  * 唯一真正生效的手段。headless 默认报 `(hover: none)`，不带它时本脚本量不到 expand 档。
  *

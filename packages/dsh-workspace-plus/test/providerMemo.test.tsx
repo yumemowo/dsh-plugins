@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import * as React from 'react'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { LocalViewOptionsProvider, useLocalViewOptions } from '../src/client/useLocalViewOptions.ts'
-import type { LocalViewOptions } from '../src/client/useLocalViewOptions.ts'
+import { LocalViewOptionsProvider, useLocalViewOptions } from '../src/client/hooks/useLocalViewOptions.ts'
+import type { LocalViewOptions } from '../src/client/hooks/useLocalViewOptions.ts'
 
 /**
  * provider value 的身份对行级缓存的影响

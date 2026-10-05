@@ -12,8 +12,8 @@ import { GroupSection } from './GroupSection.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
 import type { WorkspaceRowProps } from './WorkspaceRow.tsx'
 
-import { useExpansion } from '../useExpansion.ts'
-import { useLocale } from '../useLocale.ts'
+import { useExpansion } from '../hooks/useExpansion.ts'
+import { useLocale } from '../hooks/useLocale.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
 import styles from './components/rows.module.css'
 

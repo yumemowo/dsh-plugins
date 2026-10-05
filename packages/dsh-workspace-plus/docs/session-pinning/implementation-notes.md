@@ -271,7 +271,7 @@ const effectiveOverflow = overflow === 'expand' && hoverCapable ? 'expand' : 'sc
 浮出那批选择器外层的 `(hover: hover)` 包裹也一并撤掉——触屏档已不下发 `.pinExpand`，
 它匹配不到任何东西，留着就是同一个决定又写回两层。
 
-悬停能力由 `src/client/useHoverCapable.ts` 交出：`useSyncExternalStore` 订阅
+悬停能力由 `src/client/hooks/useHoverCapable.ts` 交出：`useSyncExternalStore` 订阅
 `matchMedia('(hover: hover)')`，因此插上鼠标后不必刷新。jsdom 没有 `matchMedia`，
 `test/setup.ts` 装了替身（默认有悬停），用例可切档；
 `test/matchMedia-stub.ts` 里的档位是按当前值现读的，替身建好之后再切也跟得上。

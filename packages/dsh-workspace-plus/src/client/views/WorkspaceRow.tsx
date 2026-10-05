@@ -33,7 +33,7 @@ import { RowActions } from './RowActions.tsx'
 import { WorkspaceHoverContent } from './components/HoverCards.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
-import { useLocale } from '../useLocale.ts'
+import { useLocale } from '../hooks/useLocale.ts'
 import styles from './components/rows.module.css'
 import clsx from 'clsx'
 

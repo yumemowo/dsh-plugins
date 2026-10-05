@@ -15,8 +15,8 @@
  */
 import { createContext, createElement, useContext } from 'react'
 import type { ReactElement, ReactNode } from 'react'
-import type { IndicatorStyle, ViewMode } from './data/types.ts'
-import type { PinnedOptions } from './store/viewMode.ts'
+import type { IndicatorStyle, ViewMode } from '../data/types.ts'
+import type { PinnedOptions } from '../store/viewMode.ts'
 
 /** 视图选项偏好：当前值与各自的写入口 */
 export interface LocalViewOptions {

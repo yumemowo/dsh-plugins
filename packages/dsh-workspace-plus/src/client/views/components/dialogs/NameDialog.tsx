@@ -6,7 +6,7 @@
 import { useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { Button, Input, Modal } from '../../../runtime.ts'
-import { useLocale } from '../../../useLocale.ts'
+import { useLocale } from '../../../hooks/useLocale.ts'
 import styles from './dialogs.module.css'
 
 export interface NameDialogProps {

@@ -10,7 +10,7 @@
  */
 import type { ReactElement } from 'react'
 import { Button, Modal } from '../../../runtime.ts'
-import { useLocale } from '../../../useLocale.ts'
+import { useLocale } from '../../../hooks/useLocale.ts'
 import styles from './dialogs.module.css'
 
 export interface ConfirmDialogProps {

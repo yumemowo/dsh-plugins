@@ -13,7 +13,7 @@
  */
 import { createContext, createElement, useContext } from 'react'
 import type { ReactElement, ReactNode } from 'react'
-import type { SessionGroupRef } from './store/viewMode.ts'
+import type { SessionGroupRef } from '../store/viewMode.ts'
 
 /**
  * 三层折叠态的生效判据与取反入口

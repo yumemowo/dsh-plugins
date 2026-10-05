@@ -7,7 +7,7 @@ import {
   resolveOccupant,
 } from '../src/client/directoryFlow.ts'
 import { AddWorkspaceControl } from '../src/client/views/AddWorkspaceControl.tsx'
-import { RegionLocaleProvider } from '../src/client/useLocale.ts'
+import { RegionLocaleProvider } from '../src/client/hooks/useLocale.ts'
 import { regionLabels } from '../src/client/labels.ts'
 import type { AddWorkspaceActions, DirectoryFlowOwner } from '../src/client/actions.ts'
 import { officialAddLabels } from '../src/client/official.ts'

@@ -27,8 +27,8 @@ import {
 } from '../runtime.ts'
 import type { IndicatorStyle, ViewMode } from '../data/types.ts'
 import type { PinOverflow, PinScope } from '../store/viewMode.ts'
-import { useLocale } from '../useLocale.ts'
-import { useLocalViewOptions } from '../useLocalViewOptions.ts'
+import { useLocale } from '../hooks/useLocale.ts'
+import { useLocalViewOptions } from '../hooks/useLocalViewOptions.ts'
 import { useFloatingPanel } from './components/useFloatingPanel.ts'
 import styles from './ViewOptionsMenu.module.css'
 

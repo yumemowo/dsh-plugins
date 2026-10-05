@@ -10,7 +10,7 @@ import type { ReactElement } from 'react'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { GroupNameDraft, VirtualWorkspaceNameDraft, WorkspaceNameDraft } from '../data/types.ts'
-import { useLocale } from '../useLocale.ts'
+import { useLocale } from '../hooks/useLocale.ts'
 import { ConfirmDialog } from './components/dialogs/ConfirmDialog.tsx'
 import { NameDialog } from './components/dialogs/NameDialog.tsx'
 

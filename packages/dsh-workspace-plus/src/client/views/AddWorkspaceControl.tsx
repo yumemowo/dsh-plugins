@@ -11,7 +11,7 @@
 import { useState } from 'react'
 import type { ReactElement } from 'react'
 import { Button, IconProjectAddOutlineRegular, Modal, Tooltip } from '../runtime.ts'
-import { useLocale } from '../useLocale.ts'
+import { useLocale } from '../hooks/useLocale.ts'
 import type { AddWorkspaceActions } from '../actions.ts'
 import dialogsStyles from './components/dialogs/dialogs.module.css'
 import headerStyles from './header.module.css'

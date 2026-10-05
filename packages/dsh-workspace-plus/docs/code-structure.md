@@ -15,11 +15,7 @@ src/client/
 ├── directoryFlow.ts            官方 directoryFlow 洞的占用者读数（添加工作区的交互来源）
 ├── hostInfo.ts                 宿主固定事实（home 目录）的读数（悬停卡片的路径缩写要用）
 ├── useFlipMarker.ts            量区域矩形、按需在 body 上挂浮层翻转标记
-├── useHoverCapable.ts          设备是否具备悬停能力（置顶区 expand 档的可用前提）
 ├── actions.ts                  RegionActions / RegionDataHooks（组件与宿主的接口）
-├── useLocale.ts                区域文案的唯一读取入口（RegionLocaleProvider + useLocale）
-├── useLocalViewOptions.ts      浏览器 store 里展示方式 / 指示器样式的读取入口（同上）
-├── useExpansion.ts             浏览器 store 里三层折叠态的读取入口（同上）
 ├── compare.tsx                 对照模式：挂进原生右侧栏 tab
 ├── remote.ts                   Remote 贡献声明与调用封装
 ├── runtime.ts                  primitives 值导入的唯一出口（external）
@@ -42,6 +38,11 @@ src/client/
 │   └── pathUtils.ts            目录路径的 `~` 缩写（与官方同规则）
 ├── store/                      浏览器内持久化状态
 │   └── viewMode.ts             展示方式 / 指示器 / 三层折叠态的存储（官方 defineStore + localStorage，插槽 store 座位的句柄）
+├── hooks/                      与具体业务无关的通用 hook
+│   ├── useHoverCapable.ts      设备是否具备悬停能力（环境读数，置顶区 expand 档的可用前提）
+│   ├── useLocale.ts            区域文案的唯一读取入口（RegionLocaleProvider + useLocale）
+│   ├── useLocalViewOptions.ts  浏览器 store 里展示方式 / 指示器样式的读取入口（同上）
+│   └── useExpansion.ts         浏览器 store 里三层折叠态的读取入口（同上）
 └── views/                      渲染层：区域容器、三块渲染区与行组件
     ├── WorkspaceGroupsRegion.tsx   区域容器：数据源、派生布局、交互状态与命令各一 hook，按区域分派渲染
     ├── RegionHeaderArea.tsx        区域顶部（宽栏两行标题 + 入口组 + 两张浮层面板，窄栏入口）

@@ -9,8 +9,8 @@
  */
 import { createContext, createElement, useContext } from 'react'
 import type { ReactElement, ReactNode } from 'react'
-import type { RegionLabels } from './labels.ts'
-import type { RegionTranslate } from './locales.ts'
+import type { RegionLabels } from '../labels.ts'
+import type { RegionTranslate } from '../locales.ts'
 
 /** 区域组件消费的文案：翻译函数与投影后的语义化文案表 */
 export interface RegionLocale {

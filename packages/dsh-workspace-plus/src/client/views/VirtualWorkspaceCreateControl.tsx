@@ -12,7 +12,7 @@
 import type { ReactElement } from 'react'
 import { Tooltip } from '../runtime.ts'
 import { IconVirtualWorkspace16 } from '../icons.tsx'
-import { useLocale } from '../useLocale.ts'
+import { useLocale } from '../hooks/useLocale.ts'
 import styles from './header.module.css'
 
 export interface VirtualWorkspaceCreateControlProps {
