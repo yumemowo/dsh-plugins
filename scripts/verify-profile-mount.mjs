@@ -1,13 +1,22 @@
 #!/usr/bin/env node
 /**
- * 挂载校验：证明每个插件包能被真实的 `dsh` 启动器加载，而不仅仅是单测通过。
+ * 挂载校验：证明每个可发布插件包能被真实的 `dsh` 启动器加载，
+ * 而不仅仅是单测通过。
  *
- * 对每个声明了 `dsh.bundle.patch` 的工作区包，本脚本会：
+ * 范围只覆盖可发布的包（manifest 声明 `repository`）——与 publish.yml 的门禁同一判据。
+ * 不发布的包（如参考骨架）没有安装通道，校验它们的挂载组合没有意义。
+ * 可用 `--only <包目录名>` 只校验指定包，供发布流程逐包校验使用。
+ *
+ * 对每个这样的包，本脚本会：
  *  1. 在 `.tmp/verify-home` 下生成一个临时 profile，把该包列为 bundle 层；
  *  2. 运行 `dsh --profile <name> --dump-config`，确认组合后的树中确实包含该包的行
  *     —— 这证明 bundle patch 能被解析且行在分层后保留；
- *  3. 短暂启动该 profile，若加载器报出加载或配置错误则失败
- *     —— 这证明入口模块可解析，且其 `Config` schema 接受 patch 中的值。
+ *  3. 断言输出里没有 `skipping profile bundle` 告警
+ *     —— patch 解析失败时 dsh 不报错退出，只打这行告警并跳过该层，
+ *     因此第 2 步的行存在性检查单独用会漏判。
+ *
+ * 不再短暂启动 profile：不含 app 的 profile 永不退出，只能等到超时，
+ * 而它在这种情况下 stdout 与 stderr 都是空的，无从判定失败。
  *
  * 所有内容都限制在 `.tmp/` 内，不会触碰开发者真实的 `~/.dsh`。
  * 请先运行 `pnpm run build`：本脚本校验的是构建产物 `lib/` 入口，
@@ -24,17 +33,25 @@ const tmpRoot = join(repoRoot, '.tmp')
 const dshHome = join(tmpRoot, 'verify-home')
 const dshBin = process.env.DSH_BIN ?? 'dsh'
 
-/** 必须限时结束：不含 app 的 profile 会一直运行到被中断。 */
-const BOOT_TIMEOUT_MS = 20_000
+/**
+ * 判断一个包是否走 npm 发布通道。
+ * @param manifest - 包的 package.json 内容。
+ * @returns 该包是否声明了 repository（provenance 的前提条件）。
+ */
+function isPublishable(manifest) {
+  return typeof manifest.repository === 'string' || Boolean(manifest.repository?.url)
+}
 
 /**
- * 找出可安装为 dsh bundle 层的工作区包。
- * @returns 声明了 bundle patch 的包及其行信息。
+ * 找出可安装为 dsh bundle 层、且可发布的工作区包。
+ * @param only - 指定时只返回该目录名的包。
+ * @returns 声明了 bundle patch 的可发布包及其行信息。
  */
-function discoverBundlePlugins() {
+function discoverBundlePlugins(only) {
   const found = []
   for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
+    if (only !== undefined && entry.name !== only) continue
     const dir = join(packagesDir, entry.name)
     const manifestPath = join(dir, 'package.json')
     if (!existsSync(manifestPath)) continue
@@ -42,6 +59,7 @@ function discoverBundlePlugins() {
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
     const patch = manifest.dsh?.bundle?.patch
     if (typeof patch !== 'string') continue
+    if (!isPublishable(manifest)) continue
 
     const patchPath = resolve(dir, patch)
     if (!existsSync(patchPath)) {
@@ -118,15 +136,14 @@ function sandboxEnv() {
 /**
  * 运行启动器并捕获输出。
  * @param args - 启动器参数。
- * @param timeout - 子进程被终止前的毫秒数。
- * @returns 退出状态、信号以及合并后的输出。
+ * @returns 退出状态与合并后的输出。
  */
-function runDsh(args, timeout) {
+function runDsh(args) {
   const result = spawnSync(dshBin, args, {
     cwd: repoRoot,
     env: sandboxEnv(),
     encoding: 'utf8',
-    timeout,
+    timeout: 120_000,
     killSignal: 'SIGTERM',
   })
   if (result.error && result.error.code === 'ENOENT') {
@@ -134,20 +151,33 @@ function runDsh(args, timeout) {
   }
   return {
     status: result.status,
-    signal: result.signal,
     output: `${result.stdout ?? ''}${result.stderr ?? ''}`,
   }
 }
 
-/** 加载器在行失败时输出的特征文本。 */
-function findLoadFailure(output) {
-  return /failed to load|failed to apply loader entry|invalid config|Cannot find module/i.test(output)
+/** 启动器跳过 bundle 层时输出的特征文本。 */
+function findSkippedBundle(output) {
+  return /skipping profile bundle/i.test(output)
+}
+
+/** 解析 `--only <包目录名>`。 */
+function parseOnly(argv) {
+  const index = argv.indexOf('--only')
+  if (index < 0) return undefined
+  const value = argv[index + 1]
+  if (!value) throw new Error('--only 需要一个包目录名')
+  return value
 }
 
 let failures = 0
-const plugins = discoverBundlePlugins()
+const only = parseOnly(process.argv.slice(2))
+const plugins = discoverBundlePlugins(only)
 if (plugins.length === 0) {
-  console.error('verify-mount: 没有任何包声明 dsh.bundle.patch —— 无需校验')
+  console.error(
+    only === undefined
+      ? 'verify-mount: 没有任何可发布包声明 dsh.bundle.patch —— 无需校验'
+      : `verify-mount: packages/${only} 不是可发布包 —— 无从校验`,
+  )
   process.exit(1)
 }
 
@@ -157,12 +187,20 @@ mkdirSync(dshHome, { recursive: true })
 for (const plugin of plugins) {
   const profileName = writeProfile(plugin)
 
-  const dumped = runDsh(['--profile', profileName, '--dump-config'], 120_000)
+  const dumped = runDsh(['--profile', profileName, '--dump-config'])
   if (dumped.status !== 0) {
     console.error(`✗ ${plugin.name}: --dump-config 失败\n${dumped.output}`)
     failures += 1
     continue
   }
+
+  // patch 解析失败时 dsh 不报错退出，只打告警并跳过该层，必须先拦下来
+  if (findSkippedBundle(dumped.output)) {
+    console.error(`✗ ${plugin.name}: bundle 层被跳过\n${dumped.output}`)
+    failures += 1
+    continue
+  }
+
   // YAML 输出器会给需要转义的名字加引号：带 scope 的包显示为
   // `name: '@scope/pkg'`，不带 scope 的显示为 `name: pkg`。两种写法都接受。
   const rowSpellings = [`name: ${plugin.name}`, `name: '${plugin.name}'`]
@@ -172,20 +210,11 @@ for (const plugin of plugins) {
     continue
   }
 
-  // 不含 app 的 profile 永不退出，因此超时才是正常结果：
-  // 关键是在启动过程中加载器没有报出失败。
-  const booted = runDsh(['--profile', profileName], BOOT_TIMEOUT_MS)
-  if (findLoadFailure(booted.output)) {
-    console.error(`✗ ${plugin.name}: profile 加载失败\n${booted.output}`)
-    failures += 1
-    continue
-  }
-
-  console.log(`✓ ${plugin.name}: 行已组合，profile 加载正常`)
+  console.log(`✓ ${plugin.name}: 行已组合，patch 已被解析`)
 }
 
 if (failures > 0) {
   console.error(`\nverify-mount: ${failures} 个包校验失败`)
   process.exit(1)
 }
-console.log(`\nverify-mount: ${plugins.length} 个包挂载成功`)
+console.log(`\nverify-mount: ${plugins.length} 个可发布包挂载成功`)
