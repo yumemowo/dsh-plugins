@@ -55,13 +55,37 @@ jobs:
           fi
           name="$(jq -r .name "$manifest")"
           echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "version=${manifest_version}" >> "$GITHUB_OUTPUT"
           echo "将发布 ${name}@${manifest_version}"
 
-      # verify:mount 调用真实的 dsh 启动器，校验构建产物能被挂载
-      - run: npm install --global @deepseek-ai/dsh
+      # 该版本已在 registry 上时跳过后续步骤，让重跑失败任务与重推 tag 都是幂等的
+      - name: Check if version already published
+        id: published
+        run: |
+          set -euo pipefail
+          name="${{ steps.target.outputs.name }}"
+          version="${{ steps.target.outputs.version }}"
+          if out="$(npm view "${name}@${version}" version 2>&1)"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${name}@${version} 已在 registry 上，跳过发布"
+          elif grep -q E404 <<<"$out"; then
+            # 只有查不到才说明尚未发布，网络与鉴权故障必须让任务失败
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "${name}@${version} 尚未发布，继续"
+          else
+            echo "$out" >&2
+            echo "查询 ${name}@${version} 失败，无法判断是否已发布" >&2
+            exit 1
+          fi
 
-      - run: pnpm run check
+      # verify:mount 调用真实的 dsh 启动器，校验构建产物能被挂载
+      - if: steps.published.outputs.skip != 'true'
+        run: npm install --global @deepseek-ai/dsh
+
+      - if: steps.published.outputs.skip != 'true'
+        run: pnpm run check
 
       # checkout tag 是游离 HEAD，pnpm 的默认 git 检查要求处于发布分支，故关闭
       - name: Publish
+        if: steps.published.outputs.skip != 'true'
         run: pnpm --filter "${{ steps.target.outputs.name }}" publish --access public --provenance --no-git-checks
