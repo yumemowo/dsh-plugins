@@ -4,8 +4,8 @@
  * 展示每个 dsh 插件包都需要的三部分：
  *  1. Cordis 插件入口，导出 `name`、可选的 `inject` 与 `apply`；
  *  2. `cordis.patch.yml` bundle patch，插入一行 loader 条目；
- *  3. `package.json` 中的 `dsh.bundle.patch` 声明，使安装本包的 profile
- *     自动把它作为一个 patch 层。
+ *  3. `package.json` 中的 `dsh.bundle.patch` 声明，让加载器把本文件
+ *     作为一个 patch 层。
  *
  * npm 包名带 scope，但源码中的 {@link name} 保持简短且不带 scope：它命名的是
  * fiber 而非包，带 scope 的包身份由 patch 的 `name:` 字段承载。

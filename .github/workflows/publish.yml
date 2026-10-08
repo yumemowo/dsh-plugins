@@ -1,0 +1,67 @@
+name: Publish
+
+# 版本号由人手动 bump 后打 tag 触发，没有任何自动改版本的机器人。
+# tag 形态：<包目录名>@<版本>，例如 dsh-workspace-plus@0.1.1
+on:
+  push:
+    tags:
+      - 'dsh-*@*'
+
+permissions:
+  contents: read
+  # OIDC 换 npm 短期 token 与 sigstore provenance 都依赖它
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # 必须先于 setup-node：cache: pnpm 要求 pnpm 已在 PATH 中。
+      # 版本从根 package.json 的 packageManager 读取，不在此处写死。
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          # 与 ci.yml 用同一个运行时
+          node-version: '22.x'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # tag 与包清单必须指向同一个版本，否则后面的发布是错的
+      - name: Resolve package from tag
+        id: target
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          dir="${tag%@*}"
+          tagged="${tag##*@}"
+          manifest="packages/${dir}/package.json"
+          if [ ! -f "$manifest" ]; then
+            echo "tag ${tag} 指向的包目录不存在：${manifest}" >&2
+            exit 1
+          fi
+          # provenance 要求 manifest 声明 repository，缺失即拒绝
+          if [ -z "$(jq -r '.repository // empty' "$manifest")" ]; then
+            echo "${manifest} 未声明 repository，不是可发布的包" >&2
+            exit 1
+          fi
+          manifest_version="$(jq -r .version "$manifest")"
+          if [ "$tagged" != "$manifest_version" ]; then
+            echo "tag 版本 ${tagged} 与 ${manifest} 的 ${manifest_version} 不一致" >&2
+            exit 1
+          fi
+          name="$(jq -r .name "$manifest")"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "将发布 ${name}@${manifest_version}"
+
+      # verify:mount 调用真实的 dsh 启动器，校验构建产物能被挂载
+      - run: npm install --global @deepseek-ai/dsh
+
+      - run: pnpm run check
+
+      # checkout tag 是游离 HEAD，pnpm 的默认 git 检查要求处于发布分支，故关闭
+      - name: Publish
+        run: pnpm --filter "${{ steps.target.outputs.name }}" publish --access public --provenance --no-git-checks

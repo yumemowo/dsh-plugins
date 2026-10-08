@@ -17,21 +17,33 @@
 
 ## 安装
 
-### 从 GitHub 安装
+下称 profile `web`，换成你自己的 profile 名即可；装完重启 `dsh web`（或 Desktop）生效。
+
+### 从 npm 安装
+
+`@yumemowo/dsh-workspace-plus` 已发布到 npm，包内是预构建的 `lib/`，安装时不需要编译：
 
 ```sh
-dsh plugin --profile web add "github:yumemowo/dsh-plugins#path:packages/<包名>"
+dsh plugin --profile web add @yumemowo/dsh-workspace-plus
 ```
 
-> 本仓库不提交 `lib/`，每个包在安装时靠 `prepare` 现编译入口，而 pnpm 默认拦截 git 依赖的构建脚本。首次 `add` 会失败并打印该包的 `allowBuilds` 键，把它加进 profile 的 `pnpm-workspace.yaml` 后重跑即可；各包的具体键见对应的包 README。
->
-> 放行等于允许该包在安装时于本机执行代码，只对可信来源使用。
->
-> 更新要显式指定
->
-> ```sh
-> dsh plugin --profile web update <包名>
-> ```
+升级要显式指定包名：
+
+```sh
+dsh plugin --profile web update @yumemowo/dsh-workspace-plus
+```
+
+### 从仓库安装
+
+不经过 npm，直接装仓库里的包目录，改完源码无需重新发布：
+
+```sh
+dsh plugin --profile web add "github:yumemowo/dsh-plugins#path:packages/dsh-workspace-plus"
+```
+
+本仓库不提交 `lib/`，这条通道靠 `prepare` 在安装时现编译入口，而 pnpm 默认拦截 git 依赖的构建脚本。首次 `add` 会失败并打印该包的 `allowBuilds` 键，把它加进 profile 的 `pnpm-workspace.yaml` 后重跑即可；各包的具体键见对应的包 README。
+
+放行等于允许该包在安装时于本机执行代码，只对可信来源使用。
 
 ## 版本兼容
 

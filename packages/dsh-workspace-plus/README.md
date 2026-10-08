@@ -31,7 +31,27 @@
 
 需要 dsh `0.2.0-rc.1` 及以上，覆盖整个 `0.2.x`。
 
-本包从仓库的包目录安装（下称 profile `web`，换成你自己的 profile 名即可）：
+`@yumemowo/dsh-workspace-plus` 已发布到 npm，包内是预构建的 `lib/`，安装时不需要编译（下称 profile `web`，换成你自己的 profile 名即可）：
+
+```sh
+dsh plugin --profile web add @yumemowo/dsh-workspace-plus
+```
+
+重启 `dsh web`（或 Desktop）后生效。确认配置已组合：
+
+```sh
+dsh --profile web --dump-config | grep -A2 '== @yumemowo/dsh-workspace-plus'
+```
+
+升级要显式指定本包：
+
+```sh
+dsh plugin --profile web update @yumemowo/dsh-workspace-plus
+```
+
+### 从仓库安装
+
+不经过 npm，直接装仓库里的包目录，改完源码无需重新发布：
 
 ```sh
 dsh plugin --profile web add "github:yumemowo/dsh-plugins#path:packages/dsh-workspace-plus"
@@ -45,18 +65,6 @@ allowBuilds:
 ```
 
 这条键不随仓库提交失效。旧版 pnpm（含 Desktop 内置的 11.8.0）只认 `add` 报错里那条含 commit 的键，改用那条即可。
-
-重启 `dsh web`（或 Desktop）后生效。确认配置已组合：
-
-```sh
-dsh --profile web --dump-config | grep -A2 '== @yumemowo/dsh-workspace-plus'
-```
-
-更新显式指定本包：
-
-```sh
-dsh plugin --profile web update @yumemowo/dsh-workspace-plus
-```
 
 <details>
 <summary>从本地 checkout 开发</summary>

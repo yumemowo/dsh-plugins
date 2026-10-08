@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # 必须先于 setup-node：cache: pnpm 要求 pnpm 已在 PATH 中。
+      # 版本从根 package.json 的 packageManager 读取，不在此处写死。
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          # 取 22 线最新版：engines 下界 22.19 不够用，jsdom 要求 ^22.22.2
+          node-version: '22.x'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # verify:mount 调用真实的 dsh 启动器，校验构建产物能被挂载
+      - run: npm install --global @deepseek-ai/dsh
+
+      - run: pnpm run check

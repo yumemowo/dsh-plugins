@@ -1,8 +1,7 @@
 # Bundle patch：在 profile 根节点上插入一行宿主插件。
 #
 # profile 在 `dsh.profile.bundles` 中列出本包后，加载器会读取本文件并插入下面的行。
-# `name` 是**带 scope 的包名**，从 profile 自己的 node_modules 中解析
-#（由 `dsh plugin --profile <name> add <path>` 安装）。
+# `name` 是**带 scope 的包名**，从 profile 自己的 node_modules 中解析。
 #
 # 注意这里有两个刻意区分的标识符：
 #   `name:` 承载完整的 npm 包身份，包含 scope；
