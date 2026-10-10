@@ -1,6 +1,6 @@
 {
   "name": "@yumemowo/dsh-workspace-plus",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "为 dsh Web 侧边栏提供两级分组：工作区分组（把一组工作区打包管理，只出现在列表最外层）与会话分组（每个工作区内部的会话归类）。",
   "type": "module",
   "license": "MIT",
