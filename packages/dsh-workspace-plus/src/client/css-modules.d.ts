@@ -165,6 +165,7 @@ declare module '*/rows.module.css' {
     readonly "rowSelected": string
     readonly "rowTime": string
     readonly "rowTitle": string
+    readonly "sessionOverflow": string
     readonly "sessions": string
     readonly "slot": string
     readonly "virtualWorkspace": string

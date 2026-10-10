@@ -221,6 +221,22 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
+/**
+ * 把每个展示范围都展开到全部会话
+ *
+ * fixture 里那几条会话都早于 3 天前用过，默认只露出最近 3 条
+ * 断言完整顺序与「已置顶行」结构的用例因此先把溢出按钮点掉，折叠额度本身另行覆盖
+ */
+async function expandSessionLists(container: HTMLElement): Promise<void> {
+  await act(async () => {
+    for (const button of Array.from(
+      container.querySelectorAll<HTMLButtonElement>('.sessionOverflow'),
+    )) {
+      button.click()
+    }
+  })
+}
+
 /** 置顶区里的会话行 */
 function pinnedRows(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>('.pinScroll > .row'))
@@ -569,6 +585,7 @@ describe('pin in the row menu', () => {
 
   it('switches the menu item to unpin on an already pinned row', async () => {
     const { container, root } = await mount()
+    await expandSessionLists(container)
     const row = rowWithPin(container, true)
 
     expect(item(row, 'pin').textContent).toBe('取消置顶')
@@ -600,6 +617,7 @@ describe('pin in the row menu', () => {
     const { container, root } = await mount({
       loadGroups: async () => snapshot({ pinnedLimit: 2 }),
     })
+    await expandSessionLists(container)
 
     // 上限只拦新增：未置顶行禁用，已置顶的照常可以取消
     expect(item(rowWithPin(container, false), 'pin').disabled).toBe(true)
@@ -784,6 +802,7 @@ describe('menu on a pinned row', () => {
 describe('session row pin', () => {
   it('keeps the action slot left of the pin on every row', async () => {
     const { container, root } = await mount()
+    await expandSessionLists(container)
     const rows = Array.from(container.querySelectorAll<HTMLElement>('.workspaceBody .row'))
 
     /** 一行里图钉与操作位的先后 */
@@ -813,6 +832,7 @@ describe('session row pin', () => {
     const { container, root } = await mount({
       loadGroups: async () => snapshot({ pinnedLimit: 2 }),
     })
+    await expandSessionLists(container)
 
     const rows = Array.from(container.querySelectorAll<HTMLElement>('.workspaceBody .row'))
     const plain = rows
@@ -841,6 +861,7 @@ describe('in-place pinning', () => {
     // 默认「仅置顶区域」：各段里仍是「空白最前、其余按最近更新倒序」
     // 因此置顶的 a、b 仍按更新时间落在末尾（b 更近，所以在 a 之前）
     const { container, root } = await mount()
+    await expandSessionLists(container)
 
     expect(titles(container)).toEqual([
       '会话 g',
@@ -858,6 +879,7 @@ describe('in-place pinning', () => {
     const store = viewModeStoreStub()
     store.setPinned({ scope: 'inline' })
     const { container, root } = await mount({ ...storeViewModeProps(store) })
+    await expandSessionLists(container)
 
     // 置顶排到它所在那一段的最前：a、b 按置顶名次在前，其后才是按更新时间的其余会话
     expect(titles(container)).toEqual([

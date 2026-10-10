@@ -31,6 +31,7 @@ src/client/
 │   ├── search.ts               按标题搜索（查询净化、匹配、排序与截断）
 │   ├── picker.ts               下拉菜单的条目与分区（根节点条目、三个分区、聚焦布局、聚焦解析）
 │   ├── sessions.ts             会话快照 → 渲染行（含可见性过滤、空白行命名、未分组收集）
+│   ├── collapse.ts             一个展示范围内折几条（五步判定、置顶与未空闲行，见 [会话折叠](session-collapse.md)）
 │   └── rows.ts                 会话行的显示事实（状态位与相对时间，两者都只依赖快照与文案）
 ├── utils/                      组件与样式表共用的零散常量
 │   ├── expandMotion.ts         撑开动画节奏常量（只 import React 类型，运行时无依赖）
@@ -57,6 +58,7 @@ src/client/
     ├── WorkspaceRow.tsx            工作区标题行（文件夹/箭头、`...`、`+`、悬停卡片）
     ├── VirtualWorkspaceSection.tsx   一个工作区分组（根节点分组头 + 组内工作区）
     ├── GroupSection.tsx            一个会话分组（分组头 + 组内会话）
+    ├── SessionList.tsx             一个展示范围的会话行 + 溢出按钮（折叠后的若干行，展开态在这里）
     ├── RowActions.tsx              容器行行尾操作位（`...` 菜单 + 可选 `+`），三类行共用
     ├── SessionRowView.tsx          会话行外壳（状态位列、标题、时间、操作位）
     ├── SessionRowItem.tsx          会话行条目（行 + 两个菜单 + 悬停卡片）

@@ -1363,6 +1363,18 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   )
 
   /**
+   * 会话折叠的输入：始终展示并占额度的行 id
+   *
+   * 就地置顶档下是那批置顶行，「仅置顶区」档下是空集，那时置顶行在分段内按普通行折叠
+   * 档位只在这里判一次，下发的因此是一份单义名单：拿到空集就是「没有这类行」，不必再回头分辨档位
+   * 名次收掉、只留成员关系：折叠用不到次序，而名次表的空还兼着「不在该档」那层含义
+   */
+  const alwaysVisibleSessionIds = useMemo(
+    () => new Set(pinRanksByScope.keys()),
+    [pinRanksByScope],
+  )
+
+  /**
    * 末尾「未分组」区段的行
    *
    * 这一段的成员不属于任何工作区
@@ -1486,6 +1498,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     session,
     // 三段共用同一个比较器：不置顶时名次为空表，比较结果与不置顶时相同
     compareRows: (a, b) => compareSessionRowsWithPins(pinRanksByScope, a, b),
+    alwaysVisibleSessionIds,
   }
 
   const headerOverlays: RegionHeaderOverlays = {

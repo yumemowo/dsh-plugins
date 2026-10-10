@@ -32,13 +32,20 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     // 缺了它那条规则就无从验证
     b: { id: 'b', displayTitle: '散落会话', running: false, blank: false, retainedBy: {}, updatedAt: 1_000 },
     orphan: { id: 'orphan', displayTitle: 'Orphan', running: false, blank: false, retainedBy: {}, updatedAt: 1_000 },
+    // 两个展示范围各自都要超出折叠额度：溢出按钮那条缩进规则只在按钮真的渲染时才有节点可查
+    ...Object.fromEntries(
+      ['c', 'd', 'e', 'f', 'g', 'h'].map((id) => [
+        id,
+        { id, displayTitle: `会话 ${id}`, running: false, blank: false, retainedBy: {}, updatedAt: 1_000 },
+      ]),
+    ),
   }
   const workspaces = [
     {
       workspaceId: 'w1',
       path: '/tmp/w1',
       title: 'W1',
-      sessionIds: ['a', 'b'],
+      sessionIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
       createdAt: new Date(created).toISOString(),
       updatedAt: new Date(created).toISOString(),
     },
@@ -63,7 +70,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
         phase: 'ready',
       })) as never,
     useSessions: ((select: (s: unknown) => unknown) =>
-      select({ ids: ['a', 'b', 'orphan'], byId, phase: 'ready' })) as never,
+      select({ ids: Object.keys(byId), byId, phase: 'ready' })) as never,
     useSessionStatus: ((select: (s: unknown) => unknown) =>
       select(new Map())) as never,
     useDirectoryFlow: ((select: (occupied: boolean) => unknown) => select(true)) as never,
@@ -73,7 +80,8 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     startSession: async () => 'fresh',
     loadGroups: async () =>
       snapshot({
-        byWorkspace: { w1: [{ id: 'g1', name: '会话分组', sessionIds: ['a'] }] },
+        // 组内也超出折叠额度，组内那一条溢出按钮的缩进规则才有节点可查
+        byWorkspace: { w1: [{ id: 'g1', name: '会话分组', sessionIds: ['a', 'c', 'd', 'e'] }] },
         workspaceGroups: [
           { id: 'wg1', name: '工作区分组', workspaceIds: ['w1'] },
           // 空分组一起渲染，它的空态占位也有一条按结构写的缩进规则

@@ -364,6 +364,84 @@ describe('search in a real DOM', () => {
     }
   })
 
+  it('spreads the collapsed session list before revealing a folded session', async () => {
+    // 被揭示的那条可能正躺在会话折叠收起的那些行里：不把该范围撑开，那条行根本不进文档
+    // 上面那条揭示用例里工作区只有一条会话，永远折不起来，因此测不到这条路
+    const listIds = ['old-1', 'old-2', 'old-3', 'old-4', 'target']
+    const stale = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString()
+    const byId: Record<string, unknown> = {}
+    for (const id of listIds) {
+      byId[id] = {
+        id,
+        displayTitle: id === 'target' ? '被折起来的老会话' : `会话 ${id}`,
+        running: false,
+        blank: false,
+        retainedBy: {},
+        updatedAt: Date.parse(stale),
+      }
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const originalScroll = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = () => {}
+    try {
+      await act(async () => {
+        root.render(
+          React.createElement(WorkspaceGroupsRegion, {
+            ...props(),
+            loadGroups: async () => snapshot(),
+            useSessions: ((select: (s: unknown) => unknown) =>
+              select({ ids: listIds, byId, phase: 'ready' })) as never,
+            useWorkspaces: ((select: (s: unknown) => unknown) =>
+              select({
+                items: [
+                  {
+                    workspaceId: 'w1',
+                    path: '/tmp/w1',
+                    title: 'W1',
+                    sessionIds: listIds,
+                    createdAt: stale,
+                    updatedAt: stale,
+                  },
+                ],
+                archivedSessionIds: [],
+                pinnedSessionIds: [],
+                phase: 'ready',
+              })) as never,
+          }),
+        )
+      })
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      // 5 条都超出窗口，默认只露最近 3 条，目标不在其中
+      const before = Array.from(container.querySelectorAll('.workspaceBody .row .rowTitle')).map(
+        (node) => node.textContent ?? '',
+      )
+      expect(before).not.toContain('被折起来的老会话')
+
+      await expandSearch(container)
+      await type(container, '被折起来的老会话')
+      await act(async () => {
+        ;(container.querySelector('.searchResult') as HTMLElement).click()
+      })
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      // 该范围整体撑开，被揭示的那条行因此真的落在文档里
+      const after = Array.from(container.querySelectorAll('.workspaceBody .row .rowTitle')).map(
+        (node) => node.textContent ?? '',
+      )
+      expect(after).toContain('被折起来的老会话')
+    } finally {
+      Element.prototype.scrollIntoView = originalScroll
+    }
+  })
+
   it('offers only the rail entry in the narrow rail, with no input to focus', async () => {
     const { container } = await mount(false)
 

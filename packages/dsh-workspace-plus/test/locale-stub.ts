@@ -28,6 +28,8 @@ export const OFFICIAL_WORKSPACE_ZH: Record<string, string> = {
   'search.noMatches': '无匹配会话',
   'search.hasMore': '仅显示前 {n} 条结果，请缩小搜索范围。',
   'viewOptions.label': '视图选项',
+  'sessions.expand': '展开其余 {n} 个会话',
+  'sessions.collapse': '收起',
   'actions.workspace.aria': '工作区“{name}”的操作',
   'actions.session.aria': '会话“{name}”的操作',
   'actions.newSession.aria': '在“{name}”中新建会话',

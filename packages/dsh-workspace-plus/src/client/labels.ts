@@ -140,6 +140,10 @@ export interface RegionLabels {
   empty: string
   /** 会话那一段的小标题，只在与会话分组/子工作区混在一起时才露面 */
   sessions: string
+  /** 一个展示范围内被收起那些会话的展开按钮，条数由调用方传入 */
+  expandSessions: (n: number) => string
+  /** 同一个按钮在展开之后的文案 */
+  collapseSessions: string
   /** 列表底部的一行说明，本区域暂未提供的能力 */
   unimplemented: string
   /** 下拉菜单与 header 两行标题的文案 */
@@ -361,6 +365,9 @@ export function regionLabels(
     empty: tw('empty.none'),
     // 官方在工作区列表上就是用这个键给会话那一段当标题的，本包不另造一份
     sessions: tw('section.sessions'),
+    // 溢出按钮与官方同一条：条数由调用方算出来传进去
+    expandSessions: (n: number) => tw('sessions.expand', { n }),
+    collapseSessions: tw('sessions.collapse'),
     unimplemented: t('unimplemented'),
     picker: {
       // 官方没有「换一个工作区看」这件事的文案，入口与三个分区标题都取本包命名空间

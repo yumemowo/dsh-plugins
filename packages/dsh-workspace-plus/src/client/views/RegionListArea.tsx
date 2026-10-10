@@ -31,6 +31,7 @@ import { useLocale } from '../hooks/useLocale.ts'
 import { useLocalViewOptions } from '../hooks/useLocalViewOptions.ts'
 import { ExpandableBody } from './components/ExpandableBody.tsx'
 import { SearchResults } from './SearchControl.tsx'
+import { SessionList } from './SessionList.tsx'
 import { SessionRowItem } from './SessionRowItem.tsx'
 import type { SessionGroupingContext } from './SessionRowItem.tsx'
 import { VirtualWorkspaceSection } from './VirtualWorkspaceSection.tsx'
@@ -133,6 +134,8 @@ export interface WorkspaceNodeScope {
    * 它由容器按「置顶会话显示方式」选定，始终是同一个引用
    */
   compareRows: (a: SessionRow, b: SessionRow) => number
+  /** 会话折叠的输入，始终展示并占额度的行 id */
+  alwaysVisibleSessionIds: ReadonlySet<string>
 }
 
 interface RegionListAreaProps {
@@ -221,7 +224,14 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
               {/* 这些会话不属于任何工作区，没有分组可归，因此菜单里只有官方操作块（归组项无处落）
                 * 宿主未提供官方服务时菜单会是空的，那时直接渲染无菜单的行，不留点不动的省略号 */}
               <div className={rowsStyles.sessions}>
-                {props.stray.map((row) => ungroupedRowElement(row, session, rowLabels))}
+                <SessionList
+                  rows={props.stray}
+                  alwaysVisibleSessionIds={scope.alwaysVisibleSessionIds}
+                  now={scope.session.now}
+                  open={expansion.isWorkspaceExpanded(UNGROUPED_KEY)}
+                  revealSessionId={session.revealSessionId}
+                  renderSession={(row) => ungroupedRowElement(row, session, rowLabels)}
+                />
               </div>
             </div>
           </ExpandableBody>
@@ -356,6 +366,9 @@ function WorkspaceNode({
       layout={built}
       depth={layout.nesting.levelOf(workspaceId)}
       compareRows={scope.compareRows}
+      alwaysVisibleSessionIds={scope.alwaysVisibleSessionIds}
+      now={scope.session.now}
+      revealSessionId={scope.session.revealSessionId}
       groupActions={{
         onRename: (section) => edits.onRenameGroup(workspaceId, section.id, section.label),
         onDelete: (section) => edits.onDeleteGroup(workspaceId, section.id, section.label),

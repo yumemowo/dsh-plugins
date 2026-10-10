@@ -91,6 +91,60 @@ describe('client stylesheet', () => {
     }
   })
 
+  it('gives the session overflow button the same indentation as its rows', () => {
+    // 注释里的例子会粘进选择器，比对选择器表之前先剥掉
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim().replace(/\s+/g, ' ')),
+      body: m[2] ?? '',
+    }))
+    /** 含该选择器的规则，可能不止一条（缩进写在按容器那条上，左缘偏移另起一条） */
+    const rulesWith = (selector: string) =>
+      rules.filter((rule) => rule.selectors.includes(selector))
+
+    // 溢出按钮按容器取缩进：两条按结构链写死的规则都必须把它带上
+    // 漏掉一条时按钮会落在 0 缩进上（界面上只表现为「位置不对」），不会有任何报错
+    for (const button of [
+      '.workspaceBody > .sessions > .sessionOverflow',
+      '.group > .expand > .expandClip > .groupBody > .sessions > .sessionOverflow',
+    ]) {
+      const indent = rulesWith(button).find((rule) => /--wg-row-start:/.test(rule.body))
+      expect(indent, `${button} gets no --wg-row-start`).toBeDefined()
+      expect(indent?.body).toMatch(/--wg-row-start:\s*calc\((24|40)px \+ 16px/)
+      expect(indent?.body).toMatch(/padding-left:\s*var\(--wg-row-start\)/)
+
+      // 与同容器那条会话行规则写在同一张选择器表里：缩进表达式只有一处
+      // 两边各写一份时，改了行那份而忘了按钮那份不会报错，只表现为按钮不跟着缩进
+      const rowSelector = button.replace(' > .sessionOverflow', ' > .row')
+      expect(indent?.selectors, `${rowSelector} is not in the same selector list`).toContain(
+        rowSelector,
+      )
+    }
+
+    // 文字左缘压在会话标题那条线上：标题在行里比 --wg-row-start 多让出 .rowTitle 的左外边距
+    // 按钮补上同一个量，两条线才不会差 4px
+    const titleMargin = /margin:\s*0 6px 0 (\d+)px/.exec(
+      rules.find((rule) => rule.selectors.includes('.rowTitle'))?.body ?? '',
+    )?.[1]
+    expect(titleMargin).toBeDefined()
+    for (const scope of ['.workspaceBody', '.group']) {
+      const offset = rules
+        .filter(
+          (rule) =>
+            rule.selectors.some((selector) => selector.startsWith(scope)) &&
+            rule.selectors.some((selector) => selector.endsWith('> .sessionOverflow')),
+        )
+        .map(
+          (rule) =>
+            /padding-left:\s*calc\(var\(--wg-row-start\)\s*\+\s*(\d+)px\)/.exec(rule.body)?.[1],
+        )
+        .filter((value): value is string => value !== undefined)
+      expect(offset.at(-1), `${scope} does not offset the button text to the title line`).toBe(
+        titleMargin,
+      )
+    }
+  })
+
   it('floats the indicator out of the row flow so titles never shift', () => {
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({

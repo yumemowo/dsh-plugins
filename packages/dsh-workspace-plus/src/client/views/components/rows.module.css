@@ -140,17 +140,50 @@
   padding-left: var(--wg-row-start);
 }
 
+/* 会话溢出按钮与同段会话行写在同一条规则里，缩进表达式只有一处
+   见 views/SessionList.tsx */
 .workspaceBody > .sessions > .row,
-.workspaceBody > .sessions > * > .row {
+.workspaceBody > .sessions > * > .row,
+.workspaceBody > .sessions > .sessionOverflow {
   --wg-row-start: calc(24px + 16px * var(--wg-depth, 0));
   padding-left: var(--wg-row-start);
 }
 
 .group > .expand > .expandClip > .groupBody > .sessions > .row,
-.group > .expand > .expandClip > .groupBody > .sessions > * > .row {
+.group > .expand > .expandClip > .groupBody > .sessions > * > .row,
+.group > .expand > .expandClip > .groupBody > .sessions > .sessionOverflow {
   --wg-row-start: calc(40px + 16px * var(--wg-depth, 0));
   padding-left: var(--wg-row-start);
 }
+
+/* ── 会话溢出按钮 ─────────────────────────────────────────
+   一个展示范围内被收起的那些会话由它展开（见 views/SessionList.tsx）
+   缩进与同段会话行共用上面那两条规则给的 --wg-row-start，因此按钮的左缘不可能与行悄悄错开
+   几何与配色照官方 .sessionOverflowButton：28px 高、12px 字、tertiary 转 secondary
+   它靠 .sessions 的相邻兄弟规则拿到与行之间同一个 2px，不必自己写 margin */
+.sessionOverflow {
+  box-sizing: border-box;
+  width: 100%;
+  height: 28px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  cursor: pointer;
+  text-align: left;
+  color: var(--dsw-alias-label-tertiary);
+  background: none;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+/* 文字左缘压在会话标题那条线上，与官方那条按钮同一取舍
+   标题在行里比 --wg-row-start 多让出 .rowTitle 的左外边距 4px，这里补上同一个量
+   这两条与上面那两条同层（选择器链相同），位置在后因此覆盖掉它们给按钮写下的 padding-left */
+.workspaceBody > .sessions > .sessionOverflow,
+.group > .expand > .expandClip > .groupBody > .sessions > .sessionOverflow {
+  padding-left: calc(var(--wg-row-start) + 4px);
+}
+
+.sessionOverflow:hover { color: var(--dsw-alias-label-secondary); }
 
 /* 子工作区这一段本身不再让出缩进，它的每个成员都是一个完整的工作区块
    各自按自己的 --wg-depth 定位，这一段只负责把它们排成一列并让出彼此之间的间距 */

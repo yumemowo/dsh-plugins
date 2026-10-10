@@ -118,6 +118,12 @@ describe('regionLabels', () => {
     expect(labels.empty).toBe('暂无会话')
   })
 
+  it('reads the session overflow copy from the official keys', () => {
+    // 会话折叠那套按钮与官方同一个控件，文案照抄官方的两条键，本包字典里不存副本
+    expect(labels.expandSessions(3)).toBe('展开其余 3 个会话')
+    expect(labels.collapseSessions).toBe('收起')
+  })
+
   it('reads the new-session row name from the official session.new key', () => {
     // 空白（新建中）会话行的固定名是官方词，本包字典里不存副本
     // 会话正式启用后的名字由标题服务投影，不走这一格

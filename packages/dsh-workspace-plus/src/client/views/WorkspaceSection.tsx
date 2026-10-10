@@ -9,6 +9,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { ExpandableBody } from './components/ExpandableBody.tsx'
 import { GroupSection } from './GroupSection.tsx'
+import { SessionList } from './SessionList.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
 import type { WorkspaceRowProps } from './WorkspaceRow.tsx'
 
@@ -39,6 +40,12 @@ export interface WorkspaceSectionProps {
    * 三种段落（分组内、未归组段、平铺列表）共用同一个
    */
   compareRows: (a: SessionRow, b: SessionRow) => number
+  /** 本工作区体内始终展示并占额度的会话行 id */
+  alwaysVisibleSessionIds: ReadonlySet<string>
+  /** 折叠判定的基准时刻，与行尾相对时间取同一刻 */
+  now: number
+  /** 待揭示的会话 id，转交给两段会话列表 */
+  revealSessionId: string | undefined
   groupActions: WorkspaceGroupActions
   /** 把一个会话行渲染成元素，渲染方式由区域组件决定（是否带归组菜单） */
   renderSession: (row: SessionRow) => ReactNode
@@ -52,6 +59,9 @@ export function WorkspaceSection({
   layout,
   depth,
   compareRows,
+  alwaysVisibleSessionIds,
+  now,
+  revealSessionId,
   groupActions,
   renderSession,
   renderChildWorkspace,
@@ -77,28 +87,55 @@ export function WorkspaceSection({
           {childIds.length === 0 ? null : (
             <div className={styles.nest}>{childIds.map(renderChildWorkspace)}</div>
           )}
-          {/* 只有用户建过分组时才渲染分组结构 */}
-          {layout.groups.map((section) => (
-            <GroupSection
-              key={section.id}
-              section={section}
-              expanded={expansion.isGroupExpanded({ workspaceId, groupId: section.id })}
-              onToggle={() => expansion.toggleGroup({ workspaceId, groupId: section.id })}
-              onRename={() => groupActions.onRename({ id: section.id, label: section.label })}
-              onDelete={() => groupActions.onDelete({ id: section.id, label: section.label })}
-              onCreateSession={() =>
-                groupActions.onCreateSession({ id: section.id, label: section.label })
-              }
-              renderChildWorkspace={renderChildWorkspace}
-            >
-              {[...section.sessions].sort(compareRows).map(renderSession)}
-            </GroupSection>
-          ))}
+          {/* 只有用户建过分组时才渲染分组结构
+              组内会话与未归组那一段各是一个展示范围，额度与展开态互不影响 */}
+          {layout.groups.map((section) => {
+            const groupExpanded = expansion.isGroupExpanded({
+              workspaceId,
+              groupId: section.id,
+            })
+            return (
+              <GroupSection
+                key={section.id}
+                section={section}
+                expanded={groupExpanded}
+                onToggle={() =>
+                  expansion.toggleGroup({ workspaceId, groupId: section.id })
+                }
+                onRename={() =>
+                  groupActions.onRename({ id: section.id, label: section.label })
+                }
+                onDelete={() =>
+                  groupActions.onDelete({ id: section.id, label: section.label })
+                }
+                onCreateSession={() =>
+                  groupActions.onCreateSession({ id: section.id, label: section.label })
+                }
+                renderChildWorkspace={renderChildWorkspace}
+              >
+                <SessionList
+                  rows={[...section.sessions].sort(compareRows)}
+                  alwaysVisibleSessionIds={alwaysVisibleSessionIds}
+                  now={now}
+                  open={groupExpanded}
+                  revealSessionId={revealSessionId}
+                  renderSession={renderSession}
+                />
+              </GroupSection>
+            )
+          })}
           {/* 未归组的会话平铺在工作区下，不套任何分组头
               指示器不占行内流，会话行的标题因此落在同级容器的图标列上，与会话分组头、子工作区行都不重合 */}
           {layout.loose.length === 0 ? null : (
             <div className={styles.sessions}>
-              {[...layout.loose].sort(compareRows).map(renderSession)}
+              <SessionList
+                rows={[...layout.loose].sort(compareRows)}
+                alwaysVisibleSessionIds={alwaysVisibleSessionIds}
+                now={now}
+                open={row.expanded}
+                revealSessionId={revealSessionId}
+                renderSession={renderSession}
+              />
             </div>
           )}
           {hasAnyRow ? null : (

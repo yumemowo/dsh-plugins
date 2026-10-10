@@ -137,7 +137,9 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 
 「写展开」的判据与官方那条 effect 也不同：官方是「只在显式为 `false` 时才写 `true`」，本包是「除非显式为 `true`，否则写展开」。这不是独立的一条设计，而是上面默认值的直接结果——本包对子工作区与会话分组默认折叠，只补显式 `false` 的键会漏掉绝大多数需要展开的情形。
 
-**没有移植**官方那条「当前会话所在工作区若缺席就补 `true`」的自动展开 effect，也没有它那套「折叠时每工作区只渲染 5 条会话」的上限（后者在官方是组件内 state，本包根本没有对应功能）。
+**没有移植**官方那条「当前会话所在工作区若缺席就补 `true`」的自动展开 effect。
+
+官方那套「折叠时每范围只渲染几条会话」的上限本包另有一份实现，见[会话折叠](session-collapse.md)：控件与文案沿用官方的 `sessions.expand` / `sessions.collapse`，判据换成「3 天内用过的窗口 + 3 条下限」，展开态与官方一样留在组件内 state。
 
 记录分三层存（`expansion.workspace` / `.virtualWorkspace` / `.group`），而不是官方那一张 `groupExpansion`：三层的键形态本就不同（会话分组是 `workspaceId:groupId` 的二元组），分开存省掉自造前缀，也因为三层的清理策略不同（见[数据存储](data-storage.md)）。动作命名刻意避开 `groupExpansion`——官方那个名字在官方语境里指**工作区**，而本包的 `group` 专指会话分组，照抄会把读者引向错误的一层。
 

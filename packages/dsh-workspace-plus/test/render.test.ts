@@ -659,6 +659,10 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
     depth: 0,
     // 名次为空表时这个比较器与 `compareSessionRows` 同序，断言因此与没有置顶时相同
     compareRows: compareSessionRows,
+    // 空名单：一条始终展示的行也没有，折叠额度按普通行算
+    alwaysVisibleSessionIds: new Set(),
+    now: 0,
+    revealSessionId: undefined,
     groupActions: {
       onRename: () => {},
       onDelete: () => {},
