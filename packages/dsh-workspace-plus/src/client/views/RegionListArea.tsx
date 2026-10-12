@@ -13,13 +13,16 @@
  */
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import { useCallback, useRef } from 'react'
 import type { ReactElement } from 'react'
 import type { OfficialSessionActions } from '../actions.ts'
 import { buildLayout, containsSession, groupIdOfSession, virtualWorkspaceIdOf } from '../data/layout.ts'
+import { looseKey, sessionGroupKey } from '../data/dnd.ts'
+import type { DragPlan, DragPlanTarget } from '../data/dnd.ts'
 import type { Nesting } from '../data/nest.ts'
 import { relativeTimeOfRow, statusViewOfRow } from '../data/rows.ts'
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
-import type { RootLayout, SessionRow } from '../data/types.ts'
+import type { RootLayout, GroupSection, SessionRow } from '../data/types.ts'
 import type { RegionLabels } from '../labels.ts'
 import { UNGROUPED_KEY } from '../store/viewMode.ts'
 import { useExpansion } from '../hooks/useExpansion.ts'
@@ -268,6 +271,34 @@ function WorkspaceNode({
   const { labels } = useLocale()
   const { snapshot, layout, edits, commands, rowsByWorkspace } = scope
   const expansion = useExpansion()
+
+  /**
+   * 分组段的最新一份，供拖拽计划的构造器读取
+   *
+   * 分组段每次渲染都是新数组，放进依赖列会让构造器每渲染换一次引用，行级 memo 随之整片失效
+   * 构造器因此在调用当刻读它，依赖列只留真正稳定的那两格
+   * 与 `ExpandableBody` 把节奏参数放进 ref 同一取舍：只用于换算与下发的值不进依赖
+   */
+  const dragSections = useRef<readonly GroupSection[]>([])
+
+  /**
+   * 拖起这一条会话时的计划
+   *
+   * 与 `selectSessionGroup` 同理是 `useCallback`：它会随归组上下文到达每一行，
+   * 行级 memo 按引用比对，每渲染新建一个会让整片列表的 memo 失效
+   */
+  const buildDragPlan = useCallback(
+    (sessionId: string) =>
+      sessionDragPlan({
+        workspaceId,
+        sessionId,
+        currentGroupId: groupIdOfSession(dragSections.current, sessionId),
+        sections: dragSections.current,
+        onSelectGroup: commands.selectSessionGroup,
+      }),
+    [workspaceId, commands.selectSessionGroup],
+  )
+
   const workspace = layout.workspaceById.get(workspaceId)
   // 布局只包含快照里存在的工作区，因此这里不会落空，防御一下避免类型断言
   if (workspace === undefined) return null
@@ -279,6 +310,7 @@ function WorkspaceNode({
     (groupId) => layout.nesting.groupedChildIdsOf(workspaceId, groupId),
     layout.nesting.looseChildIdsOf(workspaceId),
   )
+  dragSections.current = built.groups
 
   /**
    * 该工作区行上那份「移动工作区分组」菜单的选项集
@@ -384,6 +416,7 @@ function WorkspaceNode({
           sections: built.groups,
           currentGroupId: groupIdOfSession(built.groups, row.id),
           onSelectGroup: commands.selectSessionGroup,
+          buildDragPlan,
         })
       }
     />
@@ -409,6 +442,48 @@ function rowTimes(
     time: relativeTimeOfRow(row, official?.relativeTime, now),
     hoverTime: relativeTimeOfRow(row, official === undefined ? undefined : labels.hoverTimeAgo, now),
   }
+}
+
+/**
+ * 拖起一个会话行时的计划
+ *
+ * 这一次拖拽能落到「同工作区的其他分组头」与「同工作区的未归组段」两处
+ * 两个落点都是整块投放
+ * 原地投放不在这里的判据里，而是构造期就缺席
+ * 本条会话已在的那一段根本不收进 `targets`
+ * 命中层因此查不到它，既不标记也不提交
+ *
+ * `commit` 调既有的归组命令，与行菜单「移动到分组…」落到同一个宿主方法上
+ */
+function sessionDragPlan(input: {
+  workspaceId: string
+  sessionId: string
+  /** 本条会话当前所属分组 id，空串表示未归组 */
+  currentGroupId: string
+  sections: readonly GroupSection[]
+  onSelectGroup: (workspaceId: string, sessionId: string, id: string) => void
+}): DragPlan {
+  const { workspaceId, sessionId, currentGroupId, sections, onSelectGroup } = input
+  const targets = new Map<string, DragPlanTarget>()
+
+  for (const section of sections) {
+    if (section.id === currentGroupId) continue
+    targets.set(sessionGroupKey(workspaceId, section.id), {
+      mode: 'container',
+      commit: () => onSelectGroup(workspaceId, sessionId, `group:${section.id}`),
+    })
+  }
+
+  // 已在未归组段里的行不再收这一格：拖回自己所在的那一段是一次原地投放
+  if (currentGroupId !== '') {
+    targets.set(looseKey(workspaceId), {
+      mode: 'container',
+      // `ungroup` 这个归组命令 id 在区域组件里转成空分组 id，与归组菜单的「移出分组」落到同一条路径
+      commit: () => onSelectGroup(workspaceId, sessionId, 'ungroup'),
+    })
+  }
+
+  return { source: { kind: 'session', id: sessionId }, targets }
 }
 
 /**

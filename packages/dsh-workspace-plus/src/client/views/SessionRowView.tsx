@@ -24,6 +24,7 @@ import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { sameSessionStatus } from '../data/status.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useLocalViewOptions } from '../hooks/useLocalViewOptions.ts'
+import type { DragStartEvent } from '../hooks/useDnd.ts'
 import type { RowContextMenuEvent } from './components/RowContextMenu.tsx'
 import type { SessionStatus } from '../data/status.ts'
 import styles from './components/rows.module.css'
@@ -95,6 +96,33 @@ export interface SessionRowViewProps {
    * 缺省表示该行不涉及面板
    */
   panelOpen?: boolean | undefined
+  /**
+   * 这一行是否正被拖动
+   *
+   * 画淡由行自己置：整条拖拽路径零次 React 重渲染，画淡只影响这一行，它是唯一一处付得起重渲染的地方
+   */
+  dragging?: boolean | undefined
+  /**
+   * 拖起这一行
+   *
+   * 与 `onContextMenu` 同理，由持有分组上下文的组件下发
+   */
+  onDragStart?: ((event: DragStartEvent) => void) | undefined
+  /** 拖拽结束（放开或取消），清掉画淡与手势层的监听 */
+  onDragEnd?: (() => void) | undefined
+  /**
+   * 这一行是否可以拖起
+   *
+   * 缺省表示不可拖：平铺列表与「未分组」桶里的行没有可落的容器，空白占位行也没有可搬的位置
+   */
+  draggable?: boolean | undefined
+  /**
+   * 参照行 id 写到元素上的那个属性
+   *
+   * 可作 before / after 参照物的行才有，缺省表示这一行不做参照物（平铺列表与空白占位行）
+   * 与行上的 `draggable` 同生共死，因此两者一起判等，不必逐格比它内部那个键
+   */
+  rowIdAttribute?: Record<string, string> | undefined
 }
 
 /**
@@ -127,8 +155,13 @@ function SessionRowViewImpl({
   canPin = true,
   clipped = false,
   panelOpen = false,
+  dragging = false,
+  draggable = false,
+  rowIdAttribute,
   onTogglePin,
   onContextMenu,
+  onDragStart,
+  onDragEnd,
   onOpenSession,
   onReveal,
 }: SessionRowViewProps): ReactElement {
@@ -175,19 +208,26 @@ function SessionRowViewImpl({
   return (
     <div
       ref={rowRef}
-      className={styles.row}
+      className={clsx(styles.row, dragging && styles.rowDragging)}
       // 状态色底与选中加深都由样式表按它选档，行组件不感知配色
       data-wg-state={status?.state ?? 'idle'}
       // 参与所在撑开体的逐个淡入，序号由撑开体按文档序下发
       data-wg-stagger=""
       data-wg-clipped={clipped ? '' : undefined}
+      // 被拖的那一行画淡，与落点标记同一类「拖拽期间的临时外观」
+      data-wg-dragging={dragging ? '' : undefined}
       // 面板开合标在行自己身上：置顶区用 `:has()` 从段里反向读它，真值因此只有行上这一处
       data-wg-panel-open={panelOpen ? '' : undefined}
+      draggable={draggable}
+      // 可作 before / after 参照物的行把自己那一格 id 写在元素上，命中层据此认出参照行
+      {...rowIdAttribute}
       role="button"
       tabIndex={0}
       onClick={open}
       onKeyDown={(event) => handleRowKeyDown(event, open)}
       onContextMenu={onContextMenu}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
     >
       <span className={clsx(styles.rowSurface, selected && styles.rowSelected)}>
         {status && <StatusIndicator status={status} />}
@@ -220,6 +260,11 @@ function sameRowViewProps(prev: SessionRowViewProps, next: SessionRowViewProps):
     prev.canPin === next.canPin &&
     prev.clipped === next.clipped &&
     prev.panelOpen === next.panelOpen &&
+    prev.dragging === next.dragging &&
+    prev.draggable === next.draggable &&
+    prev.rowIdAttribute === next.rowIdAttribute &&
+    prev.onDragStart === next.onDragStart &&
+    prev.onDragEnd === next.onDragEnd &&
     prev.onTogglePin === next.onTogglePin &&
     prev.action === next.action &&
     prev.onContextMenu === next.onContextMenu &&

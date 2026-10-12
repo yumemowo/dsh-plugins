@@ -15,12 +15,16 @@ import { RowActions } from './RowActions.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { useLocale } from '../hooks/useLocale.ts'
+import { useDnd } from '../hooks/useDnd.ts'
+import { sessionGroupKey } from '../data/dnd.ts'
 import type { GroupSection as GroupSectionData } from '../data/types.ts'
 import styles from './components/rows.module.css'
 import clsx from 'clsx'
 
 export interface GroupSectionProps {
   section: GroupSectionData
+  /** 本分组所在的工作区，区域键要按它定位 */
+  workspaceId: string
   expanded: boolean
   onToggle: () => void
   onRename: () => void
@@ -35,6 +39,7 @@ export interface GroupSectionProps {
 
 export function GroupSection({
   section,
+  workspaceId,
   expanded,
   onToggle,
   onRename,
@@ -44,6 +49,7 @@ export function GroupSection({
   renderChildWorkspace,
 }: GroupSectionProps): ReactElement {
   const { labels } = useLocale()
+  const { dndZoneProps } = useDnd()
   const [menuOpen, setMenuOpen] = useState(false)
 
   /**
@@ -75,7 +81,7 @@ export function GroupSection({
   })
 
   return (
-    <div className={styles.group}>
+    <div className={styles.group} {...dndZoneProps(sessionGroupKey(workspaceId, section.id))}>
       <div
         className={clsx(styles.groupHead)}
         // 参与所在撑开体的逐个淡入，序号由撑开体按文档序下发

@@ -67,6 +67,7 @@ import type { Expansion } from '../hooks/useExpansion.ts'
 import { SessionScopesProvider } from '../hooks/useSessionScopes.ts'
 import type { SessionScopes } from '../hooks/useSessionScopes.ts'
 import { sessionScopeKey } from '../data/collapse.ts'
+import { DndProvider } from '../hooks/useDnd.ts'
 import { LocalViewOptionsProvider } from '../hooks/useLocalViewOptions.ts'
 import type { LocalViewOptions } from '../hooks/useLocalViewOptions.ts'
 import type { RegionLocale } from '../hooks/useLocale.ts'
@@ -1314,6 +1315,21 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   // 对照模式下区域挂右侧栏、贴着窗口右缘，官方卡片固定向右展开会开到屏幕外
   const flipRef = useFlipMarker()
 
+  /**
+   * 区域根节点，交给拖拽机制当范围
+   *
+   * 两种引用形状在这里合流：`useFlipMarker` 按节点变化重跑量测，因此只收回调；
+   * 手势层要的是随时可读的当前节点，因此是 `RefObject`
+   */
+  const dndRegion = useRef<HTMLElement | null>(null)
+  const attachRoot = useCallback(
+    (node: HTMLElement | null) => {
+      dndRegion.current = node
+      flipRef(node)
+    },
+    [flipRef],
+  )
+
   // 文案表与翻译函数合成一个稳定的 value：行级 memo 按引用比对 props，每次渲染新建会让每一行都判定为变过
   const locale: RegionLocale = useMemo(() => ({ t, labels }), [t, labels])
 
@@ -1582,8 +1598,13 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
       <LocalViewOptionsProvider value={localViewOptions}>
         <SessionScopesProvider value={sessionScopes}>
         <ExpansionProvider value={expansion.read}>
-        {/* 指示器样式挂在根节点上，列表里每一行读同一个值，不必逐行下发 */}
-        <div className={styles.root} ref={flipRef} data-wg-indicator={indicator}>
+        {/* 拖拽机制挂在根节点上：计划、监听与落点标记都不进 React 状态，
+            这一层因此只是把 `beginDrag` 与两个属性助手交给下面的行与区域容器 */}
+        <DndProvider region={dndRegion}>
+        {/* 指示器样式挂在根节点上，列表里每一行读同一个值，不必逐行下发
+            根节点同时交给拖拽机制当范围：侧边栏与对照 tab 双开时两边共享同一个 document，
+            手势层靠它只认自己这一片里的拖放事件 */}
+        <div className={styles.root} ref={attachRoot} data-wg-indicator={indicator}>
           <RegionHeaderArea
             layout={layout}
             overlays={headerOverlays}
@@ -1628,6 +1649,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             actions={dialogActions}
           />
         </div>
+        </DndProvider>
         </ExpansionProvider>
         </SessionScopesProvider>
       </LocalViewOptionsProvider>

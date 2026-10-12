@@ -10,6 +10,7 @@ import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRe
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { compareSessionRows } from '../src/client/data/sessions.ts'
 import { RegionLocaleProvider } from '../src/client/hooks/useLocale.ts'
+import { DndProvider } from '../src/client/hooks/useDnd.ts'
 import { regionLabels } from '../src/client/labels.ts'
 import { regionTranslate, sidebarTranslate, translateWith, workspaceTranslate } from './locale-stub.ts'
 import { menuLabelArrow, menuLabelText } from './menu-label.ts'
@@ -18,6 +19,7 @@ import { ExpansionProvider } from '../src/client/hooks/useExpansion.ts'
 import { SessionScopesProvider } from '../src/client/hooks/useSessionScopes.ts'
 import type { SessionScopes } from '../src/client/hooks/useSessionScopes.ts'
 import type { Expansion } from '../src/client/hooks/useExpansion.ts'
+import type { DragPlan } from '../src/client/data/dnd.ts'
 import { viewModeProps } from './viewMode-stub.ts'
 
 /**
@@ -487,7 +489,8 @@ function withLocale(node: ReactElement): ReactElement {
   const t = regionTranslate()
   return React.createElement(RegionLocaleProvider, {
     value: { t, labels: regionLabels(t, workspaceTranslate(), sidebarTranslate()) },
-    children: node,
+    // 行与分组头都用 `useDnd()` 取拖拽属性助手，单独渲染一个组件时也要有这一层
+    children: React.createElement(DndProvider, { children: node }),
   })
 }
 
@@ -556,6 +559,7 @@ function sessionRowNode(options: {
             sections: options.groupSections ?? [],
             currentGroupId: '',
             onSelectGroup: () => {},
+            buildDragPlan: (): DragPlan => ({ source: { kind: 'session', id: 's1' }, targets: new Map() }),
           },
         }
       : {}),
@@ -566,6 +570,7 @@ function sessionRowNode(options: {
 function groupRowNode(onCreateSession?: () => void): unknown {
   return withLocale(React.createElement(GroupSection, {
     section: { id: 'g1', label: '前端', sessions: [] },
+    workspaceId: 'w1',
     expanded: false,
     onToggle: () => {},
     onRename: () => {},
@@ -622,6 +627,7 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, expanded
             updatedAt: 0,
           })),
         },
+        workspaceId: 'w1',
         expanded,
         onToggle: () => {},
         onRename: () => {},

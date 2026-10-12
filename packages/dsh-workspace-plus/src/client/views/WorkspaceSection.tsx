@@ -15,6 +15,8 @@ import type { WorkspaceRowProps } from './WorkspaceRow.tsx'
 
 import { useExpansion } from '../hooks/useExpansion.ts'
 import { useLocale } from '../hooks/useLocale.ts'
+import { useDnd } from '../hooks/useDnd.ts'
+import { looseKey } from '../data/dnd.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
 import styles from './components/rows.module.css'
 
@@ -68,6 +70,7 @@ export function WorkspaceSection({
 }: WorkspaceSectionProps): ReactElement {
   const { labels } = useLocale()
   const expansion = useExpansion()
+  const { dndZoneProps } = useDnd()
   const childIds = layout.children ?? []
   const hasAnyRow =
     layout.groups.length > 0 || layout.loose.length > 0 || childIds.length > 0
@@ -78,6 +81,17 @@ export function WorkspaceSection({
    * 不在 CSS 里做容器累加，把一个变量定义成「它自己 + 1」是循环引用，浏览器会整条丢掉
    */
   const indent = { '--wg-depth': String(depth) } as Record<string, string>
+  /**
+   * 未归组那一段的落点区域
+   *
+   * 只挂在未归组会话自己那一段上
+   *
+   * 不挂在整个工作区块上——那样各分组头会落进它的面积，而命中层走到第一个带区域键的元素就停，
+   * 指针停在分组头上时会先命中那个分组，不再考虑到这一格上
+   *
+   * 它同时是「移出分组」的落点：拖到这一段空白上就是回到未归组
+   */
+  const looseZone = dndZoneProps(looseKey(workspaceId))
   return (
     <section className={styles.workspace} style={indent}>
       <WorkspaceRow {...row} />
@@ -98,6 +112,7 @@ export function WorkspaceSection({
               <GroupSection
                 key={section.id}
                 section={section}
+                workspaceId={workspaceId}
                 expanded={groupExpanded}
                 onToggle={() =>
                   expansion.toggleGroup({ workspaceId, groupId: section.id })
@@ -128,7 +143,7 @@ export function WorkspaceSection({
           {/* 未归组的会话平铺在工作区下，不套任何分组头
               指示器不占行内流，会话行的标题因此落在同级容器的图标列上，与会话分组头、子工作区行都不重合 */}
           {layout.loose.length === 0 ? null : (
-            <div className={styles.sessions}>
+            <div className={styles.sessions} {...looseZone}>
               <SessionList
                 scope={{ kind: 'loose', workspaceId }}
                 rows={[...layout.loose].sort(compareRows)}

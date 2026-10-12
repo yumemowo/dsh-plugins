@@ -15,7 +15,7 @@
  * 菜单开合状态收敛在本组件内：行组件在 map 回调里生成，把 useState 留在行内会让每行无条件多挂一组 hook 状态，独立组件则按需挂载
  * 重命名对话框也留在这里——只有真正打开过的行才付出这份状态
  */
-import { memo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
 import { HoverCard, IconEllipsisOutlineRegular, Menu } from '../runtime.ts'
 import { buildSessionMenuItems } from '../menus.tsx'
@@ -28,6 +28,10 @@ import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { SessionHoverContent } from './components/HoverCards.tsx'
 import { NameDialog } from './components/dialogs/NameDialog.tsx'
 import { useLocale } from '../hooks/useLocale.ts'
+import { useDnd, useRowDragging } from '../hooks/useDnd.ts'
+import type { DragStartEvent } from '../hooks/useDnd.ts'
+import { ROW_ATTRIBUTE } from '../data/dnd.ts'
+import type { DragPlan } from '../data/dnd.ts'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { SessionStatus } from '../data/status.ts'
 import type { GroupSection, SessionRow } from '../data/types.ts'
@@ -52,6 +56,13 @@ export interface SessionGroupingContext {
    * 接收工作区与会话 id 而不是提前绑定：这个动作由区域组件缓存，因此对所有行是同一个引用，行自己在组件内把 id 绑上去
    */
   onSelectGroup: (workspaceId: string, sessionId: string, id: string) => void
+  /**
+   * 拖起这一条会话时的计划
+   *
+   * 收会话 id 而不是提前绑定：区域组件把同一个构造器交给它名下所有行，行自己在组件内把 id 绑上去
+   * 该构造器由 `useCallback` 稳定，因此这个字段对所有行是同一个引用
+   */
+  buildDragPlan: (sessionId: string) => DragPlan
 }
 
 /**
@@ -120,7 +131,8 @@ function sameGrouping(
   if (
     a.workspaceId !== b.workspaceId ||
     a.currentGroupId !== b.currentGroupId ||
-    a.onSelectGroup !== b.onSelectGroup
+    a.onSelectGroup !== b.onSelectGroup ||
+    a.buildDragPlan !== b.buildDragPlan
   ) {
     return false
   }
@@ -175,6 +187,7 @@ function SessionRowItemView({
   ...rowProps
 }: SessionRowItemProps): ReactElement {
   const { labels } = useLocale()
+  const { dndRowProps } = useDnd()
   const [menuOpen, setMenuOpen] = useState(false)
   const [renameDraft, setRenameDraft] = useState<string | null>(null)
 
@@ -228,6 +241,33 @@ function SessionRowItemView({
   // 两种面板任一开着都算「行上有面板」，卡片与行尾锚点的显隐都据它让位
   const panelOpen = menuOpen || contextMenu.open
 
+  /**
+   * 拖拽那几格
+   *
+   * 记忆一份：这几格含闭包与新建的对象，不记的话每次渲染都是一份新引用
+   * 依赖只列真正会变的：会话 id、分组上下文与那三个稳定入口
+   */
+  const drag = useRowDragging()
+  const dnd = useMemo(
+    () => (grouping === undefined || row.blank ? null : dndRowProps(row.id, () => grouping.buildDragPlan(row.id))),
+    [dndRowProps, grouping, row.blank, row.id],
+  )
+  const dragProps = useMemo(() => {
+    if (dnd === null) return {}
+    return {
+      draggable: dnd.draggable,
+      rowIdAttribute: { [ROW_ATTRIBUTE]: dnd.rowId },
+      onDragStart: (event: DragStartEvent) => {
+        drag.onDragStart()
+        dnd.onDragStart(event)
+      },
+      onDragEnd: () => {
+        drag.onDragEnd()
+        dnd.onDragEnd()
+      },
+    }
+  }, [dnd, drag.onDragStart, drag.onDragEnd])
+
   const shownTitle = rowProps.title ?? labels.newSession
   // 条目为空时连锚点按钮一起不渲染，不留点不动的省略号
   const hasMenu = items.length > 0
@@ -236,6 +276,9 @@ function SessionRowItemView({
     <SessionRowView
       {...rowProps}
       sessionId={row.id}
+      // 拖拽那几格整体交给行外壳：它渲染行元素，本组件只按「有没有分组可归」决定给不给
+      {...dragProps}
+      dragging={drag.dragging}
       // 面板开合下发给行：置顶区靠行上的标记判断浮出要不要留住（两种面板都 portal 到 body）
       panelOpen={panelOpen}
       onContextMenu={contextMenu.onContextMenu}

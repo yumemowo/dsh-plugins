@@ -623,6 +623,32 @@ body[data-wg-flip] [data-wg-hover-card] {
   right: var(--wg-flip-right) !important;
 }
 
+/* ── 拖拽期间的被拖行与落点标记 ─────────────────────────────
+   两类外观的写入方不同：
+   落点标记由命中层直接写在区域元素上（属性名 data-wg-drop）
+   被拖行的画淡由 React 渲染的 .rowDragging 类给出
+   标记不进 React 状态，因此重渲染不会擦掉它
+
+   落点标记画在区域元素（分组头、未归组段）上，取值是落点形状：
+   - inside：整块落进容器，整段描一圈强调色边
+   - before / after：插到某行之前 / 之后，在区域的那一侧画一条线
+   本次只有 inside 有业务用，另两档画好待后续的排序片接手 */
+
+.rowDragging { opacity: 0.4; }
+
+[data-wg-drop='inside'] {
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-state-business-primary);
+  border-radius: var(--dsw-radius-md);
+}
+
+[data-wg-drop='before'] {
+  box-shadow: inset 0 2px 0 0 var(--dsw-alias-state-business-primary);
+}
+
+[data-wg-drop='after'] {
+  box-shadow: inset 0 -2px 0 0 var(--dsw-alias-state-business-primary);
+}
+
 .empty {
   color: var(--dsw-alias-label-tertiary);
   padding: 16px 12px;
