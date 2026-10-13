@@ -62,6 +62,14 @@ const optionalVirtualWorkspaceIdCodec = codec('OptionalVirtualWorkspaceId', () =
 )
 
 /**
+ * 可缺省的工作区 id
+ *
+ * 分组内成员排序的锚点参数缺席表示「挪到末尾」，与「移出分组」那个可空参数不是一回事，因此不能合用一个 codec
+ * 与上面几个同理：网关只在 `acceptsUndefined` 为真时容忍整格缺席，两处必须同时声明
+ */
+const optionalWorkspaceIdCodec = codec('OptionalWorkspaceId', () => z.union([z.undefined(), z.string()]))
+
+/**
  * 可缺省的会话 id
  *
  * 会话排序的锚点参数缺席表示「不动目标段的顺序位」，与「挪到末尾」不是一回事，因此不能复用上面那两个
@@ -173,6 +181,11 @@ export const TYPERT = {
     direct('deleteVirtualWorkspace', [
       { name: 'groupId', codec: virtualWorkspaceIdCodec },
     ]),
+    direct('moveWorkspaceBefore', [
+      { name: 'groupId', codec: virtualWorkspaceIdCodec },
+      { name: 'workspaceId', codec: workspaceIdCodec },
+      { name: 'beforeWorkspaceId', acceptsUndefined: true, codec: optionalWorkspaceIdCodec },
+    ]),
     direct('moveWorkspace', [
       { name: 'workspaceId', codec: workspaceIdCodec },
       { name: 'groupId', codec: nullableGroupIdCodec },
@@ -263,6 +276,13 @@ export const TYPERT = {
             kind: 'method',
             name: 'deleteVirtualWorkspace',
             signature: 'deleteVirtualWorkspace(groupId: string): Promise<WorkspaceGroupsSnapshot>',
+          },
+          {
+            kind: 'method',
+            name: 'moveWorkspaceBefore',
+            signature:
+              'moveWorkspaceBefore(groupId: string, workspaceId: string, beforeWorkspaceId?: string):' +
+                ' Promise<WorkspaceGroupsSnapshot>',
           },
           {
             kind: 'method',

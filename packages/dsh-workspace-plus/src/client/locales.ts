@@ -18,6 +18,7 @@ export const zh = {
   'newGroup': '新建分组',
   'renameGroup': '重命名分组',
   'deleteGroup': '删除分组',
+  'clearOrder': '清除手动顺序',
   'groupNamePrompt': '分组名称',
   'delete.desc.group': '删除分组“{name}”？组内会话会移出分组，会话本身不受影响。',
   'moveToGroup': '移动到…',
@@ -86,6 +87,7 @@ export const en = {
   'newGroup': 'New group',
   'renameGroup': 'Rename group',
   'deleteGroup': 'Delete group',
+  'clearOrder': 'Clear manual order',
   'groupNamePrompt': 'Group name',
   'delete.desc.group':
     'Delete group “{name}”? Its sessions leave the group; the sessions themselves are unaffected.',

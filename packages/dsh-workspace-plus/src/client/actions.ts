@@ -187,6 +187,18 @@ export interface RegionActions {
   renameVirtualWorkspace: (groupId: string, name: string) => Promise<WorkspaceGroupsSnapshot>
   /** 删除工作区分组，组内工作区回到未归组，返回替换用的完整快照 */
   deleteVirtualWorkspace: (groupId: string) => Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把一个工作区分组里的工作区挪到同分组另一个工作区之前
+   *
+   * `beforeWorkspaceId` 为 undefined 表示挪到末尾
+   * 这一格只管分组内成员之间的换位，改归属是 `moveWorkspace` 的事
+   * @param groupId - 工作区在这个工作区分组里排序
+   */
+  moveWorkspaceBefore: (
+    groupId: string,
+    workspaceId: string,
+    beforeWorkspaceId: string | undefined,
+  ) => Promise<WorkspaceGroupsSnapshot>
   /** 把工作区移入分组，空串表示移出分组 */
   moveWorkspace: (workspaceId: string, groupId: GroupChoice) => Promise<WorkspaceGroupsSnapshot>
   /**

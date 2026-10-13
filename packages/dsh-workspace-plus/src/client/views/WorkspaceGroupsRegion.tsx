@@ -872,6 +872,12 @@ interface RegionGroupActions {
    */
   setSegmentOrder: (key: string, order: readonly string[]) => void
   /**
+   * 清掉一段的手动顺序，该段退回时间序
+   *
+   * 与写空表是同一件事，单列一格是因为它的两个入口（分组菜单与工作区行菜单）都不产出顺序内容
+   */
+  clearSegmentOrder: (key: string) => void
+  /**
    * 把一个会话落到某一段的指定位次
    *
    * 归属与目标段的顺序由这一条路径一起改，两笔写入串行下发
@@ -1012,17 +1018,23 @@ function useRegionGroupActions(
    * 建好之后无条件把会话摆到本次创建指定的位置：`groupId` 为空串表示工作区行的 `+`，会话归入未归组区
    * 这一步不能只在指定了分组时做——官方会复用该工作区已有的空白会话，那条会话可能正留在某个分组里
    * 复用时不把它摘出来就会停在原分组
+   *
+   * 目标段已有手动顺序时顺手把新会话插到那一份的最前，锚点取顺序位的第一格
+   * 这一档与默认序一致：宿主把新会话前插进段首，比较器也把空白会话排在普通会话之前
+   * 目标段没有顺序位时不带锚点，宿主因此不会凭空为它造一份——那一段仍按时间序渲染
    * @param groupId - 新会话要归入的分组，空串表示归入未归组区
    */
   const createSessionIn = (workspaceId: string, groupId: string): void => {
     expansion.expandWorkspace(workspaceId)
     // 展开而不是取反，分组本就展开时，切换会把它收起来，新会话反而看不见
     if (groupId !== '') expansion.expandGroup({ workspaceId, groupId })
+    const key = groupId === '' ? looseSlotKey(workspaceId) : groupSlotKey(workspaceId, groupId)
+    const beforeSessionId = snapshot.orderSlots[key]?.[0]
     void startSession(workspaceId)
       .then((sessionId) => {
         // 被更晚的导航取代时没有会话要摆位置
         if (sessionId === undefined) return undefined
-        return apply(moveSession(workspaceId, sessionId, groupId))
+        return apply(moveSession(workspaceId, sessionId, groupId, beforeSessionId))
       })
       .catch(() => {
         // 建会话失败由会话控制器自己提示，这里不再弹一次，避免同一错误报两遍
@@ -1096,6 +1108,19 @@ function useRegionGroupActions(
     [apply, moveSession, setSegmentOrder],
   )
 
+  /**
+   * 清掉一段的手动顺序，该段退回时间序
+   *
+   * 空表表示删掉这一格，宿主那一侧按「删掉」处理
+   * 是 `useCallback` 而不是每次渲染新建：它会随排序接线传到每一个分组头与工作区行，行级 memo 按引用比对
+   */
+  const clearSegmentOrder = useCallback(
+    (key: string): void => {
+      apply(setSegmentOrder(key, []))
+    },
+    [apply, setSegmentOrder],
+  )
+
   return {
     commitGroupNameDraft,
     commitGroupDelete,
@@ -1107,6 +1132,7 @@ function useRegionGroupActions(
     selectSessionGroup,
     moveGroupBefore: moveGroupOrdered,
     setSegmentOrder: setSegmentOrderOrdered,
+    clearSegmentOrder,
     placeSessionInSegment,
   }
 }
@@ -1126,6 +1152,22 @@ interface RegionNestActions {
    * `beforeGroupId` 为 undefined 表示挪到末尾
    */
   moveVirtualWorkspaceBefore: (groupId: string, beforeGroupId: string | undefined) => void
+  /** 把一个工作区移入 / 移出虚拟工作区分组，空串表示移出到根节点 */
+  moveWorkspaceToGroup: (workspaceId: string, groupId: string) => void
+  /**
+   * 在同一个虚拟工作区分组内换位
+   *
+   * 只改这个分组的成员数组，改归属是 {@link RegionNestActions.moveWorkspaceToGroup} 的事
+   */
+  reorderWorkspaceInGroup: (
+    groupId: string,
+    workspaceId: string,
+    beforeWorkspaceId: string | undefined,
+  ) => void
+  /** 把一个工作区连同它名下的子工作区放进某个祖先工作区的会话分组 */
+  nestWorkspaceInto: (workspaceId: string, parentId: string, groupId: string) => void
+  /** 解除一个工作区的嵌套归属 */
+  unnestWorkspace: (workspaceId: string) => void
 }
 
 /**
@@ -1141,8 +1183,8 @@ function useRegionNestActions(
   ui: RegionUiState,
   apply: (action: Promise<WorkspaceGroupsSnapshot>) => void,
 ): RegionNestActions {
-  const { moveWorkspace, moveVirtualWorkspaceBefore, nestWorkspaces, unnestWorkspaces, setNested } =
-    props
+  const { moveWorkspace, moveWorkspaceBefore, moveVirtualWorkspaceBefore, nestWorkspaces,
+    unnestWorkspaces, setNested } = props
 
   /**
    * header 入口：新建一个工作区分组
@@ -1197,13 +1239,36 @@ function useRegionNestActions(
   /**
    * 把一个工作区（连同它名下的子工作区）放进某个祖先工作区的会话分组
    *
-   * 父工作区由选中那个分组决定，不是自动取最近祖先，放进谁的分组谁就是父工作区
+   * 父工作区由调用方指名，不是自动取最近祖先，放进谁的分组谁就是父工作区
    *
    * 归属记在子工作区自己的记录上，因此这里交出的是要写归属的那批 id：
-   * 工作区自己不写（它是被放进分组的那一个），它名下的子工作区要一并跟随，否则层级会在分组边界上断开
+   * 工作区自己进组，它名下的子工作区要一并跟随，否则层级会在分组边界上断开
    *
    * 分两次写，先把它放进分组，再把跟随的子工作区放进去
    * 第二次失败时会留下「父工作区已进组、子工作区还在外面」的状态——那是可恢复的，下次再移一次即可，不必为此加补偿事务
+   */
+  const nestWorkspaceInto = useCallback(
+    (workspaceId: string, parentId: string, groupId: string): void => {
+      // 整棵子树跟着走，保持层级关系，父工作区进哪个分组，它名下已经放进别处分组的子工作区一并换过去
+      // 未放进任何分组的那些由路径推导自动跟随，不必写
+      const followers = groupedDescendantsOf(workspaceId)
+      // 每一步都要走 `apply`，它把宿主回的整份快照写进本地状态
+      // 直接 `void nestWorkspaces(...)` 会把那次写入的结果丢掉，界面因此停在旧快照上——
+      // 归属其实已经落盘，看起来却像「移入没有生效」
+      apply(
+        nestWorkspaces([workspaceId], parentId, groupId).then((next) =>
+          followers.length === 0 ? next : nestWorkspaces(followers, parentId, groupId),
+        ),
+      )
+    },
+    [apply, nestWorkspaces, layout.workspaceIds, layout.pathOfWorkspace, layout.virtualOfWorkspace, layout.nesting],
+  )
+
+  /**
+   * 菜单里「移动到分组…」子菜单的选中项
+   *
+   * 两个分支：移出当前分组，或移入 `pg:<父工作区>:<分组>` 指名的分组
+   * 与 {@link nestWorkspaceInto} 落到同一件事上——拖拽入组与菜单入组是同一条写入，只是锚点来源不同
    */
   const selectParentGroup = useCallback(
     (workspaceId: string, id: string): void => {
@@ -1213,22 +1278,44 @@ function useRegionNestActions(
       }
       const target = parseParentGroupId(id)
       if (target === undefined) return
-      // 整棵子树跟着走，保持层级关系，父工作区进哪个分组，它名下已经放进别处分组的子工作区一并换过去
-      // 未放进任何分组的那些由路径推导自动跟随，不必写
-      // 两步分开写，因此父工作区已进组、子工作区还留在原组是一段可恢复的中间态——下次移一次即可
-      const followers = groupedDescendantsOf(workspaceId)
-      // 每一步都要走 `apply`，它把宿主回的整份快照写进本地状态
-      // 直接 `void nestWorkspaces(...)` 会把那次写入的结果丢掉，界面因此停在旧快照上——
-      // 归属其实已经落盘，看起来却像「移入没有生效」
-      apply(
-        nestWorkspaces([workspaceId], target.parentId, target.groupId).then((next) =>
-          followers.length === 0
-            ? next
-            : nestWorkspaces(followers, target.parentId, target.groupId),
-        ),
-      )
+      nestWorkspaceInto(workspaceId, target.parentId, target.groupId)
     },
-    [apply, nestWorkspaces, layout.workspaceIds, layout.pathOfWorkspace, layout.virtualOfWorkspace, layout.nesting],
+    [apply, unnestWorkspaces, nestWorkspaceInto],
+  )
+
+  /**
+   * 拖拽移出：解除一个工作区的嵌套归属，它退回按 cwd 路径推导的位置
+   */
+  const unnestWorkspace = useCallback(
+    (workspaceId: string): void => {
+      apply(unnestWorkspaces([workspaceId]))
+    },
+    [apply, unnestWorkspaces],
+  )
+
+  /**
+   * 拖拽移入 / 移出虚拟工作区分组
+   *
+   * 与菜单里那条入口落到同一个宿主方法上：拖到分组上读作移入，拖到根节点那一片读作移出
+   * 空串在宿主那一侧表示移出，与菜单里「移出工作区分组」交出的是同一个值
+   */
+  const moveWorkspaceToGroup = useCallback(
+    (workspaceId: string, groupId: string): void => {
+      apply(moveWorkspace(workspaceId, groupId))
+    },
+    [apply, moveWorkspace],
+  )
+
+  /**
+   * 拖拽在同一个虚拟工作区分组内换位
+   *
+   * 只改这个分组的成员数组，与移入 / 移出是两件不同的事，因此走另一个宿主方法
+   */
+  const reorderWorkspaceInGroup = useCallback(
+    (groupId: string, workspaceId: string, beforeWorkspaceId: string | undefined): void => {
+      apply(moveWorkspaceBefore(groupId, workspaceId, beforeWorkspaceId))
+    },
+    [apply, moveWorkspaceBefore],
   )
 
   /**
@@ -1278,6 +1365,10 @@ function useRegionNestActions(
     requestNestedToggle,
     commitNestedOff,
     moveVirtualWorkspaceBefore: moveVirtualWorkspaceOrdered,
+    moveWorkspaceToGroup,
+    reorderWorkspaceInGroup,
+    nestWorkspaceInto,
+    unnestWorkspace,
   }
 }
 

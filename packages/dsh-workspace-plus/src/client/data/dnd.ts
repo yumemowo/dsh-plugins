@@ -87,7 +87,13 @@ export function looseKey(workspaceId: string): string {
 /** 置顶区的区域键，跨工作区共用一格 */
 export const PINNED_KEY = 'pinned'
 
-/** 根节点那一层的区域键，工作区分组与未归组工作区共用一格 */
+/**
+ * 根节点那一层的区域键，工作区分组与未归组工作区共用一格
+ *
+ * 工作区计划里它是「移出虚拟工作区分组」的落点：拖到分组结构之外的任何空白上都算回到根节点
+ * 平铺在根节点上的工作区行另各占一格 `workspaceHeadKey`，两格同一档
+ * 行那一格不能省，命中层停在指针下第一个带区域键的元素上，拖到行上时若它不在计划里，这次落点就到此为止
+ */
 export const ROOT_KEY = 'root'
 
 /**
@@ -110,9 +116,41 @@ export function groupHeadKey(workspaceId: string, groupId: string): string {
  * 一个工作区分组头的区域键
  *
  * 与 `groupHeadKey` 同形但不带工作区：工作区分组只在根节点那一层，没有工作区可限定
+ *
+ * 头这一格在两个计划里档位不同：工作区计划里它是 `container`（拖到头上是移入这个分组）
+ * 分组计划里它是 `rows`（拖到头上是插到它前后）。含义由计划决定，元素本身不区分
  */
 export function virtualWorkspaceHeadKey(groupId: string): string {
   return `virtualWorkspaceHead/${groupId}`
+}
+
+/**
+ * 一个虚拟工作区分组组体的区域键
+ *
+ * 与 `virtualWorkspaceHeadKey` 那一格的分工同 `sessionRowsKey` 与 `sessionGroupKey` 那一对
+ * 那一格只罩分组头，这一格罩整个组体
+ *
+ * 工作区计划里它与分组头共用同一个提交，拖到组头或组体那一大片里都读作移入这个分组
+ * 头那一格不能省，命中层停在指针下第一个带区域键的元素上，拖到头上时若它不在计划里，这次落点就到此为止
+ *
+ * 来源已在的那个分组整格不进 `targets`，拖回自己那一片因此是构造期缺席
+ */
+export function virtualWorkspaceBodyKey(groupId: string): string {
+  return `virtualWorkspaceBody/${groupId}`
+}
+
+/**
+ * 一个工作区标题行的区域键
+ *
+ * 这一格在两个计划里档位不同，含义由计划决定，元素本身不区分
+ * 工作区计划里它是 `rows`（组内换位的参照行），同一格只在这条工作区没有会话分组归属时出现
+ * 同段里其他工作区行也参与，一格一行，拖到某一行上按它的上下半算前后
+ *
+ * 已被放进某个会话分组的工作区拖回父工作区的这一格时读作 `container`（解除那条归属）
+ * 那时它不再是与同段兄弟换位的参照物——这一条工作区行渲染在父工作区体内，不在原段的成员里
+ */
+export function workspaceHeadKey(workspaceId: string): string {
+  return `workspaceHead/${workspaceId}`
 }
 
 /** 一个区域键所属的工作区，不落在任何工作区里时为 undefined */
@@ -377,6 +415,146 @@ export function sessionAnchorPlan(input: {
 export interface OrderDragging {
   /** 拖起这一行时的计划 */
   buildDragPlan: (memberId: string) => DragPlan
+}
+
+/**
+ * 一条工作区行拖起时的计划
+ *
+ * 一个来源要落在四种位置上，档位分两档，元素本身不区分，含义全由计划决定
+ *
+ * - 别的虚拟工作区分组的组头与组体：`container`，移入那个分组（工况 10）
+ * - 根节点那一片与平铺在根节点上的工作区行：`container`，移出虚拟工作区分组（工况 10）
+ * - 与来源渲染在同一层的其他工作区行：`rows`，组内换位（工况 11）
+ * - 某个祖先工作区体内的会话分组头：`container`，移入那个会话分组（工况 12）
+ * - 来源当前所在的会话分组的父工作区行：`container`，解除那条归属（工况 12 的移出）
+ *
+ * 来源当前所在的那一片一律不进 `targets`，拖回自己那一片因此是构造期缺席
+ * 自己那个虚拟工作区分组、自己已在的那个会话分组、自己那一行，三者都不收
+ *
+ * 会话分组那一族的两个落点互不重叠，因为它们的元素本来就分处两层
+ * 移入落在会话分组头上（在祖先工作区体内），移出落在父工作区行上（在同层的上一层）
+ *
+ * 「同一个区域键在一次计划里只能有一档」这条约束在下面几处成立
+ * 某一行要么是来源同层的兄弟（`rows`），要么是根节点上未归组的工作区（`container`），两者所在的分组不同
+ * 父工作区行只在这一条真的有归属时才当移出落点，而那时它不在来源的同层名单里
+ *
+ * 后三格判据都取构造那一刻的渲染结果，与被拖之后的状态无关
+ * @param input - 来源、它在两个容器里的位置、可选落点的成员名单，以及四类落点各自落到哪次写入
+ */
+export function workspaceDragPlan(input: {
+  workspaceId: string
+  /** 来源当前所在的虚拟工作区分组 id，空串表示不在任何分组里 */
+  currentGroupId: string
+  /**
+   * 根节点上的全部虚拟工作区分组，含来源所在的那个与空分组
+   *
+   * 每组带上它的成员名单：成员行自己也要各收一格，落点才不会被行上的键截住
+   * 成员取全量而不是露出的那些——被嵌进父工作区体内的行带同一个区域键，同样会截住落点
+   */
+  groups: readonly { id: string; workspaceIds: readonly string[] }[]
+  /** 平铺在根节点上的工作区，来源在根节点时为空表 */
+  looseIds: readonly string[]
+  /**
+   * 与来源渲染在同一层的成员，按当刻的渲染序，含来源自己
+   *
+   * 换算要在整层顺序上做，来源不在这一份里就换不出任何位次
+   * 来源不在任何虚拟工作区分组里时为空表：根节点那一层的平铺段没有可换位的插入写入
+   */
+  siblingOrder: readonly string[]
+  /** 可以移入的会话分组：祖先工作区与它名下的分组 */
+  nestTargets: readonly { parentId: string; groupId: string }[]
+  /** 来源当前生效的会话分组归属，没有时缺省 */
+  binding?: { parentId: string; groupId: string } | undefined
+  /** 移入一个虚拟工作区分组，空串表示移出到根节点 */
+  moveToGroup: (groupId: string) => void
+  /** 同层换位，`beforeWorkspaceId` 为 undefined 表示挪到末尾 */
+  reorder: (beforeWorkspaceId: string | undefined) => void
+  /** 移入某个祖先工作区体内的会话分组 */
+  nestInto: (parentId: string, groupId: string) => void
+  /** 解除嵌套归属 */
+  unnest: () => void
+}): DragPlan {
+  const { workspaceId, currentGroupId, binding } = input
+  const targets = new Map<string, DragPlanTarget>()
+  /** 移出虚拟工作区分组的落点，根节点那一片与平铺在它上面的工作区行共用它 */
+  const toRoot: DragPlanTarget = {
+    mode: 'container',
+    commit: () => input.moveToGroup(''),
+  }
+
+  for (const group of input.groups) {
+    // 来源已在的那个分组不整块收：拖回自己那一片是原地投放，按构造期缺席处理
+    // 组内别的成员行改由下面那个 `rows` 循环收，两处不收同一个键
+    if (group.id === currentGroupId) continue
+    // 组头与组体同一档：指针落在组体那一片空白上也读作移入这个分组
+    const target: DragPlanTarget = {
+      mode: 'container',
+      commit: () => input.moveToGroup(group.id),
+    }
+    targets.set(virtualWorkspaceHeadKey(group.id), target)
+    targets.set(virtualWorkspaceBodyKey(group.id), target)
+    // 组内每一行也要各收一格，否则指针停在某一行上时命中层先撞上它、那一次落点就到此为止
+    // 行自己带区域键且键不在计划里，向上找组体这一步根本不会发生
+    for (const memberId of group.workspaceIds) {
+      if (memberId === workspaceId) continue
+      targets.set(workspaceHeadKey(memberId), target)
+    }
+  }
+
+  if (currentGroupId !== '') {
+    // 根节点那一层整片是移出落点，平铺在那里的工作区行另各占一格
+    // 命中层停在指针下第一个带区域键的元素上，行自己带键时不会落到包着它的这一片上
+    targets.set(ROOT_KEY, toRoot)
+    for (const id of input.looseIds) {
+      if (id === workspaceId) continue
+      // 父工作区行在下面另作「移出会话分组」的落点，同一格不能兼两档，这里先让开
+      if (binding !== undefined && id === binding.parentId) continue
+      targets.set(workspaceHeadKey(id), toRoot)
+    }
+  }
+
+  // 同层换位：换算绑的是构造那一刻的整层顺序，折起的成员因此不动
+  for (const memberId of input.siblingOrder) {
+    if (memberId === workspaceId) continue
+    // 父工作区行在下面另作「移出会话分组」的落点，同一格不能兼两档，这里先让开
+    if (binding !== undefined && memberId === binding.parentId) continue
+    targets.set(workspaceHeadKey(memberId), {
+      mode: 'rows',
+      // 相邻位与「锚点已不是本层成员」两种落点都在换算里返回 undefined，那时不写
+      commit: (anchor) => {
+        const next = reorderTo(input.siblingOrder, workspaceId, anchor)
+        if (next === undefined) return
+        input.reorder(beforeIdOf(next, workspaceId))
+      },
+    })
+  }
+
+  for (const target of input.nestTargets) {
+    // 已经在那个分组里时不收：再放一次不改变任何东西
+    if (
+      binding !== undefined &&
+      binding.parentId === target.parentId &&
+      binding.groupId === target.groupId
+    ) {
+      continue
+    }
+    targets.set(groupHeadKey(target.parentId, target.groupId), {
+      mode: 'container',
+      commit: () => input.nestInto(target.parentId, target.groupId),
+    })
+  }
+
+  if (binding !== undefined) {
+    // 移出会话分组落在父工作区那一行上：它在本条工作区的上一层，与同层名单不重叠
+    // 父工作区自己也平铺在根节点时，上面那一轮已经给这一格写过「移出虚拟工作区分组」
+    // 那一档在这里被覆盖成解除嵌套：两条读法都成立时，解除嵌套是用户看得见的那一层变化
+    targets.set(workspaceHeadKey(binding.parentId), {
+      mode: 'container',
+      commit: () => input.unnest(),
+    })
+  }
+
+  return { source: { kind: 'workspace', id: workspaceId }, targets }
 }
 
 /**

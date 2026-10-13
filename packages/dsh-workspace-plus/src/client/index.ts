@@ -336,6 +336,7 @@ export function apply(ctx: Context): void {
         renameVirtualWorkspace: async () => EMPTY_SNAPSHOT,
         deleteVirtualWorkspace: async () => EMPTY_SNAPSHOT,
         moveWorkspace: async () => EMPTY_SNAPSHOT,
+        moveWorkspaceBefore: async () => EMPTY_SNAPSHOT,
         forgetWorkspace: async () => EMPTY_SNAPSHOT,
         nestWorkspaces: async () => EMPTY_SNAPSHOT,
         unnestWorkspaces: async () => EMPTY_SNAPSHOT,
@@ -403,6 +404,9 @@ export function apply(ctx: Context): void {
       deleteVirtualWorkspace: (groupId) => callSnapshot('deleteVirtualWorkspace', [groupId]),
       moveWorkspace: (workspaceId, groupId) =>
         callSnapshot('moveWorkspace', [workspaceId, groupId === '' ? null : groupId]),
+      // 锚点传实参本身：缺席表示「挪到末尾」，与空串是同形但不同义的两种读法
+      moveWorkspaceBefore: (groupId, workspaceId, beforeWorkspaceId) =>
+        callSnapshot('moveWorkspaceBefore', [groupId, workspaceId, beforeWorkspaceId]),
       nestWorkspaces: (workspaceIds, parentWorkspaceId, groupId) =>
         callSnapshot('nestWorkspaces', [workspaceIds, parentWorkspaceId, groupId]),
       unnestWorkspaces: (workspaceIds) => callSnapshot('unnestWorkspaces', [workspaceIds]),

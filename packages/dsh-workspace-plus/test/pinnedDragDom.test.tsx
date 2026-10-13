@@ -177,6 +177,7 @@ function props(
     createVirtualWorkspace: async () => stored,
     renameVirtualWorkspace: async () => stored,
     deleteVirtualWorkspace: async () => stored,
+    moveWorkspaceBefore: async () => stored,
     moveWorkspace: async () => stored,
     nestWorkspaces: async () => stored,
     unnestWorkspaces: async () => stored,

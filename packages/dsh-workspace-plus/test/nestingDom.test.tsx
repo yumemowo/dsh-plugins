@@ -137,6 +137,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     createVirtualWorkspace: async () => snapshot(),
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),
+    moveWorkspaceBefore: async () => snapshot(),
     moveWorkspace: async () => snapshot(),
     nestWorkspaces: async () => snapshot(),
     unnestWorkspaces: async () => snapshot(),
@@ -902,6 +903,7 @@ describe('nested sub-workspaces in a real DOM', () => {
           workspaceGroups: [{ id: 'vg1', name: 'dsh plugins', workspaceIds: ['w1'] }],
           picker: { focused: virtualAddress('vg1'), recent: [], pinned: [] },
         }),
+      moveWorkspaceBefore: async () => snapshot(),
       moveWorkspace: async (workspaceId, groupId) => {
         moved.push({ workspaceId, groupId })
         return snapshot()

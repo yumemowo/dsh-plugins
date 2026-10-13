@@ -40,6 +40,7 @@ describe('locales', () => {
     expect(Object.keys(zh).sort()).toEqual([
       'actions.group.aria',
       'actions.virtualWorkspace.aria',
+      'clearOrder',
       'compareTabDescription',
       'delete.desc.group',
       'delete.desc.virtualWorkspace',

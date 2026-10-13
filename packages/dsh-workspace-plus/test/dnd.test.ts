@@ -31,7 +31,10 @@ import {
   sessionGroupKey,
   stretchDragPlan,
   targetOfZone,
+  virtualWorkspaceBodyKey,
   virtualWorkspaceHeadKey,
+  workspaceDragPlan,
+  workspaceHeadKey,
   workspaceOfZoneKey,
 } from '../src/client/data/dnd.ts'
 import type { DragPlan, DragPlanTarget, DropAnchor } from '../src/client/data/dnd.ts'
@@ -810,6 +813,213 @@ describe('building a stretch drag plan', () => {
     p.targets.get('pinned')?.commit({ kind: 'before', rowId: 's-2' })
 
     expect(order).toEqual(['s-1', 's-2'])
+  })
+})
+
+describe('building a workspace drag plan', () => {
+  /** 一个来源不在任何分组里的最小输入，用例只覆盖到自己那一格 */
+  function planInput(overrides: Partial<Parameters<typeof workspaceDragPlan>[0]> = {}) {
+    return {
+      workspaceId: 'ws-1',
+      currentGroupId: '',
+      groups: [],
+      looseIds: [],
+      siblingOrder: [],
+      nestTargets: [],
+      moveToGroup: () => {},
+      reorder: () => {},
+      nestInto: () => {},
+      unnest: () => {},
+      ...overrides,
+    }
+  }
+
+  it('collects the head and the body of every group the source is not in', () => {
+    // 组头与组体同一档：拖到组头的标题上、或者拖到组体里那一片空白上，都读作移入这个分组
+    // 两格都要在，指针停在组头上时命中层先撞上它，那一次落点就到此为止
+    const p = workspaceDragPlan(
+      planInput({
+        currentGroupId: 'group-a',
+        groups: [
+          { id: 'group-a', workspaceIds: ['ws-1'] },
+          { id: 'group-b', workspaceIds: ['ws-2'] },
+        ],
+      }),
+    )
+
+    expect(p.targets.get(virtualWorkspaceHeadKey('group-b'))?.mode).toBe('container')
+    expect(p.targets.get(virtualWorkspaceBodyKey('group-b'))?.mode).toBe('container')
+    expect(p.targets.has(virtualWorkspaceHeadKey('group-a'))).toBe(false)
+    expect(p.targets.has(virtualWorkspaceBodyKey('group-a'))).toBe(false)
+  })
+
+  it('leaves the group the source already sits in out of its own target table', () => {
+    // 原地投放是构造期缺席：拖回自己那一片时命中层查不到，既不标记也不提交
+    const p = workspaceDragPlan(
+      planInput({
+        currentGroupId: 'group-a',
+        groups: [
+          { id: 'group-a', workspaceIds: ['ws-1', 'ws-2'] },
+          { id: 'group-b', workspaceIds: [] },
+        ],
+        siblingOrder: ['ws-1', 'ws-2'],
+      }),
+    )
+
+    expect(p.targets.has(virtualWorkspaceHeadKey('group-a'))).toBe(false)
+    expect(p.targets.has(virtualWorkspaceBodyKey('group-a'))).toBe(false)
+  })
+
+  it('reads a drop on another workspace row as joining that row own group', () => {
+    // 行自己带区域键，命中层停在它上面
+    // 那一格不在计划里的话这次落点就到此为止
+    const moved: string[] = []
+    const p = workspaceDragPlan(
+      planInput({
+        groups: [{ id: 'group-b', workspaceIds: ['ws-2'] }],
+        moveToGroup: (groupId) => moved.push(groupId),
+      }),
+    )
+
+    p.targets.get(workspaceHeadKey('ws-2'))?.commit({ kind: 'inside' })
+    expect(moved).toEqual(['group-b'])
+  })
+
+  it('collects the loose row stretch of the root list as a way out of the group', () => {
+    // 来源已在某个分组里时，平铺在根节点上的工作区行与整片根节点都读作「移出虚拟工作区分组」
+    const moved: string[] = []
+    const p = workspaceDragPlan(
+      planInput({
+        currentGroupId: 'group-a',
+        groups: [{ id: 'group-a', workspaceIds: ['ws-1'] }],
+        looseIds: ['ws-9'],
+        moveToGroup: (groupId) => moved.push(groupId),
+      }),
+    )
+
+    expect(p.targets.get(ROOT_KEY)?.mode).toBe('container')
+    p.targets.get(workspaceHeadKey('ws-9'))?.commit({ kind: 'inside' })
+    expect(moved).toEqual([''])
+  })
+
+  it('keeps the root stretch out of the plan while the source is already there', () => {
+    const p = workspaceDragPlan(planInput({ looseIds: ['ws-9'] }))
+
+    expect(p.targets.has(ROOT_KEY)).toBe(false)
+    expect(p.targets.has(workspaceHeadKey('ws-9'))).toBe(false)
+  })
+
+  it('collects the sibling rows of the source group as rows targets', () => {
+    const reordered: (string | undefined)[] = []
+    const p = workspaceDragPlan(
+      planInput({
+        currentGroupId: 'group-a',
+        groups: [{ id: 'group-a', workspaceIds: ['ws-1', 'ws-2', 'ws-3'] }],
+        siblingOrder: ['ws-1', 'ws-2', 'ws-3'],
+        reorder: (beforeWorkspaceId) => reordered.push(beforeWorkspaceId),
+      }),
+    )
+
+    expect(p.targets.get(workspaceHeadKey('ws-3'))?.mode).toBe('rows')
+    p.targets.get(workspaceHeadKey('ws-3'))?.commit({ kind: 'before', rowId: 'ws-3' })
+    expect(reordered).toEqual(['ws-3'])
+  })
+
+  it('reports no change when a workspace is dropped on its own neighbour', () => {
+    // 拖动发生了，顺序没变：换算出的新顺序与现状逐位相同，写入因此被跳过
+    const reordered: (string | undefined)[] = []
+    const p = workspaceDragPlan(
+      planInput({
+        workspaceId: 'ws-2',
+        currentGroupId: 'group-a',
+        groups: [{ id: 'group-a', workspaceIds: ['ws-1', 'ws-2', 'ws-3'] }],
+        siblingOrder: ['ws-1', 'ws-2', 'ws-3'],
+        reorder: (beforeWorkspaceId) => reordered.push(beforeWorkspaceId),
+      }),
+    )
+
+    p.targets.get(workspaceHeadKey('ws-3'))?.commit({ kind: 'before', rowId: 'ws-3' })
+    expect(reordered).toEqual([])
+  })
+
+  it('collects the session groups of the source ancestors as nesting targets', () => {
+    const nested: { parentId: string; groupId: string }[] = []
+    const p = workspaceDragPlan(
+      planInput({
+        nestTargets: [{ parentId: 'ws-9', groupId: 'group-x' }],
+        nestInto: (parentId, groupId) => nested.push({ parentId, groupId }),
+      }),
+    )
+
+    expect(p.targets.get(groupHeadKey('ws-9', 'group-x'))?.mode).toBe('container')
+    p.targets.get(groupHeadKey('ws-9', 'group-x'))?.commit({ kind: 'inside' })
+    expect(nested).toEqual([{ parentId: 'ws-9', groupId: 'group-x' }])
+  })
+
+  it('leaves the session group the source already belongs to out of its target table', () => {
+    const p = workspaceDragPlan(
+      planInput({
+        binding: { parentId: 'ws-9', groupId: 'group-x' },
+        nestTargets: [
+          { parentId: 'ws-9', groupId: 'group-x' },
+          { parentId: 'ws-9', groupId: 'group-y' },
+        ],
+      }),
+    )
+
+    expect(p.targets.has(groupHeadKey('ws-9', 'group-x'))).toBe(false)
+    expect(p.targets.has(groupHeadKey('ws-9', 'group-y'))).toBe(true)
+  })
+
+  it('reads a drop on the parent workspace row as leaving the session group', () => {
+    const unnested: string[] = []
+    const p = workspaceDragPlan(
+      planInput({
+        binding: { parentId: 'ws-9', groupId: 'group-x' },
+        unnest: () => unnested.push('ws-1'),
+      }),
+    )
+
+    p.targets.get(workspaceHeadKey('ws-9'))?.commit({ kind: 'inside' })
+    expect(unnested).toEqual(['ws-1'])
+  })
+
+  it('keeps the parent row out of the root stretch so one key keeps one mode', () => {
+    // 父工作区行同时能读到「移出虚拟工作区分组」与「移出会话分组」，同一格不能兼两档
+    // 本条工作区已在某个分组里、父工作区又平铺在根节点时两种读法都成立，这里钉住取的是解除嵌套那一档
+    const unnested: string[] = []
+    const p = workspaceDragPlan(
+      planInput({
+        currentGroupId: 'group-a',
+        groups: [{ id: 'group-a', workspaceIds: ['ws-1'] }],
+        looseIds: ['ws-9'],
+        binding: { parentId: 'ws-9', groupId: 'group-x' },
+        unnest: () => unnested.push('ws-1'),
+      }),
+    )
+
+    expect(p.targets.get(workspaceHeadKey('ws-9'))?.mode).toBe('container')
+    p.targets.get(workspaceHeadKey('ws-9'))?.commit({ kind: 'inside' })
+    expect(unnested).toEqual(['ws-1'])
+  })
+
+  it('leaves the source row out of its own target table', () => {
+    const p = workspaceDragPlan(
+      planInput({
+        currentGroupId: 'group-a',
+        groups: [{ id: 'group-a', workspaceIds: ['ws-1', 'ws-2'] }],
+        siblingOrder: ['ws-1', 'ws-2'],
+      }),
+    )
+
+    expect(p.targets.has(workspaceHeadKey('ws-1'))).toBe(false)
+  })
+
+  it('reports the dragged workspace as the source', () => {
+    const p = workspaceDragPlan(planInput())
+
+    expect(p.source).toEqual({ kind: 'workspace', id: 'ws-1' })
+    expect(p.targets.size).toBe(0)
   })
 })
 

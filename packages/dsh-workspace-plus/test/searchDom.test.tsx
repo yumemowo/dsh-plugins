@@ -67,6 +67,7 @@ function props(wide = true): WorkspaceGroupsProps {
     createVirtualWorkspace: async () => snapshot(),
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),
+    moveWorkspaceBefore: async () => snapshot(),
     moveWorkspace: async () => snapshot(),
     nestWorkspaces: async () => snapshot(),
     unnestWorkspaces: async () => snapshot(),

@@ -34,6 +34,7 @@ import { WorkspaceHoverContent } from './components/HoverCards.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { useLocale } from '../hooks/useLocale.ts'
+import type { DragStartEvent } from '../hooks/useDnd.ts'
 import styles from './components/rows.module.css'
 import clsx from 'clsx'
 
@@ -91,6 +92,41 @@ export interface WorkspaceRowProps {
    * 交回的是菜单条目 id 原文，解析归 `menus.tsx` 的 `parseParentGroupId`
    */
   onSelectParentGroup?: ((id: string) => void) | undefined
+  /**
+   * 未归组那一段是否有手动顺序
+   *
+   * 有才出现「清除手动顺序」——没有顺序可清时它点了什么都不会发生，留着会读成失效的入口
+   */
+  hasManualOrder?: boolean | undefined
+  /**
+   * 清掉未归组那一段的手动顺序
+   *
+   * 那一段没有区段头，这一行的菜单是它唯一的入口，缺省表示该行不提供这个入口
+   */
+  onClearOrder?: (() => void) | undefined
+  /**
+   * 这一行的拖拽接线
+   *
+   * 缺省表示这一行不参与拖拽，那时它既不挂区域属性也不可拖起
+   * 未分组桶里的工作区行、以及被当纯展示渲染的行都属于这一档
+   */
+  dnd?: WorkspaceRowDnd | undefined
+}
+
+/** 工作区标题行的拖拽接线，由 {@link WorkspaceSection} 从 `useOrderRow` 取下后原样摊进行里 */
+export interface WorkspaceRowDnd {
+  /** 摊在行上，让这一行成为落点区域 */
+  zone: Record<string, string>
+  /** 摊在行上，让这一行成为同层换位换算的参照行 */
+  rowAttribute: Record<string, string>
+  /** 摊在行上让它可以被拖起，无排序计划时为 null */
+  drag: {
+    draggable: true
+    onDragStart: (event: DragStartEvent) => void
+    onDragEnd: () => void
+  } | null
+  /** 这一行是否正被拖，样式据此画淡 */
+  dragging: boolean
 }
 
 export function WorkspaceRow({
@@ -108,6 +144,9 @@ export function WorkspaceRow({
   hover,
   hoverCopy,
   virtualWorkspace,
+  hasManualOrder,
+  onClearOrder,
+  dnd,
 }: WorkspaceRowProps): ReactElement {
   const { labels } = useLocale()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -124,6 +163,7 @@ export function WorkspaceRow({
     if (id === ROW_MENU.newSession) onCreateSession?.()
     else if (id === WORKSPACE_MENU.newGroup) onNewGroup?.()
     else if (id === WORKSPACE_MENU.rename) onRename?.()
+    else if (id === WORKSPACE_MENU.clearOrder) onClearOrder?.()
     else if (id === WORKSPACE_MENU.delete) onDelete?.()
     else if (
       id === VIRTUAL_WORKSPACE_ITEM.create ||
@@ -144,6 +184,7 @@ export function WorkspaceRow({
         // 没有移入入口的行（未分组桶）不出现这一项，否则是个点不动的死入口
         virtualWorkspaceGrouping: onSelectVirtualWorkspace === undefined ? undefined : virtualWorkspace,
         parentGrouping: onSelectParentGroup === undefined ? undefined : parentGroup,
+        clearOrderLabel: hasManualOrder === true ? labels.clearOrder : undefined,
       })
     : undefined
 
@@ -161,7 +202,12 @@ export function WorkspaceRow({
 
   const row = (
     <div
-      className={clsx(styles.workspaceHead)}
+      className={clsx(styles.workspaceHead, dnd?.dragging === true && styles.rowDragging)}
+      // 区域属性恒在（有接线时）：这一行是别的落点接收方的参照物，只有拖起那一半随计划有无而变
+      {...dnd?.zone}
+      {...dnd?.rowAttribute}
+      {...dnd?.drag}
+      data-wg-dragging={dnd?.dragging === true ? '' : undefined}
       role="button"
       tabIndex={0}
       aria-expanded={expanded}

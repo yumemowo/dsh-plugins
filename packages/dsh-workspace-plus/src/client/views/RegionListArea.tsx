@@ -20,10 +20,13 @@ import { buildLayout, containsSession, groupIdOfSession, virtualWorkspaceIdOf } 
 import { reconcileOrder } from '../data/order.ts'
 import type { OrderSlots } from '../data/order.ts'
 import {
+  ROOT_KEY,
   groupHeadKey,
   orderDragPlan,
   sessionAnchorPlan,
+  virtualWorkspaceBodyKey,
   virtualWorkspaceHeadKey,
+  workspaceDragPlan,
 } from '../data/dnd.ts'
 import type { OrderDragging } from '../data/dnd.ts'
 import { groupSlotKey, looseSlotKey } from '../../segment.ts'
@@ -45,6 +48,7 @@ import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { abbreviateHomePath } from '../utils/pathUtils.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useLocalViewOptions } from '../hooks/useLocalViewOptions.ts'
+import { useDnd } from '../hooks/useDnd.ts'
 import { ExpandableBody } from './components/ExpandableBody.tsx'
 import { SearchResults } from './SearchControl.tsx'
 import { SessionList } from './SessionList.tsx'
@@ -137,9 +141,15 @@ export interface RegionListCommands {
    * 写一段会话的手动顺序
    *
    * 段键见 `segment.ts`，与 DOM 上的区域键不是一套：那一套是命中层用的，这一套是存储键
-   * 空表表示清掉这一格，该段退回时间序
+   * 空表表示清掉这一格，该段退回时间序——「清除手动顺序」入口就是按它下发的
    */
   setSegmentOrder: (key: string, order: readonly string[]) => void
+  /**
+   * 清掉一段的手动顺序，该段退回时间序
+   *
+   * 与写空表是同一件事，单列一格是因为两个入口（分组菜单与工作区行菜单）都不产出顺序内容
+   */
+  clearSegmentOrder: (key: string) => void
   /**
    * 把一个会话落到某一段的指定位次
    *
@@ -157,6 +167,27 @@ export interface RegionListCommands {
     groupId: string,
     order: readonly string[],
   ) => void
+  /** 把一个工作区移入 / 移出虚拟工作区分组，空串表示移出到根节点 */
+  moveWorkspaceToGroup: (workspaceId: string, groupId: string) => void
+  /**
+   * 在同一个虚拟工作区分组内换位
+   *
+   * 只改这个分组的成员数组，改归属是 `moveWorkspaceToGroup` 的事
+   * `beforeWorkspaceId` 为 undefined 表示挪到末尾
+   */
+  reorderWorkspaceInGroup: (
+    groupId: string,
+    workspaceId: string,
+    beforeWorkspaceId: string | undefined,
+  ) => void
+  /**
+   * 把一个工作区连同它名下的子工作区放进某个祖先工作区的会话分组
+   *
+   * 与菜单里那条「移动到分组…」落到同一件事上：两条入口表达的都是「把这一条放进去」
+   */
+  nestWorkspaceInto: (workspaceId: string, parentId: string, groupId: string) => void
+  /** 解除一个工作区的嵌套归属，它退回按 cwd 路径推导的位置 */
+  unnestWorkspace: (workspaceId: string) => void
 }
 
 /**
@@ -201,9 +232,19 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
   const { labels } = useLocale()
   const { mode: viewMode } = useLocalViewOptions()
   const expansion = useExpansion()
+  const { dndZoneProps } = useDnd()
   const { scope } = props
   const { session, currentSessionId } = scope
   const rowLabels = sessionRowLabels(labels)
+
+  /**
+   * 根节点那一层的区域属性
+   *
+   * 工作区拖到分组结构之外的任何空白上都读作移出虚拟工作区分组
+   * 这一格罩住整片列表，因此它是那类落点的兜底
+   * 平铺在它上面的工作区行另各占一格，命中层先撞上行的键
+   */
+  const rootZone = dndZoneProps(ROOT_KEY)
 
   /**
    * 根节点工作区分组段的最新一份，供排序计划的构造器读取
@@ -260,8 +301,11 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
   }
 
   return (
-    /* 按工作区：工作区分组段 + 未归组工作区 + 末尾的「未分组」桶 */
-    <div className={clsx(regionStyles.list, regionStyles.panel)}>
+    /* 按工作区：工作区分组段 + 未归组工作区 + 末尾的「未分组」桶
+       根节点整片另带一格区域属性：工作区拖到分组结构之外的任何空白上都读作移出虚拟工作区分组
+       这一格罩住整片列表，因此它是那类落点的兜底
+       平铺在它上面的工作区行另各占一格，命中层先撞上行的键 */
+    <div className={clsx(regionStyles.list, regionStyles.panel)} {...rootZone}>
       {/* 工作区分组段排在前面，未归组的工作区平铺在其后、不带区段头
           没有建过分组时 rootLayout.groups 为空、全部工作区都在 loose 里
           这一层因此不改变任何行的位置 */}
@@ -274,6 +318,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
           onRename={() => scope.edits.onRenameVirtualWorkspace(section.id, section.label)}
           onDelete={() => scope.edits.onDeleteVirtualWorkspace(section.id, section.label)}
           orderDragging={virtualWorkspaceDragging}
+          bodyZone={dndZoneProps(virtualWorkspaceBodyKey(section.id))}
         >
           {section.roots.map((workspaceId) => (
             <WorkspaceNode key={workspaceId} workspaceId={workspaceId} scope={scope} />
@@ -448,6 +493,83 @@ function WorkspaceNode({
     [buildGroupDragPlan],
   )
 
+  /**
+   * 工作区拖拽那两处落点的最新一份
+   *
+   * 与 `dragOrderSections` 同一取舍：这些名单每次渲染都是新数组，构造器只该在 `dragstart` 当刻读它们
+   */
+  const dragLists = useRef<{
+    groups: readonly VirtualWorkspaceSectionData[]
+    loose: readonly string[]
+  }>({ groups: [], loose: [] })
+
+  /**
+   * 拖起一条工作区行时的计划
+   *
+   * 与上面两处同一取舍：这几份名单每次渲染都是新数组，构造器在调用当刻读 ref，依赖列只留稳定的几格
+   * 四类落点落在三个宿主方法上
+   * 移入 / 移出虚拟分组走 `moveWorkspace`，组内换位走 `moveWorkspaceBefore`
+   * 会话分组那一族走 `nestWorkspaces` 与 `unnestWorkspaces`
+   *
+   * 可以移入的会话分组取自这条工作区自己的祖先链：只有 cwd 路径上的祖先才可能是它的父工作区
+   * 这一点与菜单里那份候选名单同源，两条入口因此列出的是同一批分组
+   */
+  const buildWorkspaceDragPlan = useCallback(
+    (memberId: string) => {
+      const lists = dragLists.current
+      const currentGroupId = virtualWorkspaceIdOf(lists.groups, memberId)
+      const own = lists.groups.find((section) => section.id === currentGroupId)
+      const { bindingOf, ancestorsOf } = scope.layout.nesting
+      return workspaceDragPlan({
+        workspaceId: memberId,
+        currentGroupId,
+        groups: lists.groups,
+        looseIds: lists.loose,
+        // 同层换位只收这一层渲染出来的那些行，被嵌进父工作区体内的成员不在其中
+        // 来源自己也在这一份里：换算要在整层顺序上做，它不在其中就换不出任何位次
+        siblingOrder: currentGroupId === '' ? [] : (own?.roots ?? []),
+        nestTargets: ancestorsOf(memberId).flatMap((parentId) =>
+          (scope.snapshot.byWorkspace[parentId] ?? []).map((group) => ({
+            parentId,
+            groupId: group.id,
+          })),
+        ),
+        binding: ((): { parentId: string; groupId: string } | undefined => {
+          const bound = bindingOf(memberId)
+          return bound === undefined
+            ? undefined
+            : { parentId: bound.workspaceId, groupId: bound.groupId }
+        })(),
+        moveToGroup: (groupId) => commands.moveWorkspaceToGroup(memberId, groupId),
+        reorder: (beforeWorkspaceId) => {
+          // 来源不在任何分组里时没有可写的分组，这一种落点也就不在计划里
+          if (currentGroupId === '') return
+          commands.reorderWorkspaceInGroup(currentGroupId, memberId, beforeWorkspaceId)
+        },
+        nestInto: (parentId, groupId) => commands.nestWorkspaceInto(memberId, parentId, groupId),
+        unnest: () => commands.unnestWorkspace(memberId),
+      })
+    },
+    [
+      scope.layout.nesting,
+      scope.snapshot.byWorkspace,
+      commands.moveWorkspaceToGroup,
+      commands.reorderWorkspaceInGroup,
+      commands.nestWorkspaceInto,
+      commands.unnestWorkspace,
+    ],
+  )
+
+  const workspaceDragging: OrderDragging = useMemo(
+    () => ({ buildDragPlan: buildWorkspaceDragPlan }),
+    [buildWorkspaceDragPlan],
+  )
+
+  dragLists.current = {
+    groups: scope.layout.listLayout.groups,
+    loose: scope.layout.listLayout.loose,
+  }
+
   const workspace = layout.workspaceById.get(workspaceId)
   // 布局只包含快照里存在的工作区，因此这里不会落空，防御一下避免类型断言
   if (workspace === undefined) return null
@@ -556,8 +678,12 @@ function WorkspaceNode({
         onRename: (section) => edits.onRenameGroup(workspaceId, section.id, section.label),
         onDelete: (section) => edits.onDeleteGroup(workspaceId, section.id, section.label),
         onCreateSession: (section) => commands.createSessionIn(workspaceId, section.id),
+        onClearOrder: (section) =>
+          commands.clearSegmentOrder(groupSlotKey(workspaceId, section.id)),
       }}
       orderDragging={groupDragging}
+      workspaceDragging={workspaceDragging}
+      onClearLooseOrder={() => commands.clearSegmentOrder(looseSlotKey(workspaceId))}
       renderChildWorkspace={(childId) => (
         <WorkspaceNode key={childId} workspaceId={childId} scope={scope} />
       )}

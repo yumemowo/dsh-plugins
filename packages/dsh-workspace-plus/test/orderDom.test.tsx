@@ -90,8 +90,17 @@ async function flush(): Promise<void> {
   })
 }
 
-/** 区域 props，记录收到的两种排序调用与会话归组调用 */
-function props(orders: string[][], moves: string[][]): WorkspaceGroupsProps {
+/**
+ * 区域 props，记录收到的两种排序调用与会话归组调用
+ * @param slots - 该快照里的顺序位，缺省表示每一段都没有手动顺序
+ * @param newSessionId - `startSession` 交回的会话 id，缺省表示这次导航被取代
+ */
+function props(
+  orders: string[][],
+  moves: string[][],
+  slots: Record<string, string[]> = {},
+  newSessionId: string | undefined = undefined,
+): WorkspaceGroupsProps {
   const created = new Date(2026, 0, 1).toISOString()
   const workspaceState = {
     items: [
@@ -131,6 +140,7 @@ function props(orders: string[][], moves: string[][]): WorkspaceGroupsProps {
       name: `工作区分组 ${id}`,
       workspaceIds: id === 'wg-1' ? ['ws-1'] : [],
     })),
+    orderSlots: slots,
   })
   return {
     wide: true,
@@ -142,14 +152,20 @@ function props(orders: string[][], moves: string[][]): WorkspaceGroupsProps {
     useHostInfo: ((select: (info: { home: string | undefined }) => unknown) =>
       select({ home: '/tmp' })) as never,
     openSession: () => {},
-    startSession: async () => undefined,
+    startSession: async () => newSessionId,
     loadGroups: async () => stored,
     onReady: () => () => {},
     createGroup: async () => stored,
     renameGroup: async () => stored,
     deleteGroup: async () => stored,
-    moveSession: async (workspaceId: string, sessionId: string, groupId: string) => {
-      moves.push([workspaceId, sessionId, groupId])
+    moveSession: async (
+      workspaceId: string,
+      sessionId: string,
+      groupId: string,
+      beforeSessionId?: string,
+    ) => {
+      // 缺席的锚点在数组里补成空串：`toEqual` 比不出数组元素的「缺席」
+      moves.push([workspaceId, sessionId, groupId, beforeSessionId ?? ''])
       return stored
     },
     setSegmentOrder: async () => stored,
@@ -169,6 +185,7 @@ function props(orders: string[][], moves: string[][]): WorkspaceGroupsProps {
     createVirtualWorkspace: async () => stored,
     renameVirtualWorkspace: async () => stored,
     deleteVirtualWorkspace: async () => stored,
+    moveWorkspaceBefore: async () => stored,
     moveWorkspace: async () => stored,
     nestWorkspaces: async () => stored,
     unnestWorkspaces: async () => stored,
@@ -201,8 +218,13 @@ function props(orders: string[][], moves: string[][]): WorkspaceGroupsProps {
   }
 }
 
-/** 挂载区域并交出容器与收到的两类调用 */
-async function mount(): Promise<{
+/**
+ * 挂载区域并交出容器与收到的两类调用
+ * @param options - 顺序位与 `startSession` 交回的会话 id
+ */
+async function mount(
+  options: { slots?: Record<string, string[]>; newSessionId?: string } = {},
+): Promise<{
   container: HTMLElement
   root: ReturnType<typeof createRoot>
   orders: string[][]
@@ -214,7 +236,12 @@ async function mount(): Promise<{
   document.body.appendChild(container)
   const root = createRoot(container)
   await act(async () => {
-    root.render(React.createElement(WorkspaceGroupsRegion, props(orders, moves)))
+    root.render(
+      React.createElement(
+        WorkspaceGroupsRegion,
+        props(orders, moves, options.slots ?? {}, options.newSessionId),
+      ),
+    )
   })
   await act(async () => {
     await Promise.resolve()
@@ -359,7 +386,7 @@ describe('dragging a session group head', () => {
     fire(head, 'drop', 0)
     await flush()
 
-    expect(moves).toEqual([['ws-1', 'session-1', 'group-b']])
+    expect(moves).toEqual([['ws-1', 'session-1', 'group-b', '']])
     expect(orders).toEqual([])
     await act(async () => root.unmount())
   })
@@ -446,6 +473,59 @@ describe('dragging a workspace group head', () => {
 
     expect((workspaceRow as HTMLElement).getAttribute('data-wg-drop')).toBeNull()
     expect(orders).toEqual([])
+    await act(async () => root.unmount())
+  })
+})
+
+describe('placing a newly created session', () => {
+  /**
+   * 找一个 `+` 新建入口
+   * @param container - 挂载容器
+   * @param label - 无障碍标签
+   */
+  function plusButton(container: HTMLElement, label: string): HTMLButtonElement {
+    const found = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
+    if (found === null) throw new Error(`no create button for "${label}"`)
+    return found
+  }
+
+  it('anchors the new session to the first row of a segment that has a manual order', async () => {
+    // 已接管段：顺手把新会话插到那一份手动顺序的最前
+    // 这一档与默认序一致——宿主把新会话前插进段首，比较器也把空白会话排在普通会话之前
+    const { container, root, moves } = await mount({
+      slots: { 'group/ws-1/group-a': ['session-1'] },
+      newSessionId: 'session-9',
+    })
+
+    await act(async () => plusButton(container, '在“分组 group-a”中新建会话').click())
+    await flush()
+
+    expect(moves).toEqual([['ws-1', 'session-9', 'group-a', 'session-1']])
+    await act(async () => root.unmount())
+  })
+
+  it('passes no anchor to a segment that has no manual order yet', async () => {
+    // 目标段没有顺序位时不带锚点：宿主因此不会凭空为它造一份，那一段仍按时间序渲染
+    const { container, root, moves } = await mount({ newSessionId: 'session-9' })
+
+    await act(async () => plusButton(container, '在“分组 group-a”中新建会话').click())
+    await flush()
+
+    expect(moves).toEqual([['ws-1', 'session-9', 'group-a', '']])
+    await act(async () => root.unmount())
+  })
+
+  it('reads the loose segment slot when the workspace row creates the session', async () => {
+    // 工作区行的 `+` 归入未归组那一段，锚点取的是未归组段的顺序位
+    const { container, root, moves } = await mount({
+      slots: { 'loose/ws-1': ['session-1'] },
+      newSessionId: 'session-9',
+    })
+
+    await act(async () => plusButton(container, '在“ws-1”中新建会话').click())
+    await flush()
+
+    expect(moves).toEqual([['ws-1', 'session-9', '', 'session-1']])
     await act(async () => root.unmount())
   })
 })

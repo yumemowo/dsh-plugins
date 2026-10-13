@@ -33,6 +33,14 @@ export interface GroupSectionProps {
   /** 在该分组新建会话，缺省表示该行不提供新建入口 */
   onCreateSession?: (() => void) | undefined
   /**
+   * 这一段是否有手动顺序
+   *
+   * 有才出现「清除手动顺序」——没有顺序可清时它点了什么都不会发生，留着会读成失效的入口
+   */
+  hasManualOrder?: boolean | undefined
+  /** 清掉这一段的手动顺序，缺省表示该行不提供这个入口 */
+  onClearOrder?: (() => void) | undefined
+  /**
    * 同工作区分组的排序接线
    *
    * 缺省表示这一片不参与分组排序，分组头因此只接会话归组的落点、不可拖起
@@ -52,6 +60,8 @@ export function GroupSection({
   onRename,
   onDelete,
   onCreateSession,
+  hasManualOrder,
+  onClearOrder,
   orderDragging,
   children,
   renderChildWorkspace,
@@ -86,6 +96,7 @@ export function GroupSection({
     setMenuOpen(false)
     if (id === ROW_MENU.newSession) onCreateSession?.()
     else if (id === GROUP_MENU.rename) onRename()
+    else if (id === GROUP_MENU.clearOrder) onClearOrder?.()
     else if (id === GROUP_MENU.delete) onDelete()
   }
 
@@ -93,6 +104,8 @@ export function GroupSection({
     // 菜单项用通用动词，只有对话框标题才点明对象（见 RegionDialogs）
     renameLabel: labels.rename,
     deleteLabel: labels.deleteGroup,
+    // 没有手动顺序可清时这一格缺省，菜单项因此不出现
+    clearOrderLabel: hasManualOrder === true ? labels.clearOrder : undefined,
   })
 
   const contextMenu = useRowContextMenu({

@@ -600,7 +600,12 @@ function rowActionShape(out: { menus: unknown[]; buttons?: unknown[]; containers
 }
 
 /** 渲染一个分组行并返回可断言的操作结构 */
-function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, expanded = true) {
+function renderGroupRow(
+  onCreateSession?: () => void,
+  sessionCount = 0,
+  expanded = true,
+  hasManualOrder = false,
+) {
   const out = {
     menus: [] as unknown[],
     text: [] as string[],
@@ -633,6 +638,7 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, expanded
         onRename: () => {},
         onDelete: () => {},
         ...(onCreateSession === undefined ? {} : { onCreateSession }),
+        hasManualOrder,
         renderChildWorkspace: () => null,
         children: null,
       }),
@@ -643,7 +649,11 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, expanded
 }
 
 /** 渲染一个工作区区块并返回可断言的撑开结构 */
-function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
+function renderWorkspaceSection(
+  expanded: boolean,
+  looseCount = 1,
+  orderSlots?: Record<string, string[]>,
+) {
   const loose = Array.from({ length: looseCount }, (_, index) => ({
     id: `s${index}`,
     title: `会话 ${index}`,
@@ -675,6 +685,7 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
       onDelete: () => {},
     },
     layout: { groups: [], loose, children: [] },
+    ...(orderSlots === undefined ? {} : { orderSlots }),
     depth: 0,
     // 名次为空表时这个比较器与 `compareSessionRows` 同序，断言因此与没有置顶时相同
     compareRows: compareSessionRows,
@@ -686,6 +697,7 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
       onRename: () => {},
       onDelete: () => {},
       onCreateSession: () => {},
+      onClearOrder: () => {},
     },
     renderSession: (row) => React.createElement('span', { key: row.id, className: 'row' }, row.title),
     renderChildWorkspace: () => null,
@@ -860,6 +872,7 @@ function props(
     },
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),
+    moveWorkspaceBefore: async () => snapshot(),
     moveWorkspace: async (workspaceId: string, groupId: string) => {
       options.workspaceMoves?.push([workspaceId, groupId])
       return snapshot()
@@ -1278,6 +1291,17 @@ describe('WorkspaceGroupsRegion render', () => {
     expect((out.expandBodies ?? []).length).toBe(0)
   })
 
+  it('offers the clear entry on the workspace row only when the loose segment has a manual order', () => {
+    // 未归组那一段没有区段头，工作区行的菜单是它唯一的入口
+    // 没有顺序可清时留着这一项会读成失效的入口，与分组头那一处同一取舍
+    const without = renderWorkspaceSection(true)
+    expect(menuItems(without).flat()).not.toContain('clear-order')
+
+    const withSlot = renderWorkspaceSection(true, 1, { 'loose/w1': ['s0'] })
+    expect(menuItems(withSlot).flat()).toContain('clear-order')
+    expect(menuLabels(withSlot)).toContain('清除手动顺序')
+  })
+
   it('keeps the closed workspace sessions mounted so the body can shrink', () => {
     const closed = renderWorkspaceSection(false)
     const opened = renderWorkspaceSection(true)
@@ -1304,6 +1328,16 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(group.containers).toBe(1)
     expect(group.menuAnchors).toBe(1)
     expect(group.plusButtons).toBe(1)
+  })
+
+  it('offers the clear entry only to a group that has a manual order', () => {
+    // 没有顺序可清时留着这一项，点了什么都不会发生，会读成失效的入口
+    const without = renderGroupRow(() => {})
+    expect(menuItems(without)).toEqual([['rename', 'delete']])
+
+    const withSlot = renderGroupRow(() => {}, 0, true, true)
+    expect(menuItems(withSlot)).toEqual([['rename', 'clear-order', 'delete']])
+    expect(menuLabels(withSlot)).toEqual(['重命名', '清除手动顺序', '删除分组'])
   })
 
   it('leaves row actions with an accessible label but no native tooltip', () => {

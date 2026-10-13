@@ -88,6 +88,12 @@ export interface RegionLabels {
   deleteGroup: string
   /** 分组名对话框的标题（重命名时用） */
   renameGroup: string
+  /**
+   * 「清除手动顺序」菜单项
+   *
+   * 会话分组段与未归组段共用这一条：两处清的都是「这一段现在的手动顺序」，动作与后果相同
+   */
+  clearOrder: string
   /** 分组行「更多操作」按钮的无障碍标签，分组名由调用方传入 */
   groupActions: (name: string) => string
   /** 工作区行菜单里的「移动到…」一级项文案，二级子菜单列工作区分组 */
@@ -329,6 +335,7 @@ export function regionLabels(
     groupNamePrompt: t('groupNamePrompt'),
     deleteGroup: t('deleteGroup'),
     renameGroup: t('renameGroup'),
+    clearOrder: t('clearOrder'),
     confirmDeleteGroup: (name: string) => t('delete.desc.group', { name }),
     groupActions: (name: string) => t('actions.group.aria', { name }),
     moveToVirtualWorkspace: t('moveToVirtualWorkspace'),

@@ -11,12 +11,12 @@ import { ExpandableBody } from './components/ExpandableBody.tsx'
 import { GroupSection } from './GroupSection.tsx'
 import { SessionList } from './SessionList.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
-import type { WorkspaceRowProps } from './WorkspaceRow.tsx'
+import type { WorkspaceRowDnd, WorkspaceRowProps } from './WorkspaceRow.tsx'
 
 import { useExpansion } from '../hooks/useExpansion.ts'
 import { useLocale } from '../hooks/useLocale.ts'
-import { useDnd } from '../hooks/useDnd.ts'
-import { looseKey } from '../data/dnd.ts'
+import { useDnd, useOrderRow } from '../hooks/useDnd.ts'
+import { looseKey, workspaceHeadKey } from '../data/dnd.ts'
 import { reconcileOrder } from '../data/order.ts'
 import type { OrderSlots } from '../data/order.ts'
 import { groupSlotKey, looseSlotKey } from '../../segment.ts'
@@ -29,6 +29,8 @@ export interface WorkspaceGroupActions {
   onRename: (section: { id: string; label: string }) => void
   onDelete: (section: { id: string; label: string }) => void
   onCreateSession: (section: { id: string; label: string }) => void
+  /** 清掉某个分组那一段的手动顺序，该段退回时间序 */
+  onClearOrder: (section: { id: string }) => void
 }
 
 export interface WorkspaceSectionProps {
@@ -66,6 +68,18 @@ export interface WorkspaceSectionProps {
    * 缺省表示这一片不参与分组排序，分组头因此只接会话归组的落点
    */
   orderDragging?: OrderDragging | undefined
+  /**
+   * 这一条工作区行的拖拽接线
+   *
+   * 缺省表示这一行不可拖起，但仍是别的落点的接收方（它自己的区域属性恒在）
+   */
+  workspaceDragging?: OrderDragging | undefined
+  /**
+   * 清掉本工作区未归组那一段的手动顺序
+   *
+   * 未归组段没有区段头，这一行的菜单是它唯一的入口，缺省表示该行不提供这个入口
+   */
+  onClearLooseOrder?: (() => void) | undefined
   /** 把一个会话行渲染成元素，渲染方式由区域组件决定（是否带归组菜单） */
   renderSession: (row: SessionRow) => ReactNode
   /** 把一个子工作区渲染成一个完整的工作区块，深度由区域组件自己算 */
@@ -83,6 +97,8 @@ export function WorkspaceSection({
   revealSessionId,
   groupActions,
   orderDragging,
+  workspaceDragging,
+  onClearLooseOrder,
   orderSlots,
   renderSession,
   renderChildWorkspace,
@@ -111,9 +127,33 @@ export function WorkspaceSection({
    * 它同时是「移出分组」的落点：拖到这一段空白上就是回到未归组
    */
   const looseZone = dndZoneProps(looseKey(workspaceId))
+
+  /**
+   * 本工作区标题行的拖拽接线
+   *
+   * 行自己既是落点区域也是同层换位的参照行，因此一格顶两格
+   * 未分组桶那一行没有拖拽接线，走的仍是可选的这一格
+   */
+  const workspaceOrder = useOrderRow(
+    workspaceHeadKey(workspaceId),
+    workspaceId,
+    workspaceDragging === undefined ? undefined : () => workspaceDragging.buildDragPlan(workspaceId),
+  )
+  const rowDnd: WorkspaceRowDnd = {
+    zone: workspaceOrder.zone,
+    rowAttribute: workspaceOrder.rowAttribute,
+    drag: workspaceOrder.drag,
+    dragging: workspaceOrder.dragging,
+  }
+
   return (
     <section className={styles.workspace} style={indent}>
-      <WorkspaceRow {...row} />
+      <WorkspaceRow
+        {...row}
+        hasManualOrder={(orderSlots?.[looseSlotKey(workspaceId)]?.length ?? 0) > 0}
+        onClearOrder={onClearLooseOrder}
+        dnd={rowDnd}
+      />
       <ExpandableBody open={row.expanded}>
         <div className={styles.workspaceBody}>
           {/* 子工作区排在会话分组之前，与分组内部同一顺序，文件夹在前 */}
@@ -145,6 +185,10 @@ export function WorkspaceSection({
                 onCreateSession={() =>
                   groupActions.onCreateSession({ id: section.id, label: section.label })
                 }
+                hasManualOrder={
+                  (orderSlots?.[groupSlotKey(workspaceId, section.id)]?.length ?? 0) > 0
+                }
+                onClearOrder={() => groupActions.onClearOrder({ id: section.id })}
                 orderDragging={orderDragging}
                 renderChildWorkspace={renderChildWorkspace}
               >

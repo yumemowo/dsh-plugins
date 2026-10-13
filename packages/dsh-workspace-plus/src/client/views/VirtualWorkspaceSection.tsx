@@ -41,6 +41,14 @@ export interface VirtualWorkspaceSectionProps {
    * 缺省表示这一片不参与分组排序，分组头因此不可拖起
    */
   orderDragging?: OrderDragging | undefined
+  /**
+   * 组体那一格的区域属性
+   *
+   * 组体是工作区移入本分组的整块落点，缺省表示这一片不接那类拖拽
+   * 与分组头那一格同档不同格，拖到头与拖到组体空白都读作移入，但一个计划里两格都要在
+   * 分组头自己带区域键，命中层停在指针下第一个带键的元素上，那一格不在计划里时拖到头上就到此为止
+   */
+  bodyZone?: Record<string, string> | undefined
   /** 已渲染好的组内工作区区块 */
   children: ReactNode
 }
@@ -52,6 +60,7 @@ export function VirtualWorkspaceSection({
   onRename,
   onDelete,
   orderDragging,
+  bodyZone,
   children,
 }: VirtualWorkspaceSectionProps): ReactElement {
   const { labels } = useLocale()
@@ -144,7 +153,7 @@ export function VirtualWorkspaceSection({
       {/* 空分组照样有内容要露：占位文案落在撑开体里，因此「建完分组还没移入
           工作区」时用户看得到它，而不是一个点下去什么都没发生的分组头 */}
       <ExpandableBody open={expanded}>
-        <div className={styles.virtualWorkspaceBody}>
+        <div className={styles.virtualWorkspaceBody} {...bodyZone}>
           {section.workspaceIds.length <= 0 ? (
             <div className={styles.empty} data-wg-stagger="">
               {labels.virtualWorkspaceEmpty}

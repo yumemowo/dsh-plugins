@@ -164,6 +164,11 @@ export const REMOTE_CONTRIBUTION = {
       { name: 'workspaceId', codec: str('WorkspaceId') },
       { name: 'groupId', codec: codec('NullableGroupId', () => z.string().nullable()) },
     ]),
+    descriptor('moveWorkspaceBefore', [
+      { name: 'groupId', codec: str('VirtualWorkspaceId') },
+      { name: 'workspaceId', codec: str('WorkspaceId') },
+      { name: 'beforeWorkspaceId', acceptsUndefined: true, codec: optionalId('OptionalWorkspaceId') },
+    ]),
     descriptor('nestWorkspaces', [
       { name: 'workspaceIds', codec: strList('WorkspaceIds') },
       { name: 'parentWorkspaceId', codec: str('WorkspaceId') },
