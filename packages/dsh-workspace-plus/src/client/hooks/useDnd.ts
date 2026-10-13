@@ -41,6 +41,14 @@ const DRAGGING_ATTRIBUTE = 'data-wg-dragging'
  */
 let currentPlan: DragPlan | null = null
 
+/**
+ * 一份什么都不接的计划
+ *
+ * 计划构造器在拖起当刻可能已经被摘掉（那一行在拖拽期间卸载），那时没有来源可交
+ * 交空表让命中层一路查不到，比抛错或延续上一次的落点都更接近事实
+ */
+const EMPTY_PLAN: DragPlan = { source: { kind: 'session', id: '' }, targets: new Map() }
+
 /** 自内向外取一棵祖先链，含元素自己 */
 function chainOf(element: Element): Element[] {
   const chain: Element[] = []
@@ -52,8 +60,17 @@ function chainOf(element: Element): Element[] {
   return chain
 }
 
-/** 一个区域元素里带参照行标记的后代，按文档序 */
+/**
+ * 一个区域元素里参与前后半判定的参照行，按文档序
+ *
+ * 区域元素自己带参照行标记时只取它自己
+ * 分组头那种「一块即一个成员」的段据此成立：块头既是落点区域也是参照行
+ * 指针停在它上面时按这一块的上下半算前后，不会被它撑开体里的会话行抢走
+ * 未归组段那种「一格装多行」的段没有这一格，按后代里的行标记取
+ * @param element - 命中的区域元素
+ */
 function rowsIn(element: Element): Element[] {
+  if (element.getAttribute(ROW_ATTRIBUTE) !== null) return [element]
   return Array.from(element.querySelectorAll(`[${ROW_ATTRIBUTE}]`))
 }
 
@@ -351,6 +368,97 @@ export function useRowDragging(): {
   const start = useCallback(() => setDragging(true), [])
   const end = useCallback(() => setDragging(false), [])
   return { dragging, onDragStart: start, onDragEnd: end }
+}
+
+/**
+ * 一个排序段成员行的拖拽接线
+ *
+ * 三格分开是因为它们的生命周期不同：区域属性恒常存在，参照行属性与拖拽属性同生共死
+ */
+export interface OrderRowProps {
+  /** 摊在元素上，让这一行成为本段的落点区域 */
+  zone: Record<string, string>
+  /**
+   * 摊在元素上，让这一行可以被拖起
+   *
+   * 没有排序计划时整格为 null，元素因此不挂 `draggable`，拖不动
+   */
+  drag: {
+    draggable: true
+    onDragStart: (event: DragStartEvent) => void
+    onDragEnd: () => void
+  } | null
+  /**
+   * 摊在元素上，让这一行成为别的成员换算前后的参照行
+   *
+   * 与 `drag` 同生共死：能被参照的前提是能被选中，两者分开会让参照物指向一个拖不动的行
+   */
+  rowAttribute: Record<string, string>
+  /** 这一行是否正被拖，样式据此画淡 */
+  dragging: boolean
+}
+
+/**
+ * 排序段里一个成员行的完整接线
+ *
+ * 排序段的成员行既是落点区域又是参照行，这一处把区域属性、参照行属性与被拖时的画淡合成一格
+ * 与会话行手工拼的那套同一取舍，只是那边落点与参照物是两种元素，这边合成一个
+ *
+ * 区域属性恒回：没有排序计划时这一行仍要接会话归组那类落点
+ * @param zoneKey - 这一行的区域键，须与计划里的键一致
+ * @param memberId - 这一行的成员 id，同时是它的参照行 id
+ * @param buildPlan - 拖起这一行时构造计划，缺省表示这一行不可拖起
+ */
+export function useOrderRow(
+  zoneKey: string,
+  memberId: string,
+  buildPlan: (() => DragPlan) | undefined,
+): OrderRowProps {
+  const { dndZoneProps, dndRowProps } = useDnd()
+  const drag = useRowDragging()
+  const zone = useMemo(() => dndZoneProps(zoneKey), [dndZoneProps, zoneKey])
+
+  /**
+   * 计划构造器的最新一份
+   *
+   * 调用点每渲染都会新建一个闭包（它要绑当刻的成员顺序），放进依赖列会让下面那一格每渲染换引用
+   * 构造器只在 `dragstart` 那一刻被调用一次，因此读 ref 而不是读依赖
+   */
+  const planRef = useRef(buildPlan)
+  planRef.current = buildPlan
+  const canDrag = buildPlan !== undefined
+
+  const dnd = useMemo(() => {
+    if (!canDrag) return null
+    // 构造器每渲染都是新的一份闭包，`dndRowProps` 却只该在成员身份变化时重建
+    // 因此交给它一个读 ref 的稳定闭包，拖起当刻再取最新那份计划
+    return dndRowProps(memberId, () => planRef.current?.() ?? EMPTY_PLAN)
+  }, [dndRowProps, memberId, canDrag])
+
+  const onDragStart = drag.onDragStart
+  const onDragEnd = drag.onDragEnd
+  const dragProps = useMemo(
+    () =>
+      dnd === null
+        ? null
+        : {
+            draggable: dnd.draggable,
+            onDragStart: (event: DragStartEvent) => {
+              onDragStart()
+              dnd.onDragStart(event)
+            },
+            onDragEnd: () => {
+              onDragEnd()
+              dnd.onDragEnd()
+            },
+          },
+    [dnd, onDragStart, onDragEnd],
+  )
+  const rowAttribute = useMemo(
+    () => (dnd === null ? {} : { [ROW_ATTRIBUTE]: dnd.rowId }),
+    [dnd],
+  )
+  return { zone, drag: dragProps, rowAttribute, dragging: drag.dragging }
 }
 
 /** 被拖行的画淡标记名，行的样式按它选档 */

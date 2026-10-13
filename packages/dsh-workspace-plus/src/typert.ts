@@ -48,6 +48,19 @@ const nestedEnabledCodec = codec('NestedEnabled', () => z.boolean())
 /** 可空分组 id，null 表示「移出到未分组」 */
 const nullableGroupIdCodec = codec('NullableGroupId', () => z.string().nullable())
 
+/**
+ * 可缺省的分组 id
+ *
+ * 排序的锚点参数缺席表示「挪到末尾」，与 null 表示「移出分组」不是一回事，因此不能合用一个 codec
+ * 网关只在 `acceptsUndefined` 为真时容忍整格缺席，两处必须同时声明
+ */
+const optionalGroupIdCodec = codec('OptionalGroupId', () => z.union([z.undefined(), z.string()]))
+
+/** 可缺省的工作区分组 id，缺省表示「挪到末尾」 */
+const optionalVirtualWorkspaceIdCodec = codec('OptionalVirtualWorkspaceId', () =>
+  z.union([z.undefined(), z.string()]),
+)
+
 /** 根节点条目地址：工作区 / 工作区分组 / 「全部」三类共用一套带 `kind` 标签的取值（见 `rootEntry.ts`） */
 const entryAddressCodec = codec('RootEntryAddress', () => entryAddressSchema)
 
@@ -62,6 +75,9 @@ const SERVICE = 'workspacePlus'
  *
  * 本包参数全是 `source: 'json'`，这类参数的 `wire` 恒等于源码形参名，因此缺省回退到 `name`
  * 将来引入 lookup 参数时必须逐条显式写出 `wire`
+ *
+ * `acceptsUndefined` 单独成格而不是按 codec 推断：网关的缺参校验读的是这一格
+ * 排在末尾的可选形参在客户端被传成 undefined 时会整格不出现在线上，缺了这一格调用会被判为参数不全
  * @param method - 宿主服务上的方法名，同时是 endpoint 的方法段
  * @param parameters - 按宿主签名顺序排列的形参
  */
@@ -71,6 +87,8 @@ function direct(
     name: string
     /** 线上键名，缺省时回退 `name` */
     wire?: string | undefined
+    /** 该形参允许缺席，与 codec 收 undefined 是一对 */
+    acceptsUndefined?: boolean | undefined
     codec: unknown
   }[],
 ) {
@@ -84,6 +102,7 @@ function direct(
       name: parameter.name,
       wire: parameter.wire ?? parameter.name,
       source: 'json' as const,
+      ...(parameter.acceptsUndefined === true ? { acceptsUndefined: true } : {}),
       codec: parameter.codec,
     })),
     result: snapshotCodec,
@@ -114,7 +133,20 @@ export const TYPERT = {
       { name: 'sessionId', codec: sessionIdCodec },
       { name: 'groupId', codec: nullableGroupIdCodec },
     ]),
+    direct('moveGroupBefore', [
+      { name: 'workspaceId', codec: workspaceIdCodec },
+      { name: 'groupId', codec: groupIdCodec },
+      { name: 'beforeGroupId', acceptsUndefined: true, codec: optionalGroupIdCodec },
+    ]),
     direct('createVirtualWorkspace', [{ name: 'name', codec: nameCodec }]),
+    direct('moveVirtualWorkspaceBefore', [
+      { name: 'groupId', codec: virtualWorkspaceIdCodec },
+      {
+        name: 'beforeGroupId',
+        acceptsUndefined: true,
+        codec: optionalVirtualWorkspaceIdCodec,
+      },
+    ]),
     direct('renameVirtualWorkspace', [
       { name: 'groupId', codec: virtualWorkspaceIdCodec },
       { name: 'name', codec: nameCodec },
@@ -177,8 +209,23 @@ export const TYPERT = {
           },
           {
             kind: 'method',
+            name: 'moveGroupBefore',
+            signature:
+              // 可选形参写成 `?: string`：`?` 已经含了 undefined，补写另一半是把同一件事说两遍
+              'moveGroupBefore(workspaceId: string, groupId: string, beforeGroupId?: string):' +
+                ' Promise<WorkspaceGroupsSnapshot>',
+          },
+          {
+            kind: 'method',
             name: 'createVirtualWorkspace',
             signature: 'createVirtualWorkspace(name: string): Promise<WorkspaceGroupsSnapshot>',
+          },
+          {
+            kind: 'method',
+            name: 'moveVirtualWorkspaceBefore',
+            signature:
+              'moveVirtualWorkspaceBefore(groupId: string, beforeGroupId?: string):' +
+                ' Promise<WorkspaceGroupsSnapshot>',
           },
           {
             kind: 'method',

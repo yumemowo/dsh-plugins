@@ -157,6 +157,77 @@ describe('workspace groups service', () => {
     await expect(service.moveSession('w1', 's1', 'nope')).rejects.toThrow(/unknown group/)
   })
 
+  it('moves a group before another group', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const first = (await service.createGroup('w1', '第一')).byWorkspace['w1']?.[0]?.id ?? ''
+    const groups = (await service.createGroup('w1', '第二')).byWorkspace['w1'] ?? []
+    const second = groups[1]?.id ?? ''
+
+    const snapshot = await service.moveGroupBefore('w1', second, first)
+
+    expect(snapshot.byWorkspace['w1']?.map((group) => group.id)).toEqual([second, first])
+  })
+
+  it('appends a group to the end when no anchor is given', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const first = (await service.createGroup('w1', '第一')).byWorkspace['w1']?.[0]?.id ?? ''
+    const groups = (await service.createGroup('w1', '第二')).byWorkspace['w1'] ?? []
+    const second = groups[1]?.id ?? ''
+
+    const snapshot = await service.moveGroupBefore('w1', first, undefined)
+
+    expect(snapshot.byWorkspace['w1']?.map((group) => group.id)).toEqual([second, first])
+  })
+
+  it('leaves the order alone when the anchor belongs to another workspace', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const mine = (await service.createGroup('w1', '第一')).byWorkspace['w1']?.[0]?.id ?? ''
+    const foreign = (await service.createGroup('w2', '别处')).byWorkspace['w2']?.[0]?.id ?? ''
+
+    const snapshot = await service.moveGroupBefore('w1', mine, foreign)
+
+    // 锚点必须仍是同一工作区的成员，别的工作区的分组不是合法锚点
+    expect(snapshot.byWorkspace['w1']?.map((group) => group.id)).toEqual([mine])
+  })
+
+  it('leaves the order alone when the anchor is the group itself', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const groupId = (await service.createGroup('w1', '第一')).byWorkspace['w1']?.[0]?.id ?? ''
+
+    const snapshot = await service.moveGroupBefore('w1', groupId, groupId)
+
+    expect(snapshot.byWorkspace['w1']?.map((group) => group.id)).toEqual([groupId])
+  })
+
+  it('leaves the order alone when the group is unknown', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const groupId = (await service.createGroup('w1', '第一')).byWorkspace['w1']?.[0]?.id ?? ''
+
+    // 与 moveSession 不同，排序的资格复核不过时按无操作返回而不是抛错
+    const snapshot = await service.moveGroupBefore('w1', 'nope', groupId)
+
+    expect(snapshot.byWorkspace['w1']?.map((group) => group.id)).toEqual([groupId])
+  })
+
+  it('writes nothing when a group is dropped on its own neighbour', async () => {
+    const { ctx, records } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const first = (await service.createGroup('w1', '第一')).byWorkspace['w1']?.[0]?.id ?? ''
+    const groups = (await service.createGroup('w1', '第二')).byWorkspace['w1'] ?? []
+    const second = groups[1]?.id ?? ''
+    const before = JSON.stringify(records.get('w1'))
+
+    // 拖到相邻位是一次相邻空操作：顺序没变，盘上不该留下一次改动
+    await service.moveGroupBefore('w1', first, second)
+
+    expect(JSON.stringify(records.get('w1'))).toBe(before)
+  })
+
   it('renames a group in place', async () => {
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
@@ -287,6 +358,53 @@ describe('root-level workspace groups', () => {
     const service = await createWorkspaceGroupsService(ctx)
 
     await expect(service.moveWorkspace('w1', 'nope')).rejects.toThrow(/unknown workspace group/)
+  })
+
+  it('moves a workspace group before another workspace group', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const first = (await service.createVirtualWorkspace('第一')).workspaceGroups[0]?.id ?? ''
+    const groups = (await service.createVirtualWorkspace('第二')).workspaceGroups
+    const second = groups[groups.length - 1]?.id ?? ''
+
+    const snapshot = await service.moveVirtualWorkspaceBefore(second, first)
+
+    expect(snapshot.workspaceGroups.map((group) => group.id)).toEqual([second, first])
+  })
+
+  it('appends a workspace group to the end when no anchor is given', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const first = (await service.createVirtualWorkspace('第一')).workspaceGroups[0]?.id ?? ''
+    const groups = (await service.createVirtualWorkspace('第二')).workspaceGroups
+    const second = groups[groups.length - 1]?.id ?? ''
+
+    const snapshot = await service.moveVirtualWorkspaceBefore(first, undefined)
+
+    expect(snapshot.workspaceGroups.map((group) => group.id)).toEqual([second, first])
+  })
+
+  it('leaves the order alone when a workspace group anchor is unknown', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const groupId = (await service.createVirtualWorkspace('第一')).workspaceGroups[0]?.id ?? ''
+
+    const snapshot = await service.moveVirtualWorkspaceBefore(groupId, 'nope')
+
+    expect(snapshot.workspaceGroups.map((group) => group.id)).toEqual([groupId])
+  })
+
+  it('writes nothing when a workspace group is dropped on its own neighbour', async () => {
+    const { ctx, readStored } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const first = (await service.createVirtualWorkspace('第一')).workspaceGroups[0]?.id ?? ''
+    const groups = (await service.createVirtualWorkspace('第二')).workspaceGroups
+    const second = groups[groups.length - 1]?.id ?? ''
+    const before = JSON.stringify(readStored())
+
+    await service.moveVirtualWorkspaceBefore(first, second)
+
+    expect(JSON.stringify(readStored())).toBe(before)
   })
 
   it('renames a workspace group in place', async () => {

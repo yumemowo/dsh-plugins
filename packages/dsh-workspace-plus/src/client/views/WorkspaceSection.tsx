@@ -17,6 +17,7 @@ import { useExpansion } from '../hooks/useExpansion.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useDnd } from '../hooks/useDnd.ts'
 import { looseKey } from '../data/dnd.ts'
+import type { OrderDragging } from '../data/dnd.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
 import styles from './components/rows.module.css'
 
@@ -49,6 +50,12 @@ export interface WorkspaceSectionProps {
   /** 待揭示的会话 id，转交给两段会话列表 */
   revealSessionId: string | undefined
   groupActions: WorkspaceGroupActions
+  /**
+   * 组内会话分组的排序接线
+   *
+   * 缺省表示这一片不参与分组排序，分组头因此只接会话归组的落点
+   */
+  orderDragging?: OrderDragging | undefined
   /** 把一个会话行渲染成元素，渲染方式由区域组件决定（是否带归组菜单） */
   renderSession: (row: SessionRow) => ReactNode
   /** 把一个子工作区渲染成一个完整的工作区块，深度由区域组件自己算 */
@@ -65,6 +72,7 @@ export function WorkspaceSection({
   now,
   revealSessionId,
   groupActions,
+  orderDragging,
   renderSession,
   renderChildWorkspace,
 }: WorkspaceSectionProps): ReactElement {
@@ -126,6 +134,7 @@ export function WorkspaceSection({
                 onCreateSession={() =>
                   groupActions.onCreateSession({ id: section.id, label: section.label })
                 }
+                orderDragging={orderDragging}
                 renderChildWorkspace={renderChildWorkspace}
               >
                 <SessionList

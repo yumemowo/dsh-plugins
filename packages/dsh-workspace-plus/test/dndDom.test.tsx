@@ -115,8 +115,9 @@ const SNAPSHOT = snapshot({
 /**
  * 区域 props
  * @param moves - 收到的 `moveSession` 调用，逐条记下三个实参
+ * @param orders - 收到的分组排序调用，逐条记下实参，缺省表示这一处不关心排序
  */
-function props(moves: string[][]): WorkspaceGroupsProps {
+function props(moves: string[][], orders: string[][] = []): WorkspaceGroupsProps {
   const state = workspaceState()
   const sessions = sessionState()
   return {
@@ -137,6 +138,19 @@ function props(moves: string[][]): WorkspaceGroupsProps {
     deleteGroup: async () => SNAPSHOT,
     moveSession: async (workspaceId: string, sessionId: string, groupId: string) => {
       moves.push([workspaceId, sessionId, groupId])
+      return SNAPSHOT
+    },
+    moveGroupBefore: async (
+      workspaceId: string,
+      groupId: string,
+      beforeGroupId: string | undefined,
+    ) => {
+      // 缺席的锚点在数组里补成空串：`toEqual` 比不出数组元素的「缺席」
+      orders.push([workspaceId, groupId, beforeGroupId ?? ''])
+      return SNAPSHOT
+    },
+    moveVirtualWorkspaceBefore: async (groupId: string, beforeGroupId: string | undefined) => {
+      orders.push(['', groupId, beforeGroupId ?? ''])
       return SNAPSHOT
     },
     createVirtualWorkspace: async () => SNAPSHOT,
@@ -179,19 +193,21 @@ async function mount(): Promise<{
   container: HTMLElement
   root: ReturnType<typeof createRoot>
   moves: string[][]
+  orders: string[][]
 }> {
   const moves: string[][] = []
+  const orders: string[][] = []
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   await act(async () => {
-    root.render(React.createElement(WorkspaceGroupsRegion, props(moves)))
+    root.render(React.createElement(WorkspaceGroupsRegion, props(moves, orders)))
   })
   await act(async () => {
     await Promise.resolve()
     await Promise.resolve()
   })
-  return { container, root, moves }
+  return { container, root, moves, orders }
 }
 
 /**

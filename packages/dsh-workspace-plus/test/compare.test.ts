@@ -22,6 +22,8 @@ function actions(): RegionActions {
     renameGroup: async () => snapshot(),
     deleteGroup: async () => snapshot(),
     moveSession: async () => snapshot(),
+    moveGroupBefore: async () => snapshot(),
+    moveVirtualWorkspaceBefore: async () => snapshot(),
     createVirtualWorkspace: async () => snapshot(),
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),

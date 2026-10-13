@@ -151,8 +151,28 @@ export interface RegionActions {
     sessionId: string,
     groupId: GroupChoice,
   ) => Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把一个会话分组挪到同工作区的另一个分组之前
+   *
+   * `beforeGroupId` 为 undefined 表示挪到末尾
+   * 锚点资格由宿主复核，锚点已不是同层成员时按无操作返回整份快照
+   */
+  moveGroupBefore: (
+    workspaceId: string,
+    groupId: string,
+    beforeGroupId: string | undefined,
+  ) => Promise<WorkspaceGroupsSnapshot>
   /** 在根节点新建工作区分组，返回替换用的完整快照 */
   createVirtualWorkspace: (name: string) => Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把一个工作区分组挪到根节点的另一个分组之前
+   *
+   * `beforeGroupId` 为 undefined 表示挪到末尾，资格复核同 {@link RegionActions.moveGroupBefore}
+   */
+  moveVirtualWorkspaceBefore: (
+    groupId: string,
+    beforeGroupId: string | undefined,
+  ) => Promise<WorkspaceGroupsSnapshot>
   /** 重命名工作区分组，返回替换用的完整快照 */
   renameVirtualWorkspace: (groupId: string, name: string) => Promise<WorkspaceGroupsSnapshot>
   /** 删除工作区分组，组内工作区回到未归组，返回替换用的完整快照 */

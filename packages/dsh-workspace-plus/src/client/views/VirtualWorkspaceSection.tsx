@@ -22,6 +22,9 @@ import { RowActions } from './RowActions.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { useLocale } from '../hooks/useLocale.ts'
+import { useOrderRow } from '../hooks/useDnd.ts'
+import { virtualWorkspaceHeadKey } from '../data/dnd.ts'
+import type { OrderDragging } from '../data/dnd.ts'
 import type { VirtualWorkspaceSection as VirtualWorkspaceSectionData } from '../data/types.ts'
 import styles from './components/rows.module.css'
 import clsx from 'clsx'
@@ -32,6 +35,12 @@ export interface VirtualWorkspaceSectionProps {
   onToggle: () => void
   onRename: () => void
   onDelete: () => void
+  /**
+   * 根节点工作区分组的排序接线
+   *
+   * 缺省表示这一片不参与分组排序，分组头因此不可拖起
+   */
+  orderDragging?: OrderDragging | undefined
   /** 已渲染好的组内工作区区块 */
   children: ReactNode
 }
@@ -42,10 +51,24 @@ export function VirtualWorkspaceSection({
   onToggle,
   onRename,
   onDelete,
+  orderDragging,
   children,
 }: VirtualWorkspaceSectionProps): ReactElement {
   const { labels } = useLocale()
   const [menuOpen, setMenuOpen] = useState(false)
+
+  /**
+   * 分组头的拖拽接线
+   *
+   * 根节点那一层的排序落点全在分组头上，未归组的工作区不参与，因此这一层不需要另挂区域
+   * 这个 hook 无条件调用，没有排序接线时它只交回区域属性
+   */
+  const order = useOrderRow(
+    virtualWorkspaceHeadKey(section.id),
+    section.id,
+    // 每次渲染新建的闭包，取最新那份计划这件事由 hook 内部按引用兜住
+    orderDragging === undefined ? undefined : () => orderDragging.buildDragPlan(section.id),
+  )
 
   /**
    * 菜单选中项的分派
@@ -73,7 +96,15 @@ export function VirtualWorkspaceSection({
   return (
     <div className={styles.virtualWorkspace}>
       <div
-        className={clsx(styles.groupHead, styles.virtualWorkspaceHead)}
+        className={clsx(
+          styles.groupHead,
+          styles.virtualWorkspaceHead,
+          order.dragging && styles.rowDragging,
+        )}
+        {...order.zone}
+        {...order.rowAttribute}
+        {...order.drag}
+        data-wg-dragging={order.dragging ? '' : undefined}
         role="button"
         tabIndex={0}
         aria-expanded={expanded}

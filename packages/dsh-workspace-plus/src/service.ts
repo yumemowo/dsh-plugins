@@ -25,12 +25,40 @@ export interface WorkspaceGroupsService {
   deleteGroup(workspaceId: string, groupId: string): Promise<WorkspaceGroupsSnapshot>
   /** 把会话移入分组，`groupId` 为 null 表示移出到未分组 */
   moveSession(workspaceId: string, sessionId: string, groupId: string | null): Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把一个会话分组挪到同工作区的另一个分组之前
+   *
+   * 分组数组兼顺序，数组序即界面序
+   * `beforeGroupId` 缺省表示挪到末尾
+   *
+   * 锚点资格在这里复核：锚点必须仍是该工作区的其他分组，拖拽期间快照被别处改过时按无操作返回，不抛错
+   * 顺序没有变化的也按无操作返回，不写盘
+   * @param workspaceId - 分组在这个工作区里排序
+   * @param groupId - 被挪动的分组
+   * @param beforeGroupId - 挪到哪个分组之前，缺省表示挪到末尾
+   */
+  moveGroupBefore(
+    workspaceId: string,
+    groupId: string,
+    beforeGroupId?: string | undefined,
+  ): Promise<WorkspaceGroupsSnapshot>
   /** 在根节点新建一个工作区分组 */
   createVirtualWorkspace(name: string): Promise<WorkspaceGroupsSnapshot>
   /** 重命名工作区分组 */
   renameVirtualWorkspace(groupId: string, name: string): Promise<WorkspaceGroupsSnapshot>
   /** 删除工作区分组，组内工作区回到未分组，工作区本身不受影响 */
   deleteVirtualWorkspace(groupId: string): Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把一个工作区分组挪到根节点的另一个工作区分组之前
+   *
+   * 资格复核与无操作取舍同 {@link WorkspaceGroupsService.moveGroupBefore}
+   * @param groupId - 被挪动的分组
+   * @param beforeGroupId - 挪到哪个分组之前，缺省表示挪到末尾
+   */
+  moveVirtualWorkspaceBefore(
+    groupId: string,
+    beforeGroupId?: string | undefined,
+  ): Promise<WorkspaceGroupsSnapshot>
   /**
    * 把工作区移入分组，`groupId` 为 null 表示移出到未分组
    *
@@ -86,6 +114,34 @@ function newGroupId(): string {
 /** 生成一个工作区分组 id，与会话分组的 id 前缀区分开，便于排查元数据 */
 function newVirtualWorkspaceId(): string {
   return `wg${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+}
+
+/**
+ * 把一个带 id 的成员挪到另一个成员之前
+ *
+ * 锚点缺省表示挪到末尾，与会话分组的落点换算同一个读法
+ * 返回 undefined 的两种情形都在这里判掉：来源不在这一份里、锚点不是这一份的其他成员
+ * 即「锚点必须仍是同层成员、不是来源自己」，拖拽期间快照被别处改过时按无操作返回
+ *
+ * 顺序没有变化的也返回 undefined，调用方据此跳过写入
+ * @param items - 当前顺序
+ * @param movingId - 被挪动的成员
+ * @param beforeId - 挪到哪个成员之前，缺省表示挪到末尾
+ * @returns 新顺序，无需变更时为 undefined
+ */
+function reorderById<T extends { id: string }>(
+  items: readonly T[],
+  movingId: string,
+  beforeId: string | undefined,
+): T[] | undefined {
+  const moving = items.find((item) => item.id === movingId)
+  if (moving === undefined) return undefined
+  const rest = items.filter((item) => item.id !== movingId)
+  const at = beforeId === undefined ? rest.length : rest.findIndex((item) => item.id === beforeId)
+  if (at < 0) return undefined
+  const next = [...rest.slice(0, at), moving, ...rest.slice(at)]
+  if (next.every((item, index) => item.id === items[index]?.id)) return undefined
+  return next
 }
 
 /**
@@ -305,10 +361,21 @@ export async function createWorkspaceGroupsService(
       return save(workspaceId, groups)
     },
 
+    async moveGroupBefore(workspaceId, groupId, beforeGroupId) {
+      const order = reorderById(groupsOf(workspaceId), groupId, beforeGroupId)
+      // 无变化时连写都不发：拖到自己的相邻位不该在盘上留下一次改动
+      return order === undefined ? snapshot() : save(workspaceId, order)
+    },
+
     async createVirtualWorkspace(name) {
       const groups = treeGroups()
       groups.push({ id: newVirtualWorkspaceId(), name, workspaceIds: [] })
       return saveTree(groups)
+    },
+
+    async moveVirtualWorkspaceBefore(groupId, beforeGroupId) {
+      const order = reorderById(treeGroups(), groupId, beforeGroupId)
+      return order === undefined ? snapshot() : saveTree(order)
     },
 
     async renameVirtualWorkspace(groupId, name) {

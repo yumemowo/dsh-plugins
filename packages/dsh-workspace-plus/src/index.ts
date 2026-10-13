@@ -52,7 +52,11 @@ export function apply(ctx: Context, config: WorkspacePlusConfig = Config({})): v
     deleteGroup: async (workspaceId, groupId) => (await service).deleteGroup(workspaceId, groupId),
     moveSession: async (workspaceId, sessionId, groupId) =>
       (await service).moveSession(workspaceId, sessionId, groupId),
+    moveGroupBefore: async (workspaceId, groupId, beforeGroupId) =>
+      (await service).moveGroupBefore(workspaceId, groupId, beforeGroupId),
     createVirtualWorkspace: async (groupName) => (await service).createVirtualWorkspace(groupName),
+    moveVirtualWorkspaceBefore: async (groupId, beforeGroupId) =>
+      (await service).moveVirtualWorkspaceBefore(groupId, beforeGroupId),
     renameVirtualWorkspace: async (groupId, groupName) =>
       (await service).renameVirtualWorkspace(groupId, groupName),
     deleteVirtualWorkspace: async (groupId) => (await service).deleteVirtualWorkspace(groupId),

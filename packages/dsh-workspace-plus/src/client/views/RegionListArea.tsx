@@ -13,16 +13,27 @@
  */
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
-import { useCallback, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import type { ReactElement } from 'react'
 import type { OfficialSessionActions } from '../actions.ts'
 import { buildLayout, containsSession, groupIdOfSession, virtualWorkspaceIdOf } from '../data/layout.ts'
-import { looseKey, sessionGroupKey } from '../data/dnd.ts'
-import type { DragPlan, DragPlanTarget } from '../data/dnd.ts'
+import {
+  groupHeadKey,
+  looseKey,
+  orderDragPlan,
+  sessionGroupKey,
+  virtualWorkspaceHeadKey,
+} from '../data/dnd.ts'
+import type { DragPlan, DragPlanTarget, OrderDragging } from '../data/dnd.ts'
 import type { Nesting } from '../data/nest.ts'
 import { relativeTimeOfRow, statusViewOfRow } from '../data/rows.ts'
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
-import type { RootLayout, GroupSection, SessionRow } from '../data/types.ts'
+import type {
+  RootLayout,
+  GroupSection,
+  SessionRow,
+  VirtualWorkspaceSection as VirtualWorkspaceSectionData,
+} from '../data/types.ts'
 import type { RegionLabels } from '../labels.ts'
 import { UNGROUPED_KEY } from '../store/viewMode.ts'
 import { useExpansion } from '../hooks/useExpansion.ts'
@@ -106,12 +117,20 @@ export interface RegionListEdits {
   onDeleteVirtualWorkspace: (groupId: string, label: string) => void
 }
 
-/** 列表侧消费的命令，四个都随行下发，因此是稳定引用 */
+/** 列表侧消费的命令，六个都随行下发，因此是稳定引用 */
 export interface RegionListCommands {
   selectSessionGroup: (workspaceId: string, sessionId: string, id: string) => void
   selectVirtualWorkspace: (workspaceId: string, id: string) => void
   selectParentGroup: (workspaceId: string, id: string) => void
   createSessionIn: (workspaceId: string, groupId: string) => void
+  /**
+   * 把一个会话分组挪到同工作区的另一个分组之前
+   *
+   * `beforeGroupId` 为 undefined 表示挪到末尾
+   */
+  moveGroupBefore: (workspaceId: string, groupId: string, beforeGroupId: string | undefined) => void
+  /** 把一个工作区分组挪到根节点的另一个分组之前，同上 */
+  moveVirtualWorkspaceBefore: (groupId: string, beforeGroupId: string | undefined) => void
 }
 
 /**
@@ -160,6 +179,35 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
   const { session, currentSessionId } = scope
   const rowLabels = sessionRowLabels(labels)
 
+  /**
+   * 根节点工作区分组段的最新一份，供排序计划的构造器读取
+   *
+   * 与会话分组那一处同一取舍：分组段每次渲染都是新数组，放进依赖列会让构造器每渲染换一次引用
+   * 构造器在调用当刻读它，依赖列只留稳定的那一格
+   */
+  const dragOrderSections = useRef<readonly VirtualWorkspaceSectionData[]>([])
+
+  /** 拖起一个工作区分组头时的计划，同取舍 */
+  const buildVirtualWorkspaceDragPlan = useCallback(
+    (groupId: string) =>
+      orderDragPlan({
+        source: { kind: 'virtualWorkspace', groupId },
+        keyOf: virtualWorkspaceHeadKey,
+        // 根节点那一层还平铺着未归组的工作区，它们不参与排序，因此这一段只收分组自己的顺序
+        order: dragOrderSections.current.map((section) => section.id),
+        movingId: groupId,
+        commit: (beforeGroupId) => scope.commands.moveVirtualWorkspaceBefore(groupId, beforeGroupId),
+      }),
+    [scope.commands.moveVirtualWorkspaceBefore],
+  )
+
+  const virtualWorkspaceDragging: OrderDragging = useMemo(
+    () => ({ buildDragPlan: buildVirtualWorkspaceDragPlan }),
+    [buildVirtualWorkspaceDragPlan],
+  )
+
+  dragOrderSections.current = scope.layout.listLayout.groups
+
   if (props.searching) {
     return (
       <SearchResults
@@ -199,6 +247,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
           onToggle={() => expansion.toggleVirtualWorkspace(section.id)}
           onRename={() => scope.edits.onRenameVirtualWorkspace(section.id, section.label)}
           onDelete={() => scope.edits.onDeleteVirtualWorkspace(section.id, section.label)}
+          orderDragging={virtualWorkspaceDragging}
         >
           {section.roots.map((workspaceId) => (
             <WorkspaceNode key={workspaceId} workspaceId={workspaceId} scope={scope} />
@@ -299,6 +348,31 @@ function WorkspaceNode({
     [workspaceId, commands.selectSessionGroup],
   )
 
+  /**
+   * 拖起一个会话分组头时的计划
+   *
+   * 同取舍：分组顺序每次渲染都是新数组，构造器在调用当刻读那份 ref，依赖列只留稳定的两格
+   * 换位写的是这个工作区分组的顺序，因此与会话归组落在两个不同的宿主方法上
+   */
+  const buildGroupDragPlan = useCallback(
+    (groupId: string) =>
+      orderDragPlan({
+        source: { kind: 'sessionGroup', workspaceId, groupId },
+        keyOf: (memberId) => groupHeadKey(workspaceId, memberId),
+        // 只收分组自己的顺序，会话行不在这段里，因此拖到组内会话上也读不出落点
+        order: dragSections.current.map((section) => section.id),
+        movingId: groupId,
+        commit: (beforeGroupId) => commands.moveGroupBefore(workspaceId, groupId, beforeGroupId),
+      }),
+    [workspaceId, commands.moveGroupBefore],
+  )
+
+  // 整袋接线按引用下发：构造器已经稳定，包一层新对象会让「稳定」在这一层白做
+  const groupDragging: OrderDragging = useMemo(
+    () => ({ buildDragPlan: buildGroupDragPlan }),
+    [buildGroupDragPlan],
+  )
+
   const workspace = layout.workspaceById.get(workspaceId)
   // 布局只包含快照里存在的工作区，因此这里不会落空，防御一下避免类型断言
   if (workspace === undefined) return null
@@ -311,7 +385,6 @@ function WorkspaceNode({
     layout.nesting.looseChildIdsOf(workspaceId),
   )
   dragSections.current = built.groups
-
   /**
    * 该工作区行上那份「移动工作区分组」菜单的选项集
    *
@@ -407,6 +480,7 @@ function WorkspaceNode({
         onDelete: (section) => edits.onDeleteGroup(workspaceId, section.id, section.label),
         onCreateSession: (section) => commands.createSessionIn(workspaceId, section.id),
       }}
+      orderDragging={groupDragging}
       renderChildWorkspace={(childId) => (
         <WorkspaceNode key={childId} workspaceId={childId} scope={scope} />
       )}
@@ -468,10 +542,14 @@ function sessionDragPlan(input: {
 
   for (const section of sections) {
     if (section.id === currentGroupId) continue
-    targets.set(sessionGroupKey(workspaceId, section.id), {
+    const target: DragPlanTarget = {
       mode: 'container',
       commit: () => onSelectGroup(workspaceId, sessionId, `group:${section.id}`),
-    })
+    }
+    targets.set(sessionGroupKey(workspaceId, section.id), target)
+    // 分组头自己另占一格（排序要用它作参照行），因此这里也得收一格
+    // 否则拖到头上会命中那一格而它不在计划里，界面读成「这一段不接」，比拖到块内其它地方还不如
+    targets.set(groupHeadKey(workspaceId, section.id), target)
   }
 
   // 已在未归组段里的行不再收这一格：拖回自己所在的那一段是一次原地投放

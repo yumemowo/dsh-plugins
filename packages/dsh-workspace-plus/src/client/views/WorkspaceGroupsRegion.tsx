@@ -855,6 +855,12 @@ interface RegionGroupActions {
   commitWorkspaceDelete: () => void
   createSessionIn: (workspaceId: string, groupId: string) => void
   selectSessionGroup: (workspaceId: string, sessionId: string, id: string) => void
+  /**
+   * 把一个会话分组挪到同工作区的另一个分组之前
+   *
+   * `beforeGroupId` 为 undefined 表示挪到末尾
+   */
+  moveGroupBefore: (workspaceId: string, groupId: string, beforeGroupId: string | undefined) => void
 }
 
 /**
@@ -870,9 +876,9 @@ function useRegionGroupActions(
   expansion: ExpansionCommands,
   apply: (action: Promise<WorkspaceGroupsSnapshot>) => void,
 ): RegionGroupActions {
-  const { createGroup, renameGroup, deleteGroup, moveSession, moveWorkspace, createVirtualWorkspace,
-    renameVirtualWorkspace, deleteVirtualWorkspace, forgetWorkspace, renameWorkspace,
-    deleteWorkspace, focusEntry, startSession } = props
+  const { createGroup, renameGroup, deleteGroup, moveSession, moveGroupBefore, moveWorkspace,
+    createVirtualWorkspace, renameVirtualWorkspace, deleteVirtualWorkspace, forgetWorkspace,
+    renameWorkspace, deleteWorkspace, focusEntry, startSession } = props
 
   /** 提交建组或改名，空名与取消都不写 */
   const commitGroupNameDraft = (): void => {
@@ -1022,6 +1028,21 @@ function useRegionGroupActions(
     [apply, moveSession],
   )
 
+  /**
+   * 分组排序的落点提交
+   *
+   * `beforeGroupId` 由落点换算给出，`undefined` 表示挪到末尾
+   *
+   * 是 `useCallback` 而不是每次渲染新建：它会随排序接线传到每一个分组头
+   * 而行级与头级的 memo 都按引用比对，每渲染新建一个会让整片分组的接线失效
+   */
+  const moveGroupOrdered = useCallback(
+    (workspaceId: string, groupId: string, beforeGroupId: string | undefined): void => {
+      apply(moveGroupBefore(workspaceId, groupId, beforeGroupId))
+    },
+    [apply, moveGroupBefore],
+  )
+
   return {
     commitGroupNameDraft,
     commitGroupDelete,
@@ -1031,6 +1052,7 @@ function useRegionGroupActions(
     commitWorkspaceDelete,
     createSessionIn,
     selectSessionGroup,
+    moveGroupBefore: moveGroupOrdered,
   }
 }
 
@@ -1043,6 +1065,12 @@ interface RegionNestActions {
   selectParentGroup: (workspaceId: string, id: string) => void
   requestNestedToggle: () => void
   commitNestedOff: () => void
+  /**
+   * 把一个工作区分组挪到根节点的另一个分组之前
+   *
+   * `beforeGroupId` 为 undefined 表示挪到末尾
+   */
+  moveVirtualWorkspaceBefore: (groupId: string, beforeGroupId: string | undefined) => void
 }
 
 /**
@@ -1058,7 +1086,8 @@ function useRegionNestActions(
   ui: RegionUiState,
   apply: (action: Promise<WorkspaceGroupsSnapshot>) => void,
 ): RegionNestActions {
-  const { moveWorkspace, nestWorkspaces, unnestWorkspaces, setNested } = props
+  const { moveWorkspace, moveVirtualWorkspaceBefore, nestWorkspaces, unnestWorkspaces, setNested } =
+    props
 
   /**
    * header 入口：新建一个工作区分组
@@ -1175,12 +1204,25 @@ function useRegionNestActions(
     apply(setNested(false))
   }
 
+  /**
+   * 根节点分组排序的落点提交
+   *
+   * 同 {@link RegionGroupActions.moveGroupBefore} 的取舍，这一份作用于根节点那一层
+   */
+  const moveVirtualWorkspaceOrdered = useCallback(
+    (groupId: string, beforeGroupId: string | undefined): void => {
+      apply(moveVirtualWorkspaceBefore(groupId, beforeGroupId))
+    },
+    [apply, moveVirtualWorkspaceBefore],
+  )
+
   return {
     startVirtualWorkspaceCreate,
     selectVirtualWorkspace,
     selectParentGroup,
     requestNestedToggle,
     commitNestedOff,
+    moveVirtualWorkspaceBefore: moveVirtualWorkspaceOrdered,
   }
 }
 

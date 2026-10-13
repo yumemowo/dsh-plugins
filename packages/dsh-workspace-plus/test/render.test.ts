@@ -736,6 +736,8 @@ function props(
     startReturns?: string | undefined
     /** 记录 moveSession 的三元调用 */
     moves?: [string, string, string][]
+    /** 记录分组排序的三元调用，第一个实参为空串表示根节点那一层 */
+    orders?: [string, string, string][]
     /** 搜索结果的条数上限，缺省取官方契约值 20 */
     searchResultLimit?: number
     /** 分组元数据，缺省给一个空组 */
@@ -836,6 +838,18 @@ function props(
     deleteGroup: async () => snapshot(),
     moveSession: async (workspaceId: string, sessionId: string, groupId: string) => {
       options.moves?.push([workspaceId, sessionId, groupId])
+      return snapshot()
+    },
+    moveGroupBefore: async (
+      workspaceId: string,
+      groupId: string,
+      beforeGroupId: string | undefined,
+    ) => {
+      options.orders?.push([workspaceId, groupId, beforeGroupId ?? ''])
+      return snapshot()
+    },
+    moveVirtualWorkspaceBefore: async (groupId: string, beforeGroupId: string | undefined) => {
+      options.orders?.push(['', groupId, beforeGroupId ?? ''])
       return snapshot()
     },
     createVirtualWorkspace: async (name: string) => {

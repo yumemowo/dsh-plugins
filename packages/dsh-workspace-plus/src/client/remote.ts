@@ -81,10 +81,18 @@ const str = (name: string) => codec(name, () => z.string())
 const bool = (name: string) => codec(name, () => z.boolean())
 const strList = (name: string) => codec(name, () => z.array(z.string()))
 
+/**
+ * 可缺省的 id codec
+ *
+ * 排序的锚点形参缺席表示「挪到末尾」，客户端把它传成 undefined 时网关会让整格不上线
+ * 宿主那一侧因此同时声明了 `acceptsUndefined`，这里收得下 undefined 才能与它配对
+ */
+const optionalId = (name: string) => codec(name, () => z.union([z.undefined(), z.string()]))
+
 /** 构造一条 direct 调用描述，避免逐条重复 id/service/namespace */
 function descriptor(
   method: string,
-  parameters: { name: string; codec: unknown }[],
+  parameters: { name: string; acceptsUndefined?: boolean | undefined; codec: unknown }[],
 ): Record<string, unknown> {
   return {
     id: `${PACKAGE}#${SERVICE}/${method}`,
@@ -96,6 +104,7 @@ function descriptor(
       name: parameter.name,
       wire: parameter.name,
       source: 'json',
+      ...(parameter.acceptsUndefined === true ? { acceptsUndefined: true } : {}),
       codec: parameter.codec,
     })),
     result: snapshot,
@@ -124,7 +133,20 @@ export const REMOTE_CONTRIBUTION = {
       { name: 'sessionId', codec: str('SessionId') },
       { name: 'groupId', codec: codec('NullableGroupId', () => z.string().nullable()) },
     ]),
+    descriptor('moveGroupBefore', [
+      { name: 'workspaceId', codec: str('WorkspaceId') },
+      { name: 'groupId', codec: str('GroupId') },
+      { name: 'beforeGroupId', acceptsUndefined: true, codec: optionalId('OptionalGroupId') },
+    ]),
     descriptor('createVirtualWorkspace', [{ name: 'name', codec: str('GroupName') }]),
+    descriptor('moveVirtualWorkspaceBefore', [
+      { name: 'groupId', codec: str('VirtualWorkspaceId') },
+      {
+        name: 'beforeGroupId',
+        acceptsUndefined: true,
+        codec: optionalId('OptionalVirtualWorkspaceId'),
+      },
+    ]),
     descriptor('renameVirtualWorkspace', [
       { name: 'groupId', codec: str('VirtualWorkspaceId') },
       { name: 'name', codec: str('GroupName') },

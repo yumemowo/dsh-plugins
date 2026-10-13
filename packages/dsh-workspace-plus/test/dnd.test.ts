@@ -15,15 +15,20 @@ import {
   ROOT_KEY,
   ROW_ATTRIBUTE,
   ZONE_ATTRIBUTE,
+  beforeIdOf,
   containsPoint,
   findZone,
+  groupHeadKey,
   groupOfZoneKey,
   halfOf,
   looseKey,
   nearestRow,
+  orderDragPlan,
+  reorderTo,
   resolveHit,
   sessionGroupKey,
   targetOfZone,
+  virtualWorkspaceHeadKey,
   workspaceOfZoneKey,
 } from '../src/client/data/dnd.ts'
 import type { DragPlan, DragPlanTarget, DropAnchor } from '../src/client/data/dnd.ts'
@@ -351,6 +356,152 @@ describe('a plan that leaves the origin out', () => {
 
     expect(p.source).toEqual({ kind: 'session', id: 'session-1' })
     expect([...p.targets.keys()].some((key) => key.includes('session-1'))).toBe(false)
+  })
+})
+
+describe('turning a drop anchor into a new order', () => {
+  const ORDER = ['group-a', 'group-b', 'group-c']
+
+  it('moves a member before the row it was dropped above', () => {
+    expect(reorderTo(ORDER, 'group-c', { kind: 'before', rowId: 'group-a' })).toEqual([
+      'group-c',
+      'group-a',
+      'group-b',
+    ])
+  })
+
+  it('moves a member after the row it was dropped below', () => {
+    expect(reorderTo(ORDER, 'group-a', { kind: 'after', rowId: 'group-c' })).toEqual([
+      'group-b',
+      'group-c',
+      'group-a',
+    ])
+  })
+
+  it('appends the member when the drop reads as inside', () => {
+    // 区域里一行都没有时命中层给的是 inside，读作追加到段尾
+    expect(reorderTo(ORDER, 'group-a', { kind: 'inside' })).toEqual([
+      'group-b',
+      'group-c',
+      'group-a',
+    ])
+  })
+
+  it('reports no change when the member is dropped on the row just below it', () => {
+    // 落在下一位的上半：算出来仍是原位，这是一次相邻位空操作，不该写盘
+    expect(reorderTo(ORDER, 'group-a', { kind: 'before', rowId: 'group-b' })).toBeUndefined()
+  })
+
+  it('reports no change when the member is dropped on the row just above it', () => {
+    expect(reorderTo(ORDER, 'group-b', { kind: 'after', rowId: 'group-a' })).toBeUndefined()
+  })
+
+  it('reports no change when the member is dropped on itself', () => {
+    expect(reorderTo(ORDER, 'group-b', { kind: 'before', rowId: 'group-b' })).toBeUndefined()
+    expect(reorderTo(ORDER, 'group-b', { kind: 'after', rowId: 'group-b' })).toBeUndefined()
+  })
+
+  it('reports no change when the member is not part of the stretch', () => {
+    // 快照可能在拖拽期间被别处改过，来源已不在这一段里时按无操作读
+    expect(reorderTo(ORDER, 'group-z', { kind: 'before', rowId: 'group-a' })).toBeUndefined()
+  })
+
+  it('reports no change when the anchor is not part of the stretch', () => {
+    // 锚点资格的第二半：锚点必须仍是这一段的其他成员
+    expect(reorderTo(ORDER, 'group-a', { kind: 'before', rowId: 'group-z' })).toBeUndefined()
+  })
+
+  it('keeps a single-member stretch unchanged', () => {
+    expect(reorderTo(['group-a'], 'group-a', { kind: 'inside' })).toBeUndefined()
+  })
+
+  it('reads the next member as the anchor of the new order', () => {
+    // 新顺序里排在末尾的那个成员没有下一位，宿主把缺参数读作「挪到末尾」
+    expect(beforeIdOf(['group-c', 'group-a', 'group-b'], 'group-c')).toBe('group-a')
+    expect(beforeIdOf(['group-b', 'group-c', 'group-a'], 'group-a')).toBeUndefined()
+  })
+})
+
+describe('building an ordering drag plan', () => {
+  it('collects every other member of the stretch as a rows target', () => {
+    const p = orderDragPlan({
+      source: { kind: 'virtualWorkspace', groupId: 'wg-1' },
+      keyOf: virtualWorkspaceHeadKey,
+      order: ['wg-1', 'wg-2'],
+      movingId: 'wg-1',
+      commit: () => {},
+    })
+
+    expect([...p.targets.keys()]).toEqual([virtualWorkspaceHeadKey('wg-2')])
+    expect(p.targets.get(virtualWorkspaceHeadKey('wg-2'))?.mode).toBe('rows')
+  })
+
+  it('leaves the source member out of its own target table', () => {
+    // 原地投放是构造期缺席：拖回自己那一格时命中层查不到，既不标记也不提交
+    const p = orderDragPlan({
+      source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-a' },
+      keyOf: (memberId) => groupHeadKey('ws-1', memberId),
+      order: ['group-a', 'group-b'],
+      movingId: 'group-a',
+      commit: () => {},
+    })
+
+    expect(p.targets.has(groupHeadKey('ws-1', 'group-a'))).toBe(false)
+    expect(p.targets.has(groupHeadKey('ws-1', 'group-b'))).toBe(true)
+  })
+
+  it('commits the anchor of the converted order', () => {
+    const seen: (string | undefined)[] = []
+    const p = orderDragPlan({
+      source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-c' },
+      keyOf: (memberId) => groupHeadKey('ws-1', memberId),
+      order: ['group-a', 'group-b', 'group-c'],
+      movingId: 'group-c',
+      commit: (beforeId) => seen.push(beforeId),
+    })
+
+    p.targets.get(groupHeadKey('ws-1', 'group-a'))?.commit({ kind: 'before', rowId: 'group-a' })
+    expect(seen).toEqual(['group-a'])
+  })
+
+  it('skips the write when the converted order is unchanged', () => {
+    const seen: (string | undefined)[] = []
+    const p = orderDragPlan({
+      source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-a' },
+      keyOf: (memberId) => groupHeadKey('ws-1', memberId),
+      order: ['group-a', 'group-b'],
+      movingId: 'group-a',
+      commit: (beforeId) => seen.push(beforeId),
+    })
+
+    p.targets.get(groupHeadKey('ws-1', 'group-b'))?.commit({ kind: 'before', rowId: 'group-b' })
+    expect(seen).toEqual([])
+  })
+
+  it('commits no anchor when the member lands at the end of the stretch', () => {
+    const seen: (string | undefined)[] = []
+    const p = orderDragPlan({
+      source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-a' },
+      keyOf: (memberId) => groupHeadKey('ws-1', memberId),
+      order: ['group-a', 'group-b', 'group-c'],
+      movingId: 'group-a',
+      commit: (beforeId) => seen.push(beforeId),
+    })
+
+    p.targets.get(groupHeadKey('ws-1', 'group-c'))?.commit({ kind: 'after', rowId: 'group-c' })
+    expect(seen).toEqual([undefined])
+  })
+
+  it('keeps the plan target table empty for a stretch of one', () => {
+    const p = orderDragPlan({
+      source: { kind: 'virtualWorkspace', groupId: 'wg-1' },
+      keyOf: virtualWorkspaceHeadKey,
+      order: ['wg-1'],
+      movingId: 'wg-1',
+      commit: () => {},
+    })
+
+    expect(p.targets.size).toBe(0)
   })
 })
 

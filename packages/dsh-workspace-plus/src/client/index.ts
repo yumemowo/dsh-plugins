@@ -327,7 +327,9 @@ export function apply(ctx: Context): void {
         renameGroup: async () => EMPTY_SNAPSHOT,
         deleteGroup: async () => EMPTY_SNAPSHOT,
         moveSession: async () => EMPTY_SNAPSHOT,
+        moveGroupBefore: async () => EMPTY_SNAPSHOT,
         createVirtualWorkspace: async () => EMPTY_SNAPSHOT,
+        moveVirtualWorkspaceBefore: async () => EMPTY_SNAPSHOT,
         renameVirtualWorkspace: async () => EMPTY_SNAPSHOT,
         deleteVirtualWorkspace: async () => EMPTY_SNAPSHOT,
         moveWorkspace: async () => EMPTY_SNAPSHOT,
@@ -380,7 +382,12 @@ export function apply(ctx: Context): void {
       // 选择器用空串表示「不属于任何分组」，宿主接口用 null 表达同一含义
       moveSession: (workspaceId, sessionId, groupId) =>
         callSnapshot('moveSession', [workspaceId, sessionId, groupId === '' ? null : groupId]),
+      // 锚点传的是实参本身而不是空串的转换：缺席表示「挪到末尾」，与空串是同形但不同义的两种读法
+      moveGroupBefore: (workspaceId, groupId, beforeGroupId) =>
+        callSnapshot('moveGroupBefore', [workspaceId, groupId, beforeGroupId]),
       createVirtualWorkspace: (name) => callSnapshot('createVirtualWorkspace', [name]),
+      moveVirtualWorkspaceBefore: (groupId, beforeGroupId) =>
+        callSnapshot('moveVirtualWorkspaceBefore', [groupId, beforeGroupId]),
       renameVirtualWorkspace: (groupId, name) =>
         callSnapshot('renameVirtualWorkspace', [groupId, name]),
       deleteVirtualWorkspace: (groupId) => callSnapshot('deleteVirtualWorkspace', [groupId]),

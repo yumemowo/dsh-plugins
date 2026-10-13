@@ -77,6 +77,31 @@ export const PINNED_KEY = 'pinned'
 /** 根节点那一层的区域键，工作区分组与未归组工作区共用一格 */
 export const ROOT_KEY = 'root'
 
+/**
+ * 一个会话分组头的区域键
+ *
+ * 与 `sessionGroupKey` 那一格各管一件事：那一格罩住整块分组，接会话归组
+ * 这一格只罩分组头，作排序的参照行
+ *
+ * 两格不能合并。合成一格后命中层停在整块分组上，排序要按「块内最近的行」算前后半
+ * 而块内的行是会话行，换算时找不到对应的分组，落点标记会画在一件提交时必然作废的事情上
+ *
+ * 头这一格在两个计划里档位不同：会话计划里它是 `container`（拖到头上仍然是归组）
+ * 分组计划里它是 `rows`（拖到头上是插到它前后）。含义由计划决定，元素本身不区分
+ */
+export function groupHeadKey(workspaceId: string, groupId: string): string {
+  return `groupHead/${workspaceId}/${groupId}`
+}
+
+/**
+ * 一个工作区分组头的区域键
+ *
+ * 与 `groupHeadKey` 同形但不带工作区：工作区分组只在根节点那一层，没有工作区可限定
+ */
+export function virtualWorkspaceHeadKey(groupId: string): string {
+  return `virtualWorkspaceHead/${groupId}`
+}
+
 /** 一个区域键所属的工作区，不落在任何工作区里时为 undefined */
 export function workspaceOfZoneKey(key: string): string | undefined {
   const parts = key.split('/')
@@ -227,4 +252,104 @@ export function resolveHit(input: {
  */
 export function targetOfZone(plan: DragPlan, zoneKey: string): DragPlanTarget | undefined {
   return plan.targets.get(zoneKey)
+}
+
+// ── 落点到顺序的换算 ──
+
+/**
+ * 一段可排序行的计划构造器
+ *
+ * 由持有整段顺序的那一层合成一次，行组件只按自己的 id 取计划
+ * 与会话行的归组上下文同一取舍：行级 memo 按引用比对
+ * 每次渲染新建的构造器会让整片列表的 memo 失效
+ */
+export interface OrderDragging {
+  /** 拖起这一行时的计划 */
+  buildDragPlan: (memberId: string) => DragPlan
+}
+
+/**
+ * 一段可排序成员里某个成员的落点区域键，以及这个计划要落到哪件事上
+ *
+ * 来源那一个成员不进 `targets`，拖到它自己头上因此连命中都没有
+ * @param input - 来源、段落键、全量顺序、被拖的成员，以及换算结果要落到哪次写入
+ */
+export function orderDragPlan(input: {
+  source: DragSource
+  /** 这段成员各自的落点区域键 */
+  keyOf: (memberId: string) => string
+  /** 这一段的全量成员顺序，在 dragstart 那一刻绑定 */
+  order: readonly string[]
+  movingId: string
+  /** 换算出的新位次落成一次写入，`undefined` 表示挪到末尾 */
+  commit: (beforeId: string | undefined) => void
+}): DragPlan {
+  const targets = new Map<string, DragPlanTarget>()
+  for (const memberId of input.order) {
+    if (memberId === input.movingId) continue
+    targets.set(input.keyOf(memberId), {
+      mode: 'rows',
+      // 换算用的是构造期绑定的那一份全量顺序，不是露出的那些行，折起的成员因此不动
+      // 相邻位与「锚点已不是本段成员」两种落点都在换算里返回 undefined，那时不写
+      commit: (anchor) => {
+        const next = reorderTo(input.order, input.movingId, anchor)
+        if (next === undefined) return
+        input.commit(beforeIdOf(next, input.movingId))
+      },
+    })
+  }
+  return { source: input.source, targets }
+}
+
+/**
+ * 把「参照成员 + 前后半」换算成这一段的新顺序
+ *
+ * 换算在整段成员顺序上做，而不是在露出的那些行上，因此被折起的成员不动，相对位置自动保持
+ *
+ * 返回 `undefined` 表示这次落点不改变任何顺序，调用方据此跳过写入
+ * 三种落点读作无变化：来源不在这一段里、锚点不是这一段的其他成员、以及换算出的新顺序与现状逐位相同
+ * 最后一种是「拖到自己的相邻位」——拖动发生了，顺序没变
+ * @param order - 这一段当前的完整成员顺序
+ * @param movingId - 被拖的成员
+ * @param anchor - 命中层算出的落点
+ * @returns 新顺序，无变化时为 undefined
+ */
+export function reorderTo(
+  order: readonly string[],
+  movingId: string,
+  anchor: DropAnchor,
+): string[] | undefined {
+  if (!order.includes(movingId)) return undefined
+  const rest = order.filter((id) => id !== movingId)
+  const next = anchor.kind === 'inside' ? [...rest, movingId] : insertRelative(rest, movingId, anchor)
+  if (next === null) return undefined
+  if (next.every((id, index) => id === order[index])) return undefined
+  return next
+}
+
+/**
+ * 新顺序里「插到谁之前」那一格
+ *
+ * 被拖成员排到末尾时没有下一个成员，返回 `undefined`，宿主方法把缺参数读作同一个意思
+ * @param order - 换算出的新顺序
+ * @param movingId - 被拖的成员
+ */
+export function beforeIdOf(order: readonly string[], movingId: string): string | undefined {
+  return order[order.indexOf(movingId) + 1]
+}
+
+/**
+ * 把被拖成员插到参照成员的前一位或后一位
+ * @returns 新顺序，参照成员不是这一段的其他成员时返回 null
+ */
+function insertRelative(
+  rest: readonly string[],
+  movingId: string,
+  anchor: { kind: 'before' | 'after'; rowId: string },
+): string[] | null {
+  const at = rest.indexOf(anchor.rowId)
+  if (at < 0) return null
+  const next = [...rest]
+  next.splice(anchor.kind === 'before' ? at : at + 1, 0, movingId)
+  return next
 }
