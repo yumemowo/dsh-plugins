@@ -47,7 +47,8 @@ import {
   mainSessionId,
   straySessions,
 } from '../data/sessions.ts'
-import { frontPinnedRows, pinRanks, pinnedEntries } from '../data/pinned.ts'
+import { frontPinnedRows, pinRanks, pinnedEntries, reconcilePinned } from '../data/pinned.ts'
+import { PINNED_KEY, stretchDragPlan } from '../data/dnd.ts'
 import type { RootLayout, SessionRow } from '../data/types.ts'
 import type { HostInfo } from '../hostInfo.ts'
 import { regionLabels } from '../labels.ts'
@@ -58,7 +59,7 @@ import { DEFAULT_PINNED_LIMIT, DEFAULT_PINNED_VISIBLE_COUNT, normalizeSnapshot }
 import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { ALL_ENTRIES, sameAddress, virtualAddress, workspaceAddress } from '../../rootEntry.ts'
 import type { RootEntryAddress } from '../../rootEntry.ts'
-import { groupSlotKey, looseSlotKey } from '../../segment.ts'
+import { groupSlotKey, looseSlotKey, PINNED_SLOT_KEY } from '../../segment.ts'
 import { useFlipMarker } from '../useFlipMarker.ts'
 import { UNGROUPED_KEY, expandedAt, indicatorOf, modeOf, pinnedOf, sessionGroupExpansionOf, sessionGroupKey, virtualExpansionOf, workspaceExpansionOf } from '../store/viewMode.ts'
 import type { SessionGroupRef, ViewModeStoreHandle } from '../store/viewMode.ts'
@@ -1472,20 +1473,31 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   /**
    * 置顶区里的行
    *
-   * 顺序直接沿用官方集合（最近置顶在最前），只滤掉不可见的那些
+   * 顺序取官方集合与置顶段顺序位合成后的结果，只滤掉不可见的那些
    * 两种溢出给法与就地置顶的名次表都从这一份派生，不各算一遍
    */
   const pinned = useMemo(
     () =>
-      pinnedEntries(
-        pinnedSessionIds,
-        sessions,
-        archivedSessionIds,
-        workspaceOfSession,
-        currentSessionId,
-        statusSnapshot,
+      reconcilePinned(
+        snapshot.orderSlots[PINNED_SLOT_KEY],
+        pinnedEntries(
+          pinnedSessionIds,
+          sessions,
+          archivedSessionIds,
+          workspaceOfSession,
+          currentSessionId,
+          statusSnapshot,
+        ),
       ),
-    [pinnedSessionIds, sessions, archivedSessionIds, workspaceOfSession, currentSessionId, statusSnapshot],
+    [
+      snapshot.orderSlots,
+      pinnedSessionIds,
+      sessions,
+      archivedSessionIds,
+      workspaceOfSession,
+      currentSessionId,
+      statusSnapshot,
+    ],
   )
 
   /** 置顶集合的原始 id 表，行上的图钉按钮据此判断自己那一格是否已置顶 */
@@ -1499,11 +1511,45 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    *
    * `pinnedOptions.scope === 'inline'` 时才交出它，否则是一张空表
    * 空表下比较器与不置顶时同序，三种段落因此共用同一个比较器
-   * 名次按官方集合的位置算，最近置顶的排最前
+   * 名次取置顶区那一份渲染序里的位置，两个表面因此读同一份顺序
    */
   const pinRanksByScope = useMemo(
     () => (pinnedOptions.scope === 'inline' ? pinRanks(pinned) : NO_PINS),
     [pinnedOptions.scope, pinned],
+  )
+
+  /**
+   * 置顶段全量顺序的最新一份，供拖拽计划的构造器读取
+   *
+   * 置顶顺序每次渲染都是新数组，放进依赖列会让构造器每渲染换一次引用
+   * 构造器在 `dragstart` 当刻读它，依赖列只留真正稳定的那一格
+   * 与会话分组、工作区分组两处的排序接线同一取舍
+   */
+  const dragPinnedOrder = useRef<readonly string[]>([])
+  dragPinnedOrder.current = pinned.map((entry) => entry.id)
+
+  /**
+   * 拖起一条置顶行时的计划
+   *
+   * 置顶段与组内段共用同一套 `rows` 档换算
+   * 落点由最近的那一行算前后半，换算在构造那一刻绑定的整段顺序上做，被裁在可见高度之外的行因此不动
+   *
+   * 提交写的是整份换算结果，而不是只交一个锚点
+   * 宿主手里的官方集合没有算上顺序位，只交锚点会让接管那一次与用户看见的顺序不一致
+   *
+   * 是 `useCallback` 而不是每次渲染新建：它会随行级 memo 的比对走，每渲染新建一个会让整片置顶行重渲染
+   */
+  const buildPinnedDragPlan = useCallback(
+    (sessionId: string) =>
+      stretchDragPlan({
+        source: { kind: 'session', id: sessionId },
+        zoneKey: PINNED_KEY,
+        // 顺序取这一份渲染序：它是顺序位与官方集合合成后的结果，接管因此零跳变
+        order: dragPinnedOrder.current,
+        movingId: sessionId,
+        commit: (order) => groupActions.setSegmentOrder(PINNED_SLOT_KEY, order),
+      }),
+    [groupActions.setSegmentOrder],
   )
 
   /**
@@ -1545,14 +1591,18 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     // 只有取消的正是当前打开的那一条时才接续，否则用户在看别处，替他换会话是打断
     if (removedId !== currentSessionId) return undefined
     // 顺序按取消之后的集合算，不能用取消前的快照取相邻项
+    // 与置顶区读同一份顺序位：取消置顶后接着打开的那一条，就是界面上紧接着上来的那一条
     const nextIds = pinnedSessionIds.map(String).filter((id) => id !== removedId)
-    const next = pinnedEntries(
-      nextIds,
-      sessions,
-      archivedSessionIds,
-      workspaceOfSession,
-      currentSessionId,
-      statusSnapshot,
+    const next = reconcilePinned(
+      snapshot.orderSlots[PINNED_SLOT_KEY],
+      pinnedEntries(
+        nextIds,
+        sessions,
+        archivedSessionIds,
+        workspaceOfSession,
+        currentSessionId,
+        statusSnapshot,
+      ),
     )[0]
     if (next !== undefined) return () => openSession(next.id)
     // 一条不剩：把聚焦切回「全部」，并保持当前会话的打开状态（不导航、不关闭）
@@ -1723,6 +1773,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             official={official}
             onOpenSession={openSession}
             statuses={statusSnapshot}
+            zoneKey={PINNED_KEY}
+            buildDragPlan={buildPinnedDragPlan}
           />
           <RegionListArea
             searching={searching}

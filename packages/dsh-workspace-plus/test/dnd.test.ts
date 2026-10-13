@@ -29,6 +29,7 @@ import {
   resolveHit,
   sessionAnchorPlan,
   sessionGroupKey,
+  stretchDragPlan,
   targetOfZone,
   virtualWorkspaceHeadKey,
   workspaceOfZoneKey,
@@ -694,6 +695,121 @@ describe('building an ordering drag plan', () => {
     })
 
     expect(p.targets.size).toBe(0)
+  })
+})
+
+describe('building a stretch drag plan', () => {
+  it('collects the whole stretch as one rows target', () => {
+    // 一个区域罩着多行：整段共用一格区域键，落点由最近的那一行算前后半
+    const p = stretchDragPlan({
+      source: { kind: 'session', id: 's-2' },
+      zoneKey: 'pinned',
+      order: ['s-1', 's-2', 's-3'],
+      movingId: 's-2',
+      commit: () => {},
+    })
+
+    expect([...p.targets.keys()]).toEqual(['pinned'])
+    expect(p.targets.get('pinned')?.mode).toBe('rows')
+  })
+
+  it('commits the whole converted order rather than a single anchor', () => {
+    // 写整份顺序而不是只交一个锚点：宿主手里的官方集合没有算上顺序位
+    // 只交锚点会让接管的那一次与用户当时看见的顺序不一致
+    const seen: (readonly string[])[] = []
+    const p = stretchDragPlan({
+      source: { kind: 'session', id: 's-3' },
+      zoneKey: 'pinned',
+      order: ['s-1', 's-2', 's-3'],
+      movingId: 's-3',
+      commit: (order) => seen.push(order),
+    })
+
+    p.targets.get('pinned')?.commit({ kind: 'before', rowId: 's-1' })
+
+    expect(seen).toEqual([['s-3', 's-1', 's-2']])
+  })
+
+  it('skips the write when the drop lands on the neighbour it already sits next to', () => {
+    // 相邻位是「拖动发生了、顺序没变」：换算判出逐位相同，因此不写盘
+    const seen: (readonly string[])[] = []
+    const p = stretchDragPlan({
+      source: { kind: 'session', id: 's-1' },
+      zoneKey: 'pinned',
+      order: ['s-1', 's-2'],
+      movingId: 's-1',
+      commit: (order) => seen.push(order),
+    })
+
+    p.targets.get('pinned')?.commit({ kind: 'before', rowId: 's-2' })
+
+    expect(seen).toEqual([])
+  })
+
+  it('skips the write when the drop lands on the source own row', () => {
+    // 来源自己那一行仍在计划里：一格区域罩着多行，行与区域分不开
+    // 拖到来源自己那一行上，换算判出顺序没变，因此不写盘
+    const seen: (readonly string[])[] = []
+    const p = stretchDragPlan({
+      source: { kind: 'session', id: 's-2' },
+      zoneKey: 'pinned',
+      order: ['s-1', 's-2', 's-3'],
+      movingId: 's-2',
+      commit: (order) => seen.push(order),
+    })
+
+    p.targets.get('pinned')?.commit({ kind: 'before', rowId: 's-2' })
+
+    expect(seen).toEqual([])
+  })
+
+  it('keeps folded members in place when the drop names a visible row', () => {
+    // 超出可见条数的行仍在计划绑定的那一份顺序里，落点只提供参照行与前后半
+    // 它们因此不动，相对位置自动保持
+    const seen: (readonly string[])[] = []
+    const p = stretchDragPlan({
+      source: { kind: 'session', id: 's-4' },
+      zoneKey: 'pinned',
+      order: ['s-1', 's-2', 's-3', 's-4'],
+      movingId: 's-4',
+      commit: (order) => seen.push(order),
+    })
+
+    p.targets.get('pinned')?.commit({ kind: 'before', rowId: 's-2' })
+
+    // s-4 插到 s-2 之前，被裁在可见高度之外的 s-3 仍在原位
+    expect(seen).toEqual([['s-1', 's-4', 's-2', 's-3']])
+  })
+
+  it('appends the member when the drop lands on the stretch tail', () => {
+    // 段尾空白读作追加到末尾：锚点缺省时 `reorderTo` 把成员放到最后
+    const seen: (readonly string[])[] = []
+    const p = stretchDragPlan({
+      source: { kind: 'session', id: 's-1' },
+      zoneKey: 'pinned',
+      order: ['s-1', 's-2', 's-3'],
+      movingId: 's-1',
+      commit: (order) => seen.push(order),
+    })
+
+    p.targets.get('pinned')?.commit({ kind: 'inside' })
+
+    expect(seen).toEqual([['s-2', 's-3', 's-1']])
+  })
+
+  it('leaves the bound order alone', () => {
+    const order = ['s-1', 's-2']
+    const p = stretchDragPlan({
+      source: { kind: 'session', id: 's-1' },
+      zoneKey: 'pinned',
+      order,
+      movingId: 's-1',
+      commit: () => {},
+    })
+
+    p.targets.get('pinned')?.commit({ kind: 'before', rowId: 's-2' })
+
+    expect(order).toEqual(['s-1', 's-2'])
   })
 })
 

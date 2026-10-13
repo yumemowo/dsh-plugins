@@ -31,9 +31,11 @@ import { statusViewOfRow } from '../data/rows.ts'
 import type { PinnedEntry } from '../data/pinned.ts'
 import { DEFAULT_EXPAND_MOTION, expandMotionVars } from '../utils/expandMotion.ts'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import { useDnd } from '../hooks/useDnd.ts'
 import { useHoverCapable } from '../hooks/useHoverCapable.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useLocalViewOptions } from '../hooks/useLocalViewOptions.ts'
+import type { DragPlan } from '../data/dnd.ts'
 import { SessionRowItem } from './SessionRowItem.tsx'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { PinnedLabels, RegionLabels } from '../labels.ts'
@@ -71,6 +73,19 @@ export interface PinnedSectionProps {
   onOpenSession: (sessionId: string) => void
   /** 会话行状态快照，与列表里的行取同一份 */
   statuses: SessionStatusSnapshot
+  /**
+   * 整段共用的落点区域键
+   *
+   * 缺省表示这一片不参与排序，行因此不可拖起
+   */
+  zoneKey?: string | undefined
+  /**
+   * 拖起一条置顶行时的计划构造器
+   *
+   * 缺省表示这一片不参与排序，行因此不可拖起
+   * 由区域组件按顺序位合成，因此对所有行是同一个引用
+   */
+  buildDragPlan?: ((sessionId: string) => DragPlan) | undefined
 }
 
 /**
@@ -118,11 +133,14 @@ export function PinnedSection({
   official,
   onOpenSession,
   statuses,
+  zoneKey,
+  buildDragPlan,
 }: PinnedSectionProps): ReactElement | null {
   const { labels } = useLocale()
   const { pinnedOptions, setPinned } = useLocalViewOptions()
   const { overflow, sectionExpanded } = pinnedOptions
   const hoverCapable = useHoverCapable()
+  const { dndZoneProps } = useDnd()
 
   /**
    * 当前生效的溢出给法
@@ -209,6 +227,9 @@ export function PinnedSection({
           className={pinScrollClass}
           // 溢出与否只影响提示文案与能否滚动，DOM 结构不变
           data-wg-overflowing={overflowing ? '' : undefined}
+          // 整段只有这一格区域键：置顶行的落点按最近的那一行算前后半
+          // 收起时不渲染预览区，因此这一格只在展开态存在，收起态本来就拖不动
+          {...(zoneKey === undefined ? {} : dndZoneProps(zoneKey))}
         >
           {/* 全部行都渲染：多出来的那些静止时被裁在高度之外，由样式表用 visibility 移出焦点顺序。
               卸载掉就没有可收回的东西，收回方向的动画也就无从谈起 */}
@@ -224,6 +245,7 @@ export function PinnedSection({
               canPin={canPin}
               official={official}
               onOpenSession={onOpenSession}
+              buildDragPlan={buildDragPlan}
             />
           ))}
         </div>
@@ -240,6 +262,8 @@ export function PinnedSection({
  * 每一条本就已置顶，于是走「已置顶」那条排布：图钉钉在最右，位置不随时间与操作位变
  * 不挂悬停卡片：这些行已经钉在一段固定的区里，来源由位置说明，卡片在这里只多一层浮层
  *
+ * 拖拽计划单独经 `dragPlan` 交给条目组件：这些行没有归组上下文，但仍是置顶那一段的成员
+ *
  * 官方服务不在场、或这一条是新建中的空白会话时，条目组件自己就不生成菜单，这里因此不分叉
  * 取消置顶必须仍然可点：图钉与菜单的有无无关，不受影响
  */
@@ -252,6 +276,7 @@ function PinnedRow({
   canPin,
   official,
   onOpenSession,
+  buildDragPlan,
 }: {
   entry: PinnedEntry
   labels: RegionLabels
@@ -262,6 +287,7 @@ function PinnedRow({
   canPin: boolean
   official: OfficialSessionActions | undefined
   onOpenSession: (sessionId: string) => void
+  buildDragPlan: ((sessionId: string) => DragPlan) | undefined
 }): ReactElement {
   const view = statusViewOfRow(entry.row, statuses, labels.status)
 
@@ -277,6 +303,7 @@ function PinnedRow({
       clipped={clipped}
       onTogglePin={onTogglePin}
       onOpenSession={onOpenSession}
+      dragPlan={buildDragPlan}
     />
   )
 }

@@ -413,6 +413,43 @@ export function orderDragPlan(input: {
 }
 
 /**
+ * 一段共用一格落点区域的成员排序计划
+ *
+ * 与 {@link orderDragPlan} 的分工按区域形状划开
+ * 那里每个成员各占一格区域，这里整段共用一个区域键、成员行自己带参照行标记
+ * 落点因此由离指针最近的那一行算前后半，与段容器本身无关
+ *
+ * 来源自己那一行仍在计划里：一格区域罩着多行，行与区域分不开
+ * 拖回原位的落点由 {@link reorderTo} 判成无变化，因此不写盘
+ *
+ * 换算绑的是构造那一刻的顺序，不是成员名单的原始序
+ * 一段已有顺序位时同步跟的是用户当时看见的那一版，接管因此零跳变
+ * @param input - 来源、区域键、整段顺序，以及换算结果要落到哪次写入
+ */
+export function stretchDragPlan(input: {
+  source: DragSource
+  /** 整段共用的落点区域键 */
+  zoneKey: string
+  /** 这一段的全量成员顺序，在 dragstart 那一刻绑定 */
+  order: readonly string[]
+  movingId: string
+  /** 换算出的新顺序整份落成一次写入，换算判出无变化时不被调用 */
+  commit: (order: readonly string[]) => void
+}): DragPlan {
+  const targets = new Map<string, DragPlanTarget>()
+  targets.set(input.zoneKey, {
+    mode: 'rows',
+    // 相邻位与「锚点就是来源自己」两种落点都在换算里返回 undefined，那时不写
+    commit: (anchor) => {
+      const next = reorderTo(input.order, input.movingId, anchor)
+      if (next === undefined) return
+      input.commit(next)
+    },
+  })
+  return { source: input.source, targets }
+}
+
+/**
  * 把「参照成员 + 前后半」换算成这一段的新顺序
  *
  * 换算在整段成员顺序上做，而不是在露出的那些行上，因此被折起的成员不动，相对位置自动保持

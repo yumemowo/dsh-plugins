@@ -11,6 +11,7 @@
  * 新建中（空白）会话行没有会话可操作，与官方一样整条行都不挂菜单，那条行只是「准备开始一个新会话」的占位，对它重命名或归档都无从谈起
  *
  * 置顶区里的行也走这一个组件：那些行只给官方操作块，也不给卡片
+ * 它们的拖拽计划单独经 `dragPlan` 给，没有归组上下文
  *
  * 菜单开合状态收敛在本组件内：行组件在 map 回调里生成，把 useState 留在行内会让每行无条件多挂一组 hook 状态，独立组件则按需挂载
  * 重命名对话框也留在这里——只有真正打开过的行才付出这份状态
@@ -96,6 +97,14 @@ export interface SessionRowItemProps extends Omit<SessionRowViewProps, ComputedH
   row: SessionRow
   /** 归组上下文，缺省时菜单里没有归组项 */
   grouping?: SessionGroupingContext | undefined
+  /**
+   * 拖起这一条会话时的计划构造器
+   *
+   * 与 `grouping.buildDragPlan` 是同一种东西，来源不同：那一格随归组上下文一起给，这一格单独给
+   * 置顶区里的行没有归组上下文，但仍是置顶那一段的成员，因此另开一格
+   * 两格都在时以归组上下文为准，列表里的行走的都是它
+   */
+  dragPlan?: ((sessionId: string) => DragPlan) | undefined
   /** 官方会话操作，缺省时菜单里没有官方操作块 */
   official?: OfficialSessionActions | undefined
   /** 悬停卡片，缺省表示这一行不挂卡片 */
@@ -174,6 +183,7 @@ function sameRowItemProps(prev: SessionRowItemProps, next: SessionRowItemProps):
     prev.onOpenSession === next.onOpenSession &&
     prev.onReveal === next.onReveal &&
     prev.official === next.official &&
+    prev.dragPlan === next.dragPlan &&
     sameCard(prev.card, next.card) &&
     sameGrouping(prev.grouping, next.grouping)
   )
@@ -182,6 +192,7 @@ function sameRowItemProps(prev: SessionRowItemProps, next: SessionRowItemProps):
 function SessionRowItemView({
   row,
   grouping,
+  dragPlan,
   official,
   card,
   ...rowProps
@@ -245,12 +256,17 @@ function SessionRowItemView({
    * 拖拽那几格
    *
    * 记忆一份：这几格含闭包与新建的对象，不记的话每次渲染都是一份新引用
-   * 依赖只列真正会变的：会话 id、分组上下文与那三个稳定入口
+   * 依赖只列真正会变的：会话 id、计划构造器与那三个稳定入口
+   *
+   * 构造器取归组上下文那一格，没有它时取置顶区单独给的那一格
+   * 两处都给不出计划的行不挂 `draggable`，因此拖不动
+   * 空白占位行不参与：它只是「准备开始一个新会话」，没有可搬的位置
    */
+  const buildPlan = grouping?.buildDragPlan ?? dragPlan
   const drag = useRowDragging()
   const dnd = useMemo(
-    () => (grouping === undefined || row.blank ? null : dndRowProps(row.id, () => grouping.buildDragPlan(row.id))),
-    [dndRowProps, grouping, row.blank, row.id],
+    () => (buildPlan === undefined || row.blank ? null : dndRowProps(row.id, () => buildPlan(row.id))),
+    [dndRowProps, buildPlan, row.blank, row.id],
   )
   const dragProps = useMemo(() => {
     if (dnd === null) return {}

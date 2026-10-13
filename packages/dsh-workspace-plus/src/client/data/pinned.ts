@@ -5,11 +5,12 @@
  * （会话可能已归档、可能是子代理来源），因此投影时必须滤掉不可见的那些
  * 判据复用 `sessions.ts` 里既有的可见性规则，不另写一套
  *
- * 顺序直接沿用官方集合的顺序（最近置顶在最前），不自己再排
+ * 顺序沿用官方集合的顺序（最近置顶在最前），手动顺序的合成交给 {@link reconcilePinned}
  * 这一层没有 React 依赖，置顶区按可见条数切片，就地置顶按名次做稳定分区
  */
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import { reconcileOrder } from './order.ts'
 import { isSessionVisible, toSessionRow } from './sessions.ts'
 import type { SessionRow } from './types.ts'
 
@@ -75,11 +76,32 @@ export function pinnedEntries(
 }
 
 /**
+ * 置顶集合与顺序位合成后的渲染顺序
+ *
+ * 成员集合仍是官方集合，顺序位只在它的范围内定次序
+ * 顺序位里已不是成员的 id（取消置顶、归档）静默丢弃，不在顺序位里的成员按官方集合的位置接在后面
+ * 没有顺序位时按官方集合的顺序，与引入顺序位之前逐项相同
+ *
+ * 置顶区与分组内就地置顶段都读这一份结果，两个表面因此永不打架
+ * @param slot - 置顶段的顺序位，缺省表示置顶区还没有手动顺序
+ * @param entries - {@link pinnedEntries} 的结果，顺序即官方集合的顺序
+ * @returns 渲染顺序，成员身份与传入的一致
+ */
+export function reconcilePinned(
+  slot: readonly string[] | undefined,
+  entries: readonly PinnedEntry[],
+): PinnedEntry[] {
+  const rank = new Map(entries.map((entry, index) => [entry.id, index]))
+  return reconcileOrder(slot, entries, (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
+}
+
+/**
  * 把置顶集合收成「会话 id → 名次」的索引，供就地置顶的比较器使用
  *
- * 名次只是集合里的位置，因此最近置顶的名次最小、排最前
+ * 名次是这一份顺序里的位置，顺序本身由调用方给定
+ * 置顶区与分组内就地置顶段因此读同一份，两处的先后不会各排一套
  * 只收可见的置顶项：不可见的那几条不会渲染，占着名次只会让别的行排得更后
- * @param entries - {@link pinnedEntries} 的结果
+ * @param entries - {@link reconcilePinned} 的结果
  * @returns 会话 id 到名次的索引
  */
 export function pinRanks(entries: readonly PinnedEntry[]): ReadonlyMap<string, number> {
@@ -109,7 +131,7 @@ export function frontPinnedRows(
   const rest: SessionRow[] = []
   for (const row of rows) (pins.has(row.id) ? pinned : rest).push(row)
   if (pinned.length === 0) return [...rows]
-  // 置顶内部按名次排，最近置顶的在最前
+  // 置顶内部按名次排，名次小的在最前
   pinned.sort((a, b) => (pins.get(a.id) ?? 0) - (pins.get(b.id) ?? 0))
   return [...pinned, ...rest]
 }

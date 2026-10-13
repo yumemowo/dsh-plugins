@@ -1,5 +1,11 @@
+/**
+ * 置顶集合到渲染顺序的投影
+ *
+ * 官方集合的顺序、顺序位的合成与就地置顶的名次三处算错时界面都不会报错
+ * 只表现为「置顶区拖过之后又跳回官方顺序」「新置顶的那条插到了中间」或「分组内的置顶段与置顶区先后不一致」
+ */
 import { describe, expect, it } from 'vitest'
-import { frontPinnedRows, pinRanks, pinnedEntries } from '../src/client/data/pinned.ts'
+import { frontPinnedRows, pinRanks, pinnedEntries, reconcilePinned } from '../src/client/data/pinned.ts'
 import { compareSessionRows, compareSessionRowsWithPins } from '../src/client/data/sessions.ts'
 import type { SessionRow } from '../src/client/data/types.ts'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -111,6 +117,90 @@ describe('pinnedEntries', () => {
   })
 })
 
+describe('reconcilePinned', () => {
+  /** 置顶集合的三条会话，官方集合顺序是 c、a、b */
+  function entries(ids: readonly string[] = ['c', 'a', 'b']) {
+    return pinnedEntries(
+      ids,
+      listState([{ id: 'a', updatedAt: 30 }, { id: 'b', updatedAt: 20 }, { id: 'c', updatedAt: 10 }]),
+      [],
+      new Map(),
+      undefined,
+    )
+  }
+
+  it('keeps the official set order when the pinned stretch has no slot', () => {
+    // 旧数据零变化：没有顺序位时置顶区的显示与引入顺序位之前逐项相同
+    expect(reconcilePinned(undefined, entries()).map((entry) => entry.id)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('treats an empty slot as no slot at all', () => {
+    expect(reconcilePinned([], entries()).map((entry) => entry.id)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('follows the slot order for the members it names', () => {
+    expect(reconcilePinned(['b', 'c', 'a'], entries()).map((entry) => entry.id)).toEqual([
+      'b',
+      'c',
+      'a',
+    ])
+  })
+
+  it('appends a newly pinned member after the ones the slot names', () => {
+    // 新置顶的会话不在顺序位里，接在手动排过的那些之后
+    const four = pinnedEntries(
+      ['c', 'a', 'b', 'd'],
+      listState([
+        { id: 'a', updatedAt: 30 },
+        { id: 'b', updatedAt: 20 },
+        { id: 'c', updatedAt: 10 },
+        { id: 'd', updatedAt: 40 },
+      ]),
+      [],
+      new Map(),
+      undefined,
+    )
+
+    expect(reconcilePinned(['b', 'a'], four).map((entry) => entry.id)).toEqual(['b', 'a', 'c', 'd'])
+  })
+
+  it('drops a slot id that is no longer pinned', () => {
+    // 取消置顶会在顺序位里留下已经不作数的 id，它不该在界面上占位
+    expect(reconcilePinned(['b', 'gone', 'a'], entries()).map((entry) => entry.id)).toEqual([
+      'b',
+      'a',
+      'c',
+    ])
+  })
+
+  it('drops a slot id that is pinned but not visible', () => {
+    // 归档的置顶项不渲染，它在顺序位里的那一格同样不占位
+    const archived = pinnedEntries(
+      ['b', 'a'],
+      listState([{ id: 'a', updatedAt: 30 }, { id: 'b', updatedAt: 20 }]),
+      ['b'],
+      new Map(),
+      undefined,
+    )
+
+    expect(reconcilePinned(['b', 'a'], archived).map((entry) => entry.id)).toEqual(['a'])
+  })
+
+  it('returns every member exactly once', () => {
+    // 成员集合是事实来源：顺序位无论写了什么，界面都不该因此丢行或重复
+    const out = reconcilePinned(['c', 'ghost', 'c'], entries()).map((entry) => entry.id)
+
+    expect([...out].sort()).toEqual(['a', 'b', 'c'])
+  })
+
+  it('leaves the entry list alone', () => {
+    const input = entries()
+    reconcilePinned(['b', 'a', 'c'], input)
+
+    expect(input.map((entry) => entry.id)).toEqual(['c', 'a', 'b'])
+  })
+})
+
 describe('pinRanks', () => {
   it('numbers the entries by their position in the pinned set', () => {
     const ranks = pinRanks(
@@ -119,6 +209,19 @@ describe('pinRanks', () => {
 
     expect(ranks.get('c')).toBe(0)
     expect(ranks.get('a')).toBe(1)
+  })
+
+  it('numbers them by the reconciled order once the stretch has a slot', () => {
+    // 置顶区拖过之后名次跟着换：两处读同一份顺序，分组内就地置顶因此与置顶区一致
+    const ranks = pinRanks(
+      reconcilePinned(
+        ['a', 'c'],
+        pinnedEntries(['c', 'a'], listState([{ id: 'a' }, { id: 'c' }]), [], new Map(), undefined),
+      ),
+    )
+
+    expect(ranks.get('a')).toBe(0)
+    expect(ranks.get('c')).toBe(1)
   })
 })
 
