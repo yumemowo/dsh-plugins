@@ -4,49 +4,55 @@
 
 ## 分层
 
-浏览器半边按「入口 / 契约 / 数据 / 状态 / 渲染」分层，每个模块只做一件事；组件用 `.tsx` 写 JSX，纯逻辑留在 `.ts`（tsconfig 与 vitest 都已包含 `**/*.tsx`）。`rootEntry.ts` 与 `pickerState.ts` 留在 `src/` 而不是 `src/client/`，因为宿主半边也要用同一份修剪与排序规则。
+浏览器半边按「入口 / 契约 / 数据 / 状态 / 渲染」分层，每个模块只做一件事；组件用 `.tsx` 写 JSX，纯逻辑留在 `.ts`（tsconfig 与 vitest 都已包含 `**/*.tsx`）。`rootEntry.ts`、`pickerState.ts` 与 `segment.ts` 留在 `src/` 而不是 `src/client/`，因为宿主半边也要用同一份修剪、排序规则与段键形状。
 
 ```
-src/client/
-├── index.ts                    插件入口：语言包注册、remote 挂载、插槽注册、对照开关
-├── locales.ts                  命名空间声明与中英字典（键名取官方叫法）
-├── labels.ts                   文案契约与投影（TranslateNS → RegionLabels）
-├── official.ts                 官方 workspace 语言包与相对时间的复用面
-├── directoryFlow.ts            官方 directoryFlow 洞的占用者读数（添加工作区的交互来源）
-├── hostInfo.ts                 宿主固定事实（home 目录）的读数（悬停卡片的路径缩写要用）
-├── useFlipMarker.ts            量区域矩形、按需在 body 上挂浮层翻转标记
-├── actions.ts                  RegionActions / RegionDataHooks（组件与宿主的接口）
-├── compare.tsx                 对照模式：挂进原生右侧栏 tab
-├── remote.ts                   Remote 贡献声明与调用封装
-├── runtime.ts                  primitives 值导入的唯一出口（external）
-├── icons.tsx                   自绘图标（官方没有的字形；规范见 [自绘图标](custom-icons.md)）
-├── menus.tsx                   菜单条目构造（工作区 / 分组 / 工作区分组行内菜单、右键菜单补全）
-├── menus.module.css            菜单条目样式（文字 + 行尾箭头）
-├── css-modules.d.ts            `.module.css` 的类名声明（由 scripts/gen-css-types.mjs 生成）
-├── data/                       无 React 依赖的纯逻辑
-│   ├── types.ts                SessionRow / GroupSection / WorkspaceLayout / RootLayout / 草稿类型
-│   ├── layout.ts               分组元数据 → 渲染布局（会话那一层与根节点那一层）
-│   ├── nest.ts                 子工作区嵌套推导（路径祖先关系、容器归属、段内森林）
-│   ├── status.ts               会话状态位推导（待交互 / 运行 / 完成）
-│   ├── search.ts               按标题搜索（查询净化、匹配、排序与截断）
-│   ├── picker.ts               下拉菜单的条目与分区（根节点条目、三个分区、聚焦布局、聚焦解析）
-│   ├── sessions.ts             会话快照 → 渲染行（含可见性过滤、空白行命名、未分组收集）
-│   ├── collapse.ts             一个展示范围内折几条（五步判定、置顶与未空闲行，见 [会话折叠](session-collapse.md)）
-│   ├── outline.ts              一份扁平的行序列（题头行 / 会话行 / 溢出 / 空态的顺序与露面）
-│   └── rows.ts                 会话行的显示事实（状态位与相对时间，两者都只依赖快照与文案）
-├── utils/                      组件与样式表共用的零散常量
-│   ├── expandMotion.ts         撑开动画节奏常量（只 import React 类型，运行时无依赖）
-│   ├── flip.ts                 浮层翻转的几何判定与标记名（纯函数，无 React 依赖）
-│   └── pathUtils.ts            目录路径的 `~` 缩写（与官方同规则）
-├── store/                      浏览器内持久化状态
-│   └── viewMode.ts             展示方式 / 指示器 / 三层折叠态的存储（官方 defineStore + localStorage，插槽 store 座位的句柄）
-├── hooks/                      与具体业务无关的通用 hook
-│   ├── useHoverCapable.ts      设备是否具备悬停能力（环境读数，置顶区 expand 档的可用前提）
-│   ├── useLocale.ts            区域文案的唯一读取入口（RegionLocaleProvider + useLocale）
-│   ├── useLocalViewOptions.ts  浏览器 store 里展示方式 / 指示器样式的读取入口（同上）
-│   ├── useExpansion.ts         浏览器 store 里三层折叠态的读取入口（同上）
-│   └── useSessionScopes.ts     各区段「露出几条」的展开态（同上，不落盘，容器收起时自清）
-└── views/                      渲染层：区域容器、三块渲染区与行组件
+src/
+├── segment.ts                  会话段顺序位的段键构造（宿主与浏览器共用同一套形状，见 [行拖拽](row-drag.md)）
+└── client/
+    ├── index.ts                插件入口：语言包注册、remote 挂载、插槽注册、对照开关
+    ├── locales.ts              命名空间声明与中英字典（键名取官方叫法）
+    ├── labels.ts               文案契约与投影（TranslateNS → RegionLabels）
+    ├── official.ts             官方 workspace 语言包与相对时间的复用面
+    ├── directoryFlow.ts        官方 directoryFlow 洞的占用者读数（添加工作区的交互来源）
+    ├── hostInfo.ts             宿主固定事实（home 目录）的读数（悬停卡片的路径缩写要用）
+    ├── useFlipMarker.ts        量区域矩形、按需在 body 上挂浮层翻转标记
+    ├── actions.ts              RegionActions / RegionDataHooks（组件与宿主的接口）
+    ├── compare.tsx             对照模式：挂进原生右侧栏 tab
+    ├── remote.ts               Remote 贡献声明与调用封装
+    ├── runtime.ts              primitives 值导入的唯一出口（external）
+    ├── icons.tsx               自绘图标（官方没有的字形；规范见 [自绘图标](custom-icons.md)）
+    ├── menus.tsx               菜单条目构造（工作区 / 分组 / 工作区分组行内菜单、右键菜单补全）
+    ├── menus.module.css        菜单条目样式（文字 + 行尾箭头）
+    ├── css-modules.d.ts        `.module.css` 的类名声明（由 scripts/gen-css-types.mjs 生成）
+    ├── data/                   无 React 依赖的纯逻辑
+    │   ├── types.ts            SessionRow / GroupSection / WorkspaceLayout / RootLayout / 草稿类型
+    │   ├── layout.ts           分组元数据 → 渲染布局（会话那一层与根节点那一层）
+    │   ├── nest.ts             子工作区嵌套推导（路径祖先关系、容器归属、段内森林）
+    │   ├── status.ts           会话状态位推导（待交互 / 运行 / 完成）
+    │   ├── search.ts           按标题搜索（查询净化、匹配、排序与截断）
+    │   ├── pinned.ts           置顶集合的投影与合成（pinnedEntries、reconcilePinned、pinRanks）
+    │   ├── picker.ts           下拉菜单的条目与分区（根节点条目、三个分区、聚焦布局、聚焦解析）
+    │   ├── sessions.ts         会话快照 → 渲染行（含可见性过滤、空白行命名、未分组收集）
+    │   ├── collapse.ts         一个展示范围内折几条（五步判定、置顶与未空闲行，见 [会话折叠](session-collapse.md)）
+    │   ├── dnd.ts              拖拽计划的类型、区域键与命中换算（见 [行拖拽](row-drag.md)）
+    │   ├── order.ts            顺序位到渲染顺序的换算（reconcileOrder，见 [行拖拽](row-drag.md)）
+    │   ├── outline.ts          一份扁平的行序列（题头行 / 会话行 / 溢出 / 空态的顺序与露面）
+    │   └── rows.ts             会话行的显示事实（状态位与相对时间，两者都只依赖快照与文案）
+    ├── utils/                  组件与样式表共用的零散常量
+    │   ├── expandMotion.ts     撑开动画节奏常量（只 import React 类型，运行时无依赖）
+    │   ├── flip.ts             浮层翻转的几何判定与标记名（纯函数，无 React 依赖）
+    │   └── pathUtils.ts        目录路径的 `~` 缩写（与官方同规则）
+    ├── store/                  浏览器内持久化状态
+    │   └── viewMode.ts         展示方式 / 指示器 / 三层折叠态的存储（官方 defineStore + localStorage，插槽 store 座位的句柄）
+    ├── hooks/                  与具体业务无关的通用 hook
+    │   ├── useDnd.ts           行拖拽机制层（DndProvider、beginDrag、区域与行属性助手，见 [行拖拽](row-drag.md)）
+    │   ├── useHoverCapable.ts  设备是否具备悬停能力（环境读数，置顶区 expand 档的可用前提）
+    │   ├── useLocale.ts        区域文案的唯一读取入口（RegionLocaleProvider + useLocale）
+    │   ├── useLocalViewOptions.ts  浏览器 store 里展示方式 / 指示器样式的读取入口（同上）
+    │   ├── useExpansion.ts     浏览器 store 里三层折叠态的读取入口（同上）
+    │   └── useSessionScopes.ts 各区段「露出几条」的展开态（同上，不落盘，容器收起时自清）
+    └── views/                  渲染层：区域容器、三块渲染区与行组件
     ├── WorkspaceGroupsRegion.tsx   区域容器：数据源、派生布局、交互状态与命令各一 hook，按区域分派渲染
     ├── RegionHeaderArea.tsx        区域顶部（宽栏两行标题 + 入口组 + 两张浮层面板，窄栏入口）
     ├── RegionListArea.tsx          列表区三条分支，含 WorkspaceNode 递归与会话行元素构造
