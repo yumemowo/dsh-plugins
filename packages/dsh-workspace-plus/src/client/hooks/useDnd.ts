@@ -75,6 +75,28 @@ function rowsIn(element: Element): Element[] {
 }
 
 /**
+ * 落点标记画在哪个元素上
+ *
+ * `before` / `after` 是对某一条参照行的落点，标记因此画在那条行上，线才贴着它
+ * 「一格即一行」的段（分组头）本来就命中那一个元素，这里取回的还是它
+ * 「一格装多行」的段（组内会话段、未归组段）只能按锚点里的参照行 id 回溯到具体那一行
+ * 画在段容器上会让线落在整段的上边或下边，与放开后真正落到的位置不符
+ * `inside` 是整块投放，标记仍画在区域元素上，整块描一圈
+ * @param zoneElement - 命中的区域元素
+ * @param rows - 该区域里的参照行元素
+ * @param hit - 落点读数
+ */
+function markerElementOf(
+  zoneElement: Element,
+  rows: readonly Element[],
+  hit: DropHit | null,
+): Element {
+  if (hit === null || hit.anchor.kind === 'inside') return zoneElement
+  const rowId = hit.anchor.rowId
+  return rows.find((element) => element.getAttribute(ROW_ATTRIBUTE) === rowId) ?? zoneElement
+}
+
+/**
  * 清掉一组元素上的落点标记
  *
  * 只清本实例画过的那些，而不是扫整份文档或某一棵子树
@@ -198,20 +220,25 @@ export function DndProvider({
    * 那时元素上不该留标记，否则样式会画出一次并不成立的 before / after
    * @param element - 这次命中的区域元素，没有命中时为 null
    * @param hit - 落点读数，没有落点时为 null
+   * @param rows - 该区域里的参照行元素，`before` / `after` 据此落到具体那一行上
    */
-  const drawMarker = useCallback((element: Element | null, hit: DropHit | null) => {
-    for (const previous of markedRef.current) {
-      if (previous !== element) previous.removeAttribute(DROP_ATTRIBUTE)
-    }
-    markedRef.current.clear()
-    if (element === null) return
-    markedRef.current.add(element)
-    if (hit === null) {
-      element.removeAttribute(DROP_ATTRIBUTE)
-      return
-    }
-    element.setAttribute(DROP_ATTRIBUTE, hit.anchor.kind)
-  }, [])
+  const drawMarker = useCallback(
+    (element: Element | null, hit: DropHit | null, rows: readonly Element[] = []) => {
+      const marked = element === null ? null : markerElementOf(element, rows, hit)
+      for (const previous of markedRef.current) {
+        if (previous !== marked) previous.removeAttribute(DROP_ATTRIBUTE)
+      }
+      markedRef.current.clear()
+      if (marked === null) return
+      markedRef.current.add(marked)
+      if (hit === null) {
+        marked.removeAttribute(DROP_ATTRIBUTE)
+        return
+      }
+      marked.setAttribute(DROP_ATTRIBUTE, hit.anchor.kind)
+    },
+    [],
+  )
 
   /**
    * 算一次落点读数
@@ -228,9 +255,11 @@ export function DndProvider({
     if (found === null) return null
     const zoneTarget = targetOfZone(plan, found.zoneKey)
     if (zoneTarget === undefined) return null
+    const rows = rowsIn(found.element)
     return {
       element: found.element,
-      hit: resolveHit({ zoneKey: found.zoneKey, target: zoneTarget, rows: rowsIn(found.element), point }),
+      rows,
+      hit: resolveHit({ zoneKey: found.zoneKey, target: zoneTarget, rows, point }),
       zoneTarget,
     }
   }, [])
@@ -248,7 +277,7 @@ export function DndProvider({
         pendingRef.current = null
         return
       }
-      drawMarker(found.element, found.hit)
+      drawMarker(found.element, found.hit, found.rows)
       pendingRef.current = found.hit === null ? null : { target: found.zoneTarget, anchor: found.hit.anchor }
     },
     [drawMarker, hitAt],

@@ -60,6 +60,8 @@ const EMPTY_SNAPSHOT: WorkspaceGroupsSnapshot = {
   workspaceGroups: [],
   picker: EMPTY_PICKER_STATE,
   nested: true,
+  // 空表即「每一段都没有手动顺序」，界面因此按时间序渲染
+  orderSlots: {},
   pinnedVisibleCount: DEFAULT_PINNED_VISIBLE_COUNT,
   pinnedLimit: DEFAULT_PINNED_LIMIT,
 }
@@ -327,6 +329,7 @@ export function apply(ctx: Context): void {
         renameGroup: async () => EMPTY_SNAPSHOT,
         deleteGroup: async () => EMPTY_SNAPSHOT,
         moveSession: async () => EMPTY_SNAPSHOT,
+        setSegmentOrder: async () => EMPTY_SNAPSHOT,
         moveGroupBefore: async () => EMPTY_SNAPSHOT,
         createVirtualWorkspace: async () => EMPTY_SNAPSHOT,
         moveVirtualWorkspaceBefore: async () => EMPTY_SNAPSHOT,
@@ -380,8 +383,15 @@ export function apply(ctx: Context): void {
         callSnapshot('renameGroup', [workspaceId, groupId, name]),
       deleteGroup: (workspaceId, groupId) => callSnapshot('deleteGroup', [workspaceId, groupId]),
       // 选择器用空串表示「不属于任何分组」，宿主接口用 null 表达同一含义
-      moveSession: (workspaceId, sessionId, groupId) =>
-        callSnapshot('moveSession', [workspaceId, sessionId, groupId === '' ? null : groupId]),
+      // 锚点与会话归组同一次调用下发，缺省表示不动目标段的顺序位
+      moveSession: (workspaceId, sessionId, groupId, beforeSessionId) =>
+        callSnapshot('moveSession', [
+          workspaceId,
+          sessionId,
+          groupId === '' ? null : groupId,
+          beforeSessionId,
+        ]),
+      setSegmentOrder: (key, order) => callSnapshot('setSegmentOrder', [key, order]),
       // 锚点传的是实参本身而不是空串的转换：缺席表示「挪到末尾」，与空串是同形但不同义的两种读法
       moveGroupBefore: (workspaceId, groupId, beforeGroupId) =>
         callSnapshot('moveGroupBefore', [workspaceId, groupId, beforeGroupId]),

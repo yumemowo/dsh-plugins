@@ -50,8 +50,9 @@ export function apply(ctx: Context, config: WorkspacePlusConfig = Config({})): v
     renameGroup: async (workspaceId, groupId, groupName) =>
       (await service).renameGroup(workspaceId, groupId, groupName),
     deleteGroup: async (workspaceId, groupId) => (await service).deleteGroup(workspaceId, groupId),
-    moveSession: async (workspaceId, sessionId, groupId) =>
-      (await service).moveSession(workspaceId, sessionId, groupId),
+    moveSession: async (workspaceId, sessionId, groupId, beforeSessionId) =>
+      (await service).moveSession(workspaceId, sessionId, groupId, beforeSessionId),
+    setSegmentOrder: async (key, order) => (await service).setSegmentOrder(key, order),
     moveGroupBefore: async (workspaceId, groupId, beforeGroupId) =>
       (await service).moveGroupBefore(workspaceId, groupId, beforeGroupId),
     createVirtualWorkspace: async (groupName) => (await service).createVirtualWorkspace(groupName),

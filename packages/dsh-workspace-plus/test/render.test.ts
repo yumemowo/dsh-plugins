@@ -840,6 +840,7 @@ function props(
       options.moves?.push([workspaceId, sessionId, groupId])
       return snapshot()
     },
+    setSegmentOrder: async () => snapshot(),
     moveGroupBefore: async (
       workspaceId: string,
       groupId: string,

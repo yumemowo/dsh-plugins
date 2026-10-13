@@ -50,6 +50,7 @@ const snapshotSchema = z.object({
   workspaceGroups: z.array(virtualWorkspaceSchema),
   picker: pickerSchema,
   nested: z.boolean(),
+  orderSlots: z.record(z.string(), z.array(z.string())),
   pinnedVisibleCount: z.number(),
   pinnedLimit: z.number(),
 })
@@ -132,6 +133,11 @@ export const REMOTE_CONTRIBUTION = {
       { name: 'workspaceId', codec: str('WorkspaceId') },
       { name: 'sessionId', codec: str('SessionId') },
       { name: 'groupId', codec: codec('NullableGroupId', () => z.string().nullable()) },
+      { name: 'beforeSessionId', acceptsUndefined: true, codec: optionalId('OptionalSessionId') },
+    ]),
+    descriptor('setSegmentOrder', [
+      { name: 'key', codec: str('SegmentKey') },
+      { name: 'order', codec: strList('SessionIds') },
     ]),
     descriptor('moveGroupBefore', [
       { name: 'workspaceId', codec: str('WorkspaceId') },
@@ -222,6 +228,8 @@ export interface WorkspaceGroupsSnapshot {
   picker: PickerSnapshot
   /** 是否按子工作区渲染，缺省当开启 */
   nested: boolean
+  /** 会话段的顺序位：段键 → 手动顺序，缺一格表示该段按时间序渲染 */
+  orderSlots: Record<string, string[]>
   /** 置顶区静止时显示几条 */
   pinnedVisibleCount: number
   /** 置顶数量的上限，达到后置顶入口转禁用态 */
@@ -246,6 +254,8 @@ export function normalizeSnapshot(value: unknown): WorkspaceGroupsSnapshot {
     workspaceGroups: Array.isArray(raw.workspaceGroups) ? raw.workspaceGroups : [],
     picker: normalizePickerState(raw.picker),
     nested: raw.nested !== false,
+    // 旧宿主回的快照里没有这一格，缺格时按空表读，渲染侧因此把每一段都当作没有手动顺序
+    orderSlots: raw.orderSlots ?? {},
     pinnedVisibleCount: raw.pinnedVisibleCount ?? DEFAULT_PINNED_VISIBLE_COUNT,
     pinnedLimit: raw.pinnedLimit ?? DEFAULT_PINNED_LIMIT,
   }

@@ -17,22 +17,24 @@ import { useCallback, useMemo, useRef } from 'react'
 import type { ReactElement } from 'react'
 import type { OfficialSessionActions } from '../actions.ts'
 import { buildLayout, containsSession, groupIdOfSession, virtualWorkspaceIdOf } from '../data/layout.ts'
+import { reconcileOrder } from '../data/order.ts'
+import type { OrderSlots } from '../data/order.ts'
 import {
   groupHeadKey,
-  looseKey,
   orderDragPlan,
-  sessionGroupKey,
+  sessionAnchorPlan,
   virtualWorkspaceHeadKey,
 } from '../data/dnd.ts'
-import type { DragPlan, DragPlanTarget, OrderDragging } from '../data/dnd.ts'
+import type { OrderDragging } from '../data/dnd.ts'
+import { groupSlotKey, looseSlotKey } from '../../segment.ts'
 import type { Nesting } from '../data/nest.ts'
 import { relativeTimeOfRow, statusViewOfRow } from '../data/rows.ts'
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
 import type {
   RootLayout,
-  GroupSection,
   SessionRow,
   VirtualWorkspaceSection as VirtualWorkspaceSectionData,
+  WorkspaceLayout,
 } from '../data/types.ts'
 import type { RegionLabels } from '../labels.ts'
 import { UNGROUPED_KEY } from '../store/viewMode.ts'
@@ -131,6 +133,30 @@ export interface RegionListCommands {
   moveGroupBefore: (workspaceId: string, groupId: string, beforeGroupId: string | undefined) => void
   /** 把一个工作区分组挪到根节点的另一个分组之前，同上 */
   moveVirtualWorkspaceBefore: (groupId: string, beforeGroupId: string | undefined) => void
+  /**
+   * 写一段会话的手动顺序
+   *
+   * 段键见 `segment.ts`，与 DOM 上的区域键不是一套：那一套是命中层用的，这一套是存储键
+   * 空表表示清掉这一格，该段退回时间序
+   */
+  setSegmentOrder: (key: string, order: readonly string[]) => void
+  /**
+   * 把一个会话落到某一段的指定位次
+   *
+   * 这次落点要同时改归属与目标段的顺序，因此是「先归组、再按整份顺序写回」两步串行
+   * 两次写入各是一轮读改写，并发发出去会互相盖掉，所以后一步挂在前一步的完成上
+   *
+   * 目标段还没有手动顺序时，这一笔就是它的第一份顺序，也就是设计里说的「接管」
+   * 接管要零跳变，因此写的是调用方按渲染序算出的整份顺序，而不是只把锚点交给宿主去插
+   * @param groupId - 目标分组 id，空串表示未归组段
+   * @param order - 目标段换算后的完整顺序，含即将落进去的这条会话
+   */
+  placeSessionInSegment: (
+    workspaceId: string,
+    sessionId: string,
+    groupId: string,
+    order: readonly string[],
+  ) => void
 }
 
 /**
@@ -322,30 +348,79 @@ function WorkspaceNode({
   const expansion = useExpansion()
 
   /**
-   * 分组段的最新一份，供拖拽计划的构造器读取
+   * 这一段布局的最新一份，供拖拽计划的构造器读取
    *
    * 分组段每次渲染都是新数组，放进依赖列会让构造器每渲染换一次引用，行级 memo 随之整片失效
-   * 构造器因此在调用当刻读它，依赖列只留真正稳定的那两格
+   * 构造器因此在调用当刻读它，依赖列只留真正稳定的那几格
    * 与 `ExpandableBody` 把节奏参数放进 ref 同一取舍：只用于换算与下发的值不进依赖
    */
-  const dragSections = useRef<readonly GroupSection[]>([])
+  const dragBuilt = useRef<WorkspaceLayout>({ groups: [], loose: [], children: [] })
+
+  /**
+   * 各段手动顺序的最新一份，同上
+   *
+   * 顺序位随快照每次写入换一份新表，而计划构造器必须保持同一个引用
+   */
+  const dragSlots = useRef<OrderSlots>({})
+
+  /**
+   * 会话行比较器的最新一份，同上
+   *
+   * 它由容器按「置顶会话显示方式」合成，每一次渲染都是一个新闭包
+   * 让它进构造器的依赖列会让构造器每渲染换一次引用，行级 memo 随之整片失效
+   */
+  const dragCompare = useRef(scope.compareRows)
+  dragCompare.current = scope.compareRows
 
   /**
    * 拖起这一条会话时的计划
    *
    * 与 `selectSessionGroup` 同理是 `useCallback`：它会随归组上下文到达每一行，
    * 行级 memo 按引用比对，每渲染新建一个会让整片列表的 memo 失效
+   *
+   * 换算绑的是构造那一刻的渲染序，因此这里按顺序位与时间序合成一遍
+   * 与两段会话列表用的是同一个纯函数与同一份顺序位，两者因此逐项一致
+   * 拿布局里的名单序顶替不行：那一份没有算上顺序位，「第一次拖拽接管」会跳一下
    */
   const buildDragPlan = useCallback(
     (sessionId: string) =>
-      sessionDragPlan({
+      sessionAnchorPlan({
         workspaceId,
         sessionId,
-        currentGroupId: groupIdOfSession(dragSections.current, sessionId),
-        sections: dragSections.current,
-        onSelectGroup: commands.selectSessionGroup,
+        currentGroupId: groupIdOfSession(dragBuilt.current.groups, sessionId),
+        sections: dragBuilt.current.groups.map((section) => ({
+          id: section.id,
+          order: reconcileOrder(
+            dragSlots.current[groupSlotKey(workspaceId, section.id)],
+            section.sessions,
+            dragCompare.current,
+          ).map((row) => row.id),
+        })),
+        looseOrder: reconcileOrder(
+          dragSlots.current[looseSlotKey(workspaceId)],
+          dragBuilt.current.loose,
+          dragCompare.current,
+        ).map((row) => row.id),
+        moveToGroup: (groupId) =>
+          commands.selectSessionGroup(
+            workspaceId,
+            sessionId,
+            groupId === '' ? 'ungroup' : `group:${groupId}`,
+          ),
+        reorderSegment: (groupId, order) =>
+          commands.setSegmentOrder(
+            groupId === '' ? looseSlotKey(workspaceId) : groupSlotKey(workspaceId, groupId),
+            order,
+          ),
+        placeInSegment: (groupId, order) =>
+          commands.placeSessionInSegment(workspaceId, sessionId, groupId, order),
       }),
-    [workspaceId, commands.selectSessionGroup],
+    [
+      workspaceId,
+      commands.selectSessionGroup,
+      commands.setSegmentOrder,
+      commands.placeSessionInSegment,
+    ],
   )
 
   /**
@@ -360,7 +435,7 @@ function WorkspaceNode({
         source: { kind: 'sessionGroup', workspaceId, groupId },
         keyOf: (memberId) => groupHeadKey(workspaceId, memberId),
         // 只收分组自己的顺序，会话行不在这段里，因此拖到组内会话上也读不出落点
-        order: dragSections.current.map((section) => section.id),
+        order: dragBuilt.current.groups.map((section) => section.id),
         movingId: groupId,
         commit: (beforeGroupId) => commands.moveGroupBefore(workspaceId, groupId, beforeGroupId),
       }),
@@ -384,7 +459,8 @@ function WorkspaceNode({
     (groupId) => layout.nesting.groupedChildIdsOf(workspaceId, groupId),
     layout.nesting.looseChildIdsOf(workspaceId),
   )
-  dragSections.current = built.groups
+  dragBuilt.current = built
+  dragSlots.current = snapshot.orderSlots
   /**
    * 该工作区行上那份「移动工作区分组」菜单的选项集
    *
@@ -473,6 +549,7 @@ function WorkspaceNode({
       depth={layout.nesting.levelOf(workspaceId)}
       compareRows={scope.compareRows}
       alwaysVisibleSessionIds={scope.alwaysVisibleSessionIds}
+      orderSlots={snapshot.orderSlots}
       now={scope.session.now}
       revealSessionId={scope.session.revealSessionId}
       groupActions={{
@@ -516,52 +593,6 @@ function rowTimes(
     time: relativeTimeOfRow(row, official?.relativeTime, now),
     hoverTime: relativeTimeOfRow(row, official === undefined ? undefined : labels.hoverTimeAgo, now),
   }
-}
-
-/**
- * 拖起一个会话行时的计划
- *
- * 这一次拖拽能落到「同工作区的其他分组头」与「同工作区的未归组段」两处
- * 两个落点都是整块投放
- * 原地投放不在这里的判据里，而是构造期就缺席
- * 本条会话已在的那一段根本不收进 `targets`
- * 命中层因此查不到它，既不标记也不提交
- *
- * `commit` 调既有的归组命令，与行菜单「移动到分组…」落到同一个宿主方法上
- */
-function sessionDragPlan(input: {
-  workspaceId: string
-  sessionId: string
-  /** 本条会话当前所属分组 id，空串表示未归组 */
-  currentGroupId: string
-  sections: readonly GroupSection[]
-  onSelectGroup: (workspaceId: string, sessionId: string, id: string) => void
-}): DragPlan {
-  const { workspaceId, sessionId, currentGroupId, sections, onSelectGroup } = input
-  const targets = new Map<string, DragPlanTarget>()
-
-  for (const section of sections) {
-    if (section.id === currentGroupId) continue
-    const target: DragPlanTarget = {
-      mode: 'container',
-      commit: () => onSelectGroup(workspaceId, sessionId, `group:${section.id}`),
-    }
-    targets.set(sessionGroupKey(workspaceId, section.id), target)
-    // 分组头自己另占一格（排序要用它作参照行），因此这里也得收一格
-    // 否则拖到头上会命中那一格而它不在计划里，界面读成「这一段不接」，比拖到块内其它地方还不如
-    targets.set(groupHeadKey(workspaceId, section.id), target)
-  }
-
-  // 已在未归组段里的行不再收这一格：拖回自己所在的那一段是一次原地投放
-  if (currentGroupId !== '') {
-    targets.set(looseKey(workspaceId), {
-      mode: 'container',
-      // `ungroup` 这个归组命令 id 在区域组件里转成空分组 id，与归组菜单的「移出分组」落到同一条路径
-      commit: () => onSelectGroup(workspaceId, sessionId, 'ungroup'),
-    })
-  }
-
-  return { source: { kind: 'session', id: sessionId }, targets }
 }
 
 /**

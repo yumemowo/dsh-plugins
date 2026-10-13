@@ -152,6 +152,7 @@ function props(orders: string[][], moves: string[][]): WorkspaceGroupsProps {
       moves.push([workspaceId, sessionId, groupId])
       return stored
     },
+    setSegmentOrder: async () => stored,
     moveGroupBefore: async (
       workspaceId: string,
       groupId: string,

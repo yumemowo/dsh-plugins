@@ -61,6 +61,7 @@ function props(wide = true): WorkspaceGroupsProps {
     renameGroup: async () => snapshot(),
     deleteGroup: async () => snapshot(),
     moveSession: async () => snapshot(),
+    setSegmentOrder: async () => snapshot(),
     moveGroupBefore: async () => snapshot(),
     moveVirtualWorkspaceBefore: async () => snapshot(),
     createVirtualWorkspace: async () => snapshot(),

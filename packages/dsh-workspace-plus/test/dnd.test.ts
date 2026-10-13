@@ -21,11 +21,13 @@ import {
   groupHeadKey,
   groupOfZoneKey,
   halfOf,
+  insertAtAnchor,
   looseKey,
   nearestRow,
   orderDragPlan,
   reorderTo,
   resolveHit,
+  sessionAnchorPlan,
   sessionGroupKey,
   targetOfZone,
   virtualWorkspaceHeadKey,
@@ -419,6 +421,196 @@ describe('turning a drop anchor into a new order', () => {
     // 新顺序里排在末尾的那个成员没有下一位，宿主把缺参数读作「挪到末尾」
     expect(beforeIdOf(['group-c', 'group-a', 'group-b'], 'group-c')).toBe('group-a')
     expect(beforeIdOf(['group-b', 'group-c', 'group-a'], 'group-a')).toBeUndefined()
+  })
+})
+
+describe('inserting a member that is not in the stretch yet', () => {
+  const ORDER = ['a', 'b', 'c']
+
+  it('inserts before the row it was dropped above', () => {
+    // 与段内换位的分工按「来源是否已经在这一段里」划开：这一个从别段插进来，长度必然改变
+    expect(insertAtAnchor(ORDER, 'x', { kind: 'before', rowId: 'b' })).toEqual(['a', 'x', 'b', 'c'])
+  })
+
+  it('inserts after the row it was dropped below', () => {
+    expect(insertAtAnchor(ORDER, 'x', { kind: 'after', rowId: 'b' })).toEqual(['a', 'b', 'x', 'c'])
+  })
+
+  it('appends the member when the drop reads as inside', () => {
+    // 段尾与空段的落点都是 inside，读作追加
+    expect(insertAtAnchor(ORDER, 'x', { kind: 'inside' })).toEqual(['a', 'b', 'c', 'x'])
+  })
+
+  it('appends when the whole stretch is empty', () => {
+    expect(insertAtAnchor([], 'x', { kind: 'inside' })).toEqual(['x'])
+  })
+
+  it('falls back to the tail when the anchor is not part of the stretch', () => {
+    // 拖拽期间快照可能被别处改过，段尾比丢掉这次投放更接近用户的意图
+    expect(insertAtAnchor(ORDER, 'x', { kind: 'before', rowId: 'ghost' })).toEqual(['a', 'b', 'c', 'x'])
+  })
+
+  it('does not duplicate a member that is already in the stretch', () => {
+    // 换算前先摘掉它原有的那一格，否则同一个成员会在界面上出现两次
+    expect(insertAtAnchor(ORDER, 'b', { kind: 'after', rowId: 'c' })).toEqual(['a', 'c', 'b'])
+  })
+})
+
+describe('building a session drag plan', () => {
+  /** 一个分组段与它的渲染序 */
+  const SECTIONS = [
+    { id: 'group-a', order: ['s-1', 's-2'] },
+    { id: 'group-b', order: ['s-3'] },
+  ]
+
+  /** 记下一次计划里各格的档位 */
+  function modes(plan: DragPlan): [string, string][] {
+    return [...plan.targets.entries()].map(([key, target]) => [key, target.mode])
+  }
+
+  /**
+   * 造一个只收落点回调的计划
+   *
+   * 三个回调各自记下自己被调了没有与收到什么，落点换成可断言的一格
+   */
+  function anchorPlan(currentGroupId: string, sessionId = 's-1'): {
+    plan: DragPlan
+    moved: string[]
+    reordered: [string, readonly string[]][]
+    placed: [string, readonly string[]][]
+  } {
+    const moved: string[] = []
+    const reordered: [string, readonly string[]][] = []
+    const placed: [string, readonly string[]][] = []
+    const plan = sessionAnchorPlan({
+      workspaceId: 'ws-1',
+      sessionId,
+      currentGroupId,
+      sections: SECTIONS,
+      // 来源已在未归组段时它本来就在这一段的成员里，不在的话段内换位无从谈起
+      looseOrder: currentGroupId === '' ? ['s-4', 's-1'] : ['s-4', 's-5'],
+      moveToGroup: (groupId) => moved.push(groupId),
+      reorderSegment: (groupId, order) => reordered.push([groupId, order]),
+      placeInSegment: (groupId, order) => placed.push([groupId, order]),
+    })
+    return { plan, moved, reordered, placed }
+  }
+
+  /** 提交某一格，交出它收到的落点 */
+  function commitAt(plan: DragPlan, key: string, anchor: DropAnchor): void {
+    plan.targets.get(key)?.commit(anchor)
+  }
+
+  it('collects the row stretch of every group, including the one the source sits in', () => {
+    // 来源所在那一段的行仍要收：段内换位是这一段自己的事
+    const { plan } = anchorPlan('group-a')
+
+    expect(modes(plan)).toEqual([
+      ['sessionRows/ws-1/group-a', 'rows'],
+      ['sessionGroup/ws-1/group-b', 'container'],
+      ['groupHead/ws-1/group-b', 'container'],
+      ['sessionRows/ws-1/group-b', 'rows'],
+      ['loose/ws-1', 'container'],
+    ])
+  })
+
+  it('leaves the source group block out of its own target table', () => {
+    // 原地投放是构造期缺席：整块那一格不为自己那一段注册
+    const { plan } = anchorPlan('group-a')
+
+    expect([...plan.targets.keys()]).not.toContain('sessionGroup/ws-1/group-a')
+    expect([...plan.targets.keys()]).not.toContain('groupHead/ws-1/group-a')
+  })
+
+  it('reorders in place when the row stretch of the source group is hit', () => {
+    const { plan, moved, reordered, placed } = anchorPlan('group-a')
+    commitAt(plan, 'sessionRows/ws-1/group-a', { kind: 'after', rowId: 's-2' })
+
+    expect(reordered).toEqual([['group-a', ['s-2', 's-1']]])
+    // 归属没有变，因此另外两条路一次都不该走
+    expect(moved).toEqual([])
+    expect(placed).toEqual([])
+  })
+
+  it('reorders nothing when the source lands on its own row', () => {
+    const { plan, reordered } = anchorPlan('group-a')
+    commitAt(plan, 'sessionRows/ws-1/group-a', { kind: 'before', rowId: 's-1' })
+
+    // 换算判出逐位相同，因此不写盘
+    expect(reordered).toEqual([])
+  })
+
+  it('places the source into another group with the converted order', () => {
+    // 工况 5：跨段的锚点投放要同时改归属与目标段的顺序
+    const { plan, moved, reordered, placed } = anchorPlan('group-a')
+    commitAt(plan, 'sessionRows/ws-1/group-b', { kind: 'before', rowId: 's-3' })
+
+    expect(placed).toEqual([['group-b', ['s-1', 's-3']]])
+    // 顺序整份交出，归属由同一次落点一并改，因此不单独调整块那条路
+    expect(moved).toEqual([])
+    expect(reordered).toEqual([])
+  })
+
+  it('reads a drop on another group block as joining it without a position', () => {
+    const { plan, moved, placed } = anchorPlan('group-a')
+    commitAt(plan, 'sessionGroup/ws-1/group-b', { kind: 'inside' })
+
+    expect(moved).toEqual(['group-b'])
+    // 整块投放不动目标段的顺序位
+    expect(placed).toEqual([])
+  })
+
+  it('reads a drop on the loose stretch as leaving the group when the source is grouped', () => {
+    const { plan, moved } = anchorPlan('group-a')
+    commitAt(plan, 'loose/ws-1', { kind: 'inside' })
+
+    expect(moved).toEqual([''])
+  })
+
+  it('reorders the loose stretch when the source is already ungrouped', () => {
+    // 未归组段那一格的含义随来源而变：来源已在段里时它读作段内换位
+    const { plan, moved, reordered } = anchorPlan('')
+    commitAt(plan, 'loose/ws-1', { kind: 'before', rowId: 's-4' })
+
+    expect(reordered).toEqual([['', ['s-1', 's-4']]])
+    expect(moved).toEqual([])
+  })
+
+  it('collects every group block when the source comes from the loose stretch', () => {
+    const { plan } = anchorPlan('')
+
+    expect(modes(plan)).toEqual([
+      ['sessionGroup/ws-1/group-a', 'container'],
+      ['groupHead/ws-1/group-a', 'container'],
+      ['sessionRows/ws-1/group-a', 'rows'],
+      ['sessionGroup/ws-1/group-b', 'container'],
+      ['groupHead/ws-1/group-b', 'container'],
+      ['sessionRows/ws-1/group-b', 'rows'],
+      ['loose/ws-1', 'rows'],
+    ])
+  })
+
+  it('keeps folded members in place when the drop names a visible row', () => {
+    // 工况 14：落点只提供「参照行 id + 前后半」，换算在全量成员顺序上做
+    // 折叠段里那些没露出来的成员因此不动，相对位置自动保持
+    // 这里把 s-2 当作被折起的那一条：它从不出现在锚点里，却必须留在 s-1 与 s-3 之间
+    const moved: string[] = []
+    const reordered: [string, readonly string[]][] = []
+    const plan = sessionAnchorPlan({
+      workspaceId: 'ws-1',
+      sessionId: 's-4',
+      currentGroupId: 'group-b',
+      sections: [{ id: 'group-a', order: ['s-1', 's-2', 's-3'] }],
+      looseOrder: [],
+      moveToGroup: (groupId) => moved.push(groupId),
+      reorderSegment: (groupId, order) => reordered.push([groupId, order]),
+      placeInSegment: (groupId, order) => reordered.push([groupId, order]),
+    })
+
+    // 落点落在露出的 s-3 上（上半）：新序里 s-4 插到 s-3 之前，被折起的 s-2 仍在原位
+    plan.targets.get('sessionRows/ws-1/group-a')?.commit({ kind: 'before', rowId: 's-3' })
+
+    expect(reordered).toEqual([['group-a', ['s-1', 's-2', 's-4', 's-3']]])
   })
 })
 

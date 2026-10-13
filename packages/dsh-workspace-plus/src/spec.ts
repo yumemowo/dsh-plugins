@@ -3,6 +3,14 @@ import { z } from 'zod'
 import { ALL_ENTRIES } from './rootEntry.ts'
 import type { RootEntryAddress } from './rootEntry.ts'
 
+/**
+ * 空顺序位表的落盘初值
+ *
+ * 标注成 `Record<string, string[]>` 而不是就地写个 `{}`：`z.record` 的 `.default()` 会把
+ * 字面量 `{}` 也留进推断出的取值类型里，下游读这一格时就成了「表或空对象」的联合，索引不了
+ */
+const NO_ORDER_SLOTS: Record<string, string[]> = {}
+
 /** 一个会话分组：稳定的标识、显示名，以及按顺序归属的会话 */
 export const groupSchema = z.object({
   id: z.string(),
@@ -71,9 +79,9 @@ export const pickerStateSchema = z.object({
 })
 
 /**
- * 根节点的单例状态，工作区分组列表、菜单的三份记录，以及嵌套渲染的开关
+ * 根节点的单例状态，工作区分组列表、菜单的三份记录、会话段的顺序位，以及嵌套渲染的开关
  *
- * 三者都是「根节点这一层」的单例状态，同处一个 global 槽位，分开几份记录只会多几次可能对不齐的写入
+ * 四者都是「根节点这一层」的单例状态，同处一个 global 槽位，分开几份记录只会多几次可能对不齐的写入
  */
 export const workspaceTreeSchema = z.object({
   virtualWorkspaces: z.array(virtualWorkspaceSchema),
@@ -85,6 +93,15 @@ export const workspaceTreeSchema = z.object({
    * 与 `picker` 同一取舍，旧文件里缺这一格时按默认值读，不必升版本
    */
   nested: z.boolean().default(true),
+  /**
+   * 会话段的顺序位，段键到手动顺序的映射
+   *
+   * 缺一格表示该段没有手动顺序，仍按时间序渲染
+   * 段键由 `segment.ts` 构造，取值是该段成员 id 的列表
+   *
+   * 与 `picker` / `nested` 同一取舍：旧文件里缺这一格时按空表读，不必升版本
+   */
+  orderSlots: z.record(z.string(), z.array(z.string())).default(NO_ORDER_SLOTS),
 })
 
 /**
@@ -107,6 +124,7 @@ export const workspaceGroupsSpec = defineDomain({
       virtualWorkspaces: [],
       picker: { focused: ALL_ENTRIES, recent: [], pinned: [] },
       nested: true,
+      orderSlots: NO_ORDER_SLOTS,
     },
   },
   tables: { by_workspace: domainTable(workspaceGroupsSchema) },
@@ -117,6 +135,8 @@ export const workspaceGroupsSpec = defineDomain({
  *
  * `nested` 既回开关本身，也回按该开关归一后的归属，关着时每一条归属都已被清空，渲染侧不必再自行判断
  *
+ * `orderSlots` 是会话段的手动顺序，渲染侧据它决定每一段按手动序还是时间序
+ *
  * 末尾两格来自插件的行配置而不是存储域：官方 pin 集合没有上限参数，置顶区显示几条与置顶数量上限
  * 只能由本包在界面侧实施，因此与 `nested` 走同一条下发路径
  */
@@ -126,6 +146,7 @@ export const snapshotSchema = z.object({
   workspaceGroups: z.array(virtualWorkspaceSchema),
   picker: pickerStateSchema,
   nested: z.boolean(),
+  orderSlots: z.record(z.string(), z.array(z.string())),
   pinnedVisibleCount: z.number(),
   pinnedLimit: z.number(),
 })

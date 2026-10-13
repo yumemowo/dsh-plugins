@@ -16,7 +16,7 @@ import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useDnd, useOrderRow } from '../hooks/useDnd.ts'
-import { groupHeadKey, sessionGroupKey } from '../data/dnd.ts'
+import { groupHeadKey, sessionGroupKey, sessionRowsKey } from '../data/dnd.ts'
 import type { GroupSection as GroupSectionData } from '../data/types.ts'
 import type { OrderDragging } from '../data/dnd.ts'
 import styles from './components/rows.module.css'
@@ -156,7 +156,9 @@ export function GroupSection({
               <div className={styles.nest}>{childIds.map(renderChildWorkspace)}</div>
             )}
             {section.sessions.length <= 0 ? null : (
-              <div className={styles.sessions}>
+              // 组内会话行自己那一段另占一格区域键：整块那一格罩住分组头与内嵌子工作区
+              // 它们的 id 换不出这一段的位次，锚点换算因此只能落在这一格上
+              <div className={styles.sessions} {...dndZoneProps(sessionRowsKey(workspaceId, section.id))}>
                 {children}
               </div>
             )}

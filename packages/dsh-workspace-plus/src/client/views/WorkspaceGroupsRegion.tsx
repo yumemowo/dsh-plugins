@@ -58,6 +58,7 @@ import { DEFAULT_PINNED_LIMIT, DEFAULT_PINNED_VISIBLE_COUNT, normalizeSnapshot }
 import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { ALL_ENTRIES, sameAddress, virtualAddress, workspaceAddress } from '../../rootEntry.ts'
 import type { RootEntryAddress } from '../../rootEntry.ts'
+import { groupSlotKey, looseSlotKey } from '../../segment.ts'
 import { useFlipMarker } from '../useFlipMarker.ts'
 import { UNGROUPED_KEY, expandedAt, indicatorOf, modeOf, pinnedOf, sessionGroupExpansionOf, sessionGroupKey, virtualExpansionOf, workspaceExpansionOf } from '../store/viewMode.ts'
 import type { SessionGroupRef, ViewModeStoreHandle } from '../store/viewMode.ts'
@@ -305,6 +306,7 @@ const EMPTY_SNAPSHOT: WorkspaceGroupsSnapshot = {
   workspaceGroups: [],
   picker: EMPTY_PICKER_STATE,
   nested: true,
+  orderSlots: {},
   pinnedVisibleCount: DEFAULT_PINNED_VISIBLE_COUNT,
   pinnedLimit: DEFAULT_PINNED_LIMIT,
 }
@@ -861,6 +863,24 @@ interface RegionGroupActions {
    * `beforeGroupId` 为 undefined 表示挪到末尾
    */
   moveGroupBefore: (workspaceId: string, groupId: string, beforeGroupId: string | undefined) => void
+  /**
+   * 写一段会话的手动顺序
+   *
+   * 顺序位键见 `segment.ts`：组内段按 `group/<工作区>/<分组>`，未归组段按 `loose/<工作区>`
+   * 空表表示清掉这一格，该段退回时间序
+   */
+  setSegmentOrder: (key: string, order: readonly string[]) => void
+  /**
+   * 把一个会话落到某一段的指定位次
+   *
+   * 归属与目标段的顺序由这一条路径一起改，两笔写入串行下发
+   */
+  placeSessionInSegment: (
+    workspaceId: string,
+    sessionId: string,
+    groupId: string,
+    order: readonly string[],
+  ) => void
 }
 
 /**
@@ -878,8 +898,7 @@ function useRegionGroupActions(
 ): RegionGroupActions {
   const { createGroup, renameGroup, deleteGroup, moveSession, moveGroupBefore, moveWorkspace,
     createVirtualWorkspace, renameVirtualWorkspace, deleteVirtualWorkspace, forgetWorkspace,
-    renameWorkspace, deleteWorkspace, focusEntry, startSession } = props
-
+    renameWorkspace, deleteWorkspace, focusEntry, startSession, setSegmentOrder } = props
   /** 提交建组或改名，空名与取消都不写 */
   const commitGroupNameDraft = (): void => {
     const draft = ui.overlay
@@ -1043,6 +1062,39 @@ function useRegionGroupActions(
     [apply, moveGroupBefore],
   )
 
+  /**
+   * 一段会话的手动顺序写回
+   *
+   * 与上面两个同理是 `useCallback`：它会随会话行的拖拽计划传到每一行，行级 memo 按引用比对
+   */
+  const setSegmentOrderOrdered = useCallback(
+    (key: string, order: readonly string[]): void => {
+      apply(setSegmentOrder(key, order))
+    },
+    [apply, setSegmentOrder],
+  )
+
+  /**
+   * 把一个会话落到某一段的指定位次
+   *
+   * 这次落点同时改归属与目标段的顺序，是两笔写入：先归组，再按整份顺序写回
+   * 两笔必须串行，因为各自都是一轮「读快照、改、写回」，并发发出去会互相盖掉，后一笔会拿前一笔之前的快照做底
+   * 因此后一笔挂在前一笔的完成上，而不是各发一次
+   *
+   * 顺序写的是调用方按渲染序算好的整份，而不是只把锚点交给宿主去插
+   * 目标段本来没有顺序位时，宿主手里只有元数据的名单序，拿它建出第一份顺序会让这一段其余各行跳一次
+   * 整份写入让「接管」从当时显示的那一版长出来，显示零跳变
+   *
+   * 顺序与归属都相同时宿主不落盘，因此这一条路径不会在盘上留下空改动
+   */
+  const placeSessionInSegment = useCallback(
+    (workspaceId: string, sessionId: string, groupId: string, order: readonly string[]): void => {
+      const key = groupId === '' ? looseSlotKey(workspaceId) : groupSlotKey(workspaceId, groupId)
+      apply(moveSession(workspaceId, sessionId, groupId).then(() => setSegmentOrder(key, order)))
+    },
+    [apply, moveSession, setSegmentOrder],
+  )
+
   return {
     commitGroupNameDraft,
     commitGroupDelete,
@@ -1053,6 +1105,8 @@ function useRegionGroupActions(
     createSessionIn,
     selectSessionGroup,
     moveGroupBefore: moveGroupOrdered,
+    setSegmentOrder: setSegmentOrderOrdered,
+    placeSessionInSegment,
   }
 }
 

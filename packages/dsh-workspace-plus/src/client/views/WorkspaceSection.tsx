@@ -17,6 +17,9 @@ import { useExpansion } from '../hooks/useExpansion.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useDnd } from '../hooks/useDnd.ts'
 import { looseKey } from '../data/dnd.ts'
+import { reconcileOrder } from '../data/order.ts'
+import type { OrderSlots } from '../data/order.ts'
+import { groupSlotKey, looseSlotKey } from '../../segment.ts'
 import type { OrderDragging } from '../data/dnd.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
 import styles from './components/rows.module.css'
@@ -45,6 +48,13 @@ export interface WorkspaceSectionProps {
   compareRows: (a: SessionRow, b: SessionRow) => number
   /** 本工作区体内始终展示并占额度的会话行 id */
   alwaysVisibleSessionIds: ReadonlySet<string>
+  /**
+   * 本工作区各会话段的手动顺序
+   *
+   * 缺一格表示该段没有手动顺序、仍按时间序渲染，整格缺省表示这个工作区与它体内每一段都没有
+   * 组内会话按 `group/<工作区>/<分组>` 取，未归组段按 `loose/<工作区>` 取
+   */
+  orderSlots?: OrderSlots | undefined
   /** 折叠判定的基准时刻，与行尾相对时间取同一刻 */
   now: number
   /** 待揭示的会话 id，转交给两段会话列表 */
@@ -73,6 +83,7 @@ export function WorkspaceSection({
   revealSessionId,
   groupActions,
   orderDragging,
+  orderSlots,
   renderSession,
   renderChildWorkspace,
 }: WorkspaceSectionProps): ReactElement {
@@ -139,7 +150,11 @@ export function WorkspaceSection({
               >
                 <SessionList
                   scope={{ kind: 'group', workspaceId, groupId: section.id }}
-                  rows={[...section.sessions].sort(compareRows)}
+                  rows={reconcileOrder(
+                    orderSlots?.[groupSlotKey(workspaceId, section.id)],
+                    section.sessions,
+                    compareRows,
+                  )}
                   alwaysVisibleSessionIds={alwaysVisibleSessionIds}
                   now={now}
                   open={groupExpanded}
@@ -155,7 +170,7 @@ export function WorkspaceSection({
             <div className={styles.sessions} {...looseZone}>
               <SessionList
                 scope={{ kind: 'loose', workspaceId }}
-                rows={[...layout.loose].sort(compareRows)}
+                rows={reconcileOrder(orderSlots?.[looseSlotKey(workspaceId)], layout.loose, compareRows)}
                 alwaysVisibleSessionIds={alwaysVisibleSessionIds}
                 now={now}
                 open={row.expanded}

@@ -1,6 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { DEFAULT_PINNED_LIMIT, DEFAULT_PINNED_VISIBLE_COUNT } from './config.ts'
 import type { WorkspacePlusConfig } from './config.ts'
+import { groupSlotKey, looseSlotKey } from './segment.ts'
 import { workspaceGroupsSpec } from './spec.ts'
 import type {
   Group,
@@ -23,8 +24,35 @@ export interface WorkspaceGroupsService {
   renameGroup(workspaceId: string, groupId: string, name: string): Promise<WorkspaceGroupsSnapshot>
   /** 删除会话分组，组内会话回到未分组，放进它的子工作区解除嵌套，会话本身不受影响 */
   deleteGroup(workspaceId: string, groupId: string): Promise<WorkspaceGroupsSnapshot>
-  /** 把会话移入分组，`groupId` 为 null 表示移出到未分组 */
-  moveSession(workspaceId: string, sessionId: string, groupId: string | null): Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把会话移入分组，`groupId` 为 null 表示移出到未分组
+   *
+   * 一条会话至多属于一个分组，移入时自动从原分组摘除
+   *
+   * `beforeSessionId` 只在目标段已有手动顺序时才起作用，那时把这条会话插到该成员之前
+   * 锚点已不在那一份顺序里时按末尾读
+   * 目标段还没有手动顺序时不凭空造一份，那一段因此仍按时间序渲染，新会话的位置由时间决定
+   * 顺序没有变化的也不写盘，与分组排序同一取舍
+   * @param workspaceId - 会话所属工作区
+   * @param sessionId - 被挪动的会话
+   * @param groupId - 目标分组 id，null 表示未归组
+   * @param beforeSessionId - 插到哪条会话之前，缺省表示不动目标段的顺序位
+   */
+  moveSession(
+    workspaceId: string,
+    sessionId: string,
+    groupId: string | null,
+    beforeSessionId?: string | undefined,
+  ): Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 写某一段的手动顺序
+   *
+   * 键的形状由 `segment.ts` 钉住，宿主不解析它，只当一格存储用
+   * 顺序与现状相同时不写盘，空顺序整格删掉，两者都收在同一个判断里
+   * @param key - 段键，见 `segment.ts`
+   * @param order - 该段成员的完整顺序，缺席的成员由渲染侧按时间序接在后面
+   */
+  setSegmentOrder(key: string, order: readonly string[]): Promise<WorkspaceGroupsSnapshot>
   /**
    * 把一个会话分组挪到同工作区的另一个分组之前
    *
@@ -145,6 +173,33 @@ function reorderById<T extends { id: string }>(
 }
 
 /**
+ * 把成员插到顺序里的某一条之前
+ *
+ * 顺序位与分组数组不同：它只装 id，成员可能还没进过这一段，因此插进去之前先摘掉它原有的那一格
+ * 锚点缺省表示挪到末尾，锚点不在顺序里时同样按末尾读
+ * 拖拽期间快照可能被别处改过，那时末尾比丢掉这次挪动更接近用户的意图
+ * @param order - 这一段当前的手动顺序
+ * @param memberId - 要插进去的成员
+ * @param beforeId - 插到哪个成员之前，缺省表示末尾
+ * @returns 新顺序
+ */
+function insertBefore(
+  order: readonly string[],
+  memberId: string,
+  beforeId: string | undefined,
+): string[] {
+  const rest = order.filter((id) => id !== memberId)
+  const at = beforeId === undefined ? rest.length : rest.findIndex((id) => id === beforeId)
+  const index = at < 0 ? rest.length : at
+  return [...rest.slice(0, index), memberId, ...rest.slice(index)]
+}
+
+/** 两份顺序是否逐位相同，用来把一次没有改变任何位置的写入挡在盘外 */
+function sameOrder(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, index) => id === b[index])
+}
+
+/**
  * 打开持久化域并构造服务
  *
  * 每次变更都以整份快照返回，调用方直接替换本地状态即可，无需自行推导差量
@@ -193,6 +248,8 @@ export async function createWorkspaceGroupsService(
       picker: normalizePickerState(global.picker),
       // 同样补格，旧 global 里没有这一格，直接交给渲染侧会得到 undefined
       nested: global.nested !== false,
+      // 这一格由 schema 的默认值补齐，旧 global 里没有它时读到的就是空表
+      orderSlots: global.orderSlots,
       ...pinnedSettings(),
     }
   }
@@ -266,13 +323,19 @@ export async function createWorkspaceGroupsService(
    * @param patch - 要改的格，其余原样保留
    */
   async function writeTree(
-    patch: Partial<{ virtualWorkspaces: VirtualWorkspace[]; picker: PickerSnapshot; nested: boolean }>,
+    patch: Partial<{
+      virtualWorkspaces: VirtualWorkspace[]
+      picker: PickerSnapshot
+      nested: boolean
+      orderSlots: Record<string, string[]>
+    }>,
   ): Promise<WorkspaceGroupsSnapshot> {
     const global = tree.get()
     await tree.set({
       virtualWorkspaces: patch.virtualWorkspaces ?? global.virtualWorkspaces,
       picker: patch.picker ?? normalizePickerState(global.picker),
       nested: patch.nested ?? global.nested !== false,
+      orderSlots: patch.orderSlots ?? global.orderSlots,
     })
     return snapshot()
   }
@@ -289,6 +352,24 @@ export async function createWorkspaceGroupsService(
    */
   function savePicker(picker: PickerSnapshot): Promise<WorkspaceGroupsSnapshot> {
     return writeTree({ picker })
+  }
+
+  /**
+   * 写回一段的手动顺序
+   *
+   * `order` 为空时整格删掉而不是留一份空数组，因为两者在渲染侧是同一件事（这一段没有手动顺序）
+   * 留空数组只会让 global 里堆出越来越多的空槽
+   * @param key - 段键，见 `segment.ts`
+   * @param order - 该段成员的完整顺序
+   */
+  function saveSegmentOrder(
+    key: string,
+    order: readonly string[],
+  ): Promise<WorkspaceGroupsSnapshot> {
+    const slots = { ...tree.get().orderSlots }
+    if (order.length === 0) delete slots[key]
+    else slots[key] = [...order]
+    return writeTree({ orderSlots: slots })
   }
 
   /**
@@ -347,7 +428,7 @@ export async function createWorkspaceGroupsService(
       return save(workspaceId, groups)
     },
 
-    async moveSession(workspaceId, sessionId, groupId) {
+    async moveSession(workspaceId, sessionId, groupId, beforeSessionId) {
       // 先在所有分组中摘除该会话，保证一个会话至多属于一个分组
       const groups = groupsOf(workspaceId).map((group) => ({
         ...group,
@@ -358,7 +439,22 @@ export async function createWorkspaceGroupsService(
         if (target === undefined) throw new Error(`unknown group "${groupId}" in workspace "${workspaceId}"`)
         target.sessionIds.push(sessionId)
       }
-      return save(workspaceId, groups)
+      const next = await save(workspaceId, groups)
+      // 目标段还没有手动顺序时不凭空造一份：那一段仍按时间序渲染，新会话的位置由时间决定
+      // 有顺序位时把它插到锚点之前，锚点不在那一份里、或插完与现状逐位相同，都只是省下一次写
+      if (beforeSessionId === undefined) return next
+      const key = groupId === null ? looseSlotKey(workspaceId) : groupSlotKey(workspaceId, groupId)
+      const slot = tree.get().orderSlots[key]
+      if (slot === undefined) return next
+      const order = insertBefore(slot, sessionId, beforeSessionId)
+      return sameOrder(order, slot) ? next : saveSegmentOrder(key, order)
+    },
+
+    async setSegmentOrder(key, order) {
+      const slot = tree.get().orderSlots[key]
+      // 写一份与现状相同的顺序不该在盘上留下一次改动，与分组排序对相邻位空操作的取舍一致
+      if (slot !== undefined && sameOrder(slot, order)) return snapshot()
+      return saveSegmentOrder(key, order)
     },
 
     async moveGroupBefore(workspaceId, groupId, beforeGroupId) {
@@ -451,6 +547,7 @@ export async function createWorkspaceGroupsService(
         virtualWorkspaces: global.virtualWorkspaces,
         picker: normalizePickerState(global.picker),
         nested: enabled,
+        orderSlots: global.orderSlots,
       })
       for (const entry of cleared) {
         await saveRecord(entry.childId, entry.groups, null)
