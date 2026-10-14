@@ -19,6 +19,7 @@ import type { OfficialSessionActions } from '../actions.ts'
 import { buildLayout, containsSession, groupIdOfSession, virtualWorkspaceIdOf } from '../data/layout.ts'
 import {
   ROOT_KEY,
+  SCROLL_ATTRIBUTE,
   groupHeadKey,
   orderDragPlan,
   sessionGroupingPlan,
@@ -256,7 +257,8 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
 
   if (viewMode === 'flat') {
     return (
-      /* 平铺：全部可见会话在同一条列表里，与官方「单列表」（groupBy: 'flat'）一致 */
+      /* 平铺：全部可见会话在同一条列表里，与官方「单列表」（groupBy: 'flat'）一致
+         这一支不挂滚动标记：平铺的行拖不动，整片也没有任何落点，让它跟着指针滚没有意义 */
       <div className={clsx(regionStyles.list, regionStyles.panel)}>
         <div className={rowsStyles.flatList}>
           {props.flatRows.map((row) => sessionRowElement(row, session, rowLabels))}
@@ -272,7 +274,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
        根节点整片另带一格区域属性：工作区拖到分组结构之外的任何空白上都读作移出虚拟工作区分组
        这一格罩住整片列表，因此它是那类落点的兜底
        平铺在它上面的工作区行另各占一格，命中层先撞上行的键 */
-    <div className={clsx(regionStyles.list, regionStyles.panel)} {...rootZone}>
+    <div className={clsx(regionStyles.list, regionStyles.panel)} {...rootZone} {...{ [SCROLL_ATTRIBUTE]: '' }}>
       {/* 工作区分组段排在前面，未归组的工作区平铺在其后、不带区段头
           没有建过分组时 rootLayout.groups 为空、全部工作区都在 loose 里
           这一层因此不改变任何行的位置 */}

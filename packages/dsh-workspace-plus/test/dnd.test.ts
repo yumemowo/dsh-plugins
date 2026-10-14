@@ -14,6 +14,7 @@ import {
   PINNED_KEY,
   ROOT_KEY,
   ROW_ATTRIBUTE,
+  SCROLL_ATTRIBUTE,
   ZONE_ATTRIBUTE,
   beforeIdOf,
   containsPoint,
@@ -951,5 +952,11 @@ describe('the two markers the mechanism owns', () => {
     expect(ZONE_ATTRIBUTE).toBe('data-wg-dnd')
     expect(ROW_ATTRIBUTE).toBe('data-wg-dnd-row')
     expect(DROP_ATTRIBUTE).toBe('data-wg-drop')
+  })
+
+  it('names the scrolling containers on an attribute of their own', () => {
+    // 可滚的容器与落点区域是两回事：一处容器罩着多段落点，一个落点也可能在不可滚的祖先里
+    expect(SCROLL_ATTRIBUTE).toBe('data-wg-dnd-scroll')
+    expect(SCROLL_ATTRIBUTE).not.toBe(ZONE_ATTRIBUTE)
   })
 })

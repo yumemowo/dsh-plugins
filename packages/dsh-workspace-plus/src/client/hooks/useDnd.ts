@@ -15,14 +15,19 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import {
+  DIM_ATTRIBUTE,
   DROP_ATTRIBUTE,
   ROW_ATTRIBUTE,
+  SCOPE_ATTRIBUTE,
+  SCROLL_ATTRIBUTE,
   ZONE_ATTRIBUTE,
   findZone,
   resolveHit,
   targetOfZone,
 } from '../data/dnd.ts'
 import type { DragPlan, DragPlanTarget, DropAnchor, DropHit } from '../data/dnd.ts'
+import { autoScrollStep } from '../data/scroll.ts'
+import type { ScrollBox } from '../data/scroll.ts'
 
 /**
  * 拖拽载荷的前缀
@@ -48,6 +53,7 @@ let currentPlan: DragPlan | null = null
  * 交空表让命中层一路查不到，比抛错或延续上一次的落点都更接近事实
  */
 const EMPTY_PLAN: DragPlan = { source: { kind: 'session', id: '' }, targets: new Map() }
+
 
 /** 自内向外取一棵祖先链，含元素自己 */
 function chainOf(element: Element): Element[] {
@@ -75,36 +81,172 @@ function rowsIn(element: Element): Element[] {
 }
 
 /**
+ * 一份提交的落点该画在哪一个元素上
+ *
+ * 一份提交可以对应不止一格：分组块与它的分组头是两格，虚拟工作区分组的组头与组体也是两格
+ * 指针落在哪一格上，用户看到的都是同一件事；各画一圈会被读成两个区域，正是要避免的
+ *
+ * 合并到这些格的共同祖先，但只在那个祖先的子树里没有别的提交时才这么做
+ * 未归组段与工作区标题行也共用一份提交，可两者一个在段尾、一个在顶部，
+ * 共同祖先是整个工作区块，合并会把那一圈罩住体内并不可投的分组块，因此那里退回各自成格
+ * @param root - 本实例那一片的根节点
+ * @param plan - 当前计划
+ * @returns 每个区域元素 → 该画标记的那个元素
+ */
+function landingElements(root: ParentNode, plan: DragPlan): Map<Element, Element> {
+  const byTarget = new Map<DragPlanTarget, Element[]>()
+  const targetOf = new Map<Element, DragPlanTarget>()
+  for (const element of root.querySelectorAll(`[${ZONE_ATTRIBUTE}]`)) {
+    const key = element.getAttribute(ZONE_ATTRIBUTE)
+    if (key === null) continue
+    const target = plan.targets.get(key)
+    if (target === undefined) continue
+    targetOf.set(element, target)
+    const seen = byTarget.get(target)
+    if (seen === undefined) byTarget.set(target, [element])
+    else seen.push(element)
+  }
+
+  const out = new Map<Element, Element>()
+  for (const [target, elements] of byTarget) {
+    const shared = elements.length > 1 ? commonAncestorOf(elements) : (elements[0] as Element)
+    const clean =
+      shared !== null &&
+      !Array.from(shared.querySelectorAll(`[${ZONE_ATTRIBUTE}]`)).some(
+        (inner) => targetOf.get(inner) !== undefined && targetOf.get(inner) !== target,
+      )
+    for (const element of elements) out.set(element, clean ? (shared as Element) : element)
+  }
+  return out
+}
+
+/**
+ * 一组元素的共同祖先里最深的那个
+ * @param elements - 同一份提交的那些落点元素
+ */
+function commonAncestorOf(elements: readonly Element[]): Element | null {
+  let chain = chainOf(elements[0] as Element)
+  for (const element of elements.slice(1)) {
+    const others = new Set(chainOf(element))
+    chain = chain.filter((node) => others.has(node))
+  }
+  return chain[0] ?? null
+}
+
+/**
  * 落点标记画在哪个元素上
  *
- * `before` / `after` 是对某一条参照行的落点，标记因此画在那条行上，线才贴着它
- * 「一格即一行」的段（分组头）本来就命中那一个元素，这里取回的还是它
- * 「一格装多行」的段（组内会话段、未归组段）只能按锚点里的参照行 id 回溯到具体那一行
- * 画在段容器上会让线落在整段的上边或下边，与放开后真正落到的位置不符
- * `inside` 是整块投放，标记仍画在区域元素上，整块描一圈
- * @param zoneElement - 命中的区域元素
+ * 整块投放画在这一份提交合并后的那一格上，一次拖拽只画一圈
+ * 按行插入画在参照行自己身上，线才贴着那一行
+ * 「一格装多行」的段按锚点里的参照行 id 回溯；画在段容器上会让线落在整段的上边或下边
+ * @param landing - 命中的区域元素，或它合并后的落点元素
  * @param rows - 该区域里的参照行元素
  * @param hit - 落点读数
  */
 function markerElementOf(
-  zoneElement: Element,
+  landing: Element,
   rows: readonly Element[],
   hit: DropHit | null,
 ): Element {
-  if (hit === null || hit.anchor.kind === 'inside') return zoneElement
+  if (hit === null) return landing
+  if (hit.anchor.kind === 'inside') return landing
   const rowId = hit.anchor.rowId
-  return rows.find((element) => element.getAttribute(ROW_ATTRIBUTE) === rowId) ?? zoneElement
+  return rows.find((element) => element.getAttribute(ROW_ATTRIBUTE) === rowId) ?? landing
 }
 
 /**
  * 清掉一组元素上的落点标记
  *
  * 只清本实例画过的那些，而不是扫整份文档或某一棵子树
- * 侧边栏与对照 tab 双开时两者共享同一个`document`，扫谁的范围都可能把另一个实例正画着的标记擦掉，而两个实例的渲染树也没有共同祖先
+ * 侧边栏与对照 tab 双开时两者共享同一个 `document`，扫谁的范围都可能把另一个实例正画着的标记擦掉
  * @param marked - 本实例画过标记的元素
  */
 function clearMarkers(marked: Iterable<Element>): void {
   for (const element of marked) element.removeAttribute(DROP_ATTRIBUTE)
+}
+
+/**
+ * 清掉一组元素上的压淡标记
+ * @param marked - 本实例压淡过的元素
+ */
+function clearDimmed(marked: Iterable<Element>): void {
+  for (const element of marked) element.removeAttribute(DIM_ATTRIBUTE)
+}
+
+/**
+ * 一个元素的子树里有没有本次的落点
+ * @param element - 待查的元素
+ * @param plan - 当前计划
+ */
+function containsLanding(element: Element, plan: DragPlan): boolean {
+  for (const inner of element.querySelectorAll(`[${ZONE_ATTRIBUTE}]`)) {
+    const key = inner.getAttribute(ZONE_ATTRIBUTE)
+    if (key !== null && plan.targets.has(key)) return true
+  }
+  return false
+}
+
+/**
+ * 本次拖拽够不着、该压淡的元素
+ *
+ * 引导按「压淡够不着的」做，而不是「点亮够得着的」
+ * 一次拖拽能落到的地方往往有好几处，逐个点亮会把界面涂成一片
+ * 反过来只让够不着的退下去，可投的那些保持原样，指针下那一处再单独抬高，三段因此分得开
+ *
+ * 两条都成立才压淡
+ * - 这个元素自己的区域键不是落点
+ * - 它子树里也没有落点
+ *
+ * 第二条让包着一片落点的外层退出：列表根节点罩着全部工作区，压它会把可投的目标一起压淡
+ * 第一条覆盖来源自己所在的那一片：按构造它不在计划里，拖回去是原地投放，那一片因此退下去
+ *
+ * 祖先已经压淡的不再单独标：整片淡一次足够，重复标只会让样式叠乘
+ * 压淡盖住了里面的被拖行时，行自己那一层画淡由样式表让开，两层不会叠乘
+ * @param root - 本实例那一片的根节点
+ * @param plan - 当前计划
+ */
+function dimmedElements(root: ParentNode, plan: DragPlan): Element[] {
+  const candidates: Element[] = []
+  for (const element of root.querySelectorAll(`[${ZONE_ATTRIBUTE}], [${SCOPE_ATTRIBUTE}]`)) {
+    const key = element.getAttribute(ZONE_ATTRIBUTE)
+    if (key !== null && plan.targets.has(key)) continue
+    if (containsLanding(element, plan)) continue
+    candidates.push(element)
+  }
+  return candidates.filter(
+    (element) => !candidates.some((outer) => outer !== element && outer.contains(element)),
+  )
+}
+
+/**
+ * 拖拽期间还滚得动的容器，按文档序
+ *
+ * 两条都要满足：
+ * - 内容确实超出了一屏，否则没什么可滚
+ * - 溢出样式是 auto 或 scroll。`overflow: hidden` 的元素同样吃 `scrollTop`，
+ *   滚它会让被裁掉的内容在无滚动条的情况下凭空错位，用户找不回自己在哪
+ *
+ * 置顶区展开档正是后一种：静止时它靠 `overflow: hidden` 裁掉超出的行，要浮出才变成可滚
+ *
+ * 每帧重取而不是拖起时取一次：撑开体在拖拽中可能展开或收起，可滚的高度跟着变
+ * @param root - 本实例那一片的根节点，或整份文档
+ */
+function scrollContainers(root: ParentNode): HTMLElement[] {
+  const found = root.querySelectorAll<HTMLElement>(`[${SCROLL_ATTRIBUTE}]`)
+  return Array.from(found).filter((element) => {
+    if (element.scrollHeight <= element.clientHeight) return false
+    const overflowY = getComputedStyle(element).overflowY
+    return overflowY === 'auto' || overflowY === 'scroll'
+  })
+}
+
+/**
+ * 一个容器在视口里的范围
+ * @param element - 可滚动的容器
+ */
+function boxOf(element: HTMLElement): ScrollBox {
+  const rect = element.getBoundingClientRect()
+  return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right }
 }
 
 /**
@@ -182,8 +324,32 @@ export function DndProvider({
     dragend: () => void
   } | null>(null)
 
+  /** 自动滚动那一帧的句柄，没有循环在跑时为 null */
+  const scrollFrameRef = useRef<number | null>(null)
+  /**
+   * 指针最后一次被读到的位置
+   *
+   * 只从 `dragover` 里取，不额外挂别的事件
+   * 拖拽期间浏览器只保证派发拖放那一族，`mousemove` 在原生拖放中根本不产生
+   * 自动滚动会让指针下的内容移位，而程序化滚动不会重派 `dragover`，
+   * 因此滚动之后要拿这个坐标自己重算一次落点，否则松手提交的是滚之前那一格
+   */
+  const pointerRef = useRef<{ x: number; y: number } | null>(null)
+  /** 上一帧的时间戳，用来算这一帧的滚动量 */
+  const lastFrameRef = useRef(0)
+  /**
+   * 上一次本包写完之后，各个滚动容器停在哪
+   *
+   * 下一帧先跟这里比对：对不上就说明还有别的机制在滚同一个容器
+   */
+  const ownTopRef = useRef(new Map<HTMLElement, number>())
+
   /** 本实例画过落点标记的元素，清理时只碰这些 */
   const markedRef = useRef<Set<Element>>(new Set())
+  /** 本实例压淡过的元素，同上 */
+  const dimmedRef = useRef<Element[]>([])
+  /** 这一场拖拽里每个区域元素该把标记画在哪，指针移动期间只查它 */
+  const landingRef = useRef<Map<Element, Element>>(new Map())
   /**
    * 上一次 `dragover` 算出的落点
    *
@@ -195,11 +361,27 @@ export function DndProvider({
   const committedRef = useRef(false)
 
   /**
+   * 停止自动滚动
+   *
+   * 与开始那处成对：`teardown` 与「后到的计划覆盖先到的」都走它，因此两处不会各写一份
+   */
+  const stopAutoScroll = useCallback(() => {
+    if (scrollFrameRef.current !== null) {
+      cancelAnimationFrame(scrollFrameRef.current)
+      scrollFrameRef.current = null
+    }
+    pointerRef.current = null
+    lastFrameRef.current = 0
+    ownTopRef.current = new Map()
+  }, [])
+
+  /**
    * 摘掉监听与本实例画下的全部标记
    *
    * `dragend` 与「提交完成后」都走它，因此两处不会各写一份清理
    */
   const teardown = useCallback(() => {
+    stopAutoScroll()
     const listeners = listenersRef.current
     if (listeners !== null) {
       document.removeEventListener('dragover', listeners.dragover)
@@ -209,9 +391,12 @@ export function DndProvider({
     }
     clearMarkers(markedRef.current)
     markedRef.current = new Set()
+    clearDimmed(dimmedRef.current)
+    dimmedRef.current = []
+    landingRef.current = new Map()
     pendingRef.current = null
     currentPlan = null
-  }, [])
+  }, [stopAutoScroll])
 
   /**
    * 画这一次命中的落点标记
@@ -222,9 +407,8 @@ export function DndProvider({
    * @param hit - 落点读数，没有落点时为 null
    * @param rows - 该区域里的参照行元素，`before` / `after` 据此落到具体那一行上
    */
-  const drawMarker = useCallback(
-    (element: Element | null, hit: DropHit | null, rows: readonly Element[] = []) => {
-      const marked = element === null ? null : markerElementOf(element, rows, hit)
+  const drawMarker = useCallback((landing: Element | null, hit: DropHit | null, rows: readonly Element[] = []) => {
+      const marked = landing === null ? null : markerElementOf(landing, rows, hit)
       for (const previous of markedRef.current) {
         if (previous !== marked) previous.removeAttribute(DROP_ATTRIBUTE)
       }
@@ -277,11 +461,83 @@ export function DndProvider({
         pendingRef.current = null
         return
       }
-      drawMarker(found.element, found.hit, found.rows)
+      drawMarker(landingRef.current.get(found.element) ?? found.element, found.hit, found.rows)
       pendingRef.current = found.hit === null ? null : { target: found.zoneTarget, anchor: found.hit.anchor }
     },
     [drawMarker, hitAt],
   )
+
+  /**
+   * 边缘自动滚动的那一帧
+   *
+   * 指针在容器的触发带里就按离边缘的远近滚一截，滚完按同一个坐标重算一次落点
+   * 程序化滚动不会重派 `dragover`，指针下的元素却已经换了，不重算就会把滚之前那一格提交出去
+   * @param timestamp - 这一帧的时间戳，用来算与上一帧的间隔
+   */
+  const scrollFrame = useCallback(
+    (timestamp: number) => {
+      scrollFrameRef.current = null
+      // 计划没了就是这一场拖拽已经结束，不必再排下一帧
+      const plan = currentPlan
+      if (plan === null) return
+      const pointer = pointerRef.current
+      // 第一帧常常早于首次 `dragover`（起拖到指针移动之间有一段静止），那时还没有坐标
+      // 这时不能直接返回，否则循环再也接不上
+      if (pointer === null) {
+        scrollFrameRef.current = requestAnimationFrame(scrollFrame)
+        return
+      }
+
+      // 首帧没有上一帧可减，按一个 60Hz 的间隔起步，避免第一帧跳一大步
+      const elapsedMs = lastFrameRef.current === 0 ? 16 : timestamp - lastFrameRef.current
+      const containers = scrollContainers(region?.current ?? document)
+      const decision = autoScrollStep({
+        boxes: containers.map(boxOf),
+        pointer,
+        elapsedMs,
+      })
+
+      if (decision.index >= 0) {
+        const container = containers[decision.index]
+        if (container !== undefined) {
+          const before = container.scrollTop
+          const own = ownTopRef.current.get(container)
+          // 原生拖放自带的边缘滚动关不掉，指针进到贴边那十几像素里时浏览器自己也在滚同一个容器
+          // 两份直接相加就成了「本包那一段 + 浏览器那一份」，逐帧位移在两档之间来回跳，看着就是走一下停一下
+          // 那一帧因此让给浏览器：只把它推到的位置收下，等它不再动，本包下一帧自然接着算
+          const takenByOther = own !== undefined && before !== own
+          if (!takenByOther) container.scrollTop = before + decision.step
+          const after = container.scrollTop
+          ownTopRef.current.set(container, after)
+          // 已经贴到那一头时值不再变，这一帧不必重算落点
+          if (takenByOther || after !== before) {
+            // jsdom 不实现 `elementFromPoint`，取不到就跳过这一帧的重算：坐标反查是这里的便利，不是承重
+            const target =
+              typeof document.elementFromPoint === 'function'
+                ? document.elementFromPoint(pointer.x, pointer.y)
+                : null
+            applyHit(target, pointer)
+          }
+        }
+      }
+
+      lastFrameRef.current = timestamp
+      scrollFrameRef.current = requestAnimationFrame(scrollFrame)
+    },
+    [applyHit, region],
+  )
+
+  /**
+   * 起一轮自动滚动
+   *
+   * 容器可能在指针进带之后才变得可滚（撑开体展开、列表变长），因此每帧重新取一次容器表
+   * 指针不在触发带里的那些帧只是空转，代价是每帧一次查表与几条 `getBoundingClientRect`
+   */
+  const startAutoScroll = useCallback(() => {
+    if (scrollFrameRef.current !== null) return
+    lastFrameRef.current = 0
+    scrollFrameRef.current = requestAnimationFrame(scrollFrame)
+  }, [scrollFrame])
 
   /**
    * 提交上一次命中画下的落点，只发生一次
@@ -305,10 +561,21 @@ export function DndProvider({
       currentPlan = plan
       committedRef.current = false
 
+      // 每份提交合并成一块，指针移动期间不再重算
+      landingRef.current = landingElements(region?.current ?? document, plan)
+
+      // 压淡够不着的那一片：判定与命中层同源，因此不会出现「淡着却能放进去」
+      const dimmed = dimmedElements(region?.current ?? document, plan)
+      for (const element of dimmed) element.setAttribute(DIM_ATTRIBUTE, '')
+      dimmedRef.current = dimmed
+
       const dragover = (event: DragEvent): void => {
         // 接管这一格，浏览器才会把元素读成可放置的容器，`drop` 才会派发
         event.preventDefault()
-        applyHit(event.target as Element | null, { x: event.clientX, y: event.clientY })
+        const point = { x: event.clientX, y: event.clientY }
+        // 自动滚动那一帧没有事件可读，指针位置只能在这里留下
+        pointerRef.current = point
+        applyHit(event.target as Element | null, point)
       }
       const drop = (event: DragEvent): void => {
         // 与 `dragover` 同理：不拦的话浏览器会按默认行为处理这次放置
@@ -323,8 +590,9 @@ export function DndProvider({
       document.addEventListener('dragover', dragover)
       document.addEventListener('drop', drop)
       document.addEventListener('dragend', dragend)
+      startAutoScroll()
     },
-    [applyHit, commit, teardown],
+    [applyHit, commit, region, startAutoScroll, teardown],
   )
 
   // 提供者被卸载时那一场拖拽跟着作废：监听留着会指到一个已经不渲染的树

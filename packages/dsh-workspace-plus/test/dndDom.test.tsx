@@ -312,6 +312,22 @@ describe('dragging a session into a group', () => {
     await act(async () => root.unmount())
   })
 
+  it('draws one ring for the block when the pointer sits on its head', async () => {
+    // 分组头与整块分组是两格但同一份提交，用户看到的是一件事，因此只该出现一圈
+    // 命中层停在头那一格上，标记要外扩到底下那一整块，而不是只描住头这一行
+    const { container, root } = await mount()
+    const block = zone(container, 'sessionGroup/ws-1/group-a')
+    const head = zone(container, 'groupHead/ws-1/group-a')
+
+    fire(row(container, 'session-1'), 'dragstart')
+    fire(head, 'dragover')
+
+    expect(block.getAttribute('data-wg-drop')).toBe('inside')
+    expect(head.getAttribute('data-wg-drop')).toBeNull()
+    expect(container.querySelectorAll('[data-wg-drop]')).toHaveLength(1)
+    await act(async () => root.unmount())
+  })
+
   it('reads a drop on the group block itself as joining that group', async () => {
     // 块上仍读作整块归组：没有落到某一行上时（分组体留白、空分组），用户要的是归组而不是某个位次
     const { container, root, moves, orders, slots } = await mount()
@@ -530,6 +546,67 @@ describe('committing exactly once', () => {
   })
 })
 
+describe('the guide to what this drag can reach', () => {
+  it('dims the stretch that cannot take the session and leaves the reachable ones plain', async () => {
+    // 引导按「压淡够不着的」做：够得着的保持原样，一次拖拽里界面因此不会被涂成一片
+    const { container, root } = await mount()
+    const own = zone(container, 'sessionGroup/ws-1/group-a')
+    const other = zone(container, 'sessionGroup/ws-1/group-b')
+
+    // 来源是 group-a 里的一条：group-a 自己拖回去是原地投放，因此不进计划、该压淡
+    fire(row(container, 'session-3'), 'dragstart')
+
+    expect(own.getAttribute('data-wg-dnd-dim')).toBe('')
+    expect(other.getAttribute('data-wg-dnd-dim')).toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('leaves every stretch plain when the drag reaches all of them', async () => {
+    // 未归组那一条能落进任何一个分组，因此两个分组块都不该压淡
+    const { container, root } = await mount()
+
+    fire(row(container, 'session-1'), 'dragstart')
+
+    expect(zone(container, 'sessionGroup/ws-1/group-a').getAttribute('data-wg-dnd-dim')).toBeNull()
+    expect(zone(container, 'sessionGroup/ws-1/group-b').getAttribute('data-wg-dnd-dim')).toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('marks nothing while no drag is running', async () => {
+    const { container, root } = await mount()
+
+    expect(container.querySelectorAll('[data-wg-dnd-dim]').length).toBe(0)
+    await act(async () => root.unmount())
+  })
+
+  it('clears every guide when the drag ends', async () => {
+    const { container, root } = await mount()
+    const own = zone(container, 'sessionGroup/ws-1/group-a')
+
+    fire(row(container, 'session-3'), 'dragstart')
+    expect(own.getAttribute('data-wg-dnd-dim')).toBe('')
+
+    fire(row(container, 'session-3'), 'dragend')
+
+    expect(own.getAttribute('data-wg-dnd-dim')).toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('clears every guide once the landing is committed', async () => {
+    // 提交之后拖拽即告结束，引导不该留在界面上
+    const { container, root } = await mount()
+    const own = zone(container, 'sessionGroup/ws-1/group-a')
+
+    fire(row(container, 'session-3'), 'dragstart')
+    fire(zone(container, 'sessionGroup/ws-1/group-b'), 'dragover')
+    fire(zone(container, 'sessionGroup/ws-1/group-b'), 'drop')
+    await flush()
+
+    expect(own.getAttribute('data-wg-dnd-dim')).toBeNull()
+    await act(async () => root.unmount())
+  })
+})
+
 describe('two regions sharing one document', () => {
   it('lets each instance drag on its own without borrowing the other listeners', async () => {
     // 侧边栏与对照 tab 双开：两者共享同一个 `document`
@@ -625,6 +702,17 @@ describe('the markup the mechanism puts on rows and zones', () => {
     expect(row(container, 'session-3').getAttribute('data-wg-dnd')).toBeNull()
     // 区域键在拖拽之外也不变：DOM 完全被动，含义由计划决定
     expect(zone(container, 'sessionGroup/ws-1/group-a').getAttribute('data-wg-drop')).toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('marks the scrolling stretch so a drag can pull it along', async () => {
+    // 标记少了这一格，拖拽期间就没有容器可滚，长列表翻不到另一头，而界面上不会报任何错
+    const { container, root } = await mount()
+
+    const scrollers = container.querySelectorAll('[data-wg-dnd-scroll]')
+    expect(scrollers.length).toBeGreaterThan(0)
+    // 会话列表是那个可滚的容器，区域键也挂在它上面
+    expect(zone(container, 'root').getAttribute('data-wg-dnd-scroll')).toBe('')
     await act(async () => root.unmount())
   })
 

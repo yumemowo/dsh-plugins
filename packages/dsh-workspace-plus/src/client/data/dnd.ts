@@ -48,7 +48,7 @@ export interface DragPlan {
   targets: ReadonlyMap<string, DragPlanTarget>
 }
 
-// ── DOM 上的两种静态标记 ──
+// ── DOM 上的标记属性 ──
 
 /** 区域键所在的属性，业务渲染期写好，拖拽期间不变 */
 export const ZONE_ATTRIBUTE = 'data-wg-dnd'
@@ -56,8 +56,28 @@ export const ZONE_ATTRIBUTE = 'data-wg-dnd'
 /** 可作 before / after 参照物的行 id 所在的属性，同上 */
 export const ROW_ATTRIBUTE = 'data-wg-dnd-row'
 
+/**
+ * 一个可整块压暗的区块所在的属性，业务渲染期写好
+ *
+ * 今天挂在工作区块上：一次拖拽够不着的工作区整块压暗，比逐格压暗更整齐
+ * 取值是区块的身份，机制层只用来判嵌套包含，不解析它
+ */
+export const SCOPE_ATTRIBUTE = 'data-wg-dnd-scope'
+
 /** 命中层画在当前落点上的标记，取值是落点形状 */
 export const DROP_ATTRIBUTE = 'data-wg-drop'
+
+/** 本次拖拽够不着的元素，由命中层在拖拽期间写上 */
+export const DIM_ATTRIBUTE = 'data-wg-dnd-dim'
+
+/**
+ * 拖拽期间可以跟着指针自动滚动的容器所在的属性，业务渲染期写好
+ *
+ * 原生拖放自带的边缘滚动只在贴着边缘的十几像素里生效，滚轮又会在拖拽期间被浏览器吞掉
+ * 这一段因此由本包按这个属性挑出容器自己滚，取值只用来选元素，机制层不解析它
+ */
+export const SCROLL_ATTRIBUTE = 'data-wg-dnd-scroll'
+
 
 // ── 区域键编解码 ──
 

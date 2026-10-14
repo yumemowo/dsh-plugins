@@ -326,6 +326,28 @@ describe('dragging a workspace row between virtual workspace groups', () => {
     expect(writes.moves).toEqual([['ws-1', 'wg-2']])
     await act(async () => root.unmount())
   })
+
+  it('marks one region for a target whose head and body are two zones', async () => {
+    // 组头与组体是两格但同一份提交，落脚只有一处，因此只该出现一圈
+    // 各画一圈会被读成两个区域，而用户看到的是同一件事
+    const { container, root } = await mount({
+      workspaceGroups: [
+        { id: 'wg-1', name: '工作区分组甲', workspaceIds: ['ws-1'] },
+        { id: 'wg-2', name: '工作区分组乙', workspaceIds: [] },
+      ],
+    })
+    const head = zone(container, 'virtualWorkspaceHead/wg-2')!
+    const body = zone(container, 'virtualWorkspaceBody/wg-2')!
+
+    fire(workspaceRow(container, 'ws-1'), 'dragstart')
+    fire(head, 'dragover')
+
+    // 标记合并到两格的共同祖先上：两者都不是它，但整块只描一圈
+    expect(head.getAttribute('data-wg-drop')).toBeNull()
+    expect(body.getAttribute('data-wg-drop')).toBeNull()
+    expect(container.querySelectorAll('[data-wg-drop]')).toHaveLength(1)
+    await act(async () => root.unmount())
+  })
 })
 
 describe('dragging a workspace row inside its own virtual workspace group', () => {

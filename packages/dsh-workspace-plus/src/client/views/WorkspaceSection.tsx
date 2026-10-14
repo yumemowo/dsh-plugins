@@ -16,7 +16,7 @@ import type { WorkspaceRowDnd, WorkspaceRowProps } from './WorkspaceRow.tsx'
 import { useExpansion } from '../hooks/useExpansion.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useDnd, useOrderRow } from '../hooks/useDnd.ts'
-import { looseKey, workspaceHeadKey } from '../data/dnd.ts'
+import { SCOPE_ATTRIBUTE, looseKey, workspaceHeadKey } from '../data/dnd.ts'
 import type { OrderDragging } from '../data/dnd.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
 import styles from './components/rows.module.css'
@@ -127,7 +127,7 @@ export function WorkspaceSection({
   }
 
   return (
-    <section className={styles.workspace} style={indent}>
+    <section className={styles.workspace} style={indent} {...{ [SCOPE_ATTRIBUTE]: '' }}>
       <WorkspaceRow {...row} dnd={rowDnd} />
       <ExpandableBody open={row.expanded}>
         <div className={styles.workspaceBody}>
