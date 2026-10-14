@@ -24,7 +24,7 @@ import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
 /** 未归组那一段的会话 */
 const LOOSE_IDS = ['session-1', 'session-2']
 
-/** 分组「group-a」里的会话，两条以便段内换位能真的换出位次 */
+/** 分组「group-a」里的会话，两条以便验证「拖到组内某一行上」与「拖到别处」的区别 */
 const GROUP_A_IDS = ['session-3', 'session-5']
 
 /** 分组「group-b」里的会话 */
@@ -73,30 +73,6 @@ function fire(target: Element, type: string, y = 0): void {
     })
     target.dispatchEvent(event)
   })
-}
-
-/**
- * 给一个元素一条假的矩形带
- *
- * jsdom 不做布局，`getBoundingClientRect()` 恒为零矩形，无坐标的事件因此永远算出「离第一行最近」
- * 段内换位要靠参照行的前后半定前后，用例得先把行摆到不同的高度上，命中才有确定读数
- * @param element - 要摆位置的行
- * @param top - 这一行的上沿纵坐标
- * @param height - 这一行的高度，缺省 10
- */
-function band(element: HTMLElement, top: number, height = 10): void {
-  element.getBoundingClientRect = (): DOMRect =>
-    ({
-      top,
-      bottom: top + height,
-      height,
-      left: 0,
-      right: 100,
-      width: 100,
-      x: 0,
-      y: top,
-      toJSON: () => ({}),
-    }) as DOMRect
 }
 
 /** 等一次提交落地：`moveSession` 回的是一个 Promise */
@@ -317,29 +293,22 @@ describe('dragging a session into a group', () => {
     await act(async () => root.unmount())
   })
 
-  it('reads a row inside another group as a position rather than as the whole group', async () => {
-    // 指针停在组内某一行上时，命中的是那一段的行落点：行列上是插到它之前 / 之后，也就是工况 5
-    // 组内会话段因此另注册一格行区域，与「整块分组」那一格各管一件事
-    const { container, root, moves, slots } = await mount()
+  it('reads a row inside another group as that whole group', async () => {
+    // 组内会话行不带区域键，命中的是包着它们的整块分组那一格：落到行上读作归组
+    const { container, root, moves } = await mount()
     const block = zone(container, 'sessionGroup/ws-1/group-a')
-    const rows = zone(container, 'sessionRows/ws-1/group-a')
     const inner = row(container, 'session-3')
 
     fire(row(container, 'session-1'), 'dragstart')
     fire(inner, 'dragover')
 
-    // 落点标记画在参照行自己身上：线要贴着那一行，画在段容器上会跑到整段的上边或下边
-    // 前后半在这里不定：jsdom 不做布局，矩形恒为零，算出的半边只反映「指针在零矩形之下」
-    // 这一步要证的是标记落在哪一格上，因此只断言它落在参照行上、不在段容器与块上
-    expect(inner.getAttribute('data-wg-drop')).toMatch(/^(before|after)$/)
-    expect(rows.getAttribute('data-wg-drop')).toBeNull()
-    expect(block.getAttribute('data-wg-drop')).toBeNull()
+    // 命中层从事件目标向上走，走到整块分组那一格才停，标记因此画在块上
+    expect(inner.getAttribute('data-wg-drop')).toBeNull()
+    expect(block.getAttribute('data-wg-drop')).toBe('inside')
     fire(inner, 'drop')
     await flush()
 
     expect(moves).toEqual([['ws-1', 'session-1', 'group-a']])
-    // 跨段落点写的是目标段的整份顺序，因此顺序位那一格也必须落下来
-    expect(slots.map(([key]) => key)).toEqual(['group/ws-1/group-a'])
     await act(async () => root.unmount())
   })
 
@@ -356,110 +325,41 @@ describe('dragging a session into a group', () => {
 
     expect(moves).toEqual([['ws-1', 'session-1', 'group-a']])
     await act(async () => root.unmount())
-    // 整块投放不改目标段的顺序位：这一步要的是归属，不是位次
+    // 归组不动顺序位，也不动分组顺序：这一步要的是归属
     expect(orders).toEqual([])
     expect(slots).toEqual([])
   })
 })
 
-describe('reordering sessions inside one stretch', () => {
-  it('reorders a group in place without touching membership', async () => {
-    // 段内换位只动顺序位：同一次落点不该把会话挪出它已在的分组，也不该再写一次归属
-    const { container, root, moves, slots } = await mount()
-    // 两条行摆在不同的高度上，指针落在下边那条的上半，读作插到它之前
-    band(row(container, 'session-3'), 0)
-    band(row(container, 'session-5'), 20)
-
-    fire(row(container, 'session-5'), 'dragstart')
-    fire(row(container, 'session-3'), 'dragover', 2)
-    fire(row(container, 'session-3'), 'drop', 2)
-    await flush()
-
-    // 归属没有变，因此归组那一路一次都不该调
-    expect(moves).toEqual([])
-    // session-5 被挪到 session-3 之前，整段两条都在这一份顺序里
-    expect(slots).toEqual([['group/ws-1/group-a', ['session-5', 'session-3']]])
-    await act(async () => root.unmount())
-  })
-
-  it('writes nothing when a session lands on the neighbour it already sits next to', async () => {
-    // 拖到相邻位是「拖动发生了、顺序没变」：换算判出逐位相同，因此不写盘
-    const { container, root, moves, slots } = await mount()
-    band(row(container, 'session-3'), 0)
-    band(row(container, 'session-5'), 20)
-
-    // 时间序下 session-3 在上、session-5 在下，把下边那条拖到上边那条之后即回到原位
-    fire(row(container, 'session-5'), 'dragstart')
-    fire(row(container, 'session-3'), 'dragover', 8)
-    fire(row(container, 'session-3'), 'drop', 8)
-    await flush()
-
-    expect(moves).toEqual([])
-    expect(slots).toEqual([])
-    await act(async () => root.unmount())
-  })
-
-  it('writes nothing when a session lands on its own row', async () => {
-    // 拖到自己那一行上是一次原地投放：命中查得到这一格，但换算判出顺序没变，因此不写盘
-    const { container, root, moves, slots } = await mount()
-    band(row(container, 'session-3'), 0)
+describe('the workspace title row as a landing', () => {
+  it('takes a grouped session back out when it lands on the title row', async () => {
+    // 标题行是目录性质的落点：拖到它上面与拖到未归组段上是同一件事
+    const { container, root, moves } = await mount()
+    const title = zone(container, 'workspaceHead/ws-1')
 
     fire(row(container, 'session-3'), 'dragstart')
-    fire(row(container, 'session-3'), 'dragover', 2)
-    fire(row(container, 'session-3'), 'drop', 2)
+    fire(title, 'dragover')
+    expect(title.getAttribute('data-wg-drop')).toBe('inside')
+    fire(title, 'drop')
+    await flush()
+
+    expect(moves).toEqual([['ws-1', 'session-3', '']])
+    await act(async () => root.unmount())
+  })
+
+  it('leaves an ungrouped session on its own title row with no landing', async () => {
+    // 已在未归组段时那是原地投放：整块与标题行两格都不进计划
+    const { container, root, moves } = await mount()
+    const title = zone(container, 'workspaceHead/ws-1')
+
+    fire(row(container, 'session-1'), 'dragstart')
+    fire(title, 'dragover')
+
+    expect(title.getAttribute('data-wg-drop')).toBeNull()
+    fire(title, 'drop')
     await flush()
 
     expect(moves).toEqual([])
-    expect(slots).toEqual([])
-    await act(async () => root.unmount())
-  })
-
-  it('adopts the stretched order on the first anchored drop', async () => {
-    // 第一次锚点投放就是「接管」：整份渲染序写进顺序位，而不是只记一个位次
-    // 这一份是调用方按当时显示的顺序算出来的，因此接管当刻显示零跳变
-    const { container, root, moves, slots } = await mount()
-    const rows = zone(container, 'sessionRows/ws-1/group-b')
-
-    fire(row(container, 'session-1'), 'dragstart')
-    fire(rows, 'dragover')
-    fire(rows, 'drop')
-    await flush()
-
-    expect(moves).toEqual([['ws-1', 'session-1', 'group-b']])
-    // 目标段本来只有 session-4，插进来的这条按落点定前后，整份顺序因此含两条
-    expect(slots).toHaveLength(1)
-    expect(slots[0]?.[0]).toBe('group/ws-1/group-b')
-    expect([...(slots[0]?.[1] ?? [])].sort()).toEqual(['session-1', 'session-4'])
-    await act(async () => root.unmount())
-  })
-
-  it('keeps every row of a stretched group in the adopted order', async () => {
-    // 接管写的是整段成员的完整顺序，而不是只写这一条会话
-    // 只写一条的话，那一段其余各行仍然按时间序排，用户看到的顺序会与刚放下的那一刻不同
-    const { container, root, slots } = await mount()
-
-    fire(row(container, 'session-1'), 'dragstart')
-    fire(zone(container, 'sessionRows/ws-1/group-a'), 'dragover')
-    fire(zone(container, 'sessionRows/ws-1/group-a'), 'drop')
-    await flush()
-
-    const order = slots[0]?.[1] ?? []
-    // 段里原有 session-3 与 session-5，加上落进去的 session-1，整段三名成员都必须在那一份顺序里
-    expect([...order].sort()).toEqual(['session-1', 'session-3', 'session-5'])
-    await act(async () => root.unmount())
-  })
-
-  it('leaves the source stretch alone when a session moves to another group', async () => {
-    // 源段不单独写一次：移出的 id 由渲染期对顺序位与成员集做一遍对账自动剔除
-    const { container, root, slots } = await mount()
-
-    fire(row(container, 'session-3'), 'dragstart')
-    fire(zone(container, 'sessionRows/ws-1/group-b'), 'dragover')
-    fire(zone(container, 'sessionRows/ws-1/group-b'), 'drop')
-    await flush()
-
-    // 只写目标段那一格：源段若有顺序位，靠对账剔除 session-3
-    expect(slots.map(([key]) => key)).toEqual(['group/ws-1/group-b'])
     await act(async () => root.unmount())
   })
 })
@@ -713,15 +613,16 @@ describe('two regions sharing one document', () => {
 })
 
 describe('the markup the mechanism puts on rows and zones', () => {
-  it('names the stretch each session row sits in', async () => {
+  it('names the container each session row sits in', async () => {
     const { container, root } = await mount()
 
     expect(zone(container, 'sessionGroup/ws-1/group-a')).not.toBeNull()
     expect(zone(container, 'sessionGroup/ws-1/group-b')).not.toBeNull()
     expect(zone(container, 'loose/ws-1')).not.toBeNull()
-    // 组内会话行那一段另有一格：锚点插入要靠它里面的行作参照，块那一格罩住了分组头与内嵌子工作区
-    expect(zone(container, 'sessionRows/ws-1/group-a')).not.toBeNull()
-    expect(zone(container, 'sessionRows/ws-1/group-b')).not.toBeNull()
+    // 标题行自己带一格：它是目录性质的落点，会话计划里也收它
+    expect(zone(container, 'workspaceHead/ws-1')).not.toBeNull()
+    // 会话行自身不带区域键：落到行上会一路走到包着它的容器那一格
+    expect(row(container, 'session-3').getAttribute('data-wg-dnd')).toBeNull()
     // 区域键在拖拽之外也不变：DOM 完全被动，含义由计划决定
     expect(zone(container, 'sessionGroup/ws-1/group-a').getAttribute('data-wg-drop')).toBeNull()
     await act(async () => root.unmount())

@@ -59,7 +59,7 @@ import { DEFAULT_PINNED_LIMIT, DEFAULT_PINNED_VISIBLE_COUNT, normalizeSnapshot }
 import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { ALL_ENTRIES, sameAddress, virtualAddress, workspaceAddress } from '../../rootEntry.ts'
 import type { RootEntryAddress } from '../../rootEntry.ts'
-import { groupSlotKey, looseSlotKey, PINNED_SLOT_KEY } from '../../segment.ts'
+import { PINNED_SLOT_KEY } from '../data/pinned.ts'
 import { useFlipMarker } from '../useFlipMarker.ts'
 import { UNGROUPED_KEY, expandedAt, indicatorOf, modeOf, pinnedOf, sessionGroupExpansionOf, sessionGroupKey, virtualExpansionOf, workspaceExpansionOf } from '../store/viewMode.ts'
 import type { SessionGroupRef, ViewModeStoreHandle } from '../store/viewMode.ts'
@@ -864,30 +864,8 @@ interface RegionGroupActions {
    * `beforeGroupId` 为 undefined 表示挪到末尾
    */
   moveGroupBefore: (workspaceId: string, groupId: string, beforeGroupId: string | undefined) => void
-  /**
-   * 写一段会话的手动顺序
-   *
-   * 顺序位键见 `segment.ts`：组内段按 `group/<工作区>/<分组>`，未归组段按 `loose/<工作区>`
-   * 空表表示清掉这一格，该段退回时间序
-   */
-  setSegmentOrder: (key: string, order: readonly string[]) => void
-  /**
-   * 清掉一段的手动顺序，该段退回时间序
-   *
-   * 与写空表是同一件事，单列一格是因为它的两个入口（分组菜单与工作区行菜单）都不产出顺序内容
-   */
-  clearSegmentOrder: (key: string) => void
-  /**
-   * 把一个会话落到某一段的指定位次
-   *
-   * 归属与目标段的顺序由这一条路径一起改，两笔写入串行下发
-   */
-  placeSessionInSegment: (
-    workspaceId: string,
-    sessionId: string,
-    groupId: string,
-    order: readonly string[],
-  ) => void
+  /** 写置顶段的手动顺序，空表表示清掉这一格 */
+  setPinnedOrder: (order: readonly string[]) => void
 }
 
 /**
@@ -1019,22 +997,18 @@ function useRegionGroupActions(
    * 这一步不能只在指定了分组时做——官方会复用该工作区已有的空白会话，那条会话可能正留在某个分组里
    * 复用时不把它摘出来就会停在原分组
    *
-   * 目标段已有手动顺序时顺手把新会话插到那一份的最前，锚点取顺序位的第一格
-   * 这一档与默认序一致：宿主把新会话前插进段首，比较器也把空白会话排在普通会话之前
-   * 目标段没有顺序位时不带锚点，宿主因此不会凭空为它造一份——那一段仍按时间序渲染
+   * 会话在新段里的位置由渲染侧的默认序决定，因此这里不带位次
    * @param groupId - 新会话要归入的分组，空串表示归入未归组区
    */
   const createSessionIn = (workspaceId: string, groupId: string): void => {
     expansion.expandWorkspace(workspaceId)
     // 展开而不是取反，分组本就展开时，切换会把它收起来，新会话反而看不见
     if (groupId !== '') expansion.expandGroup({ workspaceId, groupId })
-    const key = groupId === '' ? looseSlotKey(workspaceId) : groupSlotKey(workspaceId, groupId)
-    const beforeSessionId = snapshot.orderSlots[key]?.[0]
     void startSession(workspaceId)
       .then((sessionId) => {
         // 被更晚的导航取代时没有会话要摆位置
         if (sessionId === undefined) return undefined
-        return apply(moveSession(workspaceId, sessionId, groupId, beforeSessionId))
+        return apply(moveSession(workspaceId, sessionId, groupId))
       })
       .catch(() => {
         // 建会话失败由会话控制器自己提示，这里不再弹一次，避免同一错误报两遍
@@ -1076,47 +1050,14 @@ function useRegionGroupActions(
   )
 
   /**
-   * 一段会话的手动顺序写回
+   * 置顶段的手动顺序写回
    *
-   * 与上面两个同理是 `useCallback`：它会随会话行的拖拽计划传到每一行，行级 memo 按引用比对
+   * 段键只有置顶区这一格用得到，因此收在这里、不外露给调用方
+   * 是 `useCallback`：它会随置顶行的拖拽计划到达每一行，行级 memo 按引用比对
    */
-  const setSegmentOrderOrdered = useCallback(
-    (key: string, order: readonly string[]): void => {
-      apply(setSegmentOrder(key, order))
-    },
-    [apply, setSegmentOrder],
-  )
-
-  /**
-   * 把一个会话落到某一段的指定位次
-   *
-   * 这次落点同时改归属与目标段的顺序，是两笔写入：先归组，再按整份顺序写回
-   * 两笔必须串行，因为各自都是一轮「读快照、改、写回」，并发发出去会互相盖掉，后一笔会拿前一笔之前的快照做底
-   * 因此后一笔挂在前一笔的完成上，而不是各发一次
-   *
-   * 顺序写的是调用方按渲染序算好的整份，而不是只把锚点交给宿主去插
-   * 目标段本来没有顺序位时，宿主手里只有元数据的名单序，拿它建出第一份顺序会让这一段其余各行跳一次
-   * 整份写入让「接管」从当时显示的那一版长出来，显示零跳变
-   *
-   * 顺序与归属都相同时宿主不落盘，因此这一条路径不会在盘上留下空改动
-   */
-  const placeSessionInSegment = useCallback(
-    (workspaceId: string, sessionId: string, groupId: string, order: readonly string[]): void => {
-      const key = groupId === '' ? looseSlotKey(workspaceId) : groupSlotKey(workspaceId, groupId)
-      apply(moveSession(workspaceId, sessionId, groupId).then(() => setSegmentOrder(key, order)))
-    },
-    [apply, moveSession, setSegmentOrder],
-  )
-
-  /**
-   * 清掉一段的手动顺序，该段退回时间序
-   *
-   * 空表表示删掉这一格，宿主那一侧按「删掉」处理
-   * 是 `useCallback` 而不是每次渲染新建：它会随排序接线传到每一个分组头与工作区行，行级 memo 按引用比对
-   */
-  const clearSegmentOrder = useCallback(
-    (key: string): void => {
-      apply(setSegmentOrder(key, []))
+  const setPinnedOrder = useCallback(
+    (order: readonly string[]): void => {
+      apply(setSegmentOrder(PINNED_SLOT_KEY, order))
     },
     [apply, setSegmentOrder],
   )
@@ -1131,9 +1072,7 @@ function useRegionGroupActions(
     createSessionIn,
     selectSessionGroup,
     moveGroupBefore: moveGroupOrdered,
-    setSegmentOrder: setSegmentOrderOrdered,
-    clearSegmentOrder,
-    placeSessionInSegment,
+    setPinnedOrder,
   }
 }
 
@@ -1638,9 +1577,9 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
         // 顺序取这一份渲染序：它是顺序位与官方集合合成后的结果，接管因此零跳变
         order: dragPinnedOrder.current,
         movingId: sessionId,
-        commit: (order) => groupActions.setSegmentOrder(PINNED_SLOT_KEY, order),
+        commit: (order) => groupActions.setPinnedOrder(order),
       }),
-    [groupActions.setSegmentOrder],
+    [groupActions.setPinnedOrder],
   )
 
   /**

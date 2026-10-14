@@ -156,7 +156,6 @@ export function buildSessionMenuItems(input: SessionMenuInput): readonly MenuIte
 export const GROUP_MENU = {
   rename: 'rename',
   delete: 'delete',
-  clearOrder: 'clear-order',
 } as const
 
 /** 工作区分组菜单条目 id，与 `VirtualWorkspaceSection` 的分派一一对应 */
@@ -171,12 +170,6 @@ export interface GroupRowMenuInput {
   renameLabel: string
   /** 「删除分组」项文案 */
   deleteLabel: string
-  /**
-   * 「清除手动顺序」项文案，缺省表示这一段没有手动顺序可清、该项不出现
-   *
-   * 顺带兼作开关：有这一格才渲染，因此不必再传一个布尔量
-   */
-  clearOrderLabel?: string | undefined
 }
 
 /**
@@ -205,21 +198,13 @@ export function buildVirtualWorkspaceMenuItems(
  *
  * 与工作区菜单同形：重命名在前、删除在后，删除项带 `danger` 标记
  * 分组没有建造型菜单项——「新建分组」属于工作区行，分组行的高频建造操作是行内 `+`（在该分组新建会话）
- *
- * 「清除手动顺序」夹在重命名与删除之间，它是对这一段的渲染顺序动手，与重命名同属「调整这个容器」
- * 而删除是解散容器，因此排在最后
- * 只有这一段真的有手动顺序时才出现，否则它点了什么都不会发生，留着会读成失效的入口
  * @returns Menu items 列表
  */
 export function buildGroupMenuItems(input: GroupRowMenuInput): readonly MenuItem[] {
-  const items: MenuItem[] = [
+  return [
     { id: GROUP_MENU.rename, label: input.renameLabel, icon: <IconEditOutlineRegular /> },
+    { id: GROUP_MENU.delete, label: input.deleteLabel, icon: <IconTrashOutlineRegular />, danger: true },
   ]
-  if (input.clearOrderLabel !== undefined) {
-    items.push({ id: GROUP_MENU.clearOrder, label: input.clearOrderLabel })
-  }
-  items.push({ id: GROUP_MENU.delete, label: input.deleteLabel, icon: <IconTrashOutlineRegular />, danger: true })
-  return items
 }
 
 /** 工作区行「更多操作」菜单的条目文案 */
@@ -238,12 +223,6 @@ export interface WorkspaceMenuInput {
    * 与 `virtualWorkspaceGrouping` 分开，两者进的是不同层级的容器，只在一处有可选项时另一项不出现
    */
   parentGrouping?: ParentGroupMenuInput | undefined
-  /**
-   * 「清除手动顺序」项文案，缺省表示未归组那一段没有手动顺序可清、该项不出现
-   *
-   * 未归组那一段没有区段头，它唯一的行内入口就是工作区行这一个菜单，因此这一项挂在这里
-   */
-  clearOrderLabel?: string | undefined
 }
 
 /** 工作区菜单条目 id，与 `WorkspaceRow` 的分派一一对应 */
@@ -251,7 +230,6 @@ export const WORKSPACE_MENU = {
   newGroup: 'new-group',
   rename: 'rename',
   delete: 'delete',
-  clearOrder: 'clear-order',
 } as const
 
 /** 工作区菜单里的分隔线 id，分块方案见 `buildWorkspaceMenuItems` */
@@ -499,10 +477,6 @@ function newSessionItem(label: string): MenuActionItem {
  * 它们的一级项文案又只差一个词，不分开读起来像同一个动作的两条路径
  * 「移出」与它上面那条「移动到」平级、紧跟在下方，仅在已归组时出现，合成一条子菜单会把「离开」藏进「进入」的入口里
  * 删除项带 `danger` 标记，与官方删除工作区一样由菜单原语渲染危险语义
- *
- * 「清除手动顺序」紧跟在「重命名」之后、与它同属一个不画分隔线的块
- * 位置与会话分组菜单里的同一项一致
- * 它只在未归组那一段真有手动顺序时出现
  * @returns Menu items 列表
  */
 export function buildWorkspaceMenuItems(input: WorkspaceMenuInput): readonly MenuItem[] {
@@ -510,10 +484,6 @@ export function buildWorkspaceMenuItems(input: WorkspaceMenuInput): readonly Men
     { id: WORKSPACE_MENU.newGroup, label: input.newGroupLabel, icon: <IconPlusOutlineRegular /> },
     { id: WORKSPACE_MENU.rename, label: input.renameLabel, icon: <IconEditOutlineRegular /> },
   ]
-  // 未归组那一段没有区段头，清它的手动顺序只能挂在这一行的菜单上
-  if (input.clearOrderLabel !== undefined) {
-    items.push({ id: WORKSPACE_MENU.clearOrder, label: input.clearOrderLabel })
-  }
   /** 菜单里是否有归类操作块，没有时删除项前面不该留一条分隔线 */
   let grouping = false
   if (input.parentGrouping !== undefined) {

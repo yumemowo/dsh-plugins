@@ -66,19 +66,6 @@ export function sessionGroupKey(workspaceId: string, groupId: string): string {
   return `sessionGroup/${workspaceId}/${groupId}`
 }
 
-/**
- * 一个会话分组里会话行那一段的区域键
- *
- * 与 `sessionGroupKey` 那一格各管一件事：那一格罩住整块分组，接会话归组的整块投放
- * 这一格只罩组内会话行自己那一段，接锚点插入，因此它里面的行才是换算前后的参照物
- *
- * 两格不能合并。合并后整块分组的参照行会把分组头与内嵌子工作区的会话行一起收进来
- * 前者的 id 是分组 id，后者属于另一段，两者都换不出这一段的位次
- */
-export function sessionRowsKey(workspaceId: string, groupId: string): string {
-  return `sessionRows/${workspaceId}/${groupId}`
-}
-
 /** 一个工作区未归组那一段的区域键 */
 export function looseKey(workspaceId: string): string {
   return `loose/${workspaceId}`
@@ -127,7 +114,6 @@ export function virtualWorkspaceHeadKey(groupId: string): string {
 /**
  * 一个虚拟工作区分组组体的区域键
  *
- * 与 `virtualWorkspaceHeadKey` 那一格的分工同 `sessionRowsKey` 与 `sessionGroupKey` 那一对
  * 那一格只罩分组头，这一格罩整个组体
  *
  * 工作区计划里它与分组头共用同一个提交，拖到组头或组体那一大片里都读作移入这个分组
@@ -305,101 +291,54 @@ export function targetOfZone(plan: DragPlan, zoneKey: string): DragPlanTarget | 
   return plan.targets.get(zoneKey)
 }
 
-// ── 落点到顺序的换算 ──
+// ── 计划构造与落点换算 ──
 
 /**
- * 一个会话行拖起时的计划
+ * 一条会话行拖起时的计划
  *
- * 落点分两种，档位由这个计划按「目标段是不是来源所在的那一段」定，元素本身不区分
+ * 落点全走整块档：落到哪个容器上就归入哪个容器，位次由渲染侧的默认序决定，计划不带位次
  *
- * - 整块那一格走 `container`：`sessionGroupKey`、`groupHeadKey`，以及来源已在分组时的 `looseKey`
- * - 行那一段走 `rows`：`sessionRowsKey`，以及来源已在未归组时的 `looseKey`
+ * 三类落点都是「换一个容器」这件事的不同入口
+ * - 别的分组：块与头两格共用同一个提交，拖到分组上任何位置都读作归入该分组
+ * - 未归组那一段：移出分组
+ * - 本条会话所属工作区的标题行：同一个「移出分组」，标题行也是目录性质的落点
  *
- * 整块读作归组，只改归属，不动目标段的顺序位
- * 行那一段读作插到参照行之前 / 之后，同段是段内换位，只改顺序，跨段则归属与顺序一起改
- *
- * 自己所在那一段不整块收进来，拖回原位因此是构造期缺席
- * 段内的行仍然收，因为段内换位是这一段自己的事
- * 拖到自己那一行上由 {@link reorderTo} 判成无变化，不写盘
- *
- * 未归组段那一格的含义随来源而变，因为「移出分组」与「未归组段内排序」是设计里两个独立工况，一格一种档位盖不住
- *
- * 各段的顺序取的是构造那一刻的渲染序，不是元数据里的名单序
- * 一段有顺序位时渲染序是顺序位与时间序合成后的结果，接管要零跳变，换算就得从用户当时看见的那一版长出来
- * 名单序只在没有顺序位时与之相同，因此不能拿它顶替
- * 换算在全量成员上做而不是在露出的那些行上，被折起的成员因此不动、相对位置自动保持
- *
- * 三个回调收的都是分组 id（空串表示未归组），区域键与顺序位键的换算留给调用方
- * 这个模块只认渲染期的段身份，不认识存储里的段键
- * @param input - 来源、各段的渲染序，以及三种落点各自落到哪次写入
+ * 来源当前所在的那一个容器一律不进表，拖回原位因此是构造期缺席
+ * 这一条不能靠提交期判等代替：归属没有变化时宿主仍会写一次盘
+ * @param input - 来源、它当前所在的分组，以及落点落到哪次写入
  */
-export function sessionAnchorPlan(input: {
+export function sessionGroupingPlan(input: {
   workspaceId: string
   sessionId: string
   /** 本条会话当前所属分组 id，空串表示未归组 */
   currentGroupId: string
-  /** 本工作区的会话分组，含空分组，`order` 是该段当前的渲染序 */
-  sections: readonly { id: string; order: readonly string[] }[]
-  /** 未归组段当前的渲染序 */
-  looseOrder: readonly string[]
-  /** 整块投放：只改归属，不动目标段的顺序位 */
+  /** 本工作区的会话分组，含空分组 */
+  sections: readonly { id: string }[]
+  /** 只改归属 */
   moveToGroup: (groupId: string) => void
-  /** 同段换位：只写这一段的手动顺序 */
-  reorderSegment: (groupId: string, order: readonly string[]) => void
-  /**
-   * 跨段锚点投放：归属与目标段的手动顺序一起落
-   *
-   * 顺序整份交出而不是只交一个锚点，因为换算的起点是渲染序，而渲染序只在这一层手里
-   * 目标段有顺序位时它由顺序位与时间序合成，宿主手里的名单序没有算上顺序位
-   * 只交锚点的话宿主只能在那一段的顺序位里插入，新序却是按渲染集算的，成员漂移后两者会给出不同位次
-   * @param groupId - 目标段
-   * @param order - 目标段换算后的完整顺序，含即将落进去的这条会话
-   */
-  placeInSegment: (groupId: string, order: readonly string[]) => void
 }): DragPlan {
   const { workspaceId, sessionId, currentGroupId, sections } = input
   const targets = new Map<string, DragPlanTarget>()
 
   for (const section of sections) {
-    const own = section.id === currentGroupId
-    if (!own) {
-      // 块与头两格都读作「归到这个组」，因此共用同一个提交
-      const toGroup: DragPlanTarget = {
-        mode: 'container',
-        commit: () => input.moveToGroup(section.id),
-      }
-      targets.set(sessionGroupKey(workspaceId, section.id), toGroup)
-      // 分组头自己另占一格，因此这里也得收一格：拖到头上会先命中那一格，它不在计划里就读成「这一段不接」
-      targets.set(groupHeadKey(workspaceId, section.id), toGroup)
+    if (section.id === currentGroupId) continue
+    // 分组头自己另占一格，因此这里也得收一格：拖到头上会先命中那一格，它不在计划里就读成「这一段不接」
+    const toGroup: DragPlanTarget = {
+      mode: 'container',
+      commit: () => input.moveToGroup(section.id),
     }
-    targets.set(sessionRowsKey(workspaceId, section.id), {
-      mode: 'rows',
-      commit: (anchor) => {
-        if (own) {
-          const next = reorderTo(section.order, sessionId, anchor)
-          if (next !== undefined) input.reorderSegment(section.id, next)
-          return
-        }
-        input.placeInSegment(section.id, insertAtAnchor(section.order, sessionId, anchor))
-      },
-    })
+    targets.set(sessionGroupKey(workspaceId, section.id), toGroup)
+    targets.set(groupHeadKey(workspaceId, section.id), toGroup)
   }
 
-  if (currentGroupId === '') {
-    // 来源已在未归组段：这一格读作段内换位
-    targets.set(looseKey(workspaceId), {
-      mode: 'rows',
-      commit: (anchor) => {
-        const next = reorderTo(input.looseOrder, sessionId, anchor)
-        if (next !== undefined) input.reorderSegment('', next)
-      },
-    })
-  } else {
-    // 来源在某个分组里：这一格读作移出分组，落在未归组段的段尾
-    targets.set(looseKey(workspaceId), {
+  // 来源已在未归组段时，拖回那一段是原地投放，两格因此都不进表
+  if (currentGroupId !== '') {
+    const toLoose: DragPlanTarget = {
       mode: 'container',
       commit: () => input.moveToGroup(''),
-    })
+    }
+    targets.set(looseKey(workspaceId), toLoose)
+    targets.set(workspaceHeadKey(workspaceId), toLoose)
   }
 
   return { source: { kind: 'session', id: sessionId }, targets }
@@ -651,32 +590,6 @@ export function reorderTo(
   if (next === null) return undefined
   if (next.every((id, index) => id === order[index])) return undefined
   return next
-}
-
-/**
- * 把一段之外的成员插到锚点位置上
- *
- * 与 {@link reorderTo} 的分工按「来源是否已经在这一段里」划开：那个做段内换位，这个做别段插入
- * 来源不在 `order` 里，因此没有「新顺序与现状逐位相同」这一档，任何一次落点都改变长度
- *
- * 锚点不在这一段里时按段尾读，与 {@link reorderTo} 同一取舍
- * 拖拽期间快照可能被别处改过，那时段尾比丢掉这次投放更接近用户的意图
- * @param order - 目标段当前的完整成员顺序
- * @param memberId - 要插进来的成员
- * @param anchor - 命中层算出的落点
- * @returns 新顺序
- */
-export function insertAtAnchor(
-  order: readonly string[],
-  memberId: string,
-  anchor: DropAnchor,
-): string[] {
-  const rest = order.filter((id) => id !== memberId)
-  if (anchor.kind === 'inside') return [...rest, memberId]
-  const at = rest.indexOf(anchor.rowId)
-  if (at < 0) return [...rest, memberId]
-  const index = anchor.kind === 'before' ? at : at + 1
-  return [...rest.slice(0, index), memberId, ...rest.slice(index)]
 }
 
 /**

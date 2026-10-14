@@ -158,97 +158,49 @@ describe('workspace groups service', () => {
     await expect(service.moveSession('w1', 's1', 'nope')).rejects.toThrow(/unknown group/)
   })
 
-  it('inserts a moved session at the anchor the client converted', async () => {
-    // 目标段已有手动顺序时，锚点决定它插在哪一位，而不是一律接在末尾
-    const { ctx } = createFakeContext()
-    const service = await createWorkspaceGroupsService(ctx)
-    const created = await service.createGroup('w1', '前端')
-    const groupId = created.byWorkspace['w1']?.[0]?.id ?? ''
-    await service.setSegmentOrder(`group/w1/${groupId}`, ['s1', 's2'])
-
-    const snapshot = await service.moveSession('w1', 's3', groupId, 's2')
-
-    expect(snapshot.orderSlots[`group/w1/${groupId}`]).toEqual(['s1', 's3', 's2'])
-  })
-
-  it('leaves the slot alone when the move carries no anchor', async () => {
-    // 缺锚点表示不动目标段的顺序位：那一段有手动顺序时也不该被这份写入改写
-    const { ctx } = createFakeContext()
-    const service = await createWorkspaceGroupsService(ctx)
-    const created = await service.createGroup('w1', '前端')
-    const groupId = created.byWorkspace['w1']?.[0]?.id ?? ''
-    await service.setSegmentOrder(`group/w1/${groupId}`, ['s1', 's2'])
-
-    const snapshot = await service.moveSession('w1', 's3', groupId, undefined)
-
-    expect(snapshot.orderSlots[`group/w1/${groupId}`]).toEqual(['s1', 's2'])
-  })
-
-  it('appends a moved session when the anchor is gone from the slot', async () => {
-    // 锚点资格在宿主侧复核：拖拽期间快照被别处改过时按末尾读，不抛错
-    const { ctx } = createFakeContext()
-    const service = await createWorkspaceGroupsService(ctx)
-    const created = await service.createGroup('w1', '前端')
-    const groupId = created.byWorkspace['w1']?.[0]?.id ?? ''
-    await service.setSegmentOrder(`group/w1/${groupId}`, ['s1', 's2'])
-
-    const snapshot = await service.moveSession('w1', 's3', groupId, 'gone')
-
-    expect(snapshot.orderSlots[`group/w1/${groupId}`]).toEqual(['s1', 's2', 's3'])
-  })
-
-  it('leaves the target stretch in time order when it has no slot yet', async () => {
-    // 旧数据零变化：目标段还没有手动顺序时不凭空造一份，那一段仍按时间序渲染
+  it('changes only the membership when a session moves', async () => {
+    // 归属变更不带位次：会话在新段里的位置由渲染侧的默认序决定
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     const created = await service.createGroup('w1', '前端')
     const groupId = created.byWorkspace['w1']?.[0]?.id ?? ''
 
-    const snapshot = await service.moveSession('w1', 's1', groupId, 's2')
+    const snapshot = await service.moveSession('w1', 's3', groupId)
 
-    expect(snapshot.orderSlots[`group/w1/${groupId}`]).toBeUndefined()
+    expect(snapshot.byWorkspace['w1']?.[0]?.sessionIds).toContain('s3')
+    // 顺序位那一格完全不参与归属变更
+    expect(snapshot.orderSlots).toEqual({})
   })
 
-  it('inserts into the ungrouped stretch through its own slot key', async () => {
+  it('leaves the pinned order alone when a session moves', async () => {
+    // 置顶段的顺序位与会话归属是两件事，归组不该把它擦掉
     const { ctx } = createFakeContext()
-    const service = await createWorkspaceGroupsService(ctx)
-    await service.setSegmentOrder('loose/w1', ['s1', 's2'])
-
-    const snapshot = await service.moveSession('w1', 's3', null, 's2')
-
-    expect(snapshot.orderSlots['loose/w1']).toEqual(['s1', 's3', 's2'])
-  })
-
-  it('writes nothing when a session is dropped back where it already sat', async () => {
-    // 相邻位落点算出的顺序与现状逐位相同：盘上不该留下一次改动
-    const { ctx, readStored } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     const created = await service.createGroup('w1', '前端')
     const groupId = created.byWorkspace['w1']?.[0]?.id ?? ''
-    await service.setSegmentOrder(`group/w1/${groupId}`, ['s1', 's2'])
-    const before = JSON.stringify(readStored())
+    await service.setSegmentOrder('pinned', ['s1', 's2'])
 
-    await service.moveSession('w1', 's1', groupId, 's2')
+    const snapshot = await service.moveSession('w1', 's3', groupId)
 
-    expect(JSON.stringify(readStored())).toBe(before)
+    expect(snapshot.orderSlots['pinned']).toEqual(['s1', 's2'])
   })
 
   it('writes a segment order and reads it back', async () => {
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
 
-    const snapshot = await service.setSegmentOrder('group/w1/g1', ['s2', 's1'])
+    const snapshot = await service.setSegmentOrder('pinned', ['s2', 's1'])
 
-    expect(snapshot.orderSlots['group/w1/g1']).toEqual(['s2', 's1'])
+    expect(snapshot.orderSlots['pinned']).toEqual(['s2', 's1'])
   })
 
   it('drops a segment order when it is written empty', async () => {
     // 空表与「这一段没有手动顺序」是同一件事，留一格空数组只会让 global 越堆越多
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
-    await service.setSegmentOrder('group/w1/g1', ['s1'])
+    await service.setSegmentOrder('pinned', ['s1'])
 
-    const snapshot = await service.setSegmentOrder('group/w1/g1', [])
+    const snapshot = await service.setSegmentOrder('pinned', [])
 
     expect(snapshot.orderSlots).toEqual({})
   })
@@ -256,35 +208,24 @@ describe('workspace groups service', () => {
   it('writes nothing when a segment order is unchanged', async () => {
     const { ctx, readStored } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
-    await service.setSegmentOrder('group/w1/g1', ['s2', 's1'])
+    await service.setSegmentOrder('pinned', ['s2', 's1'])
     const before = JSON.stringify(readStored())
 
-    await service.setSegmentOrder('group/w1/g1', ['s2', 's1'])
+    await service.setSegmentOrder('pinned', ['s2', 's1'])
 
     expect(JSON.stringify(readStored())).toBe(before)
   })
 
-  it('keeps two segments apart', async () => {
-    const { ctx } = createFakeContext()
-    const service = await createWorkspaceGroupsService(ctx)
-
-    await service.setSegmentOrder('group/w1/g1', ['s1'])
-    const snapshot = await service.setSegmentOrder('loose/w1', ['s9'])
-
-    expect(snapshot.orderSlots['group/w1/g1']).toEqual(['s1'])
-    expect(snapshot.orderSlots['loose/w1']).toEqual(['s9'])
-  })
-
-  it('keeps the segment orders through an unrelated write', async () => {
+  it('keeps the segment order through an unrelated write', async () => {
     // 每个变更方法写回的 global 都必须带上这一格，漏掉就等于把别人的手动顺序擦掉
     const { ctx, readStored } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
-    await service.setSegmentOrder('group/w1/g1', ['s2', 's1'])
+    await service.setSegmentOrder('pinned', ['s2', 's1'])
 
     await service.createGroup('w1', '前端')
 
     const stored = readStored() as { orderSlots: Record<string, string[]> }
-    expect(stored.orderSlots['group/w1/g1']).toEqual(['s2', 's1'])
+    expect(stored.orderSlots['pinned']).toEqual(['s2', 's1'])
   })
 
   it('moves a group before another group', async () => {

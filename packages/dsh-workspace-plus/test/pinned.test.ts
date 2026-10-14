@@ -164,6 +164,34 @@ describe('reconcilePinned', () => {
     expect(reconcilePinned(['b', 'a'], four).map((entry) => entry.id)).toEqual(['b', 'a', 'c', 'd'])
   })
 
+  it('returns a re-pinned member to the position the slot remembers', () => {
+    // 取消置顶不写回顺序位，那一格因此留着；重新置顶时这条会话回到原来摆过的位次
+    // 与上一条的分工：顺序位里从来没有它的新成员接在手动项之后，有过它的老成员回到原位
+    const members = (ids: readonly string[]) =>
+      pinnedEntries(
+        ids,
+        listState([
+          { id: 'a', updatedAt: 30 },
+          { id: 'b', updatedAt: 20 },
+          { id: 'c', updatedAt: 10 },
+        ]),
+        [],
+        new Map(),
+        undefined,
+      )
+    // 用户把「b」摆到了最前，这一格此后不再随集合增删改写
+    const slot = ['b', 'a', 'c']
+
+    // 取消置顶：成员集合里没有它，那一格静默丢弃，但顺序位本身没被改写
+    expect(reconcilePinned(slot, members(['c', 'a'])).map((entry) => entry.id)).toEqual(['a', 'c'])
+    // 重新置顶：官方集合把它接在最前，渲染序却回到用户摆过的那一位
+    expect(reconcilePinned(slot, members(['b', 'c', 'a'])).map((entry) => entry.id)).toEqual([
+      'b',
+      'a',
+      'c',
+    ])
+  })
+
   it('drops a slot id that is no longer pinned', () => {
     // 取消置顶会在顺序位里留下已经不作数的 id，它不该在界面上占位
     expect(reconcilePinned(['b', 'gone', 'a'], entries()).map((entry) => entry.id)).toEqual([

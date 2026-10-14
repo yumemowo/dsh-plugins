@@ -1,7 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { DEFAULT_PINNED_LIMIT, DEFAULT_PINNED_VISIBLE_COUNT } from './config.ts'
 import type { WorkspacePlusConfig } from './config.ts'
-import { groupSlotKey, looseSlotKey } from './segment.ts'
 import { workspaceGroupsSpec } from './spec.ts'
 import type {
   Group,
@@ -28,29 +27,23 @@ export interface WorkspaceGroupsService {
    * 把会话移入分组，`groupId` 为 null 表示移出到未分组
    *
    * 一条会话至多属于一个分组，移入时自动从原分组摘除
-   *
-   * `beforeSessionId` 只在目标段已有手动顺序时才起作用，那时把这条会话插到该成员之前
-   * 锚点已不在那一份顺序里时按末尾读
-   * 目标段还没有手动顺序时不凭空造一份，那一段因此仍按时间序渲染，新会话的位置由时间决定
-   * 顺序没有变化的也不写盘，与分组排序同一取舍
+   * 只改归属：会话在段内的位置由渲染侧的默认序决定
    * @param workspaceId - 会话所属工作区
    * @param sessionId - 被挪动的会话
    * @param groupId - 目标分组 id，null 表示未归组
-   * @param beforeSessionId - 插到哪条会话之前，缺省表示不动目标段的顺序位
    */
   moveSession(
     workspaceId: string,
     sessionId: string,
     groupId: string | null,
-    beforeSessionId?: string | undefined,
   ): Promise<WorkspaceGroupsSnapshot>
   /**
    * 写某一段的手动顺序
    *
-   * 键的形状由 `segment.ts` 钉住，宿主不解析它，只当一格存储用
+   * 宿主不解析键的形状，只当一格存储用；今天只剩置顶段用得到它
    * 顺序与现状相同时不写盘，空顺序整格删掉，两者都收在同一个判断里
-   * @param key - 段键，见 `segment.ts`
-   * @param order - 该段成员的完整顺序，缺席的成员由渲染侧按时间序接在后面
+   * @param key - 段键
+   * @param order - 该段成员的完整顺序，缺席的成员由渲染侧按默认序接在后面
    */
   setSegmentOrder(key: string, order: readonly string[]): Promise<WorkspaceGroupsSnapshot>
   /**
@@ -187,28 +180,6 @@ function reorderById<T extends { id: string }>(
   const next = [...rest.slice(0, at), moving, ...rest.slice(at)]
   if (next.every((item, index) => item.id === items[index]?.id)) return undefined
   return next
-}
-
-/**
- * 把成员插到顺序里的某一条之前
- *
- * 顺序位与分组数组不同：它只装 id，成员可能还没进过这一段，因此插进去之前先摘掉它原有的那一格
- * 锚点缺省表示挪到末尾，锚点不在顺序里时同样按末尾读
- * 拖拽期间快照可能被别处改过，那时末尾比丢掉这次挪动更接近用户的意图
- * @param order - 这一段当前的手动顺序
- * @param memberId - 要插进去的成员
- * @param beforeId - 插到哪个成员之前，缺省表示末尾
- * @returns 新顺序
- */
-function insertBefore(
-  order: readonly string[],
-  memberId: string,
-  beforeId: string | undefined,
-): string[] {
-  const rest = order.filter((id) => id !== memberId)
-  const at = beforeId === undefined ? rest.length : rest.findIndex((id) => id === beforeId)
-  const index = at < 0 ? rest.length : at
-  return [...rest.slice(0, index), memberId, ...rest.slice(index)]
 }
 
 /** 两份顺序是否逐位相同，用来把一次没有改变任何位置的写入挡在盘外 */
@@ -376,7 +347,7 @@ export async function createWorkspaceGroupsService(
    *
    * `order` 为空时整格删掉而不是留一份空数组，因为两者在渲染侧是同一件事（这一段没有手动顺序）
    * 留空数组只会让 global 里堆出越来越多的空槽
-   * @param key - 段键，见 `segment.ts`
+   * @param key - 段键
    * @param order - 该段成员的完整顺序
    */
   function saveSegmentOrder(
@@ -445,7 +416,7 @@ export async function createWorkspaceGroupsService(
       return save(workspaceId, groups)
     },
 
-    async moveSession(workspaceId, sessionId, groupId, beforeSessionId) {
+    async moveSession(workspaceId, sessionId, groupId) {
       // 先在所有分组中摘除该会话，保证一个会话至多属于一个分组
       const groups = groupsOf(workspaceId).map((group) => ({
         ...group,
@@ -456,15 +427,7 @@ export async function createWorkspaceGroupsService(
         if (target === undefined) throw new Error(`unknown group "${groupId}" in workspace "${workspaceId}"`)
         target.sessionIds.push(sessionId)
       }
-      const next = await save(workspaceId, groups)
-      // 目标段还没有手动顺序时不凭空造一份：那一段仍按时间序渲染，新会话的位置由时间决定
-      // 有顺序位时把它插到锚点之前，锚点不在那一份里、或插完与现状逐位相同，都只是省下一次写
-      if (beforeSessionId === undefined) return next
-      const key = groupId === null ? looseSlotKey(workspaceId) : groupSlotKey(workspaceId, groupId)
-      const slot = tree.get().orderSlots[key]
-      if (slot === undefined) return next
-      const order = insertBefore(slot, sessionId, beforeSessionId)
-      return sameOrder(order, slot) ? next : saveSegmentOrder(key, order)
+      return save(workspaceId, groups)
     },
 
     async setSegmentOrder(key, order) {

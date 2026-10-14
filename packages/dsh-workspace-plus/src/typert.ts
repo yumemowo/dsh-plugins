@@ -69,15 +69,7 @@ const optionalVirtualWorkspaceIdCodec = codec('OptionalVirtualWorkspaceId', () =
  */
 const optionalWorkspaceIdCodec = codec('OptionalWorkspaceId', () => z.union([z.undefined(), z.string()]))
 
-/**
- * 可缺省的会话 id
- *
- * 会话排序的锚点参数缺席表示「不动目标段的顺序位」，与「挪到末尾」不是一回事，因此不能复用上面那两个
- * 与它们同理：网关只在 `acceptsUndefined` 为真时容忍整格缺席，两处必须同时声明
- */
-const optionalSessionIdCodec = codec('OptionalSessionId', () => z.union([z.undefined(), z.string()]))
-
-/** 一个会话段的顺序位键，形状由 `segment.ts` 钉住，宿主不解析它 */
+/** 一个会话段的顺序位键，宿主不解析它 */
 const segmentKeyCodec = codec('SegmentKey', () => z.string())
 
 /** 一段成员的完整顺序 */
@@ -154,7 +146,6 @@ export const TYPERT = {
       { name: 'workspaceId', codec: workspaceIdCodec },
       { name: 'sessionId', codec: sessionIdCodec },
       { name: 'groupId', codec: nullableGroupIdCodec },
-      { name: 'beforeSessionId', acceptsUndefined: true, codec: optionalSessionIdCodec },
     ]),
     direct('setSegmentOrder', [
       { name: 'key', codec: segmentKeyCodec },
@@ -237,8 +228,8 @@ export const TYPERT = {
             kind: 'method',
             name: 'moveSession',
             signature:
-              'moveSession(workspaceId: string, sessionId: string, groupId: string | null,' +
-              ' beforeSessionId?: string): Promise<WorkspaceGroupsSnapshot>',
+              'moveSession(workspaceId: string, sessionId: string, groupId: string | null):' +
+              ' Promise<WorkspaceGroupsSnapshot>',
           },
           {
             kind: 'method',

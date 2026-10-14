@@ -145,20 +145,16 @@ export interface RegionActions {
    *
    * 返回替换用的完整快照，而不是让调用方再拉一次，宿主每个变更方法本来就回整份快照（见宿主 `service.ts`）
    * 直接采用它既少一次往返，也让「摆位置」与「本地状态反映新位置」之间没有空档
-   *
-   * `beforeSessionId` 是把会话插到某条会话之前，只在目标段已有手动顺序时起作用
-   * 缺省表示不动目标段的顺序位，新建会话的归组走的就是这一档
    */
   moveSession: (
     workspaceId: string,
     sessionId: string,
     groupId: GroupChoice,
-    beforeSessionId?: string | undefined,
   ) => Promise<WorkspaceGroupsSnapshot>
   /**
    * 写某一段的手动顺序
    *
-   * 段键由 `segment.ts` 构造，顺序是该段成员的完整名单，缺成员由渲染侧按时间序接在后面
+   * 顺序是该段成员的完整名单，缺成员由渲染侧按默认序接在后面
    */
   setSegmentOrder: (key: string, order: readonly string[]) => Promise<WorkspaceGroupsSnapshot>
   /**

@@ -133,7 +133,6 @@ export const REMOTE_CONTRIBUTION = {
       { name: 'workspaceId', codec: str('WorkspaceId') },
       { name: 'sessionId', codec: str('SessionId') },
       { name: 'groupId', codec: codec('NullableGroupId', () => z.string().nullable()) },
-      { name: 'beforeSessionId', acceptsUndefined: true, codec: optionalId('OptionalSessionId') },
     ]),
     descriptor('setSegmentOrder', [
       { name: 'key', codec: str('SegmentKey') },
@@ -233,7 +232,7 @@ export interface WorkspaceGroupsSnapshot {
   picker: PickerSnapshot
   /** 是否按子工作区渲染，缺省当开启 */
   nested: boolean
-  /** 会话段的顺序位：段键 → 手动顺序，缺一格表示该段按时间序渲染 */
+  /** 各段的顺序位：段键 → 手动顺序，缺一格表示该段按默认序渲染 */
   orderSlots: Record<string, string[]>
   /** 置顶区静止时显示几条 */
   pinnedVisibleCount: number

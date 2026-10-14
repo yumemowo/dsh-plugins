@@ -92,13 +92,11 @@ async function flush(): Promise<void> {
 
 /**
  * 区域 props，记录收到的两种排序调用与会话归组调用
- * @param slots - 该快照里的顺序位，缺省表示每一段都没有手动顺序
  * @param newSessionId - `startSession` 交回的会话 id，缺省表示这次导航被取代
  */
 function props(
   orders: string[][],
   moves: string[][],
-  slots: Record<string, string[]> = {},
   newSessionId: string | undefined = undefined,
 ): WorkspaceGroupsProps {
   const created = new Date(2026, 0, 1).toISOString()
@@ -140,7 +138,6 @@ function props(
       name: `工作区分组 ${id}`,
       workspaceIds: id === 'wg-1' ? ['ws-1'] : [],
     })),
-    orderSlots: slots,
   })
   return {
     wide: true,
@@ -220,10 +217,10 @@ function props(
 
 /**
  * 挂载区域并交出容器与收到的两类调用
- * @param options - 顺序位与 `startSession` 交回的会话 id
+ * @param options - `startSession` 交回的会话 id
  */
 async function mount(
-  options: { slots?: Record<string, string[]>; newSessionId?: string } = {},
+  options: { newSessionId?: string } = {},
 ): Promise<{
   container: HTMLElement
   root: ReturnType<typeof createRoot>
@@ -239,7 +236,7 @@ async function mount(
     root.render(
       React.createElement(
         WorkspaceGroupsRegion,
-        props(orders, moves, options.slots ?? {}, options.newSessionId),
+        props(orders, moves, options.newSessionId),
       ),
     )
   })
@@ -489,23 +486,8 @@ describe('placing a newly created session', () => {
     return found
   }
 
-  it('anchors the new session to the first row of a segment that has a manual order', async () => {
-    // 已接管段：顺手把新会话插到那一份手动顺序的最前
-    // 这一档与默认序一致——宿主把新会话前插进段首，比较器也把空白会话排在普通会话之前
-    const { container, root, moves } = await mount({
-      slots: { 'group/ws-1/group-a': ['session-1'] },
-      newSessionId: 'session-9',
-    })
-
-    await act(async () => plusButton(container, '在“分组 group-a”中新建会话').click())
-    await flush()
-
-    expect(moves).toEqual([['ws-1', 'session-9', 'group-a', 'session-1']])
-    await act(async () => root.unmount())
-  })
-
-  it('passes no anchor to a segment that has no manual order yet', async () => {
-    // 目标段没有顺序位时不带锚点：宿主因此不会凭空为它造一份，那一段仍按时间序渲染
+  it('places the new session into the group whose plus was used', async () => {
+    // 会话在新段里的位置由默认序决定，因此带的是归属而不是位次
     const { container, root, moves } = await mount({ newSessionId: 'session-9' })
 
     await act(async () => plusButton(container, '在“分组 group-a”中新建会话').click())
@@ -515,17 +497,25 @@ describe('placing a newly created session', () => {
     await act(async () => root.unmount())
   })
 
-  it('reads the loose segment slot when the workspace row creates the session', async () => {
-    // 工作区行的 `+` 归入未归组那一段，锚点取的是未归组段的顺序位
-    const { container, root, moves } = await mount({
-      slots: { 'loose/ws-1': ['session-1'] },
-      newSessionId: 'session-9',
-    })
+  it('leaves the new session ungrouped when the workspace row created it', async () => {
+    // 工作区行的 `+` 归入未归组那一段
+    const { container, root, moves } = await mount({ newSessionId: 'session-9' })
 
     await act(async () => plusButton(container, '在“ws-1”中新建会话').click())
     await flush()
 
-    expect(moves).toEqual([['ws-1', 'session-9', '', 'session-1']])
+    expect(moves).toEqual([['ws-1', 'session-9', '', '']])
+    await act(async () => root.unmount())
+  })
+
+  it('skips the placement when a newer navigation superseded this creation', async () => {
+    // 被取代的那次新建不打开会话，也就不必再摆它的归属
+    const { container, root, moves } = await mount()
+
+    await act(async () => plusButton(container, '在“分组 group-a”中新建会话').click())
+    await flush()
+
+    expect(moves).toEqual([])
     await act(async () => root.unmount())
   })
 })

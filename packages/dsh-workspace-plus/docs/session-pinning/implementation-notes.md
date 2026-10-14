@@ -288,4 +288,6 @@ const effectiveOverflow = overflow === 'expand' && hoverCapable ? 'expand' : 'sc
 - 置顶的读写全部走官方既有接口（`ctx.workspaces.pinSession` / `unpinSession`、`useWorkspaces` 的 `pinnedSessionIds`），不新造 RPC、不改官方包。
 - 图钉图标与配色取官方：`IconPinFillRegular` / `IconPinOutlineRegular`，颜色用官方那次置顶标记的同一档色阶（`--dsw-alias-label-caption`）。不自绘图钉，也不用状态色。
 - 上限只拦新增：达到上限时未置顶行的图钉转禁用态，已置顶的照常可以取消。
-- 不做点击展开、折叠透出、折叠计数、跟随聚焦，也不提供手动拖拽排序。
+- 不做点击展开、折叠透出、折叠计数、跟随聚焦。
+
+置顶区的手动拖拽排序是后来补上的，不在上面这份实现记录的范围里：它落成 `pinned` 一格段键加 `reconcilePinned` 合成，见[行拖拽](../row-drag.md)。

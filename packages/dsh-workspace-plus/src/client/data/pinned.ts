@@ -10,9 +10,16 @@
  */
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
-import { reconcileOrder } from './order.ts'
 import { isSessionVisible, toSessionRow } from './sessions.ts'
 import type { SessionRow } from './types.ts'
+
+/**
+ * 置顶段顺序位的存储键
+ *
+ * 跨工作区共用一格：置顶集合本身就是注册表全局的，不按工作区切分
+ * 置顶区按它渲染，分组内就地置顶的名次也从同一份顺序取，两个表面因此永不打架
+ */
+export const PINNED_SLOT_KEY = 'pinned'
 
 /** 置顶区里的一行 */
 export interface PinnedEntry {
@@ -82,6 +89,9 @@ export function pinnedEntries(
  * 顺序位里已不是成员的 id（取消置顶、归档）静默丢弃，不在顺序位里的成员按官方集合的位置接在后面
  * 没有顺序位时按官方集合的顺序，与引入顺序位之前逐项相同
  *
+ * 顺序位只记 id、成员集合另有一份来源，两者会漂移，因此渲染不直接用顺序位，而是把它与成员集合对一遍
+ * 成员集合是事实来源，顺序位只在它的范围内定次序：重复的 id 只认第一格，界面不会因此丢行或重复
+ *
  * 置顶区与分组内就地置顶段都读这一份结果，两个表面因此永不打架
  * @param slot - 置顶段的顺序位，缺省表示置顶区还没有手动顺序
  * @param entries - {@link pinnedEntries} 的结果，顺序即官方集合的顺序
@@ -92,7 +102,21 @@ export function reconcilePinned(
   entries: readonly PinnedEntry[],
 ): PinnedEntry[] {
   const rank = new Map(entries.map((entry, index) => [entry.id, index]))
-  return reconcileOrder(slot, entries, (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
+  const byRank = (a: PinnedEntry, b: PinnedEntry): number =>
+    (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)
+  // 空表与缺席同义：两者都表示置顶区没有手动顺序，留一份空数组只是落盘时的一格噪音
+  if (slot === undefined || slot.length === 0) return [...entries].sort(byRank)
+
+  const byId = new Map(entries.map((entry) => [entry.id, entry]))
+  const ordered: PinnedEntry[] = []
+  const placed = new Set<string>()
+  for (const id of slot) {
+    const entry = byId.get(id)
+    if (entry === undefined || placed.has(id)) continue
+    placed.add(id)
+    ordered.push(entry)
+  }
+  return [...ordered, ...entries.filter((entry) => !placed.has(entry.id)).sort(byRank)]
 }
 
 /**

@@ -17,9 +17,6 @@ import { useExpansion } from '../hooks/useExpansion.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useDnd, useOrderRow } from '../hooks/useDnd.ts'
 import { looseKey, workspaceHeadKey } from '../data/dnd.ts'
-import { reconcileOrder } from '../data/order.ts'
-import type { OrderSlots } from '../data/order.ts'
-import { groupSlotKey, looseSlotKey } from '../../segment.ts'
 import type { OrderDragging } from '../data/dnd.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
 import styles from './components/rows.module.css'
@@ -29,8 +26,6 @@ export interface WorkspaceGroupActions {
   onRename: (section: { id: string; label: string }) => void
   onDelete: (section: { id: string; label: string }) => void
   onCreateSession: (section: { id: string; label: string }) => void
-  /** 清掉某个分组那一段的手动顺序，该段退回时间序 */
-  onClearOrder: (section: { id: string }) => void
 }
 
 export interface WorkspaceSectionProps {
@@ -50,13 +45,6 @@ export interface WorkspaceSectionProps {
   compareRows: (a: SessionRow, b: SessionRow) => number
   /** 本工作区体内始终展示并占额度的会话行 id */
   alwaysVisibleSessionIds: ReadonlySet<string>
-  /**
-   * 本工作区各会话段的手动顺序
-   *
-   * 缺一格表示该段没有手动顺序、仍按时间序渲染，整格缺省表示这个工作区与它体内每一段都没有
-   * 组内会话按 `group/<工作区>/<分组>` 取，未归组段按 `loose/<工作区>` 取
-   */
-  orderSlots?: OrderSlots | undefined
   /** 折叠判定的基准时刻，与行尾相对时间取同一刻 */
   now: number
   /** 待揭示的会话 id，转交给两段会话列表 */
@@ -74,12 +62,6 @@ export interface WorkspaceSectionProps {
    * 缺省表示这一行不可拖起，但仍是别的落点的接收方（它自己的区域属性恒在）
    */
   workspaceDragging?: OrderDragging | undefined
-  /**
-   * 清掉本工作区未归组那一段的手动顺序
-   *
-   * 未归组段没有区段头，这一行的菜单是它唯一的入口，缺省表示该行不提供这个入口
-   */
-  onClearLooseOrder?: (() => void) | undefined
   /** 把一个会话行渲染成元素，渲染方式由区域组件决定（是否带归组菜单） */
   renderSession: (row: SessionRow) => ReactNode
   /** 把一个子工作区渲染成一个完整的工作区块，深度由区域组件自己算 */
@@ -98,8 +80,6 @@ export function WorkspaceSection({
   groupActions,
   orderDragging,
   workspaceDragging,
-  onClearLooseOrder,
-  orderSlots,
   renderSession,
   renderChildWorkspace,
 }: WorkspaceSectionProps): ReactElement {
@@ -148,12 +128,7 @@ export function WorkspaceSection({
 
   return (
     <section className={styles.workspace} style={indent}>
-      <WorkspaceRow
-        {...row}
-        hasManualOrder={(orderSlots?.[looseSlotKey(workspaceId)]?.length ?? 0) > 0}
-        onClearOrder={onClearLooseOrder}
-        dnd={rowDnd}
-      />
+      <WorkspaceRow {...row} dnd={rowDnd} />
       <ExpandableBody open={row.expanded}>
         <div className={styles.workspaceBody}>
           {/* 子工作区排在会话分组之前，与分组内部同一顺序，文件夹在前 */}
@@ -185,20 +160,12 @@ export function WorkspaceSection({
                 onCreateSession={() =>
                   groupActions.onCreateSession({ id: section.id, label: section.label })
                 }
-                hasManualOrder={
-                  (orderSlots?.[groupSlotKey(workspaceId, section.id)]?.length ?? 0) > 0
-                }
-                onClearOrder={() => groupActions.onClearOrder({ id: section.id })}
                 orderDragging={orderDragging}
                 renderChildWorkspace={renderChildWorkspace}
               >
                 <SessionList
                   scope={{ kind: 'group', workspaceId, groupId: section.id }}
-                  rows={reconcileOrder(
-                    orderSlots?.[groupSlotKey(workspaceId, section.id)],
-                    section.sessions,
-                    compareRows,
-                  )}
+                  rows={[...section.sessions].sort(compareRows)}
                   alwaysVisibleSessionIds={alwaysVisibleSessionIds}
                   now={now}
                   open={groupExpanded}
@@ -214,7 +181,7 @@ export function WorkspaceSection({
             <div className={styles.sessions} {...looseZone}>
               <SessionList
                 scope={{ kind: 'loose', workspaceId }}
-                rows={reconcileOrder(orderSlots?.[looseSlotKey(workspaceId)], layout.loose, compareRows)}
+                rows={[...layout.loose].sort(compareRows)}
                 alwaysVisibleSessionIds={alwaysVisibleSessionIds}
                 now={now}
                 open={row.expanded}

@@ -93,18 +93,6 @@ export interface WorkspaceRowProps {
    */
   onSelectParentGroup?: ((id: string) => void) | undefined
   /**
-   * 未归组那一段是否有手动顺序
-   *
-   * 有才出现「清除手动顺序」——没有顺序可清时它点了什么都不会发生，留着会读成失效的入口
-   */
-  hasManualOrder?: boolean | undefined
-  /**
-   * 清掉未归组那一段的手动顺序
-   *
-   * 那一段没有区段头，这一行的菜单是它唯一的入口，缺省表示该行不提供这个入口
-   */
-  onClearOrder?: (() => void) | undefined
-  /**
    * 这一行的拖拽接线
    *
    * 缺省表示这一行不参与拖拽，那时它既不挂区域属性也不可拖起
@@ -144,8 +132,6 @@ export function WorkspaceRow({
   hover,
   hoverCopy,
   virtualWorkspace,
-  hasManualOrder,
-  onClearOrder,
   dnd,
 }: WorkspaceRowProps): ReactElement {
   const { labels } = useLocale()
@@ -163,7 +149,6 @@ export function WorkspaceRow({
     if (id === ROW_MENU.newSession) onCreateSession?.()
     else if (id === WORKSPACE_MENU.newGroup) onNewGroup?.()
     else if (id === WORKSPACE_MENU.rename) onRename?.()
-    else if (id === WORKSPACE_MENU.clearOrder) onClearOrder?.()
     else if (id === WORKSPACE_MENU.delete) onDelete?.()
     else if (
       id === VIRTUAL_WORKSPACE_ITEM.create ||
@@ -184,7 +169,6 @@ export function WorkspaceRow({
         // 没有移入入口的行（未分组桶）不出现这一项，否则是个点不动的死入口
         virtualWorkspaceGrouping: onSelectVirtualWorkspace === undefined ? undefined : virtualWorkspace,
         parentGrouping: onSelectParentGroup === undefined ? undefined : parentGroup,
-        clearOrderLabel: hasManualOrder === true ? labels.clearOrder : undefined,
       })
     : undefined
 

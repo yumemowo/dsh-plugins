@@ -4,11 +4,12 @@
 
 ## 分层
 
-浏览器半边按「入口 / 契约 / 数据 / 状态 / 渲染」分层，每个模块只做一件事；组件用 `.tsx` 写 JSX，纯逻辑留在 `.ts`（tsconfig 与 vitest 都已包含 `**/*.tsx`）。`rootEntry.ts`、`pickerState.ts` 与 `segment.ts` 留在 `src/` 而不是 `src/client/`，因为宿主半边也要用同一份修剪、排序规则与段键形状。
+浏览器半边按「入口 / 契约 / 数据 / 状态 / 渲染」分层，每个模块只做一件事；组件用 `.tsx` 写 JSX，纯逻辑留在 `.ts`（tsconfig 与 vitest 都已包含 `**/*.tsx`）。`rootEntry.ts` 与 `pickerState.ts` 留在 `src/` 而不是 `src/client/`，因为宿主半边也要用同一份修剪与排序规则。
 
 ```
 src/
-├── segment.ts                  会话段顺序位的段键构造（宿主与浏览器共用同一套形状，见 [行拖拽](row-drag.md)）
+├── rootEntry.ts                根节点条目地址的形状与纯变换（宿主与浏览器共用）
+├── pickerState.ts              菜单状态的形状与纯变换（同上，见 [数据存储](data-storage.md)）
 └── client/
     ├── index.ts                插件入口：语言包注册、remote 挂载、插槽注册、对照开关
     ├── locales.ts              命名空间声明与中英字典（键名取官方叫法）
@@ -31,12 +32,11 @@ src/
     │   ├── nest.ts             子工作区嵌套推导（路径祖先关系、容器归属、段内森林）
     │   ├── status.ts           会话状态位推导（待交互 / 运行 / 完成）
     │   ├── search.ts           按标题搜索（查询净化、匹配、排序与截断）
-    │   ├── pinned.ts           置顶集合的投影与合成（pinnedEntries、reconcilePinned、pinRanks）
+    │   ├── pinned.ts           置顶集合的投影与合成（pinnedEntries、reconcilePinned、pinRanks、置顶段键）
     │   ├── picker.ts           下拉菜单的条目与分区（根节点条目、三个分区、聚焦布局、聚焦解析）
     │   ├── sessions.ts         会话快照 → 渲染行（含可见性过滤、空白行命名、未分组收集）
     │   ├── collapse.ts         一个展示范围内折几条（五步判定、置顶与未空闲行，见 [会话折叠](session-collapse.md)）
     │   ├── dnd.ts              拖拽计划的类型、区域键与命中换算（见 [行拖拽](row-drag.md)）
-    │   ├── order.ts            顺序位到渲染顺序的换算（reconcileOrder，见 [行拖拽](row-drag.md)）
     │   ├── outline.ts          一份扁平的行序列（题头行 / 会话行 / 溢出 / 空态的顺序与露面）
     │   └── rows.ts             会话行的显示事实（状态位与相对时间，两者都只依赖快照与文案）
     ├── utils/                  组件与样式表共用的零散常量
