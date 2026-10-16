@@ -31,7 +31,10 @@ const PARENT_ID = 'ws-9'
 /** 挂在祖先工作区之下的子工作区，工况 12 拖的就是它 */
 const CHILD_ID = 'ws-4'
 
-const ALL_WORKSPACES = [...GROUP_MEMBERS, PARENT_ID, CHILD_ID]
+/** 挂在同一祖先之下的第二个子工作区，同层子工作区换位的参照行 */
+const SIBLING_CHILD_ID = 'ws-5'
+
+const ALL_WORKSPACES = [...GROUP_MEMBERS, PARENT_ID, CHILD_ID, SIBLING_CHILD_ID]
 
 /**
  * 一条工作区的路径
@@ -43,6 +46,7 @@ const PATH_OF: Record<string, string> = {
   'ws-1': '/repo/one',
   'ws-2': '/repo/two',
   'ws-4': '/repo/nine/four',
+  'ws-5': '/repo/nine/five',
   'ws-9': '/repo/nine',
 }
 
@@ -110,7 +114,8 @@ async function flush(): Promise<void> {
 /** 收到的那几次写入，逐条记下方法名与实参 */
 interface Writes {
   moves: [string, string][]
-  reorders: [string, string, string | undefined][]
+  /** 换位写入注册表序：被挪的工作区与锚点（undefined 表示挪到末尾） */
+  reorders: [string, string | undefined][]
   nests: [string, string, string][]
   unnests: string[][]
   clears: [string, readonly string[]][]
@@ -173,10 +178,6 @@ function props(
     createVirtualWorkspace: async () => stored,
     renameVirtualWorkspace: async () => stored,
     deleteVirtualWorkspace: async () => stored,
-    moveWorkspaceBefore: async (groupId, workspaceId, beforeWorkspaceId) => {
-      writes.reorders.push([groupId, workspaceId, beforeWorkspaceId])
-      return stored
-    },
     moveWorkspace: async (workspaceId, groupId) => {
       writes.moves.push([workspaceId, groupId])
       return stored
@@ -194,6 +195,9 @@ function props(
     focusEntry: async () => stored,
     togglePinned: async () => stored,
     setSessionPinned: async () => {},
+    insertWorkspaceBefore: async (workspaceId: string, beforeWorkspaceId: string | undefined) => {
+      writes.reorders.push([workspaceId, beforeWorkspaceId])
+    },
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,
@@ -363,7 +367,7 @@ describe('dragging a workspace row inside its own virtual workspace group', () =
     fire(workspaceRow(container, 'ws-1'), 'drop', 2)
     await flush()
 
-    expect(writes.reorders).toEqual([['wg-1', 'ws-2', 'ws-1']])
+    expect(writes.reorders).toEqual([['ws-2', 'ws-1']])
     await act(async () => root.unmount())
   })
 
@@ -391,6 +395,54 @@ describe('dragging a workspace row inside its own virtual workspace group', () =
     expect(workspaceRow(container, 'ws-2').getAttribute('draggable')).toBe('true')
     // 行自己既是落点区域也是参照行，两格标记都在它身上
     expect(workspaceRow(container, 'ws-1').getAttribute('data-wg-dnd')).toBe('workspaceHead/ws-1')
+    await act(async () => root.unmount())
+  })
+})
+
+describe('dragging a workspace row across flat and nested layers', () => {
+  it('reorders two workspaces that sit flat on the root with no group at all', async () => {
+    // 根节点平铺段的同层名单是根容器的顶层（注册表序），与组内换位落在同一个写入面上
+    const { container, root, writes } = await mount({ workspaceGroups: [] })
+    band(workspaceRow(container, 'ws-1'), 0)
+    band(workspaceRow(container, 'ws-2'), 20)
+
+    fire(workspaceRow(container, 'ws-2'), 'dragstart')
+    // 指针落在 ws-1 的上半，读作插到它之前
+    fire(workspaceRow(container, 'ws-1'), 'dragover', 2)
+    fire(workspaceRow(container, 'ws-1'), 'drop', 2)
+    await flush()
+
+    expect(writes.reorders).toEqual([['ws-2', 'ws-1']])
+    await act(async () => root.unmount())
+  })
+
+  it('moves a nested child workspace in front of its same-layer sibling', async () => {
+    // 嵌套子工作区作来源：同层名单按「父工作区相同」取（ws-9 名下的 ws-4 与 ws-5）
+    // 画出的落点线放开后必须真的写——命中与提交读的是同一份名单
+    const { container, root, writes } = await mount()
+    band(workspaceRow(container, 'ws-4'), 0)
+    band(workspaceRow(container, 'ws-5'), 20)
+
+    fire(workspaceRow(container, 'ws-5'), 'dragstart')
+    // 指针落在 ws-4 的上半，读作插到它之前
+    fire(workspaceRow(container, 'ws-4'), 'dragover', 2)
+    fire(workspaceRow(container, 'ws-4'), 'drop', 2)
+    await flush()
+
+    expect(writes.reorders).toEqual([['ws-5', 'ws-4']])
+    await act(async () => root.unmount())
+  })
+
+  it('marks a nested child workspace row as a drop target for its same-layer sibling', async () => {
+    // 嵌套子工作区作落点：这一行是同层的合法参照行，命中层不再停在它上面作废
+    const { container, root } = await mount()
+    band(workspaceRow(container, 'ws-4'), 0)
+    band(workspaceRow(container, 'ws-5'), 20)
+
+    fire(workspaceRow(container, 'ws-5'), 'dragstart')
+    fire(workspaceRow(container, 'ws-4'), 'dragover', 2)
+
+    expect(workspaceRow(container, 'ws-4').getAttribute('data-wg-drop')).toBe('before')
     await act(async () => root.unmount())
   })
 })

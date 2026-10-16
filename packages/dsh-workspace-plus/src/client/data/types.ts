@@ -3,6 +3,7 @@
  *
  * 只承载展示所需的事实，不复制整份会话或工作区快照
  */
+import type { EntryAddress } from '../../rootEntry.ts'
 
 /**
  * 会话列表的展示方式
@@ -95,10 +96,15 @@ export interface VirtualWorkspaceSection {
  *
  * 与 {@link WorkspaceLayout} 是同一个形状在两个层级上的用法：这里是工作区被分组，那里是会话被分组
  * `loose` 是没有归入任何分组的工作区 id，它们平铺在全部工作区分组之后、不带区段头
+ *
+ * `entries` 是这一层条目的单一有序名单：混排接管前后渲染层都只按它排
+ * 未接管时按「分组在前、平铺在后」合成，与既有外观逐项相同
  */
 export interface RootLayout {
   groups: VirtualWorkspaceSection[]
   loose: string[]
+  /** 根节点条目的渲染顺序：先是各工作区分组的 id，再是平铺工作区的 id */
+  entries: EntryAddress[]
 }
 
 /**

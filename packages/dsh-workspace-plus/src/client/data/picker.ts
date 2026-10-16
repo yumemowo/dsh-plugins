@@ -182,13 +182,15 @@ export function focusedLayout(
   const entry = resolveFocus(entries, focused)
   if (entry === undefined) return layout
   if (entry.kind === 'virtual') {
+    // 列出该分组的顶层，被嵌套的成员由父工作区带出来，不由这一段直接列
+    const loose = layout.groups.find((group) => group.id === entry.id)?.roots ?? []
     return {
       groups: [],
-      // 列出该分组的顶层，被嵌套的成员由父工作区带出来，不由这一段直接列
-      loose: layout.groups.find((group) => group.id === entry.id)?.roots ?? [],
+      loose,
+      entries: loose.map((id) => workspaceAddress(id)),
     }
   }
-  return { groups: [], loose: [entry.id] }
+  return { groups: [], loose: [entry.id], entries: [workspaceAddress(entry.id)] }
 }
 
 /**

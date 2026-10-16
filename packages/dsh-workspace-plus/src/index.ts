@@ -61,8 +61,6 @@ export function apply(ctx: Context, config: WorkspacePlusConfig = Config({})): v
     renameVirtualWorkspace: async (groupId, groupName) =>
       (await service).renameVirtualWorkspace(groupId, groupName),
     deleteVirtualWorkspace: async (groupId) => (await service).deleteVirtualWorkspace(groupId),
-    moveWorkspaceBefore: async (groupId, workspaceId, beforeWorkspaceId) =>
-      (await service).moveWorkspaceBefore(groupId, workspaceId, beforeWorkspaceId),
     moveWorkspace: async (workspaceId, groupId) =>
       (await service).moveWorkspace(workspaceId, groupId),
     nestWorkspaces: async (workspaceIds, parentWorkspaceId, groupId) =>

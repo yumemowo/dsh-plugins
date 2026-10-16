@@ -37,6 +37,7 @@ const LAYOUT = {
     { id: 'vg2', label: '空组', workspaceIds: [], roots: [] },
   ],
   loose: ['w3', 'w4'],
+  entries: [virtualAddress('vg1'), virtualAddress('vg2'), workspaceAddress('w3'), workspaceAddress('w4')],
 }
 const VIEWS = index(view('w1', 'W1'), view('w2', 'W2'), view('w3', 'W3'), view('w4', 'W4'))
 
@@ -186,13 +187,17 @@ describe('focusedLayout', () => {
     const layout = focusedLayout(LAYOUT, entries, virtualAddress('vg1'))
 
     // 组头不再重复渲染（第二行已经写着组名），因此 groups 是空的
-    expect(layout).toEqual({ groups: [], loose: ['w1', 'w2'] })
+    expect(layout).toEqual({
+      groups: [],
+      loose: ['w1', 'w2'],
+      entries: [workspaceAddress('w1'), workspaceAddress('w2')],
+    })
   })
 
   it('returns only that workspace when a loose workspace is focused', () => {
     const layout = focusedLayout(LAYOUT, entries, workspaceAddress('w4'))
 
-    expect(layout).toEqual({ groups: [], loose: ['w4'] })
+    expect(layout).toEqual({ groups: [], loose: ['w4'], entries: [workspaceAddress('w4')] })
   })
 
   it('drops a focused workspace that is not a menu entry', () => {
@@ -301,6 +306,7 @@ describe('focusedLayout', () => {
     expect(focusedLayout(LAYOUT, entries, virtualAddress('vg2'))).toEqual({
       groups: [],
       loose: [],
+      entries: [],
     })
   })
 })

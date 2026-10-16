@@ -864,7 +864,6 @@ function props(
     },
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),
-    moveWorkspaceBefore: async () => snapshot(),
     moveWorkspace: async (workspaceId: string, groupId: string) => {
       options.workspaceMoves?.push([workspaceId, groupId])
       return snapshot()
@@ -886,6 +885,7 @@ function props(
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
     setSessionPinned: async () => {},
+    insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     // 结果条数上限来自官方会话控制器的线上契约值

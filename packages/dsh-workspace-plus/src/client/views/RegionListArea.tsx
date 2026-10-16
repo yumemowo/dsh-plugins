@@ -138,16 +138,13 @@ export interface RegionListCommands {
   /** 把一个工作区移入 / 移出虚拟工作区分组，空串表示移出到根节点 */
   moveWorkspaceToGroup: (workspaceId: string, groupId: string) => void
   /**
-   * 在同一个虚拟工作区分组内换位
+   * 把一个工作区挪到注册表里的另一个工作区之前
    *
-   * 只改这个分组的成员数组，改归属是 `moveWorkspaceToGroup` 的事
+   * 工作区类段落的顺序唯一来自注册表序，组内换位、同层子工作区换位与根节点平铺段换位都落到这一格
+   * 改归属是 `moveWorkspaceToGroup` 的事
    * `beforeWorkspaceId` 为 undefined 表示挪到末尾
    */
-  reorderWorkspaceInGroup: (
-    groupId: string,
-    workspaceId: string,
-    beforeWorkspaceId: string | undefined,
-  ) => void
+  moveWorkspaceInOrder: (workspaceId: string, beforeWorkspaceId: string | undefined) => void
   /**
    * 把一个工作区连同它名下的子工作区放进某个祖先工作区的会话分组
    *
@@ -435,8 +432,8 @@ function WorkspaceNode({
    * 拖起一条工作区行时的计划
    *
    * 与上面两处同一取舍：这几份名单每次渲染都是新数组，构造器在调用当刻读 ref，依赖列只留稳定的几格
-   * 四类落点落在三个宿主方法上
-   * 移入 / 移出虚拟分组走 `moveWorkspace`，组内换位走 `moveWorkspaceBefore`
+   * 四类落点落在三个写入面上
+   * 移入 / 移出虚拟分组走 `moveWorkspace`，换位一律走官方 `insertBefore`（注册表序是各层共用的顺序来源）
    * 会话分组那一族走 `nestWorkspaces` 与 `unnestWorkspaces`
    *
    * 可以移入的会话分组取自这条工作区自己的祖先链：只有 cwd 路径上的祖先才可能是它的父工作区
@@ -446,16 +443,18 @@ function WorkspaceNode({
     (memberId: string) => {
       const lists = dragLists.current
       const currentGroupId = virtualWorkspaceIdOf(lists.groups, memberId)
-      const own = lists.groups.find((section) => section.id === currentGroupId)
-      const { bindingOf, ancestorsOf } = scope.layout.nesting
+      const { bindingOf, ancestorsOf, parentOf, childIdsOf, rootsOf, containerOf } = scope.layout.nesting
+      // 同层名单按「父工作区相同」取：来源的父工作区名下（父工作区为空时取所在容器的顶层）
+      // 名单按注册表序，与渲染序同源，被嵌套的子工作区因此是合法的同层成员
+      const parent = parentOf(memberId)
+      const siblingOrder = parent === '' ? rootsOf(containerOf(memberId)) : childIdsOf(parent)
       return workspaceDragPlan({
         workspaceId: memberId,
         currentGroupId,
         groups: lists.groups,
         looseIds: lists.loose,
-        // 同层换位只收这一层渲染出来的那些行，被嵌进父工作区体内的成员不在其中
         // 来源自己也在这一份里：换算要在整层顺序上做，它不在其中就换不出任何位次
-        siblingOrder: currentGroupId === '' ? [] : (own?.roots ?? []),
+        siblingOrder,
         nestTargets: ancestorsOf(memberId).flatMap((parentId) =>
           (scope.snapshot.byWorkspace[parentId] ?? []).map((group) => ({
             parentId,
@@ -469,11 +468,7 @@ function WorkspaceNode({
             : { parentId: bound.workspaceId, groupId: bound.groupId }
         })(),
         moveToGroup: (groupId) => commands.moveWorkspaceToGroup(memberId, groupId),
-        reorder: (beforeWorkspaceId) => {
-          // 来源不在任何分组里时没有可写的分组，这一种落点也就不在计划里
-          if (currentGroupId === '') return
-          commands.reorderWorkspaceInGroup(currentGroupId, memberId, beforeWorkspaceId)
-        },
+        reorder: (beforeWorkspaceId) => commands.moveWorkspaceInOrder(memberId, beforeWorkspaceId),
         nestInto: (parentId, groupId) => commands.nestWorkspaceInto(memberId, parentId, groupId),
         unnest: () => commands.unnestWorkspace(memberId),
       })
@@ -482,7 +477,7 @@ function WorkspaceNode({
       scope.layout.nesting,
       scope.snapshot.byWorkspace,
       commands.moveWorkspaceToGroup,
-      commands.reorderWorkspaceInGroup,
+      commands.moveWorkspaceInOrder,
       commands.nestWorkspaceInto,
       commands.unnestWorkspace,
     ],

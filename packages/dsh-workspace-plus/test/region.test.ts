@@ -1378,14 +1378,15 @@ describe('buildRootLayout', () => {
     return { id, name, workspaceIds }
   }
 
-  it('keeps a workspace inside its group in metadata order', () => {
+  it('orders group members by registry order rather than metadata array order', () => {
     const layout = buildRootLayout(
       ['w1', 'w2', 'w3'],
       [wgroup('g1', '前端', ['w3', 'w1'])],
     )
 
     expect(layout.groups.map((section) => section.label)).toEqual(['前端'])
-    expect(layout.groups[0]?.workspaceIds).toEqual(['w3', 'w1'])
+    // 成员数组只当归属集合用，顺序按传入的注册表序
+    expect(layout.groups[0]?.workspaceIds).toEqual(['w1', 'w3'])
     expect(layout.loose).toEqual(['w2'])
   })
 

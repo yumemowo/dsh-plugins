@@ -137,7 +137,6 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     createVirtualWorkspace: async () => snapshot(),
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),
-    moveWorkspaceBefore: async () => snapshot(),
     moveWorkspace: async () => snapshot(),
     nestWorkspaces: async () => snapshot(),
     unnestWorkspaces: async () => snapshot(),
@@ -146,6 +145,7 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
     setSessionPinned: async () => {},
+    insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,
@@ -296,12 +296,13 @@ describe('nested sub-workspaces in a real DOM', () => {
         }),
     })
 
-    // 三者都在同一个虚拟分组里，按分组记录的顺序渲染，repo 是这一段的顶层，pkg 嵌在它体内
+    // 三者都在同一个虚拟分组里，组内顺序按注册表序渲染（成员数组只当归属集合用）
+    // repo 是这一段的顶层，pkg 嵌在它体内
     // 下发的层级就是最终层级（含虚拟分组那一格），不再由 CSS 另行累加
     expect(sections(container)).toEqual([
-      { title: 'example-plugin', depth: '1' },
       { title: 'dsh_plugins', depth: '1' },
       { title: 'dsh-workspace-plus', depth: '2' },
+      { title: 'example-plugin', depth: '1' },
     ])
     const repo = Array.from(container.querySelectorAll('.workspace')).find(
       (section) => section.querySelector('.workspaceTitle')?.textContent === 'dsh_plugins',
@@ -903,8 +904,7 @@ describe('nested sub-workspaces in a real DOM', () => {
           workspaceGroups: [{ id: 'vg1', name: 'dsh plugins', workspaceIds: ['w1'] }],
           picker: { focused: virtualAddress('vg1'), recent: [], pinned: [] },
         }),
-      moveWorkspaceBefore: async () => snapshot(),
-      moveWorkspace: async (workspaceId, groupId) => {
+        moveWorkspace: async (workspaceId, groupId) => {
         moved.push({ workspaceId, groupId })
         return snapshot()
       },

@@ -78,6 +78,13 @@ export interface Nesting {
   /** workspaceId → 它所属的容器 */
   containerOf: (workspaceId: string) => ContainerNode
   /**
+   * workspaceId → 它当前生效的父工作区 id，没有时为空串
+   *
+   * 有效归属优先于路径推导，与 {@link rootsOf} 的「顶层」判定同源
+   * 同层名单按「父工作区相同」过滤时，父工作区身份从这里取，而不是从 {@link ancestorsOf} 的第一格猜
+   */
+  parentOf: (workspaceId: string) => string
+  /**
    * 一个容器里的顶层工作区，按传入顺序
    *
    * 这一层只认结构，与界面上当前聚焦在谁无关：`containers.root` 恒指「不在任何虚拟分组里」那一段，不是「当前显示的那一片」
@@ -409,6 +416,7 @@ export function deriveNesting(input: NestingInput): Nesting {
   return {
     containers,
     containerOf,
+    parentOf,
     rootsOf: (container) => roots.get(container) ?? [],
     childIdsOf: (workspaceId) => childrenByParent.get(workspaceId) ?? [],
     groupedChildIdsOf: (workspaceId, groupId) =>

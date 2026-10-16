@@ -1094,15 +1094,11 @@ interface RegionNestActions {
   /** 把一个工作区移入 / 移出虚拟工作区分组，空串表示移出到根节点 */
   moveWorkspaceToGroup: (workspaceId: string, groupId: string) => void
   /**
-   * 在同一个虚拟工作区分组内换位
+   * 把一个工作区挪到注册表里的另一个工作区之前
    *
-   * 只改这个分组的成员数组，改归属是 {@link RegionNestActions.moveWorkspaceToGroup} 的事
+   * 工作区类段落的顺序唯一来自注册表序，改归属是 {@link RegionNestActions.moveWorkspaceToGroup} 的事
    */
-  reorderWorkspaceInGroup: (
-    groupId: string,
-    workspaceId: string,
-    beforeWorkspaceId: string | undefined,
-  ) => void
+  moveWorkspaceInOrder: (workspaceId: string, beforeWorkspaceId: string | undefined) => void
   /** 把一个工作区连同它名下的子工作区放进某个祖先工作区的会话分组 */
   nestWorkspaceInto: (workspaceId: string, parentId: string, groupId: string) => void
   /** 解除一个工作区的嵌套归属 */
@@ -1122,7 +1118,7 @@ function useRegionNestActions(
   ui: RegionUiState,
   apply: (action: Promise<WorkspaceGroupsSnapshot>) => void,
 ): RegionNestActions {
-  const { moveWorkspace, moveWorkspaceBefore, moveVirtualWorkspaceBefore, nestWorkspaces,
+  const { moveWorkspace, insertWorkspaceBefore, moveVirtualWorkspaceBefore, nestWorkspaces,
     unnestWorkspaces, setNested } = props
 
   /**
@@ -1246,15 +1242,15 @@ function useRegionNestActions(
   )
 
   /**
-   * 拖拽在同一个虚拟工作区分组内换位
+   * 拖拽换位：写官方注册表序，组内、同层子工作区与根节点平铺段共用这一格
    *
-   * 只改这个分组的成员数组，与移入 / 移出是两件不同的事，因此走另一个宿主方法
+   * 官方 `insertBefore` 自带乐观更新与对账，不回快照，因此不走 `apply`
    */
-  const reorderWorkspaceInGroup = useCallback(
-    (groupId: string, workspaceId: string, beforeWorkspaceId: string | undefined): void => {
-      apply(moveWorkspaceBefore(groupId, workspaceId, beforeWorkspaceId))
+  const moveWorkspaceInOrder = useCallback(
+    (workspaceId: string, beforeWorkspaceId: string | undefined): void => {
+      void insertWorkspaceBefore(workspaceId, beforeWorkspaceId)
     },
-    [apply, moveWorkspaceBefore],
+    [insertWorkspaceBefore],
   )
 
   /**
@@ -1305,7 +1301,7 @@ function useRegionNestActions(
     commitNestedOff,
     moveVirtualWorkspaceBefore: moveVirtualWorkspaceOrdered,
     moveWorkspaceToGroup,
-    reorderWorkspaceInGroup,
+    moveWorkspaceInOrder,
     nestWorkspaceInto,
     unnestWorkspace,
   }

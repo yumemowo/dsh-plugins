@@ -81,23 +81,6 @@ export interface WorkspaceGroupsService {
     beforeGroupId?: string | undefined,
   ): Promise<WorkspaceGroupsSnapshot>
   /**
-   * 把工作区分组里的一个工作区挪到同分组另一个工作区之前
-   *
-   * 成员数组兼顺序，数组序即界面序，渲染按它原样列出，不另存顺序位
-   * `beforeWorkspaceId` 缺省表示挪到末尾
-   *
-   * 资格复核与无操作取舍同 {@link WorkspaceGroupsService.moveGroupBefore}
-   * 来源还不在这个分组里时也按无操作返回：这一格管的是成员之间的换位，改归属是 `moveWorkspace` 的事
-   * @param groupId - 工作区在这个分组里排序
-   * @param workspaceId - 被挪动的工作区
-   * @param beforeWorkspaceId - 挪到哪个工作区之前，缺省表示挪到末尾
-   */
-  moveWorkspaceBefore(
-    groupId: string,
-    workspaceId: string,
-    beforeWorkspaceId?: string | undefined,
-  ): Promise<WorkspaceGroupsSnapshot>
-  /**
    * 把工作区移入分组，`groupId` 为 null 表示移出到未分组
    *
    * 一个工作区至多属于一个分组，移入时自动从原分组摘除
@@ -452,20 +435,6 @@ export async function createWorkspaceGroupsService(
     async moveVirtualWorkspaceBefore(groupId, beforeGroupId) {
       const order = reorderById(treeGroups(), groupId, beforeGroupId)
       return order === undefined ? snapshot() : saveTree(order)
-    },
-
-    async moveWorkspaceBefore(groupId, workspaceId, beforeWorkspaceId) {
-      // 只在指定的那个分组内换位，别处的成员一律不动
-      const groups = treeGroups()
-      const target = groups.find((group) => group.id === groupId)
-      if (target === undefined) return snapshot()
-      const order = reorderById(target.workspaceIds.map((id) => ({ id })), workspaceId, beforeWorkspaceId)
-      if (order === undefined) return snapshot()
-      return saveTree(
-        groups.map((group) =>
-          group.id === groupId ? { ...group, workspaceIds: order.map((item) => item.id) } : group,
-        ),
-      )
     },
 
     async renameVirtualWorkspace(groupId, name) {
