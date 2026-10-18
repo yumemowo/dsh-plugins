@@ -16,67 +16,25 @@ import {
   ROW_ATTRIBUTE,
   SCROLL_ATTRIBUTE,
   ZONE_ATTRIBUTE,
+  bandOf,
   beforeIdOf,
-  containsPoint,
-  findZone,
   groupHeadKey,
   groupOfZoneKey,
-  halfOf,
   looseKey,
-  nearestRow,
   orderDragPlan,
   reorderTo,
-  resolveHit,
   sessionGroupingPlan,
   sessionGroupKey,
   stretchDragPlan,
-  targetOfZone,
   virtualWorkspaceBodyKey,
   virtualWorkspaceHeadKey,
-  workspaceDragPlan,
   workspaceHeadKey,
   workspaceOfZoneKey,
+  workspaceTreeDragPlan,
 } from '../src/client/data/dnd.ts'
 import type { DragPlan, DragPlanTarget, DropAnchor } from '../src/client/data/dnd.ts'
-
-/** 一条矩形带 */
-interface Band {
-  left?: number
-  right?: number
-  top: number
-  height: number
-}
-
-/**
- * 造一个只带命中层读得到的那两格的东西
- * @param attributes - 元素上的标记属性
- * @param band - 元素的矩形，缺省表示它量不出布局（jsdom 里的真实情形）
- */
-function node(attributes: Record<string, string>, band?: Band): Element {
-  const rect = {
-    left: band?.left ?? 0,
-    right: band?.right ?? 200,
-    top: band?.top ?? 0,
-    height: band?.height ?? 0,
-    get bottom(): number {
-      return this.top + this.height
-    },
-  }
-  return {
-    getAttribute: (name: string) => attributes[name] ?? null,
-    getBoundingClientRect: () => rect,
-  } as unknown as Element
-}
-
-/** 一个区域元素，带区域键 */
-function zone(key: string, band?: Band): Element {
-  return node({ [ZONE_ATTRIBUTE]: key }, band)
-}
-
-/** 一个参照行元素，带行 id */
-function row(id: string, band: Band): Element {
-  return node({ [ROW_ATTRIBUTE]: id }, band)
-}
+import { deriveNesting } from '../src/client/data/nest.ts'
+import { buildWorkspaceTree } from '../src/client/data/tree.ts'
 
 /** 一个只接整块投放的计划目标 */
 function container(sink: DropAnchor[]): DragPlanTarget {
@@ -86,11 +44,6 @@ function container(sink: DropAnchor[]): DragPlanTarget {
 /** 一张计划表，键即区域键 */
 function plan(targets: Record<string, DragPlanTarget>): DragPlan {
   return { source: { kind: 'session', id: 'session-1' }, targets: new Map(Object.entries(targets)) }
-}
-
-/** 指针位置 */
-function at(y: number, x = 100): { x: number; y: number } {
-  return { x, y }
 }
 
 describe('zone keys', () => {
@@ -122,212 +75,25 @@ describe('zone keys', () => {
   })
 })
 
-describe('plan lookup', () => {
-  it('finds the target a zone key names', () => {
-    const sinks = { a: [] as DropAnchor[], b: [] as DropAnchor[] }
-    const p = plan({
-      'sessionGroup/ws-1/group-a': container(sinks.a),
-      'loose/ws-1': container(sinks.b),
-    })
+describe('the three bands of a container row', () => {
+  const band = { top: 100, height: 40 }
 
-    expect(targetOfZone(p, 'sessionGroup/ws-1/group-a')?.mode).toBe('container')
-    expect(targetOfZone(p, 'loose/ws-1')?.mode).toBe('container')
+  it('reads the top quarter as before, the middle half as inside and the bottom quarter as after', () => {
+    // 同一行身兼排序参照与放入落点两件事时按这条分流，比例是产品手感参数
+    expect(bandOf(band, 100)).toBe('before')
+    expect(bandOf(band, 109)).toBe('before')
+    // 两条边界都算中间那一段：上四分之一与下四分之一因此各是开区间，中二分之一恰好占满一半
+    expect(bandOf(band, 110)).toBe('inside')
+    expect(bandOf(band, 120)).toBe('inside')
+    expect(bandOf(band, 130)).toBe('inside')
+    expect(bandOf(band, 131)).toBe('after')
+    expect(bandOf(band, 140)).toBe('after')
   })
 
-  it('reads nothing out of a zone the plan never declared', () => {
-    // 不接的区域不是「被拒绝」，是「从未被计划」：查不到这一格就是这次拖拽不落这里
-    const p = plan({ 'loose/ws-1': container([]) })
-
-    expect(targetOfZone(p, 'sessionGroup/ws-1/group-a')).toBeUndefined()
-    expect(targetOfZone(p, 'sessionGroup/ws-2/group-a')).toBeUndefined()
-  })
-})
-
-describe('zone hit while walking up', () => {
-  it('picks the innermost zone the plan accepts', () => {
-    const p = plan({
-      'loose/ws-1': container([]),
-      'sessionGroup/ws-1/group-a': container([]),
-    })
-    // 分组头嵌在工作区块里，两个键都在计划表里，命中的是更内层那个
-    const inner = zone('sessionGroup/ws-1/group-a')
-    const outer = zone('loose/ws-1')
-
-    expect(findZone([inner, outer], p)?.element).toBe(inner)
-  })
-
-  it('stops at the nearest zone and takes nothing when the plan leaves it out', () => {
-    // 走到第一个带区域键的元素就停，不再往上找：原地投放靠这条读法成立
-    // 拖回自己所在那一段时那一段的键不在计划里，继续向上走会让包着它的区域接到这次落点，
-    // 把一次原地投放读成「移出这一段」
-    const p = plan({ 'loose/ws-1': container([]) })
-    const inner = zone('loose/ws-2')
-    const outer = zone('loose/ws-1')
-
-    expect(findZone([inner, outer], p)).toBeNull()
-  })
-
-  it('keeps walking while the elements above carry no zone key at all', () => {
-    // 中间层（撑开体、行容器）不带标记，它们不构成「最近的那一个区域」
-    const p = plan({ 'loose/ws-1': container([]) })
-    const outer = zone('loose/ws-1')
-
-    expect(findZone([node({}), node({ 'data-wg-stagger': '' }), outer], p)?.zoneKey).toBe('loose/ws-1')
-  })
-
-  it('reads no zone when nothing along the way carries a zone key', () => {
-    const p = plan({ 'loose/ws-1': container([]) })
-
-    expect(findZone([node({}), node({})], p)).toBeNull()
-    expect(findZone([], p)).toBeNull()
-  })
-
-  it('lets an unmarked element in the middle pass through to the zone above it', () => {
-    const p = plan({ 'loose/ws-1': container([]) })
-    // 撑开体、行容器这些中间层都不带标记，向上走时直接跳过
-    const target = node({ 'data-wg-stagger': '' })
-    const outer = zone('loose/ws-1')
-
-    expect(findZone([target, node({}), outer], p)?.zoneKey).toBe('loose/ws-1')
-  })
-})
-
-describe('half of a row band', () => {
-  it('reads the upper half as before and the lower half as after', () => {
-    const band = { top: 100, height: 40 }
-
-    expect(halfOf(band, 100)).toBe('before')
-    expect(halfOf(band, 119)).toBe('before')
-    expect(halfOf(band, 121)).toBe('after')
-    expect(halfOf(band, 140)).toBe('after')
-  })
-
-  it('puts the exact centre on after', () => {
-    // 中线上取「之后」：前后半相邻两行的分界因此落在同一侧，不会出现既不属于上一行又不属于下一行的缝
-    expect(halfOf({ top: 100, height: 40 }, 120)).toBe('after')
-  })
-
-  it('reads a zero-height band as after everywhere', () => {
-    // 量不出布局的元素（折叠后仍在文档里的行）高度为零，此时没有前半可言
-    expect(halfOf({ top: 100, height: 0 }, 100)).toBe('after')
-  })
-})
-
-describe('point inside a band', () => {
-  const band = { left: 10, top: 100, right: 210, bottom: 140 }
-
-  it('accepts a point inside and on the edges', () => {
-    expect(containsPoint(band, at(120, 100))).toBe(true)
-    expect(containsPoint(band, at(100, 10))).toBe(true)
-    expect(containsPoint(band, at(140, 210))).toBe(true)
-  })
-
-  it('rejects a point outside on either axis', () => {
-    expect(containsPoint(band, at(99, 100))).toBe(false)
-    expect(containsPoint(band, at(141, 100))).toBe(false)
-    expect(containsPoint(band, at(120, 9))).toBe(false)
-    expect(containsPoint(band, at(120, 211))).toBe(false)
-  })
-})
-
-describe('nearest row in a stretch', () => {
-  const rows = [
-    row('session-1', { top: 0, height: 40 }),
-    row('session-2', { top: 40, height: 40 }),
-    row('session-3', { top: 80, height: 40 }),
-  ]
-
-  it('picks the row the pointer is standing on', () => {
-    expect(nearestRow(rows, at(10))).toEqual({ rowId: 'session-1', half: 'before' })
-    expect(nearestRow(rows, at(30))).toEqual({ rowId: 'session-1', half: 'after' })
-    expect(nearestRow(rows, at(50))).toEqual({ rowId: 'session-2', half: 'before' })
-    expect(nearestRow(rows, at(90))).toEqual({ rowId: 'session-3', half: 'before' })
-  })
-
-  it('picks the closest row when the pointer sits in the gap between two', () => {
-    const spaced = [
-      row('session-1', { top: 0, height: 40 }),
-      row('session-2', { top: 46, height: 40 }),
-    ]
-
-    // 缝隙里偏上，最近的是上一行，读作追加到它之后
-    expect(nearestRow(spaced, at(42))).toEqual({ rowId: 'session-1', half: 'after' })
-    // 偏下，最近的是下一行，读作插到它之前
-    expect(nearestRow(spaced, at(45))).toEqual({ rowId: 'session-2', half: 'before' })
-  })
-
-  it('reads a pointer below every row as landing after the last one', () => {
-    // 段尾空白：最近的那一行仍是最后一行
-    expect(nearestRow(rows, at(400))).toEqual({ rowId: 'session-3', half: 'after' })
-  })
-
-  it('reads a pointer above every row as landing before the first one', () => {
-    expect(nearestRow(rows, at(-50))).toEqual({ rowId: 'session-1', half: 'before' })
-  })
-
-  it('keeps the earlier row when two rows measure the same distance', () => {
-    // 等高相邻两行的分界上取先出现的那个，否则同一个指针位置会在两行之间来回跳
-    const tie = [
-      row('session-1', { top: 0, height: 20 }),
-      row('session-2', { top: 20, height: 20 }),
-    ]
-
-    expect(nearestRow(tie, at(20))).toEqual({ rowId: 'session-1', half: 'after' })
-  })
-
-  it('reads no row while the stretch renders none', () => {
-    // 空分组：一行都没有，落点因此只有整块投放一种读法
-    expect(nearestRow([], at(20))).toBeNull()
-  })
-
-  it('skips an element that carries no row marker', () => {
-    expect(nearestRow([node({}, { top: 0, height: 40 })], at(20))).toBeNull()
-  })
-})
-
-describe('resolving a hit', () => {
-  it('always reads a whole-block landing for a container target', () => {
-    const rows = [row('session-1', { top: 0, height: 40 }), row('session-2', { top: 40, height: 40 })]
-
-    // container 档不按上下半分档，段里有没有行都是整块落进容器
-    for (const y of [0, 20, 60, 400]) {
-      expect(resolveHit({ zoneKey: 'sessionGroup/ws-1/group-a', target: container([]), rows, point: at(y) }))
-        .toEqual({ zoneKey: 'sessionGroup/ws-1/group-a', anchor: { kind: 'inside' } })
-    }
-  })
-
-  it('reads the row halves for a rows target', () => {
-    const rows = [row('session-1', { top: 0, height: 40 }), row('session-2', { top: 40, height: 40 })]
-    const target: DragPlanTarget = { mode: 'rows', commit: () => {} }
-
-    expect(resolveHit({ zoneKey: 'loose/ws-1', target, rows, point: at(10) })).toEqual({
-      zoneKey: 'loose/ws-1',
-      anchor: { kind: 'before', rowId: 'session-1' },
-    })
-    expect(resolveHit({ zoneKey: 'loose/ws-1', target, rows, point: at(30) })).toEqual({
-      zoneKey: 'loose/ws-1',
-      anchor: { kind: 'after', rowId: 'session-1' },
-    })
-  })
-
-  it('reads an empty rows stretch as appending to the end', () => {
-    const target: DragPlanTarget = { mode: 'rows', commit: () => {} }
-
-    expect(resolveHit({ zoneKey: 'loose/ws-1', target, rows: [], point: at(20) })).toEqual({
-      zoneKey: 'loose/ws-1',
-      anchor: { kind: 'inside' },
-    })
-  })
-
-  it('carries the zone key through so the commit can name its stretch', () => {
-    const hit = resolveHit({
-      zoneKey: 'loose/ws-1',
-      target: container([]),
-      rows: [],
-      point: at(0),
-    })
-
-    expect(hit?.zoneKey).toBe('loose/ws-1')
+  it('reads a zero-height band as inside everywhere', () => {
+    // jsdom 恒零矩形，尚未布局的节点也如此：那时上下段都无从谈起，退回不需要像素的放入读法
+    expect(bandOf({ top: 100, height: 0 }, 100)).toBe('inside')
+    expect(bandOf({ top: 100, height: 0 }, 999)).toBe('inside')
   })
 })
 
@@ -340,8 +106,8 @@ describe('a plan that leaves the origin out', () => {
       'loose/ws-2': container([]),
     })
 
-    expect(targetOfZone(p, 'sessionGroup/ws-1/group-a')).toBeUndefined()
-    expect(targetOfZone(p, 'loose/ws-1')).toBeUndefined()
+    expect(p.targets.get('sessionGroup/ws-1/group-a')).toBeUndefined()
+    expect(p.targets.get('loose/ws-1')).toBeUndefined()
   })
 
   it('still carries every other stretch of the same workspace', () => {
@@ -738,212 +504,167 @@ describe('building a stretch drag plan', () => {
   })
 })
 
-describe('building a workspace drag plan', () => {
-  /** 一个来源不在任何分组里的最小输入，用例只覆盖到自己那一格 */
-  function planInput(overrides: Partial<Parameters<typeof workspaceDragPlan>[0]> = {}) {
-    return {
-      workspaceId: 'ws-1',
-      currentGroupId: '',
-      groups: [],
-      looseIds: [],
-      siblingOrder: [],
-      nestTargets: [],
-      moveToGroup: () => {},
-      reorder: () => {},
-      nestInto: () => {},
-      unnest: () => {},
-      ...overrides,
+describe('building a tree driven workspace drag plan', () => {
+  /** 四个工作区互不嵌套、同处一层：用来钉「同层兄弟」那几格 */
+  const flatTopology = { virtualGroups: [] as { id: string; workspaceIds: string[] }[] }
+
+  /** 夹具照搬验收拓扑：一个虚拟分组四个成员，其中两条按 cwd 挂在同一条工作区之下 */
+  function planFor(
+    source: string,
+    options: {
+      virtualGroups?: { id: string; workspaceIds: string[] }[]
+      paths?: Record<string, string>
+      bindings?: Record<string, { workspaceId: string; groupId: string }>
+      groupIds?: Record<string, string[]>
+      writes?: { moves: string[]; orders: (string | undefined)[]; nests: string[]; unnests: string[] }
+    } = {},
+  ) {
+    const workspaceIds = ['ws-p1', 'ws-c1', 'ws-c2', 'ws-p2']
+    const virtualGroups = options.virtualGroups ?? [
+      { id: 'wg-1', workspaceIds: ['ws-p1', 'ws-c1', 'ws-c2', 'ws-p2'] },
+      { id: 'wg-2', workspaceIds: [] },
+    ]
+    const paths = options.paths ?? {
+      'ws-p1': '/p1',
+      'ws-c1': '/p1/c1',
+      'ws-c2': '/p1/c2',
+      'ws-p2': '/p2',
     }
+    const bindings = options.bindings ?? {}
+    const groupIds = options.groupIds ?? {}
+    const writes = options.writes ?? { moves: [], orders: [], nests: [], unnests: [] }
+    const virtualOf = (id: string): string =>
+      virtualGroups.find((group) => group.workspaceIds.includes(id))?.id ?? ''
+    const nesting = deriveNesting({
+      enabled: true,
+      workspaceIds,
+      pathOf: (id) => paths[id],
+      virtualOf,
+      bindingOf: (id) => bindings[id],
+      groupIdsOf: (id) => new Set(groupIds[id] ?? []),
+    })
+    const tree = buildWorkspaceTree({
+      workspaceIds,
+      virtualGroups,
+      nesting,
+      sessionGroupsOf: (id) => groupIds[id] ?? [],
+      // 拖拽认祖先要看 cwd：那是「可能挪到哪儿」，与渲染那一层的同组要求不是同一个问题
+      pathOf: (id) => paths[id],
+    })
+    return workspaceTreeDragPlan({
+      tree,
+      workspaceId: source,
+      moveToGroup: (groupId) => writes.moves.push(groupId),
+      reorder: (before) => writes.orders.push(before),
+      nestInto: (parentId, groupId) => writes.nests.push(`${parentId}/${groupId}`),
+      unnest: () => writes.unnests.push(source),
+    })
   }
 
   it('collects the head and the body of every group the source is not in', () => {
     // 组头与组体同一档：拖到组头的标题上、或者拖到组体里那一片空白上，都读作移入这个分组
     // 两格都要在，指针停在组头上时命中层先撞上它，那一次落点就到此为止
-    const p = workspaceDragPlan(
-      planInput({
-        currentGroupId: 'group-a',
-        groups: [
-          { id: 'group-a', workspaceIds: ['ws-1'] },
-          { id: 'group-b', workspaceIds: ['ws-2'] },
-        ],
-      }),
-    )
+    const p = planFor('ws-p1', { writes: { moves: [], orders: [], nests: [], unnests: [] } })
 
-    expect(p.targets.get(virtualWorkspaceHeadKey('group-b'))?.mode).toBe('container')
-    expect(p.targets.get(virtualWorkspaceBodyKey('group-b'))?.mode).toBe('container')
-    expect(p.targets.has(virtualWorkspaceHeadKey('group-a'))).toBe(false)
-    expect(p.targets.has(virtualWorkspaceBodyKey('group-a'))).toBe(false)
-  })
-
-  it('leaves the group the source already sits in out of its own target table', () => {
-    // 原地投放是构造期缺席：拖回自己那一片时命中层查不到，既不标记也不提交
-    const p = workspaceDragPlan(
-      planInput({
-        currentGroupId: 'group-a',
-        groups: [
-          { id: 'group-a', workspaceIds: ['ws-1', 'ws-2'] },
-          { id: 'group-b', workspaceIds: [] },
-        ],
-        siblingOrder: ['ws-1', 'ws-2'],
-      }),
-    )
-
-    expect(p.targets.has(virtualWorkspaceHeadKey('group-a'))).toBe(false)
-    expect(p.targets.has(virtualWorkspaceBodyKey('group-a'))).toBe(false)
-  })
-
-  it('reads a drop on another workspace row as joining that row own group', () => {
-    // 行自己带区域键，命中层停在它上面
-    // 那一格不在计划里的话这次落点就到此为止
-    const moved: string[] = []
-    const p = workspaceDragPlan(
-      planInput({
-        groups: [{ id: 'group-b', workspaceIds: ['ws-2'] }],
-        moveToGroup: (groupId) => moved.push(groupId),
-      }),
-    )
-
-    p.targets.get(workspaceHeadKey('ws-2'))?.commit({ kind: 'inside' })
-    expect(moved).toEqual(['group-b'])
+    expect(p.targets.get(virtualWorkspaceHeadKey("wg-2"))?.mode).toBe('container')
+    expect(p.targets.get(virtualWorkspaceBodyKey("wg-2"))?.mode).toBe('container')
+    // 来源已在的那个分组整块不进表，拖回自己那一片是构造期缺席
+    expect(p.targets.has(virtualWorkspaceHeadKey("wg-1"))).toBe(false)
+    expect(p.targets.has(virtualWorkspaceBodyKey("wg-1"))).toBe(false)
   })
 
   it('collects the loose row stretch of the root list as a way out of the group', () => {
     // 来源已在某个分组里时，平铺在根节点上的工作区行与整片根节点都读作「移出虚拟工作区分组」
-    const moved: string[] = []
-    const p = workspaceDragPlan(
-      planInput({
-        currentGroupId: 'group-a',
-        groups: [{ id: 'group-a', workspaceIds: ['ws-1'] }],
-        looseIds: ['ws-9'],
-        moveToGroup: (groupId) => moved.push(groupId),
-      }),
-    )
+    const writes = { moves: [] as string[], orders: [] as (string | undefined)[], nests: [] as string[], unnests: [] as string[] }
+    const p = planFor('ws-p1', { virtualGroups: [{ id: 'wg-1', workspaceIds: ['ws-p1'] }], writes })
 
     expect(p.targets.get(ROOT_KEY)?.mode).toBe('container')
-    p.targets.get(workspaceHeadKey('ws-9'))?.commit({ kind: 'inside' })
-    expect(moved).toEqual([''])
+    p.targets.get(ROOT_KEY)?.commit({ kind: 'inside' })
+    expect(writes.moves).toEqual([''])
   })
 
   it('keeps the root stretch out of the plan while the source is already there', () => {
-    const p = workspaceDragPlan(planInput({ looseIds: ['ws-9'] }))
+    const p = planFor('ws-p2', {
+      virtualGroups: [],
+      writes: { moves: [], orders: [], nests: [], unnests: [] },
+    })
 
     expect(p.targets.has(ROOT_KEY)).toBe(false)
-    expect(p.targets.has(workspaceHeadKey('ws-9'))).toBe(false)
   })
 
   it('collects the sibling rows of the source group as rows targets', () => {
-    const reordered: (string | undefined)[] = []
-    const p = workspaceDragPlan(
-      planInput({
-        currentGroupId: 'group-a',
-        groups: [{ id: 'group-a', workspaceIds: ['ws-1', 'ws-2', 'ws-3'] }],
-        siblingOrder: ['ws-1', 'ws-2', 'ws-3'],
-        reorder: (beforeWorkspaceId) => reordered.push(beforeWorkspaceId),
-      }),
-    )
+    const writes = { moves: [] as string[], orders: [] as (string | undefined)[], nests: [] as string[], unnests: [] as string[] }
+    const p = planFor('ws-p2', { ...flatTopology, writes })
 
-    expect(p.targets.get(workspaceHeadKey('ws-3'))?.mode).toBe('rows')
-    p.targets.get(workspaceHeadKey('ws-3'))?.commit({ kind: 'before', rowId: 'ws-3' })
-    expect(reordered).toEqual(['ws-3'])
+    expect(p.targets.get(workspaceHeadKey('ws-p1'))?.mode).toBe('rows')
+    p.targets.get(workspaceHeadKey('ws-p1'))?.commit({ kind: 'before', rowId: 'ws-p1' })
+    expect(writes.orders).toEqual(['ws-p1'])
   })
 
   it('reports no change when a workspace is dropped on its own neighbour', () => {
     // 拖动发生了，顺序没变：换算出的新顺序与现状逐位相同，写入因此被跳过
-    const reordered: (string | undefined)[] = []
-    const p = workspaceDragPlan(
-      planInput({
-        workspaceId: 'ws-2',
-        currentGroupId: 'group-a',
-        groups: [{ id: 'group-a', workspaceIds: ['ws-1', 'ws-2', 'ws-3'] }],
-        siblingOrder: ['ws-1', 'ws-2', 'ws-3'],
-        reorder: (beforeWorkspaceId) => reordered.push(beforeWorkspaceId),
-      }),
-    )
+    const writes = { moves: [] as string[], orders: [] as (string | undefined)[], nests: [] as string[], unnests: [] as string[] }
+    const p = planFor('ws-c1', { ...flatTopology, writes })
 
-    p.targets.get(workspaceHeadKey('ws-3'))?.commit({ kind: 'before', rowId: 'ws-3' })
-    expect(reordered).toEqual([])
+    // 来源 ws-c1 与 ws-c2 同层，落到 ws-c2 之前得到的顺序与现状逐位相同
+    p.targets.get(workspaceHeadKey('ws-c2'))?.commit({ kind: 'before', rowId: 'ws-c2' })
+    expect(writes.orders).toEqual([])
   })
 
   it('collects the session groups of the source ancestors as nesting targets', () => {
-    const nested: { parentId: string; groupId: string }[] = []
-    const p = workspaceDragPlan(
-      planInput({
-        nestTargets: [{ parentId: 'ws-9', groupId: 'group-x' }],
-        nestInto: (parentId, groupId) => nested.push({ parentId, groupId }),
-      }),
-    )
+    const writes = { moves: [] as string[], orders: [] as (string | undefined)[], nests: [] as string[], unnests: [] as string[] }
+    const p = planFor('ws-c1', { groupIds: { 'ws-p1': ['group-a', 'group-b'] }, writes })
 
-    expect(p.targets.get(groupHeadKey('ws-9', 'group-x'))?.mode).toBe('container')
-    p.targets.get(groupHeadKey('ws-9', 'group-x'))?.commit({ kind: 'inside' })
-    expect(nested).toEqual([{ parentId: 'ws-9', groupId: 'group-x' }])
+    expect(p.targets.get(groupHeadKey("ws-p1", "group-a"))?.mode).toBe('container')
+    p.targets.get(groupHeadKey("ws-p1", "group-a"))?.commit({ kind: 'inside' })
+    expect(writes.nests).toEqual(['ws-p1/group-a'])
   })
 
   it('leaves the session group the source already belongs to out of its target table', () => {
-    const p = workspaceDragPlan(
-      planInput({
-        binding: { parentId: 'ws-9', groupId: 'group-x' },
-        nestTargets: [
-          { parentId: 'ws-9', groupId: 'group-x' },
-          { parentId: 'ws-9', groupId: 'group-y' },
-        ],
-      }),
-    )
+    // 已经归属的那一组不再承接「放进去」——归属没有变化，宿主仍会写一次盘。
+    // 但它的组头仍可作位次参照：组里其他成员的先后是合法的，那一格因此留着，只是不接 inside
+    const p = planFor('ws-c1', {
+      bindings: { 'ws-c1': { workspaceId: 'ws-p1', groupId: 'group-a' } },
+      groupIds: { 'ws-p1': ['group-a', 'group-b'] },
+      writes: { moves: [], orders: [], nests: [], unnests: [] },
+    })
 
-    expect(p.targets.has(groupHeadKey('ws-9', 'group-x'))).toBe(false)
-    expect(p.targets.has(groupHeadKey('ws-9', 'group-y'))).toBe(true)
+    expect(p.targets.get(groupHeadKey("ws-p1", "group-a"))?.mode).not.toBe('container')
+    expect(p.targets.get(groupHeadKey("ws-p1", "group-b"))?.mode).toBe('container')
   })
 
   it('reads a drop on the parent workspace row as leaving the session group', () => {
-    const unnested: string[] = []
-    const p = workspaceDragPlan(
-      planInput({
-        binding: { parentId: 'ws-9', groupId: 'group-x' },
-        unnest: () => unnested.push('ws-1'),
-      }),
-    )
+    const writes = { moves: [] as string[], orders: [] as (string | undefined)[], nests: [] as string[], unnests: [] as string[] }
+    const p = planFor('ws-c1', {
+      bindings: { 'ws-c1': { workspaceId: 'ws-p1', groupId: 'group-a' } },
+      groupIds: { 'ws-p1': ['group-a'] },
+      writes,
+    })
 
-    p.targets.get(workspaceHeadKey('ws-9'))?.commit({ kind: 'inside' })
-    expect(unnested).toEqual(['ws-1'])
-  })
-
-  it('keeps the parent row out of the root stretch so one key keeps one mode', () => {
-    // 父工作区行同时能读到「移出虚拟工作区分组」与「移出会话分组」，同一格不能兼两档
-    // 本条工作区已在某个分组里、父工作区又平铺在根节点时两种读法都成立，这里钉住取的是解除嵌套那一档
-    const unnested: string[] = []
-    const p = workspaceDragPlan(
-      planInput({
-        currentGroupId: 'group-a',
-        groups: [{ id: 'group-a', workspaceIds: ['ws-1'] }],
-        looseIds: ['ws-9'],
-        binding: { parentId: 'ws-9', groupId: 'group-x' },
-        unnest: () => unnested.push('ws-1'),
-      }),
-    )
-
-    expect(p.targets.get(workspaceHeadKey('ws-9'))?.mode).toBe('container')
-    p.targets.get(workspaceHeadKey('ws-9'))?.commit({ kind: 'inside' })
-    expect(unnested).toEqual(['ws-1'])
+    expect(p.targets.get(workspaceHeadKey("ws-p1"))?.mode).toBe('container')
+    p.targets.get(workspaceHeadKey("ws-p1"))?.commit({ kind: 'inside' })
+    expect(writes.unnests).toEqual(['ws-c1'])
   })
 
   it('leaves the source row out of its own target table', () => {
-    const p = workspaceDragPlan(
-      planInput({
-        currentGroupId: 'group-a',
-        groups: [{ id: 'group-a', workspaceIds: ['ws-1', 'ws-2'] }],
-        siblingOrder: ['ws-1', 'ws-2'],
-      }),
-    )
+    const p = planFor('ws-p1', {
+      writes: { moves: [], orders: [], nests: [], unnests: [] },
+    })
 
-    expect(p.targets.has(workspaceHeadKey('ws-1'))).toBe(false)
+    expect(p.targets.has(workspaceHeadKey("ws-p1"))).toBe(false)
   })
 
   it('reports the dragged workspace as the source', () => {
-    const p = workspaceDragPlan(planInput())
+    const p = planFor('ws-p2', {
+      virtualGroups: [],
+      writes: { moves: [], orders: [], nests: [], unnests: [] },
+    })
 
-    expect(p.source).toEqual({ kind: 'workspace', id: 'ws-1' })
-    expect(p.targets.size).toBe(0)
+    expect(p.source).toEqual({ kind: 'workspace', id: 'ws-p2' })
   })
 })
+
+
 
 describe('the two markers the mechanism owns', () => {
   it('keeps the zone and row markers on separate attributes', () => {

@@ -104,7 +104,11 @@ export function GroupSection({
   })
 
   return (
-    <div className={styles.group} {...dndZoneProps(sessionGroupKey(workspaceId, section.id))}>
+    <div
+      className={styles.group}
+      {...dndZoneProps(sessionGroupKey(workspaceId, section.id))}
+      data-wg-dnd-block=""
+    >
       <div
         className={clsx(styles.groupHead, order.dragging && styles.rowDragging)}
         {...order.zone}

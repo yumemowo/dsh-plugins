@@ -103,7 +103,8 @@ export function VirtualWorkspaceSection({
   })
 
   return (
-    <div className={styles.virtualWorkspace}>
+    // 这一块是分组的整体：组头与组体各占一格区域，指针落在任何一格上框都该套住这里
+    <div className={styles.virtualWorkspace} data-wg-dnd-block="">
       <div
         className={clsx(
           styles.groupHead,

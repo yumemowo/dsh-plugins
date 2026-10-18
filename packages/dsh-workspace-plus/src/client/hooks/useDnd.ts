@@ -15,17 +15,19 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import {
+  BLOCK_ATTRIBUTE,
+  BLOCK_KEY_ATTRIBUTE,
   DIM_ATTRIBUTE,
   DROP_ATTRIBUTE,
   ROW_ATTRIBUTE,
   SCOPE_ATTRIBUTE,
   SCROLL_ATTRIBUTE,
   ZONE_ATTRIBUTE,
-  findZone,
-  resolveHit,
-  targetOfZone,
 } from '../data/dnd.ts'
-import type { DragPlan, DragPlanTarget, DropAnchor, DropHit } from '../data/dnd.ts'
+import type { DragPlan } from '../data/dnd.ts'
+import { maybeDropSearcher } from '../data/dropSearcher.ts'
+import type { DropCheck, DropNode, DropSearcher, DropTarget } from '../data/dropSearcher.ts'
+import type { TreeContainerRef, TreeNodeRef } from '../data/tree.ts'
 import { autoScrollStep } from '../data/scroll.ts'
 import type { ScrollBox } from '../data/scroll.ts'
 
@@ -55,17 +57,6 @@ let currentPlan: DragPlan | null = null
 const EMPTY_PLAN: DragPlan = { source: { kind: 'session', id: '' }, targets: new Map() }
 
 
-/** 自内向外取一棵祖先链，含元素自己 */
-function chainOf(element: Element): Element[] {
-  const chain: Element[] = []
-  let node: Element | null = element
-  while (node !== null) {
-    chain.push(node)
-    node = node.parentElement
-  }
-  return chain
-}
-
 /**
  * 一个区域元素里参与前后半判定的参照行，按文档序
  *
@@ -81,77 +72,173 @@ function rowsIn(element: Element): Element[] {
 }
 
 /**
- * 一份提交的落点该画在哪一个元素上
+ * 这次拖拽可能接住的所有位置，按深度从深到浅
  *
- * 一份提交可以对应不止一格：分组块与它的分组头是两格，虚拟工作区分组的组头与组体也是两格
- * 指针落在哪一格上，用户看到的都是同一件事；各画一圈会被读成两个区域，正是要避免的
+ * 名单从计划来：计划里每一格配什么档，这里就落成什么形状的落点
+ * - `container` 档只给放入
+ * - `rows` 档给排序，参照行是那一格里的每一行
+ * - `banded` 档两种都给
  *
- * 合并到这些格的共同祖先，但只在那个祖先的子树里没有别的提交时才这么做
- * 未归组段与工作区标题行也共用一份提交，可两者一个在段尾、一个在顶部，
- * 共同祖先是整个工作区块，合并会把那一圈罩住体内并不可投的分组块，因此那里退回各自成格
+ * 整块放入画在哪一个元素上由这里一次算定：一份提交可以对应不止一格（组块与它的组头是两格），
+ * 它们合并到共同祖先，用户看到的因此是整块那一圈，而不是只套住标题的小圈
+ *
  * @param root - 本实例那一片的根节点
  * @param plan - 当前计划
- * @returns 每个区域元素 → 该画标记的那个元素
+/**
+ * 这次拖拽可能接住的所有位置，以及每个位置该画在哪个元素上
+ *
+ * 检测本身只认区域键（见 `dropSearcher.ts`）：这里把计划里的每一格算成一条节点，
+ * 同时交出「键 → 元素」的绘制表。检测层因此一个元素都不用碰，
+ * 需要元素的地方只有本函数与画标记那一处——也就是这一份映射
+ *
+ * 名单从计划来：计划里每一格配什么档，这里就落成什么形状的落点
+ * - `container` 档只给放入
+ * - `rows` 档给排序，参照行是那一格里的每一行
+ * - `banded` 档两种都给
+ *
+ * @param root - 本实例那一片的根节点
+ * @param plan - 当前计划
  */
-function landingElements(root: ParentNode, plan: DragPlan): Map<Element, Element> {
-  const byTarget = new Map<DragPlanTarget, Element[]>()
-  const targetOf = new Map<Element, DragPlanTarget>()
+function collectDropTargets(
+  root: ParentNode,
+  plan: DragPlan,
+): { targets: DropTarget[]; paint: Map<string, Element> } {
+  /** 区域键 → 节点身份：树对全部节点算一遍，这里只查表 */
+  const zoneNodes: ReadonlyMap<string, TreeNodeRef | TreeContainerRef> =
+    plan.tree?.nodesByZone() ?? new Map()
+  const nodeOf = (key: string, fallback: DropNode): DropNode => zoneNodes.get(key) ?? fallback
+
+  /** 键 → 画框 / 画线的元素 */
+  const paint = new Map<string, Element>()
+  const targets: DropTarget[] = []
   for (const element of root.querySelectorAll(`[${ZONE_ATTRIBUTE}]`)) {
     const key = element.getAttribute(ZONE_ATTRIBUTE)
     if (key === null) continue
     const target = plan.targets.get(key)
     if (target === undefined) continue
-    targetOf.set(element, target)
-    const seen = byTarget.get(target)
-    if (seen === undefined) byTarget.set(target, [element])
-    else seen.push(element)
-  }
+    // 不在树上的行（会话、置顶）用行 id 作身份
+    const rowId = element.getAttribute(ROW_ATTRIBUTE) ?? key
+    const node = nodeOf(key, { kind: 'row', id: rowId })
 
-  const out = new Map<Element, Element>()
-  for (const [target, elements] of byTarget) {
-    const shared = elements.length > 1 ? commonAncestorOf(elements) : (elements[0] as Element)
-    const clean =
-      shared !== null &&
-      !Array.from(shared.querySelectorAll(`[${ZONE_ATTRIBUTE}]`)).some(
-        (inner) => targetOf.get(inner) !== undefined && targetOf.get(inner) !== target,
-      )
-    for (const element of elements) out.set(element, clean ? (shared as Element) : element)
+    if (target.mode === 'container' || target.mode === 'banded') {
+      // 框该套多大由渲染层指明：
+      // - 树点名了某一格（`blockKey`）时，那一格对应的整块写在 `data-wg-block-key` 上。
+      //   工作区的标题格对应整个工作区块（含体内的子工作区行、会话分组），
+      //   指针停在标题行或体内空白上时框因此把落点的那些子集一并圈进来
+      // - 没点名时取格子自己的块标记（分组把组头与组体圈在同一块里）；
+      //   没有块标记的格子自成一块（未归组段是工作区体内单独的一格，不该扩到整块）
+      const namedZone =
+        target.blockKey === undefined
+          ? undefined
+          : (root.querySelector(`[${ZONE_ATTRIBUTE}="${target.blockKey}"]`) ?? undefined)
+      const named =
+        namedZone === undefined || target.blockKey === undefined
+          ? undefined
+          : (root.querySelector(`[${BLOCK_KEY_ATTRIBUTE}="${target.blockKey}"]`) ?? namedZone)
+      const block = named ?? blockOf(element)
+      // 绘制表按**区域键**存：一个节点可以有好几格（标题、体内、未归组段），
+      // 框该画在指针真正落着的那一格上，而不是按节点身份合并
+      paint.set('inside/' + key, block)
+      targets.push({
+        kind: 'inside',
+        node,
+        commit: () => target.commit({ kind: 'inside' }),
+      })
+    }
+
+    if (target.mode === 'rows' || target.mode === 'banded') {
+      // 一片可以点名让线跨整片画（`orderBlock`）：那时线只有一条，画在整块的上下缘。
+      // 不点名时仍按片里的行算，与分组头那种「一格即一行」的段落一致
+      const lineKey = target.orderBlock ?? key
+      const lineElement = root.querySelector(`[${ZONE_ATTRIBUTE}="${lineKey}"]`) ?? element
+      const lineBlock =
+        root.querySelector(`[${BLOCK_KEY_ATTRIBUTE}="${lineKey}"]`) ?? lineElement
+      // 线挂在整块上时，参照行 id 从整块里取：整块元素自己没有行标记，
+      // 而这一片可能占好几格（标题行与体内那一格），两格必须交出同一个 id
+      const anchorRow = rowsIn(lineBlock)[0]
+      const anchorId = anchorRow?.getAttribute(ROW_ATTRIBUTE) ?? ''
+      // 落在树上的节点：一个节点一条关系，线画在它整块上
+      const treeNode = zoneNodes.get(lineKey)
+      if (treeNode !== undefined) {
+        paint.set('order/' + lineKey, lineBlock)
+        targets.push({
+          kind: 'order',
+          node: treeNode,
+          commit: (side) =>
+            target.commit(
+              side === 'before'
+                ? { kind: 'before', rowId: anchorId }
+                : { kind: 'after', rowId: anchorId },
+            ),
+        })
+        continue
+      }
+      // 不在树上的段（置顶区那种「一格装多行」）：每一行各成一条关系，
+      // 成员身份就是行自己——指针落着哪一行，谈先后的就是那一行
+      for (const row of rowsIn(lineBlock)) {
+        const rowId = row.getAttribute(ROW_ATTRIBUTE)
+        if (rowId === null) continue
+        paint.set('order/' + rowId, row)
+        targets.push({
+          kind: 'order',
+          node: { kind: 'row', id: rowId },
+          commit: (side) =>
+            target.commit(
+              side === 'before' ? { kind: 'before', rowId } : { kind: 'after', rowId },
+            ),
+        })
+      }
+    }
   }
-  return out
+  return { targets, paint }
 }
 
 /**
- * 一组元素的共同祖先里最深的那个
- * @param elements - 同一份提交的那些落点元素
+ * 一个节点在区域键表里占了哪几格
+ * @param zoneNodes - 区域键 → 节点身份的对照表
+ * @param node - 落点身份
  */
-function commonAncestorOf(elements: readonly Element[]): Element | null {
-  let chain = chainOf(elements[0] as Element)
-  for (const element of elements.slice(1)) {
-    const others = new Set(chainOf(element))
-    chain = chain.filter((node) => others.has(node))
-  }
-  return chain[0] ?? null
+function zonesOfNode(
+  zoneNodes: ReadonlyMap<string, TreeNodeRef | TreeContainerRef>,
+  node: DropNode,
+): string[] {
+  const keys: string[] = []
+  for (const [key, value] of zoneNodes) if (value === node) keys.push(key)
+  return keys
 }
 
 /**
- * 落点标记画在哪个元素上
+ * 指针这一格归哪一片
  *
- * 整块投放画在这一份提交合并后的那一格上，一次拖拽只画一圈
- * 按行插入画在参照行自己身上，线才贴着那一行
- * 「一格装多行」的段按锚点里的参照行 id 回溯；画在段容器上会让线落在整段的上边或下边
- * @param landing - 命中的区域元素，或它合并后的落点元素
- * @param rows - 该区域里的参照行元素
- * @param hit - 落点读数
+ * 从元素自己往上走，遇到的第一个带区域键的就是答案。这是本文件里唯一一处「沿祖先链找」
+ * ——它属于 DOM 层，检测层因此拿到的永远是一个键
+ * @param element - 指针下的元素
+ * @returns 那一格的区域键，沿途没有区域元素时为 null
  */
-function markerElementOf(
-  landing: Element,
-  rows: readonly Element[],
-  hit: DropHit | null,
-): Element {
-  if (hit === null) return landing
-  if (hit.anchor.kind === 'inside') return landing
-  const rowId = hit.anchor.rowId
-  return rows.find((element) => element.getAttribute(ROW_ATTRIBUTE) === rowId) ?? landing
+function owningZoneKey(element: Element): string | null {
+  let node: Element | null = element
+  while (node !== null) {
+    const key = node.getAttribute(ZONE_ATTRIBUTE)
+    if (key !== null) return key
+    node = node.parentElement
+  }
+  return null
+}
+
+/**
+ * 一个格子所属的那一块
+ *
+ * 渲染层用块标记画出「哪几格同属一块」：分组把组头与组体圈在同一个分组块里。
+ * 没有块标记的格子自成一块——未归组段是工作区体内单独的一格，它自己就是范围
+ * @param element - 落点格子
+ */
+function blockOf(element: Element): Element {
+  // 只看**它自己**：块标记是渲染层明确写下的，一处标记代表那一格属于那一块。
+  // 向上找 closest 会让没有标记的格子（未归组段）继承外层工作区块，
+  // 于是「移出会话分组」的框变成了整个工作区
+  return element.hasAttribute(BLOCK_ATTRIBUTE)
+    ? element
+    : (element.closest(`[${BLOCK_ATTRIBUTE}]`) ?? element)
 }
 
 /**
@@ -348,15 +435,20 @@ export function DndProvider({
   const markedRef = useRef<Set<Element>>(new Set())
   /** 本实例压淡过的元素，同上 */
   const dimmedRef = useRef<Element[]>([])
-  /** 这一场拖拽里每个区域元素该把标记画在哪，指针移动期间只查它 */
-  const landingRef = useRef<Map<Element, Element>>(new Map())
+  /** 这一场拖拽的落点检测器，dragstart 时建一次，指针移动期间只查它 */
+  const searcherRef = useRef<DropSearcher | null>(null)
+  /** 区域键 → 画框 / 画线的元素：检测只交回键，靠它落成像素 */
+  const paintRef = useRef<Map<string, Element>>(new Map())
+  /** 区域键 → 节点身份：把指针落着的那个元素读成节点，检测层只认节点 */
+  const zoneNodesRef = useRef<ReadonlyMap<string, TreeNodeRef | TreeContainerRef>>(new Map())
   /**
    * 上一次 `dragover` 算出的落点
    *
    * `drop` 只用它，不按自己的坐标重算
    * 指针在两格之间可能已经越过中线，那时提交的会是与用户看到的标记不同的一件事
    */
-  const pendingRef = useRef<{ target: DragPlanTarget; anchor: DropAnchor } | null>(null)
+  /** 上一次检测的结果，放开时提交的就是它 */
+  const checkRef = useRef<DropCheck | null>(null)
   /** 本次拖拽是否已经提交过，提交只发生一次 */
   const committedRef = useRef(false)
 
@@ -393,79 +485,107 @@ export function DndProvider({
     markedRef.current = new Set()
     clearDimmed(dimmedRef.current)
     dimmedRef.current = []
-    landingRef.current = new Map()
-    pendingRef.current = null
+    searcherRef.current = null
+    paintRef.current = new Map()
+    checkRef.current = null
     currentPlan = null
   }, [stopAutoScroll])
 
   /**
-   * 画这一次命中的落点标记
+   * 处理一次 `dragover`：问一次检测器，按它交回的至多两个元素画标记
    *
-   * 指针移开时把上一次那个元素上的标记删掉；`rows` 档命中一段空白时标记值为空
-   * 那时元素上不该留标记，否则样式会画出一次并不成立的 before / after
-   * @param element - 这次命中的区域元素，没有命中时为 null
-   * @param hit - 落点读数，没有落点时为 null
-   * @param rows - 该区域里的参照行元素，`before` / `after` 据此落到具体那一行上
+   * 画什么完全由检测结果决定：有 `inside` 就画框、有 `order` 就画线，
+   * 调用方不再自己往上找区域、也不再把两份提交合并成一格
+   * @param target - 事件目标，可能为 null
+   * @param point - 指针位置
    */
-  const drawMarker = useCallback((landing: Element | null, hit: DropHit | null, rows: readonly Element[] = []) => {
-      const marked = landing === null ? null : markerElementOf(landing, rows, hit)
-      for (const previous of markedRef.current) {
-        if (previous !== marked) previous.removeAttribute(DROP_ATTRIBUTE)
+  /**
+   * 指针落着的元素是树上哪个节点
+   *
+   * 适配层唯一一处「元素 → 节点」的换算：元素上的区域键经树的对照表换成节点身份。
+   * 找不到时按行 id 立一个行身份——会话行与置顶行不在树上
+   * @param element - 指针下的元素
+   */
+  const nodeAt = useCallback((element: Element): DropNode => {
+    const zone = owningZoneKey(element)
+    if (zone !== null) {
+      const found = zoneNodesRef.current.get(zone)
+      if (found !== undefined) return found
+    }
+    const row = element.closest(`[${ROW_ATTRIBUTE}]`)
+    const id = row?.getAttribute(ROW_ATTRIBUTE) ?? zone ?? ''
+    return { kind: 'row', id }
+  }, [])
+
+  /**
+   * 一个落点节点该画在哪个元素上
+   *
+   * 先按**指针正落着的那一格**查：同一个节点可以占好几格（工作区的标题行、体内那一格、未归组段），
+   * 用户指的是哪一格，框就该画在哪一格对应的块上。
+   * 查不到时退回这个节点自己那一格——排序命中时指针那一格未必是参照行本身
+   * @param kind - 画框还是画线
+   * @param node - 交回的那个落点身份
+   * @param here - 指针正落着的区域键，读不到时为 null
+   */
+  const paintFor = useCallback(
+    (kind: 'inside' | 'order', node: DropNode, here: string | null): Element | undefined => {
+      const paint = paintRef.current
+      const zones = zonesOfNode(zoneNodesRef.current, node)
+      // 指针那一格在这个节点的格子名单里：就用它
+      if (here !== null) {
+        if (zones.length === 0 || zones.includes(here)) {
+          const found = paint.get(kind + '/' + here)
+          if (found !== undefined) return found
+        }
       }
-      markedRef.current.clear()
-      if (marked === null) return
-      markedRef.current.add(marked)
-      if (hit === null) {
-        marked.removeAttribute(DROP_ATTRIBUTE)
-        return
+      // 不在树上的行（会话行、置顶行）绘制表按行 id 存：它自己就是那一格
+      if (zones.length === 0) return node.kind === 'row' ? paint.get(kind + '/' + node.id) : undefined
+      // 否则取这个节点的任意一格（顺序即区域键的登记顺序）
+      for (const zone of zones) {
+        const found = paint.get(kind + '/' + zone)
+        if (found !== undefined) return found
       }
-      marked.setAttribute(DROP_ATTRIBUTE, hit.anchor.kind)
+      return undefined
     },
     [],
   )
 
-  /**
-   * 算一次落点读数
-   * @param target - 事件目标，可能为 null（指针在窗口之外）
-   * @param point - 指针位置，`rows` 档据此算前后半
-   */
-  const hitAt = useCallback((target: Element | null, point: { x: number; y: number }) => {
-    const plan = currentPlan
-    if (plan === null || target === null) return null
+  const applyHit = useCallback((target: Element | null, point: { x: number; y: number }) => {
+    const searcher = searcherRef.current
+    if (searcher === null) return
     // 事件目标不在本实例那一片里：这一格不归本实例管，另一个实例的拖拽或页面上的别的拖放
     const scope = region?.current
-    if (scope !== undefined && scope !== null && !scope.contains(target)) return null
-    const found = findZone(chainOf(target), plan)
-    if (found === null) return null
-    const zoneTarget = targetOfZone(plan, found.zoneKey)
-    if (zoneTarget === undefined) return null
-    const rows = rowsIn(found.element)
-    return {
-      element: found.element,
-      rows,
-      hit: resolveHit({ zoneKey: found.zoneKey, target: zoneTarget, rows, point }),
-      zoneTarget,
-    }
-  }, [])
+    const inside = target !== null && (scope === undefined || scope === null || scope.contains(target))
+    // 指针正落着哪个节点：适配层读一次（元素带区域键，经树换成节点身份），
+    // 此后落点判定全在节点上做，检测层沿树往上走
+    const node = inside ? nodeAt(target) : null
+    const check = inside && node !== null ? searcher.checkDrop(target, point, node) : null
+    checkRef.current = check
 
-  /**
-   * 处理一次 `dragover`：从事件目标向上找区域，算出落点读数并画上标记
-   * @param target - 事件目标，可能为 null
-   * @param point - 指针位置
-   */
-  const applyHit = useCallback(
-    (target: Element | null, point: { x: number; y: number }) => {
-      const found = hitAt(target, point)
-      if (found === null) {
-        drawMarker(null, null)
-        pendingRef.current = null
-        return
-      }
-      drawMarker(landingRef.current.get(found.element) ?? found.element, found.hit, found.rows)
-      pendingRef.current = found.hit === null ? null : { target: found.zoneTarget, anchor: found.hit.anchor }
-    },
-    [drawMarker, hitAt],
-  )
+    // 一次最多两个节点：一个画框、一个画线。
+    // 先按**指针落着的那一格**查绘制表，再退回节点身份——
+    // 同一个节点可以有好几格（标题、体内、未归组段），用户指着哪一格就该画在哪一格
+    const drawn = new Set<Element>()
+    const here = node === null ? null : owningZoneKey(target as Element)
+    const box =
+      check?.inside === undefined
+        ? undefined
+        : (paintFor('inside', check.inside, here) ?? undefined)
+    const line =
+      check?.order === undefined
+        ? undefined
+        : (paintFor('order', check.order, here) ?? undefined)
+    if (box !== undefined) drawn.add(box)
+    if (line !== undefined) drawn.add(line)
+
+    for (const previous of markedRef.current) {
+      if (!drawn.has(previous)) previous.removeAttribute(DROP_ATTRIBUTE)
+    }
+    markedRef.current = drawn
+
+    if (box !== undefined) box.setAttribute(DROP_ATTRIBUTE, 'inside')
+    if (line !== undefined) line.setAttribute(DROP_ATTRIBUTE, check?.side ?? 'after')
+  }, [region, nodeAt, paintFor])
 
   /**
    * 边缘自动滚动的那一帧
@@ -547,11 +667,12 @@ export function DndProvider({
    */
   const commit = useCallback(() => {
     if (committedRef.current) return
-    const pending = pendingRef.current
-    if (pending === null) return
+    const searcher = searcherRef.current
+    const check = checkRef.current
+    if (searcher === null || check === null) return
     committedRef.current = true
+    searcher.commit(check)
     teardown()
-    pending.target.commit(pending.anchor)
   }, [teardown])
 
   const beginDrag = useCallback(
@@ -561,8 +682,13 @@ export function DndProvider({
       currentPlan = plan
       committedRef.current = false
 
-      // 每份提交合并成一块，指针移动期间不再重算
-      landingRef.current = landingElements(region?.current ?? document, plan)
+      // 名单、检测器与绘制表一场拖拽只建一次，指针移动期间只问它
+      // 绘制表反过来读：元素上的区域键经树换算成节点身份，
+      // 检测器因此拿到的与交回的都是节点，只有这里那一层 map 需要碰 DOM
+      const collected = collectDropTargets(region?.current ?? document, plan)
+      zoneNodesRef.current = plan.tree?.nodesByZone() ?? new Map()
+      searcherRef.current = maybeDropSearcher(plan.tree, collected.targets)
+      paintRef.current = collected.paint
 
       // 压淡够不着的那一片：判定与命中层同源，因此不会出现「淡着却能放进去」
       const dimmed = dimmedElements(region?.current ?? document, plan)

@@ -26,20 +26,23 @@ src/
     ├── menus.tsx               菜单条目构造（工作区 / 分组 / 工作区分组行内菜单、右键菜单补全）
     ├── menus.module.css        菜单条目样式（文字 + 行尾箭头）
     ├── css-modules.d.ts        `.module.css` 的类名声明（由 scripts/gen-css-types.mjs 生成）
-    ├── data/                   无 React 依赖的纯逻辑
+    ├── data/                   推导：快照与设置 → 布局 / 落点 / 写入名单，无 React、无 DOM
     │   ├── types.ts            SessionRow / GroupSection / WorkspaceLayout / RootLayout / 草稿类型
     │   ├── layout.ts           分组元数据 → 渲染布局（会话那一层与根节点那一层）
     │   ├── nest.ts             子工作区嵌套推导（路径祖先关系、容器归属、段内森林）
+    │   ├── tree.ts             工作区与虚拟分组的统一节点树（容器、兄弟段、顺序持有者、区域键）
+    │   ├── dropSearcher.ts     拖拽落点的唯一检测入口（拿整棵树，沿链现算，交回节点）
+    │   ├── move.ts             一次移动要写哪几笔（虚拟分组归属、会话分组归属、跟随的后代）
     │   ├── status.ts           会话状态位推导（待交互 / 运行 / 完成）
     │   ├── search.ts           按标题搜索（查询净化、匹配、排序与截断）
     │   ├── pinned.ts           置顶集合的投影与合成（pinnedEntries、reconcilePinned、pinRanks、置顶段键）
     │   ├── picker.ts           下拉菜单的条目与分区（根节点条目、三个分区、聚焦布局、聚焦解析）
     │   ├── sessions.ts         会话快照 → 渲染行（含可见性过滤、空白行命名、未分组收集）
     │   ├── collapse.ts         一个展示范围内折几条（五步判定、置顶与未空闲行，见 [会话折叠](session-collapse.md)）
-    │   ├── dnd.ts              拖拽计划的类型、区域键与命中换算（见 [行拖拽](row-drag.md)）
+    │   ├── dnd.ts              拖拽计划的类型、命中换算与区域键封装（见 [行拖拽](row-drag.md)）
     │   ├── outline.ts          一份扁平的行序列（题头行 / 会话行 / 溢出 / 空态的顺序与露面）
     │   └── rows.ts             会话行的显示事实（状态位与相对时间，两者都只依赖快照与文案）
-    ├── utils/                  组件与样式表共用的零散常量
+    ├── utils/                  组件与样式表共用的零散常量与单点小工具
     │   ├── expandMotion.ts     撑开动画节奏常量（只 import React 类型，运行时无依赖）
     │   ├── flip.ts             浮层翻转的几何判定与标记名（纯函数，无 React 依赖）
     │   └── pathUtils.ts        目录路径的 `~` 缩写（与官方同规则）
@@ -103,6 +106,8 @@ src/
 `WorkspaceGroupsRegion.tsx` 按「数据源 / 快照 / 派生布局 / 交互状态 / 命令 / 容器」分段，段间有 `// ── … ──` 分节标记。这些 hook 与容器同处一个文件，因为它们的消费方只有容器一处：`useRegionSources` 读全局数据源，`useSnapshotFeed` 管快照的加载与改动，`useRegionLayout` 把快照切成渲染布局，`useRegionUiState` 持有除折叠态外的全部交互状态，`useExpansionValue` 把 store 座位的三份折叠记录与层级推导演成读 / 取反 / 写入口（并摘掉失效键），与 `useLocalViewOptionsValue` 同构，命令再按对象分成 `useSearchResults`、`useWorkspaceAdoption`、`useRegionGroupActions`、`useRegionNestActions`、`useRegionPickerActions` 五个——搜索结果页与新增工作区的输入几乎不重叠，因此各成一个。渲染按区域拆成 `RegionHeaderArea` / `RegionListArea` / `RegionDialogs` 三个模块，主组件只做装配与宽窄形态分派。Provider 的 value 由容器 `useMemo` 合成一次、宽窄两个渲染分支共用；不过只有真的被 `memo` 行组件消费的那几份才从中获益，哪些承重、哪些只是留余地见 [渲染性能与行级缓存](render-performance.md)。
 
 每个渲染区只声明自己真正消费的那几格形状，而不是逐字段转发：`RegionListArea` 收 `RegionListLayout` / `RegionListEdits` / `RegionListCommands` 合成的 `WorkspaceNodeScope`，`RegionHeaderArea` 收布局、浮层与命令三格，`RegionDialogs` 收当前那个 `RegionOverlay`、对话框布局、工作区视图与提交入口。列表侧因此不接触任何状态 setter，浮层形状不出容器那一层。只有确实被多个调用点复用的纯逻辑才外提到 `data/` 与 `utils/`，其余留在原地，避免为了「能抽」而抽出一堆只有一个调用点的间接层。
+
+两处的分工：**`data/` 是推导**——输入快照与设置，输出布局、落点或写入名单，可以被两个以上调用点共享，也可以被单测直接调用；**`utils/` 是零散常量与单点小工具**——样式表与组件共用的名字、一处几何判定、一处字符串缩写。判据是「它回答的是业务问题还是通用的小问题」，不是文件行数。
 
 聚焦 / 最近使用 / 置顶三份记录**只有一处变换逻辑**（`pickerState.ts`），宿主半边在变更时用它修剪、浏览器半边在渲染菜单时用它排序，两边因此不可能各写一份「最近使用怎么排」的判断。
 

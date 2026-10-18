@@ -11,6 +11,7 @@ import { RECENT_HISTORY_LIMIT, RECENT_SHOWN } from '../src/pickerState.ts'
 import { ALL_ENTRIES, virtualAddress, workspaceAddress } from '../src/rootEntry.ts'
 import { deriveNesting } from '../src/client/data/nest.ts'
 import type { NestingInput } from '../src/client/data/nest.ts'
+import type { RootLayout } from '../src/client/data/types.ts'
 
 /**
  * 下拉菜单的条目与分区
@@ -72,7 +73,7 @@ describe('rootPickerEntries', () => {
   })
 
   it('reports nothing for an empty root', () => {
-    expect(rootPickerEntries({ groups: [], loose: [] }, VIEWS)).toEqual([])
+    expect(rootPickerEntries({ groups: [], loose: [], entries: [] }, VIEWS)).toEqual([])
   })
 })
 
@@ -104,7 +105,7 @@ describe('pickerSections', () => {
     // 若它占了展示名额，满记录时最近使用就会少一条——这里钉住它不占展示
     const ids = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6']
     const many = rootPickerEntries(
-      { groups: [], loose: ids },
+      { groups: [], loose: ids, entries: ids.map(workspaceAddress) },
       index(...ids.map((id) => view(id, id.toUpperCase()))),
     )
     const recent = [ALL_ENTRIES, ...ids.map(workspaceAddress)]
@@ -325,9 +326,10 @@ describe('focusedWorkspaceIds', () => {
   it('allows the whole group membership rather than its rendered roots', () => {
     // 平铺列表没有层级，组内被嵌套的成员与顶层成员一样是这片内容的一部分
     // 归属（workspaceIds）与渲染（roots）在开启嵌套时会不同，这里要的是前者
-    const layout = {
+    const layout: RootLayout = {
       groups: [{ id: 'vg1', label: '前端仓库', workspaceIds: ['w1', 'w2', 'w3'], roots: ['w1'] }],
       loose: [],
+      entries: [virtualAddress('vg1')],
     }
     const nested = rootPickerEntries(layout, VIEWS)
 

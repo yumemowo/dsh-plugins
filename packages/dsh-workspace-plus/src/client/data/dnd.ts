@@ -1,5 +1,5 @@
 /**
- * 行拖拽的计划类型、命中推导与区域键编解码
+ * 行拖拽的计划类型、命中推导与区域键
  *
  * 纯逻辑，不碰 React、不碰 DOM
  * 命中函数收的是「已经取到的元素」与「已在手的事件坐标」，因此可以在 node 环境下逐条断言，不必搭一棵真实元素树
@@ -7,7 +7,13 @@
  * 计划是整个拖拽架构里唯一含业务知识的东西
  * 它声明「我是谁、能落到哪些区域、落到之后执行什么」
  * 手势层与命中层只认计划里的区域键与档次，不认识会话、分组与工作区
+ *
+ * 工作区那一族的业务知识又有一半在 `data/tree.ts`：容器归属、同层名单与落点判定都在那里，这里只按解析结果接线
+ * 区域键的形状也由那边一处决定，本模块保留的同名构造器只是给渲染层的薄封装
  */
+
+import { dropRelationsOf, looseZoneKeyOf, zoneKeyOf } from './tree.ts'
+import type { TreeNodeRef, WorkspaceTree } from './tree.ts'
 
 // ── 计划 ──
 
@@ -35,10 +41,57 @@ export interface DragPlanTarget {
    *
    * `container`：整块只接 inside
    * `rows`：按区域内的行算 before / after，指针落在段内空白（行与行之间的缝隙、段尾）时读作追加到段尾
+   * `banded`：同一格上两种读法都成立，按指针落在这条带的哪一段分流
+   *
+   * `banded` 给的是**容器对容器**的情形：一个分组既能承接放入（成为它的下级），也能与它谈先后。
+   * 拖拽的对象本身就是容器时两种读法才并存，因此这一档留给分组之间的嵌套排序。
+   * 拖工作区时用不上——工作区不是容器，它要么被放进去、要么作为参照行排队，不会兼两职
    */
-  mode: 'container' | 'rows'
+  mode: 'container' | 'rows' | 'banded'
+  /**
+   * 框画在哪一格所在的元素上
+   *
+   * 一片可以占好几格，它们未必落在同一个块标记之下：一个工作区的标题行与它体内那一格就是这样。
+   * 这时要靠这一项点名标题行，否则框会沿着体内那一格一路找到外面那个虚拟分组。
+   */
+  blockKey?: string
+  /**
+   * 线画在哪一格所在的元素上
+   *
+   * 与 {@link blockKey} 同一个道理，只是给排序那一档用：一片可以占好几格，
+   * 线要跨整片画在它的上下缘，而不是贴着标题那一行画一条短边。
+   * 给出这一项时，前后半也按整片的矩形算
+   */
+  orderBlock?: string
   /** 放开时执行。闭包在计划构造时绑定全量顺序等数据，执行前自行复核 */
   commit: (anchor: DropAnchor) => void
+}
+
+/**
+ * 一条带上下分流的落点，两段的边界各占带高的比例
+ *
+ * 上段读 before、下段读 after、中间读 inside
+ * 比例是产品手感参数，只写在这里一处，样式与计划都不各写一份
+ */
+const BAND_EDGE = 0.25
+
+/**
+ * 指针落在一条带的哪一段
+ *
+ * 带高为零（jsdom 恒如此、尚未布局的节点也如此）时读作中间那一段：
+ * 那时上下半都无从谈起，退回「整块落进容器」这个不需要像素的读法
+ * @param rect - 参照行的矩形
+ * @param y - 指针的纵坐标
+ */
+export function bandOf(
+  rect: { top: number; height: number },
+  y: number,
+): 'before' | 'inside' | 'after' {
+  if (rect.height <= 0) return 'inside'
+  const offset = (y - rect.top) / rect.height
+  if (offset < BAND_EDGE) return 'before'
+  if (offset > 1 - BAND_EDGE) return 'after'
+  return 'inside'
 }
 
 /** 一次拖拽的完整计划，dragstart 时构造，dragend 时销毁 */
@@ -46,6 +99,13 @@ export interface DragPlan {
   source: DragSource
   /** 键与 DOM 标记上的区域键一一对应；不在表里的区域这次拖拽就不接 */
   targets: ReadonlyMap<string, DragPlanTarget>
+  /**
+   * 这份计划背后的树
+   *
+   * 检测器拿它现算「指针这一格归谁」：沿树上往上走，而不是把每个成员逐一列进名单。
+   * 会话行、置顶行这类不在树上的拖拽没有这一项，那时检测只认指针正落着的那一格
+   */
+  tree?: WorkspaceTree
 }
 
 // ── DOM 上的标记属性 ──
@@ -67,6 +127,28 @@ export const SCOPE_ATTRIBUTE = 'data-wg-dnd-scope'
 /** 命中层画在当前落点上的标记，取值是落点形状 */
 export const DROP_ATTRIBUTE = 'data-wg-drop'
 
+/**
+ * 一片区域里「框该画在哪一整块上」的标记，业务渲染期写好
+ *
+ * 一片区域可以由好几格组成：虚拟分组的组头与组体是两格，会话分组的组头与组体也是两格。
+ * 指针落在其中任何一格，用户看到的都是「放进这一片」，框因此该套住整块而不是只套住标题。
+ * 挂这个标记的就是那一块。
+ *
+ * 没有这个标记的格自己就是框的位置。未归组段与工作区标题行虽然共用一份提交，
+ * 但它们处在工作区的两头、是两处独立的地方，不该被套进同一个框——不挂标记即可区分，
+ * 不必由命中层去猜它们的共同祖先是不是「够小」
+ */
+export const BLOCK_ATTRIBUTE = 'data-wg-dnd-block'
+
+/**
+ * 某一格对应的**整块**标记
+ *
+ * {@link BLOCK_ATTRIBUTE} 说的是「这一格属于哪一块」（分组把组头与组体圈在一起）；
+ * 这一个说的是「某一格对应的整块是哪个元素」——工作区的标题格对应整个工作区块，
+ * 指针停在标题行上时框因此套住整块工作区（含它体内的子工作区行），而不是只套住标题那一行
+ */
+export const BLOCK_KEY_ATTRIBUTE = 'data-wg-block-key'
+
 /** 本次拖拽够不着的元素，由命中层在拖拽期间写上 */
 export const DIM_ATTRIBUTE = 'data-wg-dnd-dim'
 
@@ -79,20 +161,54 @@ export const DIM_ATTRIBUTE = 'data-wg-dnd-dim'
 export const SCROLL_ATTRIBUTE = 'data-wg-dnd-scroll'
 
 
-// ── 区域键编解码 ──
+// ── 区域键 ──
 
-/** 一个会话分组在它所属工作区里的区域键 */
+/**
+ * 一格的区域键
+ *
+ * 形状由 `data/tree.ts` 的 `zoneKeyOf` 一处决定，这里只是给渲染层一层按对象取的薄封装
+ * 分成两个模块是因为渲染层只知道「我在画哪个工作区、哪个分组」，还不认识节点身份
+ */
+
+/** 一个会话分组整块那一格 */
 export function sessionGroupKey(workspaceId: string, groupId: string): string {
-  return `sessionGroup/${workspaceId}/${groupId}`
+  return zoneKeyOf({ kind: 'group', workspaceId, groupId }, 'body') as string
 }
 
-/** 一个工作区未归组那一段的区域键 */
+/** 一个会话分组头那一格 */
+export function groupHeadKey(workspaceId: string, groupId: string): string {
+  return zoneKeyOf({ kind: 'group', workspaceId, groupId }, 'head') as string
+}
+
+/** 一个工作区未归组那一段 */
 export function looseKey(workspaceId: string): string {
-  return `loose/${workspaceId}`
+  return looseZoneKeyOf(workspaceId)
 }
 
-/** 置顶区的区域键，跨工作区共用一格 */
-export const PINNED_KEY = 'pinned'
+/** 一个工作区标题行那一格 */
+export function workspaceHeadKey(workspaceId: string): string {
+  return zoneKeyOf({ kind: 'workspace', id: workspaceId }, 'head') as string
+}
+
+/**
+ * 一个工作区体内那一格
+ *
+ * 与标题行那一格分开：拖到它的子工作区行上时，用户面对的范围是这一个工作区，
+ * 而那一行渲染在它体内、并不在标题行之内
+ */
+export function workspaceBodyKey(workspaceId: string): string {
+  return `workspaceBody/${workspaceId}`
+}
+
+/** 一个虚拟工作区分组头那一格 */
+export function virtualWorkspaceHeadKey(groupId: string): string {
+  return zoneKeyOf({ kind: 'virtual', id: groupId }, 'head') as string
+}
+
+/** 一个虚拟工作区分组组体那一格 */
+export function virtualWorkspaceBodyKey(groupId: string): string {
+  return zoneKeyOf({ kind: 'virtual', id: groupId }, 'body') as string
+}
 
 /**
  * 根节点那一层的区域键，工作区分组与未归组工作区共用一格
@@ -101,63 +217,10 @@ export const PINNED_KEY = 'pinned'
  * 平铺在根节点上的工作区行另各占一格 `workspaceHeadKey`，两格同一档
  * 行那一格不能省，命中层停在指针下第一个带区域键的元素上，拖到行上时若它不在计划里，这次落点就到此为止
  */
-export const ROOT_KEY = 'root'
+export const ROOT_KEY = zoneKeyOf({ kind: 'root' }, 'body') as string
 
-/**
- * 一个会话分组头的区域键
- *
- * 与 `sessionGroupKey` 那一格各管一件事：那一格罩住整块分组，接会话归组
- * 这一格只罩分组头，作排序的参照行
- *
- * 两格不能合并。合成一格后命中层停在整块分组上，排序要按「块内最近的行」算前后半
- * 而块内的行是会话行，换算时找不到对应的分组，落点标记会画在一件提交时必然作废的事情上
- *
- * 头这一格在两个计划里档位不同：会话计划里它是 `container`（拖到头上仍然是归组）
- * 分组计划里它是 `rows`（拖到头上是插到它前后）。含义由计划决定，元素本身不区分
- */
-export function groupHeadKey(workspaceId: string, groupId: string): string {
-  return `groupHead/${workspaceId}/${groupId}`
-}
-
-/**
- * 一个工作区分组头的区域键
- *
- * 与 `groupHeadKey` 同形但不带工作区：工作区分组只在根节点那一层，没有工作区可限定
- *
- * 头这一格在两个计划里档位不同：工作区计划里它是 `container`（拖到头上是移入这个分组）
- * 分组计划里它是 `rows`（拖到头上是插到它前后）。含义由计划决定，元素本身不区分
- */
-export function virtualWorkspaceHeadKey(groupId: string): string {
-  return `virtualWorkspaceHead/${groupId}`
-}
-
-/**
- * 一个虚拟工作区分组组体的区域键
- *
- * 那一格只罩分组头，这一格罩整个组体
- *
- * 工作区计划里它与分组头共用同一个提交，拖到组头或组体那一大片里都读作移入这个分组
- * 头那一格不能省，命中层停在指针下第一个带区域键的元素上，拖到头上时若它不在计划里，这次落点就到此为止
- *
- * 来源已在的那个分组整格不进 `targets`，拖回自己那一片因此是构造期缺席
- */
-export function virtualWorkspaceBodyKey(groupId: string): string {
-  return `virtualWorkspaceBody/${groupId}`
-}
-
-/**
- * 一个工作区标题行的区域键
- *
- * 这一格在两个计划里档位不同，含义由计划决定，元素本身不区分
- * 工作区计划里它是 `rows`（组内换位的参照行），同一格只在这条工作区没有会话分组归属时出现
- * 同段里其他工作区行也参与，一格一行，拖到某一行上按它的上下半算前后
- *
- * 已被放进某个会话分组的工作区拖回父工作区的这一格时读作 `container`（解除那条归属）
- * 那时它不再是与同段兄弟换位的参照物——这一条工作区行渲染在父工作区体内，不在原段的成员里
- */
-export function workspaceHeadKey(workspaceId: string): string {
-  return `workspaceHead/${workspaceId}`
-}
+/** 置顶区的区域键，跨工作区共用一格 */
+export const PINNED_KEY = 'pinned'
 
 /** 一个区域键所属的工作区，不落在任何工作区里时为 undefined */
 export function workspaceOfZoneKey(key: string): string | undefined {
@@ -174,141 +237,6 @@ export function groupOfZoneKey(key: string): string | undefined {
   const parts = key.split('/')
   if (parts[0] !== 'sessionGroup') return undefined
   return parts[2] === undefined || parts[2] === '' ? undefined : parts[2]
-}
-
-// ── 命中 ──
-
-/** 命中层的读数：落在哪个区域、什么形状 */
-export interface DropHit {
-  /** 区域键，它就是计划表里的那一格 */
-  zoneKey: string
-  anchor: DropAnchor
-}
-
-/** 一个元素上的区域键，没有标记时为 null */
-function zoneKeyOf(element: Element): string | null {
-  return element.getAttribute(ZONE_ATTRIBUTE)
-}
-
-/** 一个元素上的参照行 id，没有标记时为 null */
-function rowIdOf(element: Element): string | null {
-  return element.getAttribute(ROW_ATTRIBUTE)
-}
-
-/**
- * 从事件目标向上找最近的那个区域，并看计划接不接它
- *
- * 走到第一个带区域键的元素就停
- * 那个元素是「指针正落在哪一段」的答案，计划里没有它就表示这一段不接，命中到此为止，不继续往上找别的区域
- *
- * 原地投放靠这条读法成立：
- * 拖回自己所在那一段时，那一段的键按设计不在计划里，停在这一格上即「不标记、不提交」
- * 若继续向上走，包着它的区域会接到这次落点，把一次原地投放读成「移出这一段」
- * @param chain - 自内向外排列的祖先链
- * @param plan - 当前计划
- * @returns 命中的区域元素与区域键，沿途没有区域元素、或最近那一个不在计划里时为 null
- */
-export function findZone(
-  chain: readonly Element[],
-  plan: DragPlan,
-): { element: Element; zoneKey: string } | null {
-  for (const element of chain) {
-    const key = zoneKeyOf(element)
-    if (key === null) continue
-    return plan.targets.has(key) ? { element, zoneKey: key } : null
-  }
-  return null
-}
-
-/**
- * 一个区域里离指针最近的那一行，以及指针落在它的上半还是下半
- *
- * 两行之间没有缝隙时，指针总在最近那一行的某半边里
- * 真落在段尾空白上时最近的那一行仍是最后一行，读作追加到它之后
- * @param rows - 区域里带参照行标记的元素，按文档序
- * @param point - 指针位置
- * @returns 参照行与它的前后半，区域里没有行时返回 null
- */
-export function nearestRow(
-  rows: readonly Element[],
-  point: { x: number; y: number },
-): { rowId: string; half: 'before' | 'after' } | null {
-  let nearest: { rowId: string; distance: number; half: 'before' | 'after' } | null = null
-  for (const element of rows) {
-    const rowId = rowIdOf(element)
-    if (rowId === null) continue
-    const rect = element.getBoundingClientRect()
-    const distance = verticalDistance(rect, point.y)
-    const half = halfOf(rect, point.y)
-    if (nearest === null || distance < nearest.distance) nearest = { rowId, distance, half }
-  }
-  return nearest === null ? null : { rowId: nearest.rowId, half: nearest.half }
-}
-
-/** 指针到一条矩形带的竖向距离，落在带内时为 0 */
-function verticalDistance(rect: { top: number; bottom: number }, y: number): number {
-  if (y < rect.top) return rect.top - y
-  if (y > rect.bottom) return y - rect.bottom
-  return 0
-}
-
-/**
- * 指针落在一条矩形带的前半还是后半
- * @param rect - 参照行的矩形
- * @param y - 指针的纵坐标
- * @returns 中线以上是 before，中线以下是 after
- */
-export function halfOf(rect: { top: number; height: number }, y: number): 'before' | 'after' {
-  return y < rect.top + rect.height / 2 ? 'before' : 'after'
-}
-
-/**
- * 判定一个点是否落在一条矩形带里
- * @param rect - 要判定的矩形
- * @param point - 指针位置
- */
-export function containsPoint(
-  rect: { left: number; top: number; right: number; bottom: number },
-  point: { x: number; y: number },
-): boolean {
-  return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom
-}
-
-/**
- * 读出这次指针位置落在计划里的什么落点
- *
- * `container` 档整块只接 inside；`rows` 档再找最近的行算前后半，区域里一行都没有时落到段尾追加
- * @param input - 命中的区域元素与区域键、计划、参照行元素与指针位置
- * @returns 落点读数，该区域这次不接时为 null
- */
-export function resolveHit(input: {
-  zoneKey: string
-  target: DragPlanTarget
-  rows: readonly Element[]
-  point: { x: number; y: number }
-}): DropHit | null {
-  if (input.target.mode === 'container') {
-    return { zoneKey: input.zoneKey, anchor: { kind: 'inside' } }
-  }
-  const nearest = nearestRow(input.rows, input.point)
-  if (nearest === null) return { zoneKey: input.zoneKey, anchor: { kind: 'inside' } }
-  return {
-    zoneKey: input.zoneKey,
-    anchor:
-      nearest.half === 'before'
-        ? { kind: 'before', rowId: nearest.rowId }
-        : { kind: 'after', rowId: nearest.rowId },
-  }
-}
-
-/**
- * 计划里有没有这一格，以及它要不要接这次拖拽
- * @param plan - 当前计划
- * @param zoneKey - 区域键
- * @returns 那一格的目标，计划表里没有它时返回 undefined
- */
-export function targetOfZone(plan: DragPlan, zoneKey: string): DragPlanTarget | undefined {
-  return plan.targets.get(zoneKey)
 }
 
 // ── 计划构造与落点换算 ──
@@ -336,6 +264,8 @@ export function sessionGroupingPlan(input: {
   sections: readonly { id: string }[]
   /** 只改归属 */
   moveToGroup: (groupId: string) => void
+  /** 本区域的树：检测器沿它往上走，落到组内任何一条成员行上都读作落在这一片上 */
+  tree?: WorkspaceTree
 }): DragPlan {
   const { workspaceId, sessionId, currentGroupId, sections } = input
   const targets = new Map<string, DragPlanTarget>()
@@ -361,7 +291,7 @@ export function sessionGroupingPlan(input: {
     targets.set(workspaceHeadKey(workspaceId), toLoose)
   }
 
-  return { source: { kind: 'session', id: sessionId }, targets }
+  return { source: { kind: 'session', id: sessionId }, targets, ...(input.tree === undefined ? {} : { tree: input.tree }) }
 }
 
 /**
@@ -376,144 +306,104 @@ export interface OrderDragging {
   buildDragPlan: (memberId: string) => DragPlan
 }
 
+
 /**
- * 一条工作区行拖起时的计划
+ * 一条工作区行拖起时的计划（树驱动）
  *
- * 一个来源要落在四种位置上，档位分两档，元素本身不区分，含义全由计划决定
+ * 只收一棵树：枚举面、容器归属与合法性判定都收在树那一层（`dropRelationsOf`），
+ * 调用方因此不需要传当前分组、平铺名单、同层名单、祖先会话分组四份互有重叠的名单
  *
- * - 别的虚拟工作区分组的组头与组体：`container`，移入那个分组（工况 10）
- * - 根节点那一片与平铺在根节点上的工作区行：`container`，移出虚拟工作区分组（工况 10）
- * - 与来源渲染在同一层的其他工作区行：`rows`，组内换位（工况 11）
- * - 某个祖先工作区体内的会话分组头：`container`，移入那个会话分组（工况 12）
- * - 来源当前所在的会话分组的父工作区行：`container`，解除那条归属（工况 12 的移出）
+ * 落点档由关系本身决定，不由区域形状决定：换位是 `rows`（按参照行的前后半算），其余都是 `container`
+ * 同一格因此不会既接排序又接放入——这正是「指针读出的语义必须单一」在代码里的形态
  *
- * 来源当前所在的那一片一律不进 `targets`，拖回自己那一片因此是构造期缺席
- * 自己那个虚拟工作区分组、自己已在的那个会话分组、自己那一行，三者都不收
- *
- * 会话分组那一族的两个落点互不重叠，因为它们的元素本来就分处两层
- * 移入落在会话分组头上（在祖先工作区体内），移出落在父工作区行上（在同层的上一层）
- *
- * 「同一个区域键在一次计划里只能有一档」这条约束在下面几处成立
- * 某一行要么是来源同层的兄弟（`rows`），要么是根节点上未归组的工作区（`container`），两者所在的分组不同
- * 父工作区行只在这一条真的有归属时才当移出落点，而那时它不在来源的同层名单里
- *
- * 后三格判据都取构造那一刻的渲染结果，与被拖之后的状态无关
- * @param input - 来源、它在两个容器里的位置、可选落点的成员名单，以及四类落点各自落到哪次写入
+ * 换算绑的是构造那一刻的同层名单，折起的成员因此不动
+ * @param input - 树、来源，以及四种写入各自落到哪次调用
  */
-export function workspaceDragPlan(input: {
+export function workspaceTreeDragPlan(input: {
+  tree: WorkspaceTree
   workspaceId: string
-  /** 来源当前所在的虚拟工作区分组 id，空串表示不在任何分组里 */
-  currentGroupId: string
-  /**
-   * 根节点上的全部虚拟工作区分组，含来源所在的那个与空分组
-   *
-   * 每组带上它的成员名单：成员行自己也要各收一格，落点才不会被行上的键截住
-   * 成员取全量而不是露出的那些——被嵌进父工作区体内的行带同一个区域键，同样会截住落点
-   */
-  groups: readonly { id: string; workspaceIds: readonly string[] }[]
-  /** 平铺在根节点上的工作区，来源在根节点时为空表 */
-  looseIds: readonly string[]
-  /**
-   * 与来源渲染在同一层的成员，按当刻的渲染序，含来源自己
-   *
-   * 换算要在整层顺序上做，来源不在这一份里就换不出任何位次
-   * 来源不在任何虚拟工作区分组里时为空表：根节点那一层的平铺段没有可换位的插入写入
-   */
-  siblingOrder: readonly string[]
-  /** 可以移入的会话分组：祖先工作区与它名下的分组 */
-  nestTargets: readonly { parentId: string; groupId: string }[]
-  /** 来源当前生效的会话分组归属，没有时缺省 */
-  binding?: { parentId: string; groupId: string } | undefined
-  /** 移入一个虚拟工作区分组，空串表示移出到根节点 */
-  moveToGroup: (groupId: string) => void
   /** 同层换位，`beforeWorkspaceId` 为 undefined 表示挪到末尾 */
   reorder: (beforeWorkspaceId: string | undefined) => void
+  /** 移入一个虚拟工作区分组，空串表示移出到根节点 */
+  moveToGroup: (groupId: string) => void
   /** 移入某个祖先工作区体内的会话分组 */
   nestInto: (parentId: string, groupId: string) => void
   /** 解除嵌套归属 */
   unnest: () => void
 }): DragPlan {
-  const { workspaceId, currentGroupId, binding } = input
+  const { tree, workspaceId } = input
+  const source: TreeNodeRef = { kind: 'workspace', id: workspaceId }
   const targets = new Map<string, DragPlanTarget>()
-  /** 移出虚拟工作区分组的落点，根节点那一片与平铺在它上面的工作区行共用它 */
-  const toRoot: DragPlanTarget = {
-    mode: 'container',
-    commit: () => input.moveToGroup(''),
-  }
 
-  for (const group of input.groups) {
-    // 来源已在的那个分组不整块收：拖回自己那一片是原地投放，按构造期缺席处理
-    // 组内别的成员行改由下面那个 `rows` 循环收，两处不收同一个键
-    if (group.id === currentGroupId) continue
-    // 组头与组体同一档：指针落在组体那一片空白上也读作移入这个分组
-    const target: DragPlanTarget = {
-      mode: 'container',
-      commit: () => input.moveToGroup(group.id),
+  // 关系由树一次给全：它能落进哪几片、能排到哪几行前后
+  // 每条关系自带它占的那几格区域键，这一层因此不必认识虚拟分组、会话分组与工作区行的差别
+  const relations = dropRelationsOf(tree, source, {
+    moveToGroup: input.moveToGroup,
+    reorder: input.reorder,
+    nestInto: input.nestInto,
+    unnest: input.unnest,
+  })
+
+  // 同一格上两种读法都成立时合成一个目标，档记作 banded：
+  // 上四分之一读 before、下四分之一读 after、中二分之一读 inside
+  //
+  // 这不是特例——它正是「一行既是容器、又能谈位次」的情形。祖先行与同层兄弟撞在同一格上，
+  // 或者两个虚拟分组里的同层兄弟互相指着对方时，都会落到这里
+  interface Slot {
+    inside?: () => void
+    /** 这一片点名把框画在哪一格上 */
+    insideBlock?: string
+    order?: (side: 'before' | 'after') => void
+    /** 这一片点名把线画在哪一格上 */
+    orderBlock?: string
+  }
+  const byZone = new Map<string, Slot>()
+  for (const relation of relations) {
+    for (const key of relation.zones) {
+      const slot = byZone.get(key) ?? {}
+      if (relation.kind === 'inside') {
+        slot.inside = () => relation.commit()
+        if (relation.block !== undefined) slot.insideBlock = relation.block
+      } else {
+        slot.order = (side) => relation.place(side)
+        if (relation.block !== undefined) slot.orderBlock = relation.block
+      }
+      byZone.set(key, slot)
     }
-    targets.set(virtualWorkspaceHeadKey(group.id), target)
-    targets.set(virtualWorkspaceBodyKey(group.id), target)
-    // 组内每一行也要各收一格，否则指针停在某一行上时命中层先撞上它、那一次落点就到此为止
-    // 行自己带区域键且键不在计划里，向上找组体这一步根本不会发生
-    for (const memberId of group.workspaceIds) {
-      if (memberId === workspaceId) continue
-      targets.set(workspaceHeadKey(memberId), target)
-    }
   }
-
-  if (currentGroupId !== '') {
-    // 根节点那一层整片是移出落点，平铺在那里的工作区行另各占一格
-    // 命中层停在指针下第一个带区域键的元素上，行自己带键时不会落到包着它的这一片上
-    targets.set(ROOT_KEY, toRoot)
-    for (const id of input.looseIds) {
-      if (id === workspaceId) continue
-      // 父工作区行在下面另作「移出会话分组」的落点，同一格不能兼两档，这里先让开
-      if (binding !== undefined && id === binding.parentId) continue
-      targets.set(workspaceHeadKey(id), toRoot)
-    }
-  }
-
-  // 同层换位：换算绑的是构造那一刻的整层顺序，折起的成员因此不动
-  for (const memberId of input.siblingOrder) {
-    if (memberId === workspaceId) continue
-    // 父工作区行在下面另作「移出会话分组」的落点，同一格不能兼两档，这里先让开
-    if (binding !== undefined && memberId === binding.parentId) continue
-    targets.set(workspaceHeadKey(memberId), {
-      mode: 'rows',
-      // 相邻位与「锚点已不是本层成员」两种落点都在换算里返回 undefined，那时不写
-      commit: (anchor) => {
-        const next = reorderTo(input.siblingOrder, workspaceId, anchor)
-        if (next === undefined) return
-        input.reorder(beforeIdOf(next, workspaceId))
-      },
-    })
-  }
-
-  for (const target of input.nestTargets) {
-    // 已经在那个分组里时不收：再放一次不改变任何东西
-    if (
-      binding !== undefined &&
-      binding.parentId === target.parentId &&
-      binding.groupId === target.groupId
-    ) {
+  for (const [key, slot] of byZone) {
+    if (slot.inside !== undefined && slot.order !== undefined) {
+      const inside = slot.inside
+      const order = slot.order
+      targets.set(key, {
+        mode: 'banded',
+        ...(slot.insideBlock === undefined ? {} : { blockKey: slot.insideBlock }),
+        ...(slot.orderBlock === undefined ? {} : { orderBlock: slot.orderBlock }),
+        commit: (anchor) =>
+          anchor.kind === 'inside'
+            ? inside()
+            : order(anchor.kind === 'before' ? 'before' : 'after'),
+      })
       continue
     }
-    targets.set(groupHeadKey(target.parentId, target.groupId), {
-      mode: 'container',
-      commit: () => input.nestInto(target.parentId, target.groupId),
+    if (slot.inside !== undefined) {
+      const inside = slot.inside
+      targets.set(key, {
+        mode: 'container',
+        ...(slot.insideBlock === undefined ? {} : { blockKey: slot.insideBlock }),
+        commit: () => inside(),
+      })
+      continue
+    }
+    const order = slot.order
+    targets.set(key, {
+      mode: 'rows',
+      ...(slot.orderBlock === undefined ? {} : { orderBlock: slot.orderBlock }),
+      commit: (anchor) => order?.(anchor.kind === 'before' ? 'before' : 'after'),
     })
   }
 
-  if (binding !== undefined) {
-    // 移出会话分组落在父工作区那一行上：它在本条工作区的上一层，与同层名单不重叠
-    // 父工作区自己也平铺在根节点时，上面那一轮已经给这一格写过「移出虚拟工作区分组」
-    // 那一档在这里被覆盖成解除嵌套：两条读法都成立时，解除嵌套是用户看得见的那一层变化
-    targets.set(workspaceHeadKey(binding.parentId), {
-      mode: 'container',
-      commit: () => input.unnest(),
-    })
-  }
-
-  return { source: { kind: 'workspace', id: workspaceId }, targets }
+  return { source: { kind: 'workspace', id: workspaceId }, targets, tree }
 }
 
 /**

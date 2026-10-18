@@ -75,8 +75,8 @@ const EMPTY_SNAPSHOT: WorkspaceGroupsSnapshot = {
  *
  * 之所以是编译期常量而不是配置项：这是开发期的对照开关，不是要交付给用户的能力，配置化反而要多一套 schema 与文档
  */
-// export const COMPARE_MODE = false
-export const COMPARE_MODE = true
+export const COMPARE_MODE = false
+// export const COMPARE_MODE = true
 
 /**
  * 插件入口

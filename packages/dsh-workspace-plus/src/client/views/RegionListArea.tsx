@@ -25,10 +25,11 @@ import {
   sessionGroupingPlan,
   virtualWorkspaceBodyKey,
   virtualWorkspaceHeadKey,
-  workspaceDragPlan,
+  workspaceTreeDragPlan,
 } from '../data/dnd.ts'
 import type { OrderDragging } from '../data/dnd.ts'
 import type { Nesting } from '../data/nest.ts'
+import type { WorkspaceTree } from '../data/tree.ts'
 import { relativeTimeOfRow, statusViewOfRow } from '../data/rows.ts'
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
 import type {
@@ -101,6 +102,8 @@ export interface RegionListLayout {
   /** 未经聚焦裁剪的根节点布局，工作区行的「移动工作区分组」菜单按它的分组段列出候选 */
   rootLayout: RootLayout
   nesting: Nesting
+  /** 工作区与虚拟分组的统一节点树，拖拽计划层按它取容器归属与同层名单 */
+  tree: WorkspaceTree
   workspaceById: ReadonlyMap<string, WorkspaceView>
   /** 真的聚焦在某一片内容上时，「未分组」区段整段隐藏 */
   focused: boolean
@@ -389,8 +392,10 @@ function WorkspaceNode({
             sessionId,
             groupId === '' ? 'ungroup' : `group:${groupId}`,
           ),
+        // 检测器沿树往上走：落到组内任何一条成员行上，读出的都是「落在这一片上」
+        tree: scope.layout.tree,
       }),
-    [workspaceId, commands.selectSessionGroup],
+    [workspaceId, commands.selectSessionGroup, scope.layout.tree],
   )
 
   /**
@@ -419,63 +424,25 @@ function WorkspaceNode({
   )
 
   /**
-   * 工作区拖拽那两处落点的最新一份
-   *
-   * 与 `dragOrderSections` 同一取舍：这些名单每次渲染都是新数组，构造器只该在 `dragstart` 当刻读它们
-   */
-  const dragLists = useRef<{
-    groups: readonly VirtualWorkspaceSectionData[]
-    loose: readonly string[]
-  }>({ groups: [], loose: [] })
-
-  /**
    * 拖起一条工作区行时的计划
    *
-   * 与上面两处同一取舍：这几份名单每次渲染都是新数组，构造器在调用当刻读 ref，依赖列只留稳定的几格
-   * 四类落点落在三个写入面上
-   * 移入 / 移出虚拟分组走 `moveWorkspace`，换位一律走官方 `insertBefore`（注册表序是各层共用的顺序来源）
+   * 枚举面与合法性判定都收在树那一层，这里只交出树与四个写入
+   * 四类落点落在三个写入面上：移入 / 移出虚拟分组走 `moveWorkspace`，
+   * 换位一律走官方 `insertBefore`（注册表序是各层共用的顺序来源），
    * 会话分组那一族走 `nestWorkspaces` 与 `unnestWorkspaces`
-   *
-   * 可以移入的会话分组取自这条工作区自己的祖先链：只有 cwd 路径上的祖先才可能是它的父工作区
-   * 这一点与菜单里那份候选名单同源，两条入口因此列出的是同一批分组
    */
   const buildWorkspaceDragPlan = useCallback(
-    (memberId: string) => {
-      const lists = dragLists.current
-      const currentGroupId = virtualWorkspaceIdOf(lists.groups, memberId)
-      const { bindingOf, ancestorsOf, parentOf, childIdsOf, rootsOf, containerOf } = scope.layout.nesting
-      // 同层名单按「父工作区相同」取：来源的父工作区名下（父工作区为空时取所在容器的顶层）
-      // 名单按注册表序，与渲染序同源，被嵌套的子工作区因此是合法的同层成员
-      const parent = parentOf(memberId)
-      const siblingOrder = parent === '' ? rootsOf(containerOf(memberId)) : childIdsOf(parent)
-      return workspaceDragPlan({
+    (memberId: string) =>
+      workspaceTreeDragPlan({
+        tree: scope.layout.tree,
         workspaceId: memberId,
-        currentGroupId,
-        groups: lists.groups,
-        looseIds: lists.loose,
-        // 来源自己也在这一份里：换算要在整层顺序上做，它不在其中就换不出任何位次
-        siblingOrder,
-        nestTargets: ancestorsOf(memberId).flatMap((parentId) =>
-          (scope.snapshot.byWorkspace[parentId] ?? []).map((group) => ({
-            parentId,
-            groupId: group.id,
-          })),
-        ),
-        binding: ((): { parentId: string; groupId: string } | undefined => {
-          const bound = bindingOf(memberId)
-          return bound === undefined
-            ? undefined
-            : { parentId: bound.workspaceId, groupId: bound.groupId }
-        })(),
         moveToGroup: (groupId) => commands.moveWorkspaceToGroup(memberId, groupId),
         reorder: (beforeWorkspaceId) => commands.moveWorkspaceInOrder(memberId, beforeWorkspaceId),
         nestInto: (parentId, groupId) => commands.nestWorkspaceInto(memberId, parentId, groupId),
         unnest: () => commands.unnestWorkspace(memberId),
-      })
-    },
+      }),
     [
-      scope.layout.nesting,
-      scope.snapshot.byWorkspace,
+      scope.layout.tree,
       commands.moveWorkspaceToGroup,
       commands.moveWorkspaceInOrder,
       commands.nestWorkspaceInto,
@@ -487,11 +454,6 @@ function WorkspaceNode({
     () => ({ buildDragPlan: buildWorkspaceDragPlan }),
     [buildWorkspaceDragPlan],
   )
-
-  dragLists.current = {
-    groups: scope.layout.listLayout.groups,
-    loose: scope.layout.listLayout.loose,
-  }
 
   const workspace = layout.workspaceById.get(workspaceId)
   // 布局只包含快照里存在的工作区，因此这里不会落空，防御一下避免类型断言

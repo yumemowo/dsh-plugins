@@ -479,3 +479,31 @@ export function descendantsOf(
     })
     .sort((a, b) => (pathOf(a)?.length ?? 0) - (pathOf(b)?.length ?? 0))
 }
+/**
+ * 一个工作区在 cwd 路径上的最近祖先，**不限虚拟分组**
+ *
+ * 与 {@link deriveNesting} 的作用范围刻意不同：那一处回答「现在渲染成什么样」，
+ * 因此要求父工作区与子工作区同处一个虚拟分组——跨组的两个工作区在列表上是两片互不相干的内容，
+ * 不该因为路径关系就连起来渲染。
+ *
+ * 拖拽问的是另一件事：「可能落到哪儿」。把一个工作区从甲组挪到乙组是允许的操作，
+ * 挪过去之后它与乙组里那些 cwd 祖先就成了真正的父子——所以这里按路径认祖先，不看此刻住在哪一片。
+ *
+ * @param workspaceIds - 全部工作区 id
+ * @param pathOf - workspaceId → cwd
+ * @param workspaceId - 要查的那个工作区
+ * @returns 最近的祖先 id，没有祖先时为 undefined
+ */
+export function nearestAncestorAnyScope(
+  workspaceIds: readonly string[],
+  pathOf: (workspaceId: string) => string | undefined,
+  workspaceId: string,
+): string | undefined {
+  const path = pathOf(workspaceId)
+  if (path === undefined) return undefined
+  return nearestAncestor(
+    path,
+    workspaceIds.filter((id) => id !== workspaceId),
+    pathOf,
+  )
+}

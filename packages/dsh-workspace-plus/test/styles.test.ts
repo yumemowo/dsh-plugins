@@ -1572,4 +1572,57 @@ describe('client stylesheet', () => {
       .join('\n')
     expect(reveal).toMatch(/width:\s*16px/)
   })
+
+  /** 落点线那几条规则，剥掉注释后按选择器与声明体拆开 */
+  function dropLineRules(): { selector: string; body: string }[] {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    return [...css.matchAll(/([^{}]*\[data-wg-drop='(?:before|after)'\][^{}]*)\{([^{}]*)\}/g)].map((m) => ({
+      selector: (m[1] ?? '').replace(/\s+/g, ' ').trim(),
+      body: m[2] ?? '',
+    }))
+  }
+
+  it('draws the drop line with a border rather than a shadow or background', () => {
+    // 2 CSS 像素落在设备像素网格的哪一侧由缩放决定，浏览器对边框做设备像素吸附、对背景不做
+    // 用背景或阴影画，同一套几何会在不同缩放下显形为「粗细不一致」
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    // 只有那两条单选择器规则各自画一条边；共享几何那条（写成「A::before, B::after」）不带边框
+    const lineRules = dropLineRules().filter(
+      (rule) => !rule.selector.includes(',') && /::(?:before|after)$/.test(rule.selector),
+    )
+
+    expect(lineRules).toHaveLength(2)
+    for (const rule of lineRules) {
+      expect(rule.body).toMatch(/border-(?:top|bottom):\s*2px solid/)
+      expect(rule.body).not.toMatch(/box-shadow|background/)
+    }
+    const shared = dropLineRules().find((rule) => rule.selector.includes('::before,'))
+    expect(shared?.body).toMatch(/position:\s*absolute/)
+    // 贴边的 box-shadow 画法不能再出现：它只能贴着这一行自己的盒子，跨不过整片区域
+    expect(css).not.toMatch(/\[data-wg-drop='before'\]\s*\{[^{}]*box-shadow/)
+    expect(css).not.toMatch(/\[data-wg-drop='after'\]\s*\{[^{}]*box-shadow/)
+  })
+
+  it('keeps the tail drop line inside the last row rather than reaching past it', () => {
+    // 撑开体与置顶区都是 overflow: hidden / auto 的裁剪盒，下缘正落在末行下缘
+    // 线伸出块外会被整条裁掉：属性与命中全对而像素为空
+    // 精确匹配那一条单选择器规则：合并写的那条共享规则也含同样的子串
+    const after = dropLineRules().find((rule) => rule.selector === "[data-wg-drop='after']::after")
+
+    expect(after).toBeDefined()
+    expect(after?.body).toMatch(/bottom:\s*0\s*;/)
+    expect(after?.body).not.toMatch(/bottom:\s*-\d/)
+    expect(after?.body).not.toMatch(/top:\s*100%/)
+  })
+
+  it('starts the drop line where the row text starts', () => {
+    // 线要与行文字左对齐，因此取行自己那一格缩进变量，而不是写死一个像素值
+    const shared = dropLineRules().find((rule) => rule.selector.includes('::before,'))
+
+    expect(shared).toBeDefined()
+    expect(shared?.body).toMatch(/left:\s*var\(--wg-row-start/)
+    expect(shared?.body).toMatch(/height:\s*2px/)
+    // 线是浮层，不能把行自己的点击吃掉
+    expect(shared?.body).toMatch(/pointer-events:\s*none/)
+  })
 })

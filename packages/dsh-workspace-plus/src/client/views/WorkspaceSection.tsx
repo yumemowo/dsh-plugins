@@ -16,7 +16,13 @@ import type { WorkspaceRowDnd, WorkspaceRowProps } from './WorkspaceRow.tsx'
 import { useExpansion } from '../hooks/useExpansion.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useDnd, useOrderRow } from '../hooks/useDnd.ts'
-import { SCOPE_ATTRIBUTE, looseKey, workspaceHeadKey } from '../data/dnd.ts'
+import {
+  BLOCK_KEY_ATTRIBUTE,
+  SCOPE_ATTRIBUTE,
+  looseKey,
+  workspaceBodyKey,
+  workspaceHeadKey,
+} from '../data/dnd.ts'
 import type { OrderDragging } from '../data/dnd.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
 import styles from './components/rows.module.css'
@@ -127,10 +133,18 @@ export function WorkspaceSection({
   }
 
   return (
-    <section className={styles.workspace} style={indent} {...{ [SCOPE_ATTRIBUTE]: '' }}>
+    // 这一块是工作区的整体：标题行与它体内的子工作区、会话分组都在其中。
+    // 标的是「标题格对应的整块」——指针停在标题行或体内空白上时框因此套住整块，
+    // 与虚拟分组那一块同形；体内的子工作区行是落点的子集，框把它们一并圈进来
+    <section
+      className={styles.workspace}
+      style={indent}
+      {...{ [SCOPE_ATTRIBUTE]: '' }}
+      {...{ [BLOCK_KEY_ATTRIBUTE]: workspaceHeadKey(workspaceId) }}
+    >
       <WorkspaceRow {...row} dnd={rowDnd} />
       <ExpandableBody open={row.expanded}>
-        <div className={styles.workspaceBody}>
+        <div className={styles.workspaceBody} {...dndZoneProps(workspaceBodyKey(workspaceId))}>
           {/* 子工作区排在会话分组之前，与分组内部同一顺序，文件夹在前 */}
           {childIds.length === 0 ? null : (
             <div className={styles.nest}>{childIds.map(renderChildWorkspace)}</div>

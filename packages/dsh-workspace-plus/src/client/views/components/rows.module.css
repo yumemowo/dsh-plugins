@@ -656,12 +656,40 @@ body[data-wg-flip] [data-wg-hover-card] {
   border-radius: var(--dsw-radius-md);
 }
 
-[data-wg-drop='before'] {
-  box-shadow: inset 0 2px 0 0 var(--dsw-alias-state-business-primary);
+/* 落点线由伪元素画，不由 box-shadow 或背景色：
+   - 线要跨整块区域的宽度，而 inset 的 box-shadow 只能贴着这一行自己的盒子，缩进之后右边会短一截
+   - 2 CSS 像素落在设备像素网格的哪一侧由缩放决定（125% 下 2 × 1.25 = 2.5 设备像素），
+     浏览器对边框做设备像素吸附、对背景不做，背景画法会显形为「不同落点的线粗细不一致」
+   行的左缘由 --wg-row-start 给出，与行自己的 padding-left 同源，线因此与文字左对齐 */
+[data-wg-drop='before'],
+[data-wg-drop='after'] {
+  position: relative;
 }
 
-[data-wg-drop='after'] {
-  box-shadow: inset 0 -2px 0 0 var(--dsw-alias-state-business-primary);
+[data-wg-drop='before']::before,
+[data-wg-drop='after']::after {
+  content: '';
+  position: absolute;
+  left: var(--wg-row-start, 24px);
+  right: 4px;
+  height: 2px;
+  box-sizing: border-box;
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 线画在参照行自己的上下缘内侧：往外伸会被容器的裁剪吃掉
+   撑开体是 overflow: hidden，置顶区两档分别是 auto 与 hidden，这些裁剪盒的下缘正落在末行下缘
+   段尾那一道因此收在末行下缘之内（bottom: 0），属性与命中层全对而像素为空是这条的反例 */
+[data-wg-drop='before']::before {
+  top: -2px;
+  border-top: 2px solid var(--dsw-alias-state-business-primary);
+}
+
+[data-wg-drop='after']::after {
+  bottom: 0;
+  border-bottom: 2px solid var(--dsw-alias-state-business-primary);
 }
 
 .empty {

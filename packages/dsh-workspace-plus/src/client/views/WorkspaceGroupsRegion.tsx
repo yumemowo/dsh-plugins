@@ -26,8 +26,11 @@ import type { ReactElement, RefObject } from 'react'
 import { EMPTY_PICKER_STATE } from '../../pickerState.ts'
 import type { AddWorkspaceActions, OfficialSessionActions, RegionActions, RegionDataHooks } from '../actions.ts'
 import { buildRootLayout, virtualWorkspaceIdOf } from '../data/layout.ts'
+import { planWorkspaceMove } from '../data/move.ts'
+import type { WorkspaceMoveTarget } from '../data/move.ts'
 import { descendantsOf, deriveNesting, nearestAncestorForPath } from '../data/nest.ts'
 import type { Nesting } from '../data/nest.ts'
+import type { WorkspaceTree } from '../data/tree.ts'
 import {
   adoptionVisibility,
   focusedLayout,
@@ -49,6 +52,7 @@ import {
 } from '../data/sessions.ts'
 import { frontPinnedRows, pinRanks, pinnedEntries, reconcilePinned } from '../data/pinned.ts'
 import { PINNED_KEY, stretchDragPlan } from '../data/dnd.ts'
+import { buildWorkspaceTree } from '../data/tree.ts'
 import type { RootLayout, SessionRow } from '../data/types.ts'
 import type { HostInfo } from '../hostInfo.ts'
 import { regionLabels } from '../labels.ts'
@@ -138,6 +142,8 @@ interface RegionLayout {
   /** workspaceId → 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里 */
   virtualOfWorkspace: (workspaceId: string) => string
   nesting: Nesting
+  /** 工作区与虚拟分组的统一节点树，拖拽计划层按它取容器归属与同层名单 */
+  tree: WorkspaceTree
   rootLayout: RootLayout
   pickerEntries: PickerEntry[]
   picker: ReturnType<typeof pickerSections>
@@ -449,6 +455,27 @@ function useRegionLayout(
   )
 
   /**
+   * 统一节点树
+   *
+   * 与 `rootLayout` 同源：两者都由注册表序、分组定义与嵌套推导装配，只是交出的形状不同
+   * 拖拽计划层按它取容器归属与同层名单，渲染层继续读上面那两份布局
+   */
+  const tree = useMemo(
+    () =>
+      buildWorkspaceTree({
+        workspaceIds,
+        virtualGroups: snapshot.workspaceGroups ?? [],
+        nesting,
+        sessionGroupsOf: (workspaceId: string) =>
+          (snapshot.byWorkspace[workspaceId] ?? []).map((group) => group.id),
+        // 拖拽认祖先要看 cwd：渲染那一层要求同组才算父子，拖拽问的是「可能挪到哪儿」，
+        // 而挪过去之后跨组的 cwd 祖先就成了真正的父子
+        pathOf: (workspaceId: string) => workspaceById.get(workspaceId)?.path,
+      }),
+    [workspaceIds, snapshot.workspaceGroups, nesting, snapshot.byWorkspace, workspaceById],
+  )
+
+  /**
    * 下拉菜单里的条目与三个分区
    *
    * 与列表取自同一次切分，因此「全部」分区的顺序与刚才那一屏逐行对应
@@ -500,6 +527,7 @@ function useRegionLayout(
     pathOfWorkspace,
     virtualOfWorkspace,
     nesting,
+    tree,
     rootLayout,
     pickerEntries,
     picker,
@@ -1172,31 +1200,78 @@ function useRegionNestActions(
     ).filter((candidate) => layout.nesting.bindingOf(candidate) !== undefined)
 
   /**
-   * 把一个工作区（连同它名下的子工作区）放进某个祖先工作区的会话分组
+   * 把一个工作区（连同它名下的子工作区）挪到另一处
+   *
+   * 目的地由调用方指名：换一个虚拟分组、进某个会话分组、或两件一起做。
+   * 要走哪几笔由 {@link planWorkspaceMove} 按来源与目的地的差算，这里只按它给的名单依次写。
+   *
+   * 会话分组那一笔**排在虚拟分组之后**：一条归属只在父子两边同处一个虚拟分组时才生效，
+   * 顺序反过来会先落一条无效归属再改它，中间那一段窗口里界面读作「进了分组但没进分组」。
+   *
+   * 会话语义上「进某个分组」也必然意味着「进那一片」，因此拖动与菜单两个入口走的是同一条路。
+   *
+   * 每一步都要走 `apply`，它把宿主回的整份快照写进本地状态
+   * 直接 `void nestWorkspaces(...)` 会把那次写入的结果丢掉，界面因此停在旧快照上——
+   * 归属其实已经落盘，看起来却像「移入没有生效」
+   *
+   * 中途失败时会留下「虚拟分组已改、会话分组还没写」的状态——那是可恢复的，下次再移一次即可，不必为此加补偿事务
+   * @param workspaceId - 被挪动的工作区
+   * @param target - 目的地
+   */
+  const moveWorkspaceTo = useCallback(
+    (workspaceId: string, target: WorkspaceMoveTarget): void => {
+      // 整块子树跟着走：已经放进别处分组的后代留在原地会让层级在分组边界上断开
+      // 未放进任何分组的那些由路径推导自动跟随，不必写
+      const followers = groupedDescendantsOf(workspaceId)
+      const plan = planWorkspaceMove({
+        workspaceId,
+        target,
+        followers,
+        scopeOf: layout.virtualOfWorkspace,
+        bindingOf: (id) => layout.nesting.bindingOf(id),
+      })
+      // 每一笔都回一份整快照，最后交出去的是**最后一笔的那一份**：
+      // 丢掉中间结果再拿闭包里那份旧快照去替换状态，界面会停在改动之前——
+      // 写入其实已经落盘，看起来却像「拖了没反应」
+      const run = async (): Promise<WorkspaceGroupsSnapshot> => {
+        let next = snapshot
+        for (const entry of plan.reslotted) {
+          next = await moveWorkspace(entry.workspaceId, entry.scope)
+        }
+        if (plan.unnested.length > 0) next = await unnestWorkspaces(plan.unnested)
+        const nest = target.nest
+        if (plan.nested.length > 0 && nest !== undefined) {
+          next = await nestWorkspaces(plan.nested, nest.workspaceId, nest.groupId)
+        }
+        return next
+      }
+      apply(run())
+    },
+    [
+      apply,
+      moveWorkspace,
+      nestWorkspaces,
+      unnestWorkspaces,
+      layout.virtualOfWorkspace,
+      layout.nesting,
+      layout.workspaceIds,
+      layout.pathOfWorkspace,
+    ],
+  )
+
+  /**
+   * 把一个工作区放进某个祖先工作区的会话分组
    *
    * 父工作区由调用方指名，不是自动取最近祖先，放进谁的分组谁就是父工作区
-   *
-   * 归属记在子工作区自己的记录上，因此这里交出的是要写归属的那批 id：
-   * 工作区自己进组，它名下的子工作区要一并跟随，否则层级会在分组边界上断开
-   *
-   * 分两次写，先把它放进分组，再把跟随的子工作区放进去
-   * 第二次失败时会留下「父工作区已进组、子工作区还在外面」的状态——那是可恢复的，下次再移一次即可，不必为此加补偿事务
    */
   const nestWorkspaceInto = useCallback(
     (workspaceId: string, parentId: string, groupId: string): void => {
-      // 整棵子树跟着走，保持层级关系，父工作区进哪个分组，它名下已经放进别处分组的子工作区一并换过去
-      // 未放进任何分组的那些由路径推导自动跟随，不必写
-      const followers = groupedDescendantsOf(workspaceId)
-      // 每一步都要走 `apply`，它把宿主回的整份快照写进本地状态
-      // 直接 `void nestWorkspaces(...)` 会把那次写入的结果丢掉，界面因此停在旧快照上——
-      // 归属其实已经落盘，看起来却像「移入没有生效」
-      apply(
-        nestWorkspaces([workspaceId], parentId, groupId).then((next) =>
-          followers.length === 0 ? next : nestWorkspaces(followers, parentId, groupId),
-        ),
-      )
+      moveWorkspaceTo(workspaceId, {
+        scope: layout.virtualOfWorkspace(parentId),
+        nest: { workspaceId: parentId, groupId },
+      })
     },
-    [apply, nestWorkspaces, layout.workspaceIds, layout.pathOfWorkspace, layout.virtualOfWorkspace, layout.nesting],
+    [moveWorkspaceTo, layout.virtualOfWorkspace],
   )
 
   /**
@@ -1236,9 +1311,9 @@ function useRegionNestActions(
    */
   const moveWorkspaceToGroup = useCallback(
     (workspaceId: string, groupId: string): void => {
-      apply(moveWorkspace(workspaceId, groupId))
+      moveWorkspaceTo(workspaceId, { scope: groupId })
     },
-    [apply, moveWorkspace],
+    [moveWorkspaceTo],
   )
 
   /**
