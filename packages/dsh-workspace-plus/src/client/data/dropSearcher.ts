@@ -199,11 +199,12 @@ function idOf(node: DropNode): string {
  * 指针落在一条带的上半还是下半
  *
  * 只问指针正落着的那一条带的矩形——落点本身是节点，没有矩形可言。
- * 量不出高度时读作「之后」：尚未布局的节点与 jsdom 都是这种情形，那时没有上半
+ * 量不出高度时读作「之前」：尚未布局的节点与 jsdom 都是这种情形，那时分不出上下，
+ * 而「之前」那处缝落在这一条自己身上，读出来仍是指着它的一条线
  * @param rect - 指针正落着的那一条带的矩形
  * @param point - 指针坐标
  */
 function sideOf(rect: { top: number; height: number }, point: { x: number; y: number }): DropSide {
-  if (rect.height <= 0) return 'after'
+  if (rect.height <= 0) return 'before'
   return point.y - rect.top < rect.height / 2 ? 'before' : 'after'
 }

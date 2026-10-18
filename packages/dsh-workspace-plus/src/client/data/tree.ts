@@ -511,6 +511,13 @@ export type DropRelation =
        * 给出这一项时线跨整个元素画在它的上下缘，而不是贴着标题那一行画一条短边
        */
       block?: string
+      /**
+       * 同一处缝由上一条代言时，上一条的格键
+       *
+       * 「排到这一行之前」与「排到上一条之后」是同一处缝，两行各画一条就成了两条线。
+       * 线因此一律画在上一条的下缘；这里没有上一条时，线画在这一行自己的上缘
+       */
+      above?: string
       /** 排到这一行之前 / 之后 */
       place: (side: 'before' | 'after') => void
     }
@@ -623,6 +630,11 @@ export function dropRelationsOf(
     // （见 dropSearcher 的 chainOf）；把它塞进位次关系里，就等于用**目标那一行**
     // 的祖先去回答**指针**的问题——目标行有一个 cwd 父工作区、而它与来源毫无关系时，
     // 那一块会被无缘无故高亮起来
+    // 同一处缝只画一条线：一律由前一条的下缘代表，这一条只在没有上一条时才画自己的上缘
+    // 上一条正是来源时不交给它：它整片画淡着，线画到它身上会跟着一起淡下去
+    const at = order.indexOf(targetId)
+    const prev = at < 1 ? undefined : order[at - 1]
+    const above = prev === node.id ? undefined : prev
     return {
       kind: 'order',
       // 整片都算这一行的检测范围：标题行与它体内的那一格。指针停在体内的会话上时，
@@ -630,6 +642,7 @@ export function dropRelationsOf(
       zones: [`workspaceHead/${targetId}`, `workspaceBody/${targetId}`],
       // 线跨整块工作区画：贴着标题那一行画会在体内有内容时显得只有半截
       block: `workspaceHead/${targetId}`,
+      ...(above === undefined ? {} : { above: `workspaceHead/${above}` }),
       place: (side) => {
         const next = orderWith(order, node.id, side, targetId)
         if (next === null) return

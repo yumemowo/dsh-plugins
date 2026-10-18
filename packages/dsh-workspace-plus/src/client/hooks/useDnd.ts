@@ -42,6 +42,17 @@ const PAYLOAD_PREFIX = 'wg-dnd:'
 const DRAGGING_ATTRIBUTE = 'data-wg-dragging'
 
 /**
+ * 一处落点标记：画在哪个元素上、带哪个值
+ *
+ * 两件事分开记，是因为「排到这一行之后」那处缝的线画在**下一条**的上缘，
+ * 元素与标记不再是同一行上的同一个值
+ */
+interface PaintMark {
+  element: Element
+  mark: 'inside' | 'before' | 'after'
+}
+
+/**
  * 模块级单例：当前有一场拖拽时是那份计划，否则为 null
  *
  * 放模块级而不是提供者里，是因为「谁拥有 `document`」这件事要跨实例、跨 React 树来问
@@ -102,14 +113,43 @@ function rowsIn(element: Element): Element[] {
 function collectDropTargets(
   root: ParentNode,
   plan: DragPlan,
-): { targets: DropTarget[]; paint: Map<string, Element> } {
+): { targets: DropTarget[]; paint: Map<string, () => PaintMark | undefined> } {
   /** 区域键 → 节点身份：树对全部节点算一遍，这里只查表 */
   const zoneNodes: ReadonlyMap<string, TreeNodeRef | TreeContainerRef> =
     plan.tree?.nodesByZone() ?? new Map()
   const nodeOf = (key: string, fallback: DropNode): DropNode => zoneNodes.get(key) ?? fallback
 
-  /** 键 → 画框 / 画线的元素 */
-  const paint = new Map<string, Element>()
+  /**
+   * 一个格键在画面上对应的那一块
+   *
+   * 先按 `data-wg-block-key` 找整块（工作区那一块含体内，比标题行大一圈），
+   * 再退回那一格自己的元素；行 id 也在同一张查询里找得到，线让给下一条时要靠它
+   * @param key - 区域键或行 id
+   * @param scope - 先在这一片里找，缺省整片
+   */
+  const lineElementOf = (key: string, scope: ParentNode = root): Element | undefined => {
+    const look = (where: ParentNode): Element | null => {
+      // 渲染层点名的整块优先：工作区块用 data-wg-block-key 标出「标题那一格对应的整块是它」
+      const named = where.querySelector(`[${BLOCK_KEY_ATTRIBUTE}="${key}"]`)
+      if (named !== null) return named
+      // 没有点名时取这一格自己所属的块：虚拟分组、会话分组的块标记挂在整块容器上，
+      // 那一格是块里的组头，直接拿组头会把线画在组头下缘而不是整个区域的下缘
+      const zone = where.querySelector(`[${ZONE_ATTRIBUTE}="${key}"]`)
+      if (zone !== null) return blockOf(zone)
+      return where.querySelector(`[${ROW_ATTRIBUTE}="${key}"]`)
+    }
+    // 先在指针这一片里找：一格装多行的段（置顶区）里同一行 id 在本包别处也有，
+    // 全局先命中会把线画到另一片那一行上
+    return look(scope) ?? look(root) ?? undefined
+  }
+
+  /**
+   * 键 → 画框 / 画线的元素与它该带哪个标记
+   *
+   * 存成惰性的一格：线的落点取决于哪一行正被拖走，而那只在拖拽进行中才确定——
+   * 拖起那一刻 React 还没把画淡状态写到行上
+   */
+  const paint = new Map<string, () => PaintMark | undefined>()
   const targets: DropTarget[] = []
   for (const element of root.querySelectorAll(`[${ZONE_ATTRIBUTE}]`)) {
     const key = element.getAttribute(ZONE_ATTRIBUTE)
@@ -127,18 +167,11 @@ function collectDropTargets(
       //   指针停在标题行或体内空白上时框因此把落点的那些子集一并圈进来
       // - 没点名时取格子自己的块标记（分组把组头与组体圈在同一块里）；
       //   没有块标记的格子自成一块（未归组段是工作区体内单独的一格，不该扩到整块）
-      const namedZone =
-        target.blockKey === undefined
-          ? undefined
-          : (root.querySelector(`[${ZONE_ATTRIBUTE}="${target.blockKey}"]`) ?? undefined)
-      const named =
-        namedZone === undefined || target.blockKey === undefined
-          ? undefined
-          : (root.querySelector(`[${BLOCK_KEY_ATTRIBUTE}="${target.blockKey}"]`) ?? namedZone)
+      const named = target.blockKey === undefined ? undefined : lineElementOf(target.blockKey)
       const block = named ?? blockOf(element)
       // 绘制表按**区域键**存：一个节点可以有好几格（标题、体内、未归组段），
       // 框该画在指针真正落着的那一格上，而不是按节点身份合并
-      paint.set('inside/' + key, block)
+      paint.set('inside/' + key, () => ({ element: block, mark: 'inside' }))
       targets.push({
         kind: 'inside',
         node,
@@ -150,17 +183,31 @@ function collectDropTargets(
       // 一片可以点名让线跨整片画（`orderBlock`）：那时线只有一条，画在整块的上下缘。
       // 不点名时仍按片里的行算，与分组头那种「一格即一行」的段落一致
       const lineKey = target.orderBlock ?? key
-      const lineElement = root.querySelector(`[${ZONE_ATTRIBUTE}="${lineKey}"]`) ?? element
-      const lineBlock =
-        root.querySelector(`[${BLOCK_KEY_ATTRIBUTE}="${lineKey}"]`) ?? lineElement
+      // 渲染层可以用 data-wg-block-key 点名「这一格对应的整块是哪一个元素」：
+      // 工作区块与虚拟工作区分组都这么写，线因此跨整个区域，而不是只贴着标题那一行
+      const lineBlock = lineElementOf(lineKey) ?? element
       // 线挂在整块上时，参照行 id 从整块里取：整块元素自己没有行标记，
       // 而这一片可能占好几格（标题行与体内那一格），两格必须交出同一个 id
       const anchorRow = rowsIn(lineBlock)[0]
       const anchorId = anchorRow?.getAttribute(ROW_ATTRIBUTE) ?? ''
+      /**
+       * 这一侧的线画在哪一块上
+       *
+       * 线始终跨**整块**，两端就是这一块的上缘与下缘：一片可以装下别的行（分组块含组内成员、
+       * 工作区块含子工作区），只有整块才能让线横跨整个区域。把线让给相邻那一行会让它缩到
+       * 那一行的宽度，读起来像「落点只在那一行上」
+       *
+       * 落在压淡里时干脆不画：压淡按元素叠乘，线会跟着一起淡下去，用户读到的是
+       * 「这条线的颜色不对」而不是「这里能放」。这种情况出现在指针还停在被拖走的那一块上，
+       * 那本来也是一次不改变结果的投放
+       */
+      const markFor = (side: 'before' | 'after', own: Element): PaintMark | undefined =>
+        fadedAt(own) ? undefined : { element: own, mark: side }
       // 落在树上的节点：一个节点一条关系，线画在它整块上
       const treeNode = zoneNodes.get(lineKey)
       if (treeNode !== undefined) {
-        paint.set('order/' + lineKey, lineBlock)
+        paint.set('order/before/' + lineKey, () => markFor('before', lineBlock))
+        paint.set('order/after/' + lineKey, () => markFor('after', lineBlock))
         targets.push({
           kind: 'order',
           node: treeNode,
@@ -173,12 +220,30 @@ function collectDropTargets(
         })
         continue
       }
-      // 不在树上的段（置顶区那种「一格装多行」）：每一行各成一条关系，
+      // 一格即一条（虚拟分组、会话分组、工作区）：线画在整块上，跨整个区域
+      // 那一格自己就是一条行，块是它所属的容器；按行画会把线缩到标题那一行
+      if (element.getAttribute(ROW_ATTRIBUTE) !== null) {
+        paint.set('order/before/' + rowOf(element, anchorId), () => markFor('before', lineBlock))
+        paint.set('order/after/' + rowOf(element, anchorId), () => markFor('after', lineBlock))
+        targets.push({
+          kind: 'order',
+          node: { kind: 'row', id: rowOf(element, anchorId) },
+          commit: (side) =>
+            target.commit(
+              side === 'before'
+                ? { kind: 'before', rowId: rowOf(element, anchorId) }
+                : { kind: 'after', rowId: rowOf(element, anchorId) },
+            ),
+        })
+        continue
+      }
+      // 一格装多行（置顶区）：每一行各成一条关系，
       // 成员身份就是行自己——指针落着哪一行，谈先后的就是那一行
       for (const row of rowsIn(lineBlock)) {
         const rowId = row.getAttribute(ROW_ATTRIBUTE)
         if (rowId === null) continue
-        paint.set('order/' + rowId, row)
+        paint.set('order/before/' + rowId, () => markFor('before', row))
+        paint.set('order/after/' + rowId, () => markFor('after', row))
         targets.push({
           kind: 'order',
           node: { kind: 'row', id: rowId },
@@ -223,6 +288,29 @@ function owningZoneKey(element: Element): string | null {
     node = node.parentElement
   }
   return null
+}
+
+/**
+ * 一个元素是不是画在压淡里
+ *
+ * 压淡写在祖先上、按元素叠乘，因此要从元素自己往上找一遍。
+ * 被拖走的那一行自己也画淡，同样算在这一类里
+ * @param element - 待查的元素
+ */
+function fadedAt(element: Element): boolean {
+  for (let node: Element | null = element; node !== null; node = node.parentElement) {
+    if (node.hasAttribute(DIM_ATTRIBUTE) || node.hasAttribute(DRAGGING_ATTRIBUTE)) return true
+  }
+  return false
+}
+
+/**
+ * 一条行元素的 id
+ * @param element - 带行标记的元素
+ * @param fallback - 元素自己没有行标记时用它
+ */
+function rowOf(element: Element, fallback: string): string {
+  return element.getAttribute(ROW_ATTRIBUTE) ?? fallback
 }
 
 /**
@@ -438,7 +526,7 @@ export function DndProvider({
   /** 这一场拖拽的落点检测器，dragstart 时建一次，指针移动期间只查它 */
   const searcherRef = useRef<DropSearcher | null>(null)
   /** 区域键 → 画框 / 画线的元素：检测只交回键，靠它落成像素 */
-  const paintRef = useRef<Map<string, Element>>(new Map())
+  const paintRef = useRef<Map<string, () => PaintMark | undefined>>(new Map())
   /** 区域键 → 节点身份：把指针落着的那个元素读成节点，检测层只认节点 */
   const zoneNodesRef = useRef<ReadonlyMap<string, TreeNodeRef | TreeContainerRef>>(new Map())
   /**
@@ -528,21 +616,29 @@ export function DndProvider({
    * @param here - 指针正落着的区域键，读不到时为 null
    */
   const paintFor = useCallback(
-    (kind: 'inside' | 'order', node: DropNode, here: string | null): Element | undefined => {
+    (
+      kind: 'inside' | 'order',
+      node: DropNode,
+      here: string | null,
+      side?: 'before' | 'after',
+    ): PaintMark | undefined => {
       const paint = paintRef.current
+      // 线分上下两处缝：同一处缝由下一条接过去，因此两条线各有各的落点
+      const at = (key: string): PaintMark | undefined =>
+        paint.get(kind === 'order' ? 'order/' + (side ?? 'after') + '/' + key : kind + '/' + key)?.()
       const zones = zonesOfNode(zoneNodesRef.current, node)
       // 指针那一格在这个节点的格子名单里：就用它
       if (here !== null) {
         if (zones.length === 0 || zones.includes(here)) {
-          const found = paint.get(kind + '/' + here)
+          const found = at(here)
           if (found !== undefined) return found
         }
       }
       // 不在树上的行（会话行、置顶行）绘制表按行 id 存：它自己就是那一格
-      if (zones.length === 0) return node.kind === 'row' ? paint.get(kind + '/' + node.id) : undefined
+      if (zones.length === 0) return node.kind === 'row' ? at(node.id) : undefined
       // 否则取这个节点的任意一格（顺序即区域键的登记顺序）
       for (const zone of zones) {
-        const found = paint.get(kind + '/' + zone)
+        const found = at(zone)
         if (found !== undefined) return found
       }
       return undefined
@@ -565,26 +661,23 @@ export function DndProvider({
     // 一次最多两个节点：一个画框、一个画线。
     // 先按**指针落着的那一格**查绘制表，再退回节点身份——
     // 同一个节点可以有好几格（标题、体内、未归组段），用户指着哪一格就该画在哪一格
-    const drawn = new Set<Element>()
+    const drawn = new Map<Element, string>()
     const here = node === null ? null : owningZoneKey(target as Element)
     const box =
-      check?.inside === undefined
-        ? undefined
-        : (paintFor('inside', check.inside, here) ?? undefined)
+      check?.inside === undefined ? undefined : paintFor('inside', check.inside, here)
     const line =
       check?.order === undefined
         ? undefined
-        : (paintFor('order', check.order, here) ?? undefined)
-    if (box !== undefined) drawn.add(box)
-    if (line !== undefined) drawn.add(line)
+        : paintFor('order', check.order, here, check.side)
+    if (box !== undefined) drawn.set(box.element, box.mark)
+    if (line !== undefined) drawn.set(line.element, line.mark)
 
     for (const previous of markedRef.current) {
       if (!drawn.has(previous)) previous.removeAttribute(DROP_ATTRIBUTE)
     }
-    markedRef.current = drawn
+    markedRef.current = new Set(drawn.keys())
 
-    if (box !== undefined) box.setAttribute(DROP_ATTRIBUTE, 'inside')
-    if (line !== undefined) line.setAttribute(DROP_ATTRIBUTE, check?.side ?? 'after')
+    for (const [element, mark] of drawn) element.setAttribute(DROP_ATTRIBUTE, mark)
   }, [region, nodeAt, paintFor])
 
   /**

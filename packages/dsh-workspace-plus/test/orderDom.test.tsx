@@ -282,8 +282,10 @@ describe('dragging a session group head', () => {
     fire(row(container, 'group-a'), 'dragstart')
     fire(target, 'dragover', 0)
 
-    // 落点标记画在分组头上：头自己既是区域也是参照行，因此只按它自己的上下半算
-    expect(target.getAttribute('data-wg-drop')).toBe('before')
+    // 线跨整块画在分组头所在的那一块上，而不是缩到组头那一行：
+    // 组头只是这一片的标题行，贴着它画会读成「落点只覆盖那一行」
+    const block = target.closest('[data-wg-dnd-block]')
+    expect(block?.getAttribute('data-wg-drop')).toBe('before')
     await act(async () => root.unmount())
   })
 
@@ -398,7 +400,9 @@ describe('dragging a workspace group head', () => {
     fire(row(container, 'wg-1'), 'dragstart')
     fire(target, 'dragover', 0)
 
-    expect(target.getAttribute('data-wg-drop')).toBe('before')
+    // 同上一处：线画在整个虚拟分组那一块上，不缩到组头那一行
+    const block = target.closest('[data-wg-dnd-block]')
+    expect(block?.getAttribute('data-wg-drop')).toBe('before')
     await act(async () => root.unmount())
   })
 

@@ -336,6 +336,27 @@ describe('dragging a pinned row', () => {
     await act(async () => root.unmount())
   })
 
+  it('draws one line for a seam from above or below alike', async () => {
+    // 一处缝从上面看是前一条的下半、从下面看是后一条的上半：两处各画一条就是两条线。
+    // 一次命中只交回一侧，因此屏幕上同时只有一条线
+    const { container, root } = await mount()
+    band(pinnedRow(container, 'session-1'), 0)
+    band(pinnedRow(container, 'session-2'), 20)
+
+    fire(pinnedRow(container, 'session-2'), 'dragstart')
+
+    // 从上面靠近：指针在前一条的下半
+    fire(pinnedRow(container, 'session-1'), 'dragover', 8)
+    expect(container.querySelectorAll('[data-wg-drop]')).toHaveLength(1)
+    expect(pinnedRow(container, 'session-1').getAttribute('data-wg-drop')).toBe('after')
+
+    // 从下面靠近：指针落在正被拖走的那一行上。那一行画淡着，线画上去会被一起压暗，
+    // 因此这一档干脆不给线——它本来也是一次不改变结果的投放
+    fire(pinnedRow(container, 'session-2'), 'dragover', 22)
+    expect(container.querySelectorAll('[data-wg-drop]')).toHaveLength(0)
+    await act(async () => root.unmount())
+  })
+
   it('writes nothing when a row lands on its own row', async () => {
     // 来源自己那一行仍在计划里，拖到它头上由换算判出顺序没变，因此不写盘
     const { container, root, slots } = await mount()

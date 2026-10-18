@@ -1648,6 +1648,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
         // 顺序取这一份渲染序：它是顺序位与官方集合合成后的结果，接管因此零跳变
         order: dragPinnedOrder.current,
         movingId: sessionId,
+        // 置顶段整片共用一格，成员靠行标记区分：下半让给下一条时按行 id 找回那一行
+        keyOf: (memberId) => memberId,
         commit: (order) => groupActions.setPinnedOrder(order),
       }),
     [groupActions.setPinnedOrder],

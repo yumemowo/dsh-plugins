@@ -679,11 +679,16 @@ body[data-wg-flip] [data-wg-hover-card] {
   z-index: 1;
 }
 
-/* 线画在参照行自己的上下缘内侧：往外伸会被容器的裁剪吃掉
-   撑开体是 overflow: hidden，置顶区两档分别是 auto 与 hidden，这些裁剪盒的下缘正落在末行下缘
-   段尾那一道因此收在末行下缘之内（bottom: 0），属性与命中层全对而像素为空是这条的反例 */
+/* 线与行的关系是「落在这一行身上」，因此两侧都画在行的盒子里，一端顶边、一端底边
+ *
+ * 不往外伸，也不再靠外层容器让出空间
+ * 撑开体是 overflow: hidden，置顶区两档分别是 auto 与 hidden，列表是 auto
+ * 外侧那一段正好落在裁剪边上，会被整条吃掉——属性与命中全对而像素为空
+ *
+ * 更要紧的是命中：线一旦画到行盒子之外，指针瞄着线就落在容器上，读出的不是这一行
+ * 于是线在、松手却什么都不发生。画在盒子里，看得见的那一条与能放下去的是同一处 */
 [data-wg-drop='before']::before {
-  top: -2px;
+  top: 0;
   border-top: 2px solid var(--dsw-alias-state-business-primary);
 }
 

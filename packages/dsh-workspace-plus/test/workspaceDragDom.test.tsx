@@ -296,6 +296,11 @@ function workspaceRow(container: HTMLElement, workspaceId: string): HTMLElement 
   return found
 }
 
+/** 当前画着落点标记的元素个数：一处缝只该有一个 */
+function countMarked(container: HTMLElement): number {
+  return container.querySelectorAll('[data-wg-drop]').length
+}
+
 /**
  * 一个带区域键的元素
  * @param container - 挂载容器
@@ -621,6 +626,47 @@ describe('a root level source beside an unrelated root level sibling', () => {
     fire(workspaceRow(container, MUN_ID), 'drop', 2)
     await flush()
     expect(writes.reorders).toEqual([['ws-1', MUN_ID]])
+    await act(async () => root.unmount())
+  })
+
+  it('draws exactly one line on a whole block for a seam', async () => {
+    // 一处缝从上面看是前一条的下半、从下面看是后一条的上半，两处各画一条就成了两条线。
+    // 无论指针从哪一侧靠近，都只该有一条，而且它必须画在**整块**上——
+    // 贴着标题那一行画会让线只有半行宽，读起来像「落点只覆盖那一行」
+    const { container, root } = await mount({ workspaceGroups: [] })
+    band(workspaceRow(container, 'ws-1'), 0)
+    band(workspaceRow(container, 'ws-2'), 20)
+
+    fire(workspaceRow(container, MUN_ID), 'dragstart')
+
+    for (const [label, rowId, y] of [
+      ['from above', 'ws-1', 8],
+      ['from below', 'ws-2', 22],
+    ] as const) {
+      fire(workspaceRow(container, rowId), 'dragover', y)
+      const marked = [...container.querySelectorAll('[data-wg-drop]')]
+      expect(marked, label).toHaveLength(1)
+      // 画的是整块，不是块里的标题行
+      expect(marked[0]?.hasAttribute('data-wg-block-key'), label).toBe(true)
+      expect(marked[0]?.contains(workspaceRow(container, rowId)), label).toBe(true)
+    }
+    await act(async () => root.unmount())
+  })
+
+  it('keeps the seam off the row it is dragging', async () => {
+    // 后一条正是被拖走的那一条时，线不能交给它：那一行画淡着（.rowDragging），
+    // 线画上去会跟着一起淡下去，用户看到的是「这条线颜色不对」而不是「这里能放」。
+    // 同一处缝因此留在前一条的下缘——位置一样，仍然是同一条线
+    const { container, root } = await mount({ workspaceGroups: [] })
+    band(workspaceRow(container, 'ws-1'), 0)
+    band(workspaceRow(container, 'ws-2'), 20)
+
+    fire(workspaceRow(container, 'ws-2'), 'dragstart')
+    fire(workspaceRow(container, 'ws-1'), 'dragover', 8)
+
+    expect(countMarked(container)).toBe(1)
+    expect(workspaceBlock(container, 'ws-1').getAttribute('data-wg-drop')).toBe('after')
+    expect(workspaceBlock(container, 'ws-2').getAttribute('data-wg-drop')).toBeNull()
     await act(async () => root.unmount())
   })
 

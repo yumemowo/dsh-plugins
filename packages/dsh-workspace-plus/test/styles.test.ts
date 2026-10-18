@@ -1603,13 +1603,19 @@ describe('client stylesheet', () => {
     expect(css).not.toMatch(/\[data-wg-drop='after'\]\s*\{[^{}]*box-shadow/)
   })
 
-  it('keeps the tail drop line inside the last row rather than reaching past it', () => {
-    // 撑开体与置顶区都是 overflow: hidden / auto 的裁剪盒，下缘正落在末行下缘
-    // 线伸出块外会被整条裁掉：属性与命中全对而像素为空
-    // 精确匹配那一条单选择器规则：合并写的那条共享规则也含同样的子串
-    const after = dropLineRules().find((rule) => rule.selector === "[data-wg-drop='after']::after")
+  it('keeps both drop lines inside the row box they point at', () => {
+    // 线画在行盒子之外时，指针瞄着线就落在容器上，读出的不是这一行
+    // 于是线在、松手却什么都不发生；盒子外侧那一段还会被各处的裁剪盒吃掉
+    // 两端因此都收在盒子内侧：一端顶边、一端底边，看得见的那一条与能放下去的是同一处
+    const before = dropLineRules().find(
+      (rule) => rule.selector === "[data-wg-drop='before']::before",
+    )
+    const after = dropLineRules().find(
+      (rule) => rule.selector === "[data-wg-drop='after']::after",
+    )
 
-    expect(after).toBeDefined()
+    expect(before?.body).toMatch(/top:\s*0\s*;/)
+    expect(before?.body).not.toMatch(/top:\s*-\d/)
     expect(after?.body).toMatch(/bottom:\s*0\s*;/)
     expect(after?.body).not.toMatch(/bottom:\s*-\d/)
     expect(after?.body).not.toMatch(/top:\s*100%/)

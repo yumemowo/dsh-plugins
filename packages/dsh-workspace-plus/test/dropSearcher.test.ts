@@ -140,12 +140,13 @@ describe('maybeDropSearcher', () => {
     expect(searcher.checkDrop(row, at(115), ws('ws-2'))?.side).toBe('after')
   })
 
-  it('reads a zero-height row as after', () => {
-    // jsdom 恒零矩形，尚未布局的节点也如此：那时没有上半可言
+  it('reads a zero-height row as before', () => {
+    // jsdom 恒零矩形，尚未布局的节点也如此：那时分不出上下，
+    // 读作「之前」让线落在这条行自己身上，与指针到底指着哪一条无关
     const tree = fixture()
     const searcher = maybeDropSearcher(tree, [targetOf('order', ws('ws-2'))])
 
-    expect(searcher.checkDrop(el({ top: 100, height: 0 }), at(100), ws('ws-2'))?.side).toBe('after')
+    expect(searcher.checkDrop(el({ top: 100, height: 0 }), at(100), ws('ws-2'))?.side).toBe('before')
   })
 
   it('walks the node chain rather than the document', () => {

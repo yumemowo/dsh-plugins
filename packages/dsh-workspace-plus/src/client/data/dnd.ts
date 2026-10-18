@@ -63,6 +63,14 @@ export interface DragPlanTarget {
    * 给出这一项时，前后半也按整片的矩形算
    */
   orderBlock?: string
+  /**
+   * 同一处缝由上一条代言时，上一条的格键
+   *
+   * 「排到这一行之前」与「排到上一条之后」是同一处缝，统一画在上一条的下缘，
+   * 一处缝因此只有一条线。交出 undefined 表示这一条就是本段第一个，画在它自己的上缘
+   * @param rowId - 指针正落着的那一条参照行
+   */
+  orderAbove?: (rowId: string) => string | undefined
   /** 放开时执行。闭包在计划构造时绑定全量顺序等数据，执行前自行复核 */
   commit: (anchor: DropAnchor) => void
 }
@@ -356,6 +364,8 @@ export function workspaceTreeDragPlan(input: {
     order?: (side: 'before' | 'after') => void
     /** 这一片点名把线画在哪一格上 */
     orderBlock?: string
+    /** 上一条的格键，见 {@link DragPlanTarget.orderAbove} */
+    orderAbove?: string
   }
   const byZone = new Map<string, Slot>()
   for (const relation of relations) {
@@ -367,6 +377,7 @@ export function workspaceTreeDragPlan(input: {
       } else {
         slot.order = (side) => relation.place(side)
         if (relation.block !== undefined) slot.orderBlock = relation.block
+        if (relation.above !== undefined) slot.orderAbove = relation.above
       }
       byZone.set(key, slot)
     }
@@ -379,6 +390,7 @@ export function workspaceTreeDragPlan(input: {
         mode: 'banded',
         ...(slot.insideBlock === undefined ? {} : { blockKey: slot.insideBlock }),
         ...(slot.orderBlock === undefined ? {} : { orderBlock: slot.orderBlock }),
+        ...(slot.orderAbove === undefined ? {} : { orderAbove: () => slot.orderAbove }),
         commit: (anchor) =>
           anchor.kind === 'inside'
             ? inside()
@@ -399,6 +411,7 @@ export function workspaceTreeDragPlan(input: {
     targets.set(key, {
       mode: 'rows',
       ...(slot.orderBlock === undefined ? {} : { orderBlock: slot.orderBlock }),
+      ...(slot.orderAbove === undefined ? {} : { orderAbove: () => slot.orderAbove }),
       commit: (anchor) => order?.(anchor.kind === 'before' ? 'before' : 'after'),
     })
   }
@@ -423,10 +436,12 @@ export function orderDragPlan(input: {
   commit: (beforeId: string | undefined) => void
 }): DragPlan {
   const targets = new Map<string, DragPlanTarget>()
-  for (const memberId of input.order) {
-    if (memberId === input.movingId) continue
-    targets.set(input.keyOf(memberId), {
+  const { order, movingId, keyOf } = input
+  for (const memberId of order) {
+    if (memberId === movingId) continue
+    targets.set(keyOf(memberId), {
       mode: 'rows',
+      orderAbove: () => aboveZoneOfByRow(order, memberId, keyOf),
       // 换算用的是构造期绑定的那一份全量顺序，不是露出的那些行，折起的成员因此不动
       // 相邻位与「锚点已不是本段成员」两种落点都在换算里返回 undefined，那时不写
       commit: (anchor) => {
@@ -460,20 +475,51 @@ export function stretchDragPlan(input: {
   /** 这一段的全量成员顺序，在 dragstart 那一刻绑定 */
   order: readonly string[]
   movingId: string
+  /**
+   * 一个成员的区域键，缺省表示整段共用 {@link zoneKey}
+   *
+   * 给出时下半交给下一位成员代言，同一处缝因此只有一条线
+   */
+  keyOf?: (memberId: string) => string
   /** 换算出的新顺序整份落成一次写入，换算判出无变化时不被调用 */
   commit: (order: readonly string[]) => void
 }): DragPlan {
   const targets = new Map<string, DragPlanTarget>()
+  const { order, movingId, keyOf } = input
   targets.set(input.zoneKey, {
     mode: 'rows',
+    ...(keyOf === undefined
+      ? {}
+      : {
+          orderAbove: (rowId: string) => aboveZoneOfByRow(order, rowId, keyOf),
+        }),
     // 相邻位与「锚点就是来源自己」两种落点都在换算里返回 undefined，那时不写
     commit: (anchor) => {
-      const next = reorderTo(input.order, input.movingId, anchor)
+      const next = reorderTo(order, movingId, anchor)
       if (next === undefined) return
       input.commit(next)
     },
   })
   return { source: input.source, targets }
+}
+
+/**
+ * 一条成员的上半那处缝交给谁
+ *
+ * 「排到这一条之前」与「排到上一条之后」是同一处缝，统一由上一条的下缘代表
+ * @param order - 这一段的全量成员顺序
+ * @param rowId - 指针正落着的那一条
+ * @param keyOf - 一个成员的区域键
+ * @returns 接过上半的格键，本段没有上一条时为 undefined
+ */
+function aboveZoneOfByRow(
+  order: readonly string[],
+  rowId: string,
+  keyOf: (memberId: string) => string,
+): string | undefined {
+  const at = order.indexOf(rowId)
+  const above = at < 1 ? undefined : order[at - 1]
+  return above === undefined ? undefined : keyOf(above)
 }
 
 /**
