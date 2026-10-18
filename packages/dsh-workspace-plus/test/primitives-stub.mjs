@@ -62,6 +62,7 @@ export const IconCheckOutlineRegular = icon('IconCheckOutlineRegular')
 export const IconPinOutlineRegular = icon('IconPinOutlineRegular')
 export const IconPinFillRegular = icon('IconPinFillRegular')
 export const IconWorkspaceTreeOutlineRegular = icon('IconWorkspaceTreeOutlineRegular')
+export const IconRefreshOutlineRegular = icon('IconRefreshOutlineRegular')
 
 /**
  * 相对时间替身：分桶规则与本包 `official.ts` 的契约一致，文案由调用方决定

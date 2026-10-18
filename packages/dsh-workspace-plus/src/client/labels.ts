@@ -158,6 +158,8 @@ export interface RegionLabels {
   pinOverflow: PinOverflowLabels
   /** 视图选项面板里「置顶显示」那一组的文案 */
   pinScope: PinScopeLabels
+  /** 视图选项面板尾部的「恢复默认顺序」动作 */
+  pinOrder: PinOrderLabels
   /** 置顶区的段头、行尾提示与图钉按钮文案 */
   pinned: PinnedLabels
 }
@@ -208,6 +210,17 @@ export interface PinScopeLabels {
   section: string
   /** 「置顶区 + 分组内」这一项：置顶会话在它自己那一段里也排到最前 */
   inline: string
+}
+
+/**
+ * 视图选项面板里的「恢复默认顺序」动作
+ *
+ * 它清掉置顶段的手动顺序位，置顶区因此回到官方集合序
+ * 它是一个动作而不是一组可选值，因此没有组标题，也不与上面四组并列
+ */
+export interface PinOrderLabels {
+  /** 动作行文案：点下去之后置顶区按哪一种顺序 */
+  restore: string
 }
 
 /** 置顶区的文案 */
@@ -417,6 +430,9 @@ export function regionLabels(
       label: t('pinScope.label'),
       section: t('pinScope.section'),
       inline: t('pinScope.inline'),
+    },
+    pinOrder: {
+      restore: t('pinOrder.restore'),
     },
     pinned: {
       section: t('pinned.section'),

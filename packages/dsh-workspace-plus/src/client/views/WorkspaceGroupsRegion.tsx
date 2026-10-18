@@ -1654,6 +1654,20 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   )
 
   /**
+   * 清掉置顶段的手动顺序
+   *
+   * 空表即整格删除，置顶区因此回到官方集合序；面板尾部那条动作只在这一格非空时露面
+   * 与拖拽走同一个写入方法，清空与接管不会各写一套
+   */
+  const restorePinnedOrder = useCallback(
+    () => groupActions.setPinnedOrder([]),
+    [groupActions.setPinnedOrder],
+  )
+
+  /** 置顶段是否真有手动顺序，空表与缺格同义，两者都不构成「可以恢复」 */
+  const pinnedReorderable = (snapshot.orderSlots[PINNED_SLOT_KEY]?.length ?? 0) > 0
+
+  /**
    * 会话折叠的输入：始终展示并占额度的行 id
    *
    * 就地置顶档下是那批置顶行，「仅置顶区」档下是空集，那时置顶行在分段内按普通行折叠
@@ -1859,6 +1873,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             searching={searching}
             nestingEnabled={snapshot.nested}
             onToggleNested={nestActions.requestNestedToggle}
+            pinnedReorderable={pinnedReorderable}
+            onRestorePinnedOrder={restorePinnedOrder}
             focusedKey={snapshot.picker.focused}
             addWorkspace={addWorkspace}
             search={search}

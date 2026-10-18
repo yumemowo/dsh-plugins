@@ -77,6 +77,7 @@ describe('locales', () => {
       'picker.remove',
       'picker.rename',
       'picker.unpin',
+      'pinOrder.restore',
       'pinOverflow.expand',
       'pinOverflow.label',
       'pinOverflow.scroll',
@@ -228,6 +229,12 @@ describe('regionLabels', () => {
     expect(labels.nested.disable).toBe('关闭嵌套')
     // 两者分工不同，不是同一句话换了个位置
     expect(labels.nested.setting).not.toBe(labels.nested.disable)
+  })
+
+  it('names the restore action after the order it brings back', () => {
+    // 「清除手动顺序」说的是实现里的那一格存储，用户看到的是置顶区换了先后
+    // 因此文案说清点下去之后按哪一种顺序，而不是「清除」了什么
+    expect(labels.pinOrder.restore).toBe('恢复默认置顶顺序')
   })
 
   it('shares one move-to wording across the two grouping levels', () => {

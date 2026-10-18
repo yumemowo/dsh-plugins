@@ -446,6 +446,48 @@ describe('the pinned order both surfaces read', () => {
     await act(async () => root.unmount())
   })
 
+  it('offers no way back to the default order while the slot is absent', async () => {
+    // 没有手动顺序时置顶区本来就按官方集合序渲染，摆一条「恢复」只会让用户去猜它为什么点不动
+    const { container, root } = await mount()
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.headerAction[aria-label="视图选项"]')?.click()
+    })
+
+    const rows = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.viewOptionRow'))
+    expect(rows.map((row) => row.querySelector('.viewOptionLabel')?.textContent)).not.toContain(
+      '恢复默认置顶顺序',
+    )
+    await act(async () => root.unmount())
+  })
+
+  it('restores the default order from the view options panel', async () => {
+    // 手动顺序的唯一出口：清掉那一格，置顶区随之回到官方集合序（最近置顶在最前）
+    const { container, root, slots, rerender } = await mount({
+      orderSlots: { pinned: ['session-2', 'session-1'] },
+    })
+    expect(pinnedTitles(container)).toEqual(['会话 session-2', '会话 session-1'])
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.headerAction[aria-label="视图选项"]')?.click()
+    })
+    const restore = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>('.viewOptionRow'),
+    ).find((row) => row.querySelector('.viewOptionLabel')?.textContent === '恢复默认置顶顺序')
+    expect(restore).toBeDefined()
+
+    await act(async () => restore?.click())
+    // 空表即整格删除，与拖拽接管走同一个写入方法
+    expect(slots).toEqual([['pinned', []]])
+    // 点完收起面板：这一行随即消失，它的可停点也不会留在文档里
+    expect(document.body.querySelector('.viewMenu')).toBeNull()
+
+    // 宿主回的整份快照把顺序位收走之后，置顶区回到官方集合序
+    await rerender({})
+    expect(pinnedTitles(container)).toEqual(['会话 session-1', '会话 session-2'])
+    await act(async () => root.unmount())
+  })
+
   it('carries a drag through the written slot into both surfaces', async () => {
     // 端到端：拖一次置顶行、把宿主回的整份快照喂回去，两个表面的先后都要跟着换
     // 这一段把「落点换算」「顺序位写入」「reconcile 进渲染」「名次联动」四处串起来

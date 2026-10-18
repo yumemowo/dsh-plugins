@@ -211,6 +211,8 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const IconSearchOutlineRegular: IconComponent
   /** 官方搜索框清除按钮的图标 */
   export const IconCloseFillRegular: IconComponent
+  /** 官方「恢复默认 / 重试」一类重置动作的图标，本包用它标「恢复默认顺序」 */
+  export const IconRefreshOutlineRegular: IconComponent
   /** 官方 header「视图选项」入口的图标 */
   export const IconSlidersTwoOutlineRegular: IconComponent
   /** 官方会话菜单「分叉」项用的图标 */

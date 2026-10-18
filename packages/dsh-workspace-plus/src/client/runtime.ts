@@ -28,6 +28,7 @@ export {
   IconPinOutlineRegular,
   IconPlusOutlineRegular,
   IconProjectAddOutlineRegular,
+  IconRefreshOutlineRegular,
   IconSearchOutlineRegular,
   IconSlidersTwoOutlineRegular,
   IconTrashOutlineRegular,

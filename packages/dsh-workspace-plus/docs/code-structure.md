@@ -61,7 +61,7 @@ src/
     ├── RegionListArea.tsx          列表区三条分支，含 WorkspaceNode 递归与会话行元素构造
     ├── RegionDialogs.tsx           全部对话框（RegionOverlay 可辨识联合，任意时刻至多开一个）
     ├── WorkspacePickerMenu.tsx     工作区下拉菜单（自绘面板：三个分区、与工作区行同形的条目行、键盘导航）
-    ├── ViewOptionsMenu.tsx         视图选项面板（四组「标题 + 两条可选行」+ 子工作区嵌套开关）
+    ├── ViewOptionsMenu.tsx         视图选项面板（四组「标题 + 两条可选行」+ 子工作区嵌套开关 + 恢复默认置顶顺序）
     ├── VirtualWorkspaceCreateControl.tsx  header 的「新建工作区分组」入口
     ├── SearchControl.tsx           搜索状态、入口、输入框与结果列表
     ├── AddWorkspaceControl.tsx     「添加工作区」入口与 picking 流程

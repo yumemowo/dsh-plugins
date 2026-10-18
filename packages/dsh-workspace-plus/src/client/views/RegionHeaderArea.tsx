@@ -84,6 +84,10 @@ interface RegionHeaderAreaProps {
   searching: boolean
   nestingEnabled: boolean
   onToggleNested: () => void
+  /** 置顶段当前是否真有手动顺序，决定面板尾部那条「恢复默认顺序」是否渲染 */
+  pinnedReorderable: boolean
+  /** 清掉置顶段的手动顺序，置顶区回到官方集合序 */
+  onRestorePinnedOrder: () => void
   /** 当前聚焦条目的地址，菜单按它标出选中项 */
   focusedKey: RootEntryAddress
   /** 解析出来的「添加工作区」服务面，缺省时该入口不渲染 */
@@ -155,6 +159,8 @@ export function RegionHeaderArea(props: RegionHeaderAreaProps): ReactElement {
         open={viewOptionsOpen && !props.searching}
         triggerRef={props.overlays.viewOptions.triggerRef}
         nesting={{ enabled: props.nestingEnabled, onToggle: props.onToggleNested }}
+        pinnedReorderable={props.pinnedReorderable}
+        onRestorePinnedOrder={props.onRestorePinnedOrder}
         onClose={props.overlays.viewOptions.onClose}
       />
       <WorkspacePickerMenu
