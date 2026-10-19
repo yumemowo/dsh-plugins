@@ -367,18 +367,17 @@ describe('dragging a pinned row', () => {
     await act(async () => root.unmount())
   })
 
-  it('reads the row spacing between two rows as the seam they share', async () => {
-    // 置顶段相邻两条之间那 2px 是 `margin-top`，不属于任何一行的盒子：
-    // 指针停在那上面时命中的是段容器，按元素归属读不到任何一行。
-    // 界面上它和「从上下两侧靠近」是同一处缝，读数因此必须逐字相同
+  it('reads the spacing a pinned row carries as that row own band', async () => {
+    // 置顶段那 2px 也挂在后一条带的上内边距里（见 PinnedSection.module.css），
+    // 两条带因此严丝合缝。指针停在那段间距里命中的就是后一条带本身，读作「排到它之前」
     const { container, root } = await mount({ pinned: [...PINNED_IDS, 'session-3'] })
-    const stretch = zone(container, 'pinned')
-    band(pinnedRow(container, 'session-1'), 0)
-    band(pinnedRow(container, 'session-2'), 12)
-    band(pinnedRow(container, 'session-3'), 24)
+    band(pinnedRow(container, 'session-1'), 0, 34)
+    band(pinnedRow(container, 'session-2'), 34, 34)
+    band(pinnedRow(container, 'session-3'), 68, 34)
 
     fire(pinnedRow(container, 'session-3'), 'dragstart')
-    fire(stretch, 'dragover', 11)
+    // session-2 是一条从 34 起的带，它自己承担的那 2px 落在 34..36
+    fire(pinnedRow(container, 'session-2'), 'dragover', 35)
 
     expect([...container.querySelectorAll('[data-wg-drop]')].map((element) => [
       element.getAttribute('data-wg-drop'),

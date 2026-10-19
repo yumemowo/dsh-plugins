@@ -663,46 +663,34 @@ describe('a root level source beside an unrelated root level sibling', () => {
     await act(async () => root.unmount())
   })
 
-  it('reads the row spacing as the same seam the two rows share', async () => {
-    // 相邻两块之间那 4px 是 `margin-top`，不属于任何一块的盒子：指针停在那上面时
-    // 命中的是列表本身，按元素归属读不到任何一行。界面上它和「从上下两侧靠近」是同一处缝，
-    // 因此读数也必须逐字相同，否则用户移到那 4px 里落点线就整个消失
+  it('reads the spacing a row carries as that row own band', async () => {
+    // 行与行之间没有 margin：那点间距挂在后一行带的上内边距里（见 rows.module.css 的行带一节），
+    // 相邻两条带因此严丝合缝。指针停在带的上内边距里，命中的就是这一条带本身，
+    // 而那段读作「排到它之前」——同一处缝从上面还是从下面靠近都是同一个读数
     const { container, root } = await mount({ workspaceGroups: [] })
-    const list = container.querySelector<HTMLElement>('.list')
-    if (list === null) throw new Error('no list root')
-    band(workspaceRow(container, 'ws-1'), 0, 34)
-    band(workspaceRow(container, 'ws-2'), 38, 34)
+    band(workspaceRow(container, 'ws-1'), 0, 38)
+    band(workspaceRow(container, 'ws-2'), 38, 38)
 
     fire(workspaceRow(container, MUN_ID), 'dragstart')
 
-    // 缝：36 是 ws-1 的下缘，38 是 ws-2 的上缘，指针停在 37
-    fire(list, 'dragover', 37)
-    const readings = [...container.querySelectorAll('[data-wg-drop]')].map((element) => [
-      element.getAttribute('data-wg-drop'),
-      element.getAttribute('data-wg-dnd-region'),
-    ])
-    expect(readings).toEqual([['before', 'workspaceBlock/ws-2']])
-
-    // 同一处缝从下面靠近（落在 ws-2 自己的上半）读数不变
+    // ws-2 是一条从 38 起的带，它自己承担的那 2px 落在 38..40
     fire(workspaceRow(container, 'ws-2'), 'dragover', 39)
     expect([...container.querySelectorAll('[data-wg-drop]')].map((element) => [
       element.getAttribute('data-wg-drop'),
       element.getAttribute('data-wg-dnd-region'),
-    ])).toEqual(readings)
+    ])).toEqual([['before', 'workspaceBlock/ws-2']])
     await act(async () => root.unmount())
   })
 
-  it('reads the row spacing above the first row as dropping before it', async () => {
-    // 段首那一行上面那一段空白同样是一处缝：它同时是「排到第一条之前」，
-    // 而下面没有任何一条可以代言，因此这一档必须自己画出来
+  it('reads the band above the first row as dropping before it', async () => {
+    // 段首那一行带着自己那段间距，指针落在里面仍读作「排到第一条之前」：
+    // 上面没有哪一条能替它画，这一档因此由它自己给出
     const { container, root } = await mount({ workspaceGroups: [] })
-    const list = container.querySelector<HTMLElement>('.list')
-    if (list === null) throw new Error('no list root')
-    band(workspaceRow(container, 'ws-1'), 20, 34)
-    band(workspaceRow(container, 'ws-2'), 58, 34)
+    band(workspaceRow(container, 'ws-1'), 20, 38)
+    band(workspaceRow(container, 'ws-2'), 58, 38)
 
     fire(workspaceRow(container, MUN_ID), 'dragstart')
-    fire(list, 'dragover', 17)
+    fire(workspaceRow(container, 'ws-1'), 'dragover', 21)
 
     expect([...container.querySelectorAll('[data-wg-drop]')].map((element) => [
       element.getAttribute('data-wg-drop'),

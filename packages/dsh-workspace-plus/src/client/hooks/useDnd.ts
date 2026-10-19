@@ -82,50 +82,6 @@ function rowsIn(element: Element): Element[] {
 }
 
 /**
- * 两行之间最多隔多远还算同一处缝
- *
- * 行距是一两像素（见样式表里那几条 `margin-top`）。隔得更远的空白不是缝，
- * 而是两段之间的结构（置顶区与列表之间的分隔、段的边界），那里既没有「上一条」也没有「下一条」，
- * 读成缝会让指针停在列表空白处时莫名冒出一条线
- */
-const MAX_SEAM_GAP = 12
-
-/**
- * 指针停在那一行上缘之上一点点时，它停着的那一行
- *
- * 行距不是任何一行的盒子（`margin-top` 属于父容器），因此那段空白在元素归属上无处可去：
- * 指针停在那里时命中的是容器，按元素向上找读不到任何一行。界面上的语义却很明确，
- * 它同时是「上一条之后」与「下一条之前」，也就是一处缝；缝统一由下一条的上缘代言
- * （见 `DragPlanTarget.seamKey`），所以这里只回答「缝下面是哪一行」，
- * 判定照旧交给检测器——把指针当成落在那一行自己的上缘即可
- *
- * 段首那一行上方同样算一处：它下面是「排到第一条之前」，没有哪一条能替它画
- *
- * 按**上缘**排而不是按文档序或父元素：折叠的区块把「上一条」排在自己的展开体之前，
- * 文档序走到那里时纵向已经折回去了；而行又可能被悬停卡片之类的包装套住，父元素各不相同
- *
- * 每次 `dragover` 都要量一遍矩形，因此只在正常命中读不到落点时才算
- * @param rows - 本实例那一片里的全部行
- * @param point - 指针坐标
- * @returns 缝下面那一行；不落在任何缝上时为 null
- */
-function seamBelow(rows: readonly Element[], point: { x: number; y: number }): Element | null {
-  const boxes = rows
-    .map((row) => ({ row, rect: row.getBoundingClientRect() }))
-    // 尚未布局的元素量不出位置（jsdom 恒为零矩形），它不构成任何缝
-    .filter((box) => box.rect.height > 0)
-    .sort((a, b) => a.rect.top - b.rect.top)
-  for (const box of boxes) {
-    const above = box.rect.top - point.y
-    if (above <= 0 || above > MAX_SEAM_GAP) continue
-    // 指针得压在行的那一条竖带上，否则行左侧的空白也会被读成缝
-    if (point.x < box.rect.left || point.x > box.rect.right) continue
-    return box.row
-  }
-  return null
-}
-
-/**
  * 这次拖拽可能接住的所有位置，以及每个位置该画在哪个元素上
  *
  * 检测本身只认区域键（见 `dropSearcher.ts`）：这里把计划里的每一格算成一条节点，
@@ -500,8 +456,7 @@ export function DndProvider({
   const paintRef = useRef<Map<string, () => PaintMark | undefined>>(new Map())
   /** 区域键 → 节点身份：把指针落着的那个元素读成节点，检测层只认节点 */
   const zoneNodesRef = useRef<ReadonlyMap<string, TreeNodeRef | TreeContainerRef>>(new Map())
-  /** 本实例那一片里的全部行，行距那段空白按它们的矩形认（见 `seamBelow`） */
-  const rowsRef = useRef<readonly Element[]>([])
+
   /**
    * 上一次 `dragover` 算出的落点
    *
@@ -548,7 +503,6 @@ export function DndProvider({
     dimmedRef.current = []
     searcherRef.current = null
     paintRef.current = new Map()
-    rowsRef.current = []
     checkRef.current = null
     currentPlan = null
   }, [stopAutoScroll])
@@ -629,27 +583,14 @@ export function DndProvider({
     // 指针正落着哪个节点：适配层读一次（元素带区域键，经树换成节点身份），
     // 此后落点判定全在节点上做，检测层沿树往上走
     const node = inside ? nodeAt(target) : null
-    let check = inside && node !== null ? searcher.checkDrop(target, point, node) : null
-    /**
-     * 指针落在行距那段空白上时按元素归属读不到任何一行（那段空白属于父容器），
-     * 因此按矩形补一次：把它当成落在缝下面那一行的上缘，判定仍交给检测器
-     *
-     * 只在正常命中什么都没读到时才算——容器本身可能就是一个落点（整片列表接「移出分组」），
-     * 那时按元素归属得出的答案优先，行距不会把它盖掉
-     */
-    let seam: Element | null = null
-    if (check === null) {
-      seam = seamBelow(rowsRef.current, point)
-      if (seam !== null) check = searcher.checkDrop(seam, point, nodeAt(seam))
-    }
+    const check = inside && node !== null ? searcher.checkDrop(target, point, node) : null
     checkRef.current = check
 
     // 一次最多两个节点：一个画框、一个画线。
     // 先按**指针落着的那一格**查绘制表，再退回节点身份——
-    // 同一个节点可以有好几格（标题、体内、未归组段），用户指着哪一格就该画在哪一格。
-    // 缝那一档按缝下面那一行算，它是同一件事：指针指着的是那一行上方
+    // 同一个节点可以有好几格（标题、体内、未归组段），用户指着哪一格就该画在哪一格
     const drawn = new Map<Element, string>()
-    const here = seam !== null ? owningZoneKey(seam) : node === null ? null : owningZoneKey(target as Element)
+    const here = node === null ? null : owningZoneKey(target as Element)
     const box =
       check?.inside === undefined ? undefined : paintFor('inside', check.inside, here)
     const line =
@@ -770,9 +711,6 @@ export function DndProvider({
       zoneNodesRef.current = plan.tree?.nodesByZone() ?? new Map()
       searcherRef.current = maybeDropSearcher(plan.tree, collected.targets)
       paintRef.current = collected.paint
-      // 行距那段空白按**全部行**认，不只按落点：来源自己那一行不在计划里，
-      // 而它下面的那条缝正是「排到它之后」要走的那处
-      rowsRef.current = Array.from(scope.querySelectorAll(`[${ROW_ATTRIBUTE}]`))
 
       // 压淡够不着的那一片：判定与命中层同源，因此不会出现「淡着却能放进去」
       const dimmed = dimmedElements(scope, plan)
