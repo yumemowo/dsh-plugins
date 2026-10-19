@@ -806,9 +806,18 @@ export function DndProvider({
       const drop = (event: DragEvent): void => {
         // 与 `dragover` 同理：不拦的话浏览器会按默认行为处理这次放置
         event.preventDefault()
+        // 常开：这一条与下面的 `drag end` 合起来才能分清「浏览器没派 drop」与「drop 到了但没提交」
+        debugWarn('drop event', {
+          alreadyCommitted: committedRef.current,
+          hasCheck: checkRef.current !== null,
+          marks: markedRef.current.size,
+        })
         commit()
       }
       const dragend = (): void => {
+        // 常开：drop 之后浏览器还会派 dragend，两条都出现说明松手正常；
+        // 只有 dragend 而没有 drop，说明这次拖拽被浏览器取消了（拖动的元素在中途从文档里消失就会这样）
+        debugWarn('drag end', { committed: committedRef.current })
         teardown()
       }
 
