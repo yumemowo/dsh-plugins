@@ -191,4 +191,46 @@ describe('maybeDropSearcher', () => {
 
     expect(check?.order).toEqual({ kind: 'row', id: 'session-1' })
   })
+
+  it('reads the session group a child sits in as nearer than its parent workspace', () => {
+    // 一个按 cwd 挂在父工作区之下的子工作区，被放进了父工作区的会话分组：
+    // 它渲染在组体里，因此「它所在的那一片」是那个会话分组，而不是父工作区。
+    //
+    // 链上若把祖先排在容器之前，框会套到父工作区上，而线仍画在这一行上——
+    // 用户读到的是一条线在组里、框在组外，两个落点互相矛盾
+    const workspaceIds = ['ws-1', 'ws-c1', 'ws-4']
+    const paths: Record<string, string> = {
+      'ws-1': '/repo',
+      'ws-c1': '/repo/pkg',
+      'ws-4': '/elsewhere',
+    }
+    const nesting = deriveNesting({
+      enabled: true,
+      workspaceIds,
+      pathOf: (id) => paths[id],
+      virtualOf: () => '',
+      bindingOf: (id) => (id === 'ws-c1' ? { workspaceId: 'ws-1', groupId: 'group-a' } : undefined),
+      groupIdsOf: (id) => (id === 'ws-1' ? new Set(['group-a']) : new Set<string>()),
+    })
+    const tree = buildWorkspaceTree({
+      workspaceIds,
+      virtualGroups: [],
+      nesting,
+      sessionGroupsOf: (id) => (id === 'ws-1' ? ['group-a'] : []),
+      pathOf: (id) => paths[id],
+    })
+    const group = tree.containers.groupOf('ws-1', 'group-a')
+    const searcher = maybeDropSearcher(tree, [
+      targetOf('order', ws('ws-c1')),
+      targetOf('inside', group),
+      targetOf('inside', ws('ws-1')),
+    ])
+
+    // 指针落在 ws-c1 那一行上
+    const check = searcher.checkDrop(el({ top: 0, height: 10 }), at(0), ws('ws-c1'))
+
+    // 框与线必须说同一层：框落在那个会话分组上，而不是父工作区
+    expect(check?.inside).toEqual(group)
+    expect(check?.order).toEqual({ kind: 'workspace', id: 'ws-c1' })
+  })
 })

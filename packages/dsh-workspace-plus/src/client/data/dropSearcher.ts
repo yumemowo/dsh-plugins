@@ -101,18 +101,40 @@ export function maybeDropSearcher(
       const found = nodes.get(kind + '/' + id)
       if (found !== undefined && !chain.includes(found)) chain.push(found)
     }
-    /** 一个工作区往外的那一条：它的祖先、它所在的那一片、它归属的分组，最后是根节点 */
+    /**
+     * 一个工作区往外的那一条，近的在前
+     *
+     * 逐层往上，每一层两样东西，先后由渲染层级决定：
+     * - 会话分组是宿主工作区**体内**的一层，因此比宿主本身更近
+     * - 其余的容器（最外层那一段、虚拟分组）都在宿主**外面**，排在宿主之后
+     *
+     * 只按「祖先然后容器」一刀切会出错：一个被放进父工作区会话分组的子工作区，
+     * 它最近的那一片是那个分组，而祖先排在了前面，于是框套到父工作区上，
+     * 与「这一行和谁同层」完全对不上——框和线因此会指着两层
+     */
     const walkWorkspace = (id: string): void => {
-      const host = nodes.get('workspace/' + id)
-      if (host === undefined || host.kind !== 'workspace') return
-      for (const ancestor of tree.ancestorsOf(host)) push('workspace', ancestor.id)
-      const container = tree.containerOf(host)
-      if (container !== undefined) {
-        if (container.kind === 'virtual') push('virtual', container.id)
-        else if (container.kind === 'group') chain.push(container)
+      let current = nodes.get('workspace/' + id)
+      if (current === undefined || current.kind !== 'workspace') return
+      for (;;) {
+        const container = tree.containerOf(current)
+        if (container !== undefined && container.kind === 'group') chain.push(container)
+        const parent = tree.ancestorsOf(current)[0]
+        if (parent === undefined) {
+          // 没有父工作区了：这一层容器就是最外那一片
+          if (container !== undefined && container.kind === 'virtual') push('virtual', container.id)
+          break
+        }
+        push('workspace', parent.id)
+        const next = nodes.get('workspace/' + parent.id)
+        if (next === undefined || next.kind !== 'workspace') break
+        current = next
       }
-      const membership = tree.virtualGroupOf(host)
-      if (membership !== undefined) push('virtual', membership.id)
+      // 归属分组：进了会话分组的子工作区容器已经不是「归属」，但那一片仍要能用
+      const origin = nodes.get('workspace/' + id)
+      if (origin !== undefined && origin.kind === 'workspace') {
+        const membership = tree.virtualGroupOf(origin)
+        if (membership !== undefined) push('virtual', membership.id)
+      }
     }
     if (node.kind === 'root') return [node]
     /** 指针此刻在哪一片的**范围内**：这决定根节点那一片接不接 */
