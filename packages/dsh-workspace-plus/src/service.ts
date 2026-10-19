@@ -182,6 +182,19 @@ export async function createWorkspaceGroupsService(
   ctx: Context,
   pinnedConfig?: WorkspacePlusConfig | undefined,
 ): Promise<WorkspaceGroupsService> {
+  /**
+   * 诊断日志的出口
+   *
+   * 真实宿主一定有 `ctx.logger`，但服务本身不该把「有人在看日志」当成前提：
+   * 测试替身与将来的其它宿主可能没有它，那几行诊断因此只在有 logger 时才打
+   */
+  const logInfo = (message: string): void => {
+    ctx.logger?.info?.(message)
+  }
+  const logWarn = (message: string): void => {
+    ctx.logger?.warn?.(message)
+  }
+
   const domain = await ctx.storageDomain.open(workspaceGroupsSpec)
   ctx.effect(() => () => domain.close(), 'workspace-plus: domain close')
   const table = domain.table('by_workspace')
@@ -461,10 +474,23 @@ export async function createWorkspaceGroupsService(
       }))
       if (groupId !== null) {
         const target = groups.find((group) => group.id === groupId)
-        if (target === undefined) throw new Error(`unknown workspace group "${groupId}"`)
+        if (target === undefined) {
+          // 客户端拿着一个服务端已经没有的分组 id 时走到这里（分组在别处被删、或两边快照不同步）。
+          // 写入被拒绝而界面已经画过落点，用户看到的就是「拖了没反应」，因此这一条必须留痕
+          logWarn(
+            `workspace-plus: moveWorkspace 拒绝写入，分组不存在 workspace=${workspaceId} groupId=${groupId}`,
+          )
+          logWarn(`workspace-plus: 现有分组=${groups.map((group) => group.id).join(',') || '(none)'}`)
+          throw new Error(`unknown workspace group "${groupId}"`)
+        }
         target.workspaceIds.push(workspaceId)
       }
-      return saveTree(groups)
+      const saved = await saveTree(groups)
+      logInfo(
+        `workspace-plus: moveWorkspace 写入完成 workspace=${workspaceId} groupId=${groupId ?? '(root)'} ` +
+          `分组状态=${saved.workspaceGroups.map((group) => `${group.id}[${group.workspaceIds.join('|')}]`).join(' ') || '(none)'}`,
+      )
+      return saved
     },
 
     async nestWorkspaces(workspaceIds, parentWorkspaceId, groupId) {

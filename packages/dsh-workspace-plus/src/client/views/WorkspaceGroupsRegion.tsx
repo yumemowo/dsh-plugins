@@ -52,6 +52,7 @@ import {
 } from '../data/sessions.ts'
 import { frontPinnedRows, pinRanks, pinnedEntries, reconcilePinned } from '../data/pinned.ts'
 import { PINNED_KEY, stretchDragPlan } from '../data/dnd.ts'
+import { debugLog, debugWarn } from '../data/debug.ts'
 import { buildWorkspaceTree } from '../data/tree.ts'
 import type { RootLayout, SessionRow } from '../data/types.ts'
 import type { HostInfo } from '../hostInfo.ts'
@@ -354,9 +355,19 @@ function useSnapshotFeed(
   const apply = useCallback(
     (action: Promise<WorkspaceGroupsSnapshot>) => {
       void action.then(
-        (next) => setSnapshot(normalizeSnapshot(next)),
+        (next) => {
+          const normalized = normalizeSnapshot(next)
+          debugLog('snapshot applied', {
+            groups: normalized.workspaceGroups.map(
+              (group) => group.id + '[' + group.workspaceIds.join('|') + ']',
+            ),
+          })
+          setSnapshot(normalized)
+        },
         (reason: unknown) => {
-          console.error('workspace-plus: group change failed', reason)
+          // 写入被宿主拒绝时界面已经画过落点，用户看到的是「拖了没反应」。
+          // 这一条不受调试开关管：它标记的就是「本该落下去却没落下」的分叉
+          debugWarn('group change failed', reason)
           reload()
         },
       )

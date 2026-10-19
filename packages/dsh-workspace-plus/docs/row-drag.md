@@ -422,3 +422,40 @@ jsdom 不做布局（`getBoundingClientRect()` 恒为零矩形）也不实现 `D
 它也不覆盖 `paintFor` 里「优先指针那一格」那条分支：本页面的场景中指针所在格恒等于该节点的第一格，破坏那一条探针输出不变。那一条由 jsdom 用例负责。
 
 写这类探针时最花时间的不是判据，是把它们写对。这一份先后把三件事误判成代码缺陷：`inside` 框的 inset 描边被数成第二条线；用启动时取的行矩形去算起拖坐标，而 React 重排后那个坐标落在了会话行上（拖拽计划因此是会话而不是工作区）；指针停在压淡区上本来就没有标记。前两条靠取证元素链发现，第三条靠把「压淡区无标记」写成设计。
+
+## 诊断日志
+
+拖拽的失败模式大多**在界面上看不出异常**：落点画对了、松手却没写入；写入发了、宿主持有的分组列表里却没有那一项。这类问题靠观察界面无法定位，只能看链路上每一步的现场。因此机制层与服务层各留了几处诊断日志。
+
+打开方式三选一：
+
+- 浏览器控制台执行 `__workspacePlusDebug()`，当场生效，不必刷新
+- 浏览器控制台执行 `localStorage.setItem('workspace-plus:debug', '1')` 之后刷新，跨会话保持
+- 宿主启动时设置环境变量 `WORKSPACE_PLUS_DEBUG=1`
+
+关掉用 `__workspacePlusDebug(false)`，它同时清掉 localStorage 那一格。
+
+日志只打在**决策点**，不逐帧打。指针每移动一像素都会重算落点，逐帧打会把真正要看的那几行淹掉，因此 `hit` 只在落点摘要变化时才输出。
+
+| 位置 | 打什么 |
+| --- | --- |
+| 浏览器 | `drag begin`：被拖的来源、计划里有哪些格、其中多少格在 DOM 上真的找到了元素、几块被压淡 |
+| 浏览器 | `hit`：指针坐标、指针落着的格、命中的节点、框与线各指向谁、画出来的标记 |
+| 浏览器 | `commit`：松手时提交的框与线 |
+| 浏览器 | `snapshot applied`：宿主回来的那份分组状态 |
+| 终端 | `moveWorkspace 写入完成`：写的是哪个工作区、写进哪个分组、写完之后各分组的成员 |
+| 终端 | `moveWorkspace 拒绝写入，分组不存在`：客户端拿了一个服务端已经没有的分组 id |
+
+最后两条**不受调试开关管**，永远输出。它们标记的是「本该落下去却没落下」这个分叉：写入被拒绝而界面已经画过落点，用户看到的就是「拖了没反应」，而控制台里什么都不留的话，这条路径就没有任何可查的痕迹。浏览器侧同样常开的是 `drop with no landing`（松手时没有任何落点）与 `group change failed`（写入被宿主拒绝）。
+
+一次正常拖拽的日志大致长这样：
+
+```
+[workspace-plus] drag begin source=kind=workspace id=ws-3 targets=[virtualWorkspaceHead/wg-1|virtualWorkspaceBody/wg-1|workspaceHead/ws-1|...] painted=16 dimmed=3
+[workspace-plus] hit pointer=x=120 y=81 pointerZone=workspaceHead/ws-2 node=workspace/ws-2 check=inside=virtual/wg-1 order=workspace/ws-2 side=before marks=inside@div[virtualBlock/wg-1] before@section[workspaceBlock/ws-2]
+[workspace-plus] commit inside=virtual/wg-1 order=workspace/ws-2 side=before
+[workspace-plus] snapshot applied groups=[wg-1[ws-2]]
+```
+
+`drag begin` 那行里的 `painted` 与 `targets` 两个数对不上时，"界面有格、计划没有"或反过来就是这一次拖拽的问题所在；`targets` 里没有你想落的那个分组，说明计划构造那一刻的数据里它还不存在。
+

@@ -27,6 +27,7 @@ import type { DragPlan, DragPlanTarget } from '../data/dnd.ts'
 import { maybeDropSearcher } from '../data/dropSearcher.ts'
 import type { DropCheck, DropNode, DropSearcher, DropTarget } from '../data/dropSearcher.ts'
 import type { TreeContainerRef, TreeNodeRef } from '../data/tree.ts'
+import { debugLog, debugWarn } from '../data/debug.ts'
 import { autoScrollStep } from '../data/scroll.ts'
 import type { ScrollBox } from '../data/scroll.ts'
 
@@ -240,6 +241,35 @@ function owningZoneKey(element: Element): string | null {
     node = node.parentElement
   }
   return null
+}
+
+/**
+ * 一个元素的简短称呼，日志里用
+ *
+ * 带上区域键或行 id：只写类名在同一个分组里会出现好几条一模一样的记录，分不出是哪一格
+ * @param element - 待描述的元素
+ */
+function describeElement(element: Element): string {
+  const key = element.getAttribute(ZONE_ATTRIBUTE)
+  const region = element.getAttribute(REGION_ATTRIBUTE)
+  const row = element.getAttribute(ROW_ATTRIBUTE)
+  const tag = element.tagName.toLowerCase()
+  if (region !== null) return `${tag}[${region}]`
+  if (key !== null) return `${tag}{${key}}`
+  if (row !== null) return `${tag}(${row})`
+  return `${tag}.${String(element.className).split(' ')[0] ?? ''}`
+}
+
+/**
+ * 一个落点身份的简短称呼，日志里用
+ * @param node - 树节点、容器或行
+ */
+function describeNode(node: DropNode): string {
+  if (node.kind === 'workspace') return 'workspace/' + node.id
+  if (node.kind === 'virtual') return 'virtual/' + node.id
+  if (node.kind === 'group') return `group/${node.workspaceId}/${node.groupId}`
+  if (node.kind === 'root') return 'root'
+  return 'row/' + node.id
 }
 
 /**
@@ -467,6 +497,13 @@ export function DndProvider({
   const checkRef = useRef<DropCheck | null>(null)
   /** 本次拖拽是否已经提交过，提交只发生一次 */
   const committedRef = useRef(false)
+  /**
+   * 上一次打出来的落点摘要
+   *
+   * 用来只在落点**变了**的时候打日志；放 ref 而不是局部变量，因为 `applyHit` 可能在
+   * 组件重渲染时重建，那时局部变量会被重置成空串，同一次拖拽里就会重复打
+   */
+  const lastMarkKeyRef = useRef('')
 
   /**
    * 停止自动滚动
@@ -504,6 +541,7 @@ export function DndProvider({
     searcherRef.current = null
     paintRef.current = new Map()
     checkRef.current = null
+    lastMarkKeyRef.current = ''
     currentPlan = null
   }, [stopAutoScroll])
 
@@ -606,6 +644,26 @@ export function DndProvider({
     markedRef.current = new Set(drawn.keys())
 
     for (const [element, mark] of drawn) element.setAttribute(DROP_ATTRIBUTE, mark)
+
+    // 只在落点**变了**的时候打：指针每移动一像素都会重算，逐帧打会把日志刷满
+    const key = [...drawn].map(([element, mark]) => mark + '@' + describeElement(element)).join(' ')
+    if (key !== lastMarkKeyRef.current) {
+      lastMarkKeyRef.current = key
+      debugLog('hit', {
+        pointer: point,
+        pointerZone: here,
+        node: node === null ? null : describeNode(node),
+        check:
+          check === null
+            ? null
+            : {
+                inside: check.inside === undefined ? undefined : describeNode(check.inside),
+                order: check.order === undefined ? undefined : describeNode(check.order),
+                side: check.side,
+              },
+        marks: key === '' ? '(none)' : key,
+      })
+    }
   }, [region, nodeAt, paintFor])
 
   /**
@@ -690,8 +748,21 @@ export function DndProvider({
     if (committedRef.current) return
     const searcher = searcherRef.current
     const check = checkRef.current
-    if (searcher === null || check === null) return
+    if (searcher === null || check === null) {
+      // 松手时没有任何落点：界面上看不出异常，用户只会觉得「拖了没反应」。
+      // 这一条因此不受调试开关管，永远打出来
+      debugWarn('drop with no landing', {
+        hasSearcher: searcher !== null,
+        lastMarks: markedRef.current.size,
+      })
+      return
+    }
     committedRef.current = true
+    debugLog('commit', {
+      inside: check.inside === undefined ? undefined : describeNode(check.inside),
+      order: check.order === undefined ? undefined : describeNode(check.order),
+      side: check.side,
+    })
     searcher.commit(check)
     teardown()
   }, [teardown])
@@ -711,6 +782,13 @@ export function DndProvider({
       zoneNodesRef.current = plan.tree?.nodesByZone() ?? new Map()
       searcherRef.current = maybeDropSearcher(plan.tree, collected.targets)
       paintRef.current = collected.paint
+      debugLog('drag begin', {
+        source: plan.source,
+        targets: [...plan.targets.keys()],
+        // 计划里有多少格真的在 DOM 上找到了元素：对不上就是「界面有格、计划没有」或反过来
+        painted: collected.paint.size,
+        dimmed: dimmedElements(scope, plan).length,
+      })
 
       // 压淡够不着的那一片：判定与命中层同源，因此不会出现「淡着却能放进去」
       const dimmed = dimmedElements(scope, plan)
