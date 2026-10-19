@@ -48,6 +48,7 @@ declare module '*/SearchControl.module.css' {
     readonly "searchResultHeading": string
     readonly "searchResultMeta": string
     readonly "searchResultPath": string
+    readonly "searchResultRow": string
     readonly "searchResultSelected": string
     readonly "searchResultTitle": string
     readonly "searchResultWorkspace": string
@@ -148,6 +149,7 @@ declare module '*/rows.module.css' {
     readonly "groupCount": string
     readonly "groupHead": string
     readonly "groupLabel": string
+    readonly "headSurface": string
     readonly "indicator": string
     readonly "indicatorBar": string
     readonly "nest": string
@@ -163,6 +165,7 @@ declare module '*/rows.module.css' {
     readonly "rowPinOff": string
     readonly "rowPinOn": string
     readonly "rowSelected": string
+    readonly "rowSurface": string
     readonly "rowTime": string
     readonly "rowTitle": string
     readonly "sessionOverflow": string

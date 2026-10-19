@@ -257,42 +257,45 @@ export function SearchResults({
           const status = statusOf(match)
           const path = resultPath(match, labels.ungrouped)
           return (
-            <button
-              key={match.row.id}
-              type="button"
-              className={clsx(searchStyles.searchResult, selected && searchStyles.searchResultSelected)}
-              role="treeitem"
-              aria-selected={selected}
-              onClick={() => onOpen(match)}
-            >
-              <span className={searchStyles.searchResultHeading}>
-                {/* 状态位与常规会话行同一套：空闲时留空占位，标题的左缘因此
-                    与列表里的行对齐 */}
-                {status === undefined ? (
-                  <span className={rowsStyles.slot} />
-                ) : (
-                  <span className={rowsStyles.slot} role="img" aria-label={status.label}>
-                    <StateDot state={status.state} />
-                  </span>
-                )}
-                <span className={searchStyles.searchResultTitle}>{match.row.title}</span>
-              </span>
-              {/* 路径是一个整体：两段着色包在同一个元素里，靠外层那格 gap 隔开的是
-                  「路径」与（本包没有的）摘录，绝不会落到这两段之间 */}
-              <span className={searchStyles.searchResultMeta}>
-                <span className={searchStyles.searchResultPath}>
-                  {path.ungrouped === undefined ? null : (
-                    <span className={searchStyles.searchResultWorkspace}>{path.ungrouped}</span>
+            // 行带：与常规会话行同构，间距落在它自己的上内边距里，行与行之间不留空白
+            // role=none 让辅助技术跳过这一层，treeitem 仍是 tree 的语义子项
+            <div key={match.row.id} className={searchStyles.searchResultRow} role="none">
+              <button
+                type="button"
+                className={clsx(searchStyles.searchResult, selected && searchStyles.searchResultSelected)}
+                role="treeitem"
+                aria-selected={selected}
+                onClick={() => onOpen(match)}
+              >
+                <span className={searchStyles.searchResultHeading}>
+                  {/* 状态位与常规会话行同一套：空闲时留空占位，标题的左缘因此
+                      与列表里的行对齐 */}
+                  {status === undefined ? (
+                    <span className={rowsStyles.slot} />
+                  ) : (
+                    <span className={rowsStyles.slot} role="img" aria-label={status.label}>
+                      <StateDot state={status.state} />
+                    </span>
                   )}
-                  {path.workspace === undefined ? null : (
-                    <span className={searchStyles.searchResultWorkspace}>{path.workspace}</span>
-                  )}
-                  {path.group === undefined ? null : (
-                    <span className={searchStyles.searchResultGroup}>{`/${path.group}`}</span>
-                  )}
+                  <span className={searchStyles.searchResultTitle}>{match.row.title}</span>
                 </span>
-              </span>
-            </button>
+                {/* 路径是一个整体：两段着色包在同一个元素里，靠外层那格 gap 隔开的是
+                    「路径」与（本包没有的）摘录，绝不会落到这两段之间 */}
+                <span className={searchStyles.searchResultMeta}>
+                  <span className={searchStyles.searchResultPath}>
+                    {path.ungrouped === undefined ? null : (
+                      <span className={searchStyles.searchResultWorkspace}>{path.ungrouped}</span>
+                    )}
+                    {path.workspace === undefined ? null : (
+                      <span className={searchStyles.searchResultWorkspace}>{path.workspace}</span>
+                    )}
+                    {path.group === undefined ? null : (
+                      <span className={searchStyles.searchResultGroup}>{`/${path.group}`}</span>
+                    )}
+                  </span>
+                </span>
+              </button>
+            </div>
           )
         })}
       </div>

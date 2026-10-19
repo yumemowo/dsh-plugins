@@ -67,6 +67,12 @@ if (prefix === undefined) throw new Error('产物样式表里没找到 pinnedSec
 
 /** 把裸类名换成产物里的哈希类名，让被测的就是构建产物那份规则 */
 const hashed = (name) => `.${prefix}_${name}`
+
+// 行本身来自另一张样式表（rows.module.css）：置顶行用的是同一个 .row + .rowSurface
+// 行距由行带自己承担，因此那两段样式也要一起搬进页面，否则行会塌成文字高度
+const cssRows = cssLiteral(bundle, 'workspaceHead{')
+const rowsPrefix = cssRows.match(/\.([A-Za-z0-9_]+?)_workspaceHead\{/)?.[1]
+if (rowsPrefix === undefined) throw new Error('产物样式表里没找到 workspaceHead 类名')
 // 7 条假会话：可见 5 条，因此后 2 条应当被裁掉
 const ROWS = ['session-a', 'session-b', 'session-c', 'session-d', 'session-e', 'session-f', 'session-g']
 const page = `<!doctype html>
@@ -74,17 +80,19 @@ const page = `<!doctype html>
 <style>
   body { margin: 0; font: 13px sans-serif; }
   ${css}
-  /* 页面外壳这几项产物里由别的表或宿主给：宽度、行高与行距 */
+  /* 页面外壳这几项产物里由别的表或宿主给：宽度、行高
+     行距不在这里补：它由行带自己承担（见 rows.module.css 的行带一节） */
   ${hashed('pinnedSection')} { width: 300px; }
-  ${hashed('pinScroll')} > * + * { margin-top: 2px; }
-  ${hashed('pinScroll')} > * { height: 32px; line-height: 32px; }
+  ${cssRows}
+  ${hashed('pinScroll')} > * > span { height: 32px; line-height: 32px; display: block; }
 </style>
 <div class="${prefix}_pinnedSection ${prefix}_pinExpand" data-wg-expandable>
   <div class="${prefix}_pinHead">置顶</div>
   <div class="${prefix}_pinScroll" data-wg-overflowing>
     ${ROWS.map(
       (id, i) =>
-        `<div class="row"${i >= 5 ? ' data-wg-clipped' : ''}>${id}</div>`,
+        `<div class="${rowsPrefix}_row"${i >= 5 ? ' data-wg-clipped' : ''}>` +
+        `<span class="${rowsPrefix}_rowSurface">${id}</span></div>`,
     ).join('\n    ')}
   </div>
   <div class="${prefix}_pinDivider"></div>
@@ -175,11 +183,11 @@ await step('静止（指针在段外）', () => move(away.x, away.y))
 await step('指针在预览行上', () => move(overRow.x, overRow.y))
 await step('指针离开', () => move(away.x, away.y))
 await step('行上面板开着、指针在段外', async () => {
-  await evaluate(`document.querySelector('${scrollSel} .row').setAttribute('data-wg-panel-open', '')`)
+  await evaluate(`document.querySelector('${scrollSel} .${rowsPrefix}_row').setAttribute('data-wg-panel-open', '')`)
   await move(away.x, away.y)
 })
 await step('面板关闭', () =>
-  evaluate(`document.querySelector('${scrollSel} .row').removeAttribute('data-wg-panel-open')`),
+  evaluate(`document.querySelector('${scrollSel} .${rowsPrefix}_row').removeAttribute('data-wg-panel-open')`),
 )
 await step('闸门关闭（没有行被裁掉）+ 指针在预览行上', async () => {
   await evaluate(`document.querySelector('${hashed('pinnedSection')}').removeAttribute('data-wg-expandable')`)

@@ -125,8 +125,11 @@
   flex: none;
 }
 
+/* 行距由行带自己承担（见 rows.module.css 的行带一节）
+   2px 落在后一行带的上内边距里，而不是两行之间的空白
+   拖拽时的落点按元素命中，缝隙上的那一点必须归属于某一行 */
 .pinScroll > * + * {
-  margin-top: 2px;
+  --wg-row-lead: 2px;
 }
 
 /* 置顶行的缩进取会话行的下限 24px
@@ -135,12 +138,12 @@
  * 列表里的行由 .workspaceBody > .sessions > .row 那几条规则让出这一格
  * 置顶区不在那些容器里，因此这里自己让一次
  *
- * 选 .pinScroll 的子项而不是它下面的 .row：.row 是另一张样式表的类名，
- * 跨模块引用会编译成匹配不到的哈希，这条规则就永远是空的
+ * 只下发变量、不写内边距：行带只承担间距，内边距由药丸（.rowSurface）吃下
+ * 选 .pinScroll 的子项而不是它下面的 .row：
+ * .row 是另一张样式表的类名，跨模块引用会编译成匹配不到的哈希，这条规则就永远是空的
  * 前缀 .pinnedSection 抬一级优先级，不去依赖两张表的注入先后 */
 .pinnedSection .pinScroll > * {
   --wg-row-start: 24px;
-  padding-left: var(--wg-row-start);
 }
 
 /* 区内滚动：同一个高度里自行滚动。溢出与否只影响这条规则是否真的滚得动，DOM 结构不变

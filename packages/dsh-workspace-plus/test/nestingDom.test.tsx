@@ -326,8 +326,10 @@ describe('nested sub-workspaces in a real DOM', () => {
     // 样式表里必须有一条按结构写的规则给它换算左边距，缺了它那 16px 内边距会盖住
     // 刚才那条对齐，空态停在根节点那一列而不会有任何报错
     const css = readAllCss().replace(/\/\*[\s\S]*?\*\//g, '')
-    const rule = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((match) =>
-      (match[1] ?? '').includes('.workspaceBody > .empty'),
+    const rule = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(
+      (match) =>
+        (match[1] ?? '').includes('.workspaceBody > .empty') &&
+        (match[2] ?? '').includes('padding-left'),
     )
     expect(rule, 'no .workspaceBody > .empty rule in the stylesheet').toBeDefined()
     expect(rule?.[2] ?? '').toContain('var(--wg-depth')

@@ -90,7 +90,7 @@ export interface SessionRowViewProps {
   /**
    * 这一行上是否有面板开着（行内 `...` 菜单或右键菜单）
    *
-   * 两种面板都 portal 到 body，行外面看不到它们；置顶区借这一格判断「指针是不是还在预览区附近」，
+   * 两种面板都 portal 到 body，行外面看不到它们；置顶区借这一格判断「指针是不是还在预览区附近」
    * 面板开着时它不能收回（见 PinnedSection 样式表里那条 `:has` 规则）
    * 缺省表示该行不涉及面板
    */
@@ -170,11 +170,12 @@ function SessionRowViewImpl({
       </span>
     )
 
-  // 行是一个裸 div：菜单开合标记、悬停卡片都由组装它的 SessionRowItem 负责
+  // 行是一条带（外层）与一颗药丸（内层）：带承担与上一行之间的间距，指针落在哪一像素都归属于某一行
+  // 菜单开合标记、悬停卡片都由组装它的 SessionRowItem 负责
   return (
     <div
       ref={rowRef}
-      className={clsx(styles.row, selected && styles.rowSelected)}
+      className={styles.row}
       // 状态色底与选中加深都由样式表按它选档，行组件不感知配色
       data-wg-state={status?.state ?? 'idle'}
       // 参与所在撑开体的逐个淡入，序号由撑开体按文档序下发
@@ -188,14 +189,16 @@ function SessionRowViewImpl({
       onKeyDown={(event) => handleRowKeyDown(event, open)}
       onContextMenu={onContextMenu}
     >
-      {status && <StatusIndicator status={status} />}
-      <span className={styles.rowTitle}>{shownTitle}</span>
-      {time && <span className={styles.rowTime}>{time}</span>}
-      {/* 行尾两段：操作位在左、图钉在右
-          已置顶的图钉常驻可见并占宽，因此它的位置不随时间隐去、操作位展开而变；
-          未置顶的图钉与操作位一起显隐，静止时连宽度一起收掉 */}
-      {actionSlot}
-      {pin}
+      <span className={clsx(styles.rowSurface, selected && styles.rowSelected)}>
+        {status && <StatusIndicator status={status} />}
+        <span className={styles.rowTitle}>{shownTitle}</span>
+        {time && <span className={styles.rowTime}>{time}</span>}
+        {/* 行尾两段：操作位在左、图钉在右
+            已置顶的图钉常驻可见并占宽，因此它的位置不随时间隐去、操作位展开而变；
+            未置顶的图钉与操作位一起显隐，静止时连宽度一起收掉 */}
+        {actionSlot}
+        {pin}
+      </span>
     </div>
   )
 }

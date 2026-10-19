@@ -115,7 +115,7 @@ const page = `<!doctype html>
       <button class="${headerPrefix}_headerAction" id="act">A</button>
     </div>
   </div>
-  <div class="${rowsPrefix}_row" id="row">会话</div>
+  <div class="${rowsPrefix}_row"><span class="${rowsPrefix}_rowSurface" id="row">会话</span></div>
   <div class="${rowsPrefix}_pickerRow" id="picker">条目</div>
 </div>
 `

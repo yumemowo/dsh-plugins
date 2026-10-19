@@ -82,29 +82,32 @@ export function VirtualWorkspaceSection({
         onContextMenu={contextMenu.onContextMenu}
       >
         {contextMenu.menu}
-        {/* 文件夹槽与箭头槽常驻同一个 16px 列，与工作区行同一套：静止时显示文件夹、悬停换成箭头，因此切换不会让标题位移
-            这里的文件夹走虚线：工作区分组形状上像一个工作区，但本身不是一个真实工作区 */}
-        <span className={clsx(styles.slot, styles.folder)}>
-          <IconVirtualFolder16 />
-        </span>
-        <span className={clsx(styles.slot, styles.chevron)}>
-          <IconTriangleRightFillRegular className={clsx(styles.arrow, expanded && styles.arrowOpen)} />
-        </span>
-        <span className={styles.virtualWorkspaceLabel}>{section.label}</span>
-        {/* 工作区数自己成格贴在行右，与会话分组的会话数、session 行的时间同格同形
-            空分组不显示 */}
-        {section.workspaceIds.length > 0 && (
-          <span className={styles.groupCount}>{section.workspaceIds.length}</span>
-        )}
-        {/* 操作位收进 session 行同一套可收放槽位：静止时不占宽，上面的工作区数因此贴到行右，悬停/菜单展开/键盘聚焦时槽位展开，工作区数隐去 */}
-        <span className={styles.rowActionSlot}>
-          <RowActions
-            menuOpen={menuOpen}
-            onMenuOpen={setMenuOpen}
-            onMenuSelect={select}
-            menuItems={menuItems}
-            actionsLabel={labels.virtualWorkspaceActions(section.label)}
-          />
+        {/* 药丸：底色、圆角与悬停都在它身上，外层的带只承担与上一行之间的那点间距 */}
+        <span className={styles.headSurface}>
+          {/* 文件夹槽与箭头槽常驻同一个 16px 列，与工作区行同一套：静止时显示文件夹、悬停换成箭头，因此切换不会让标题位移
+              这里的文件夹走虚线：工作区分组形状上像一个工作区，但本身不是一个真实工作区 */}
+          <span className={clsx(styles.slot, styles.folder)}>
+            <IconVirtualFolder16 />
+          </span>
+          <span className={clsx(styles.slot, styles.chevron)}>
+            <IconTriangleRightFillRegular className={clsx(styles.arrow, expanded && styles.arrowOpen)} />
+          </span>
+          <span className={styles.virtualWorkspaceLabel}>{section.label}</span>
+          {/* 工作区数自己成格贴在行右，与会话分组的会话数、session 行的时间同格同形
+              空分组不显示 */}
+          {section.workspaceIds.length > 0 && (
+            <span className={styles.groupCount}>{section.workspaceIds.length}</span>
+          )}
+          {/* 操作位收进 session 行同一套可收放槽位：静止时不占宽，上面的工作区数因此贴到行右，悬停/菜单展开/键盘聚焦时槽位展开，工作区数隐去 */}
+          <span className={styles.rowActionSlot}>
+            <RowActions
+              menuOpen={menuOpen}
+              onMenuOpen={setMenuOpen}
+              onMenuSelect={select}
+              menuItems={menuItems}
+              actionsLabel={labels.virtualWorkspaceActions(section.label)}
+            />
+          </span>
         </span>
       </div>
       {/* 空分组照样有内容要露：占位文案落在撑开体里，因此「建完分组还没移入

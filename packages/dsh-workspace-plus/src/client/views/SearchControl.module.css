@@ -128,10 +128,23 @@
 
 .searchClear:hover { background: var(--dsw-alias-interactive-bg-hover); }
 
+/* 搜索结果的行带：与常规会话行同构
+ * 带高 = 上行间距 + 可见的条目，间距落在它自己的上内边距里
+ * 间距留在 margin 里就是一段不属于任何条目的空白，指针停在上面时由容器接住事件
+ * 落点计算因此读不到条目
+ *
+ * 只有相邻两项之间有间距，首项贴住上面的输入区 */
+.searchResults { display: flex; flex-direction: column; }
+
+.searchResultRow {
+  box-sizing: border-box;
+  padding-top: var(--wg-row-lead, 0px);
+}
+
+.searchResultRow + .searchResultRow { --wg-row-lead: 2px; }
+
 /* 搜索结果行，官方 .searchResultRow 的几何
    它比常规会话行高——两行内容（标题 + 路径），因此用 min-height 而不是固定高度 */
-.searchResults > * + * { margin-top: 2px; }
-
 .searchResult {
   box-sizing: border-box;
   cursor: pointer;

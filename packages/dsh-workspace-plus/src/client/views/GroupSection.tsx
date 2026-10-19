@@ -88,27 +88,30 @@ export function GroupSection({
         onContextMenu={contextMenu.onContextMenu}
       >
         {contextMenu.menu}
-        <span className={styles.slot}>
-          <IconTriangleRightFillRegular className={clsx(styles.arrow, expanded && styles.arrowOpen)} />
-        </span>
-        <span className={styles.groupLabel}>{section.label}</span>
-        {/* 会话数自己成格贴在行右，与 session 行的 time 同格同形，空分组不显示
-            只算会话，放进来的子工作区另用层级表达，混进同一个数会看不出组里是什么 */}
-        {section.sessions.length <= 0 ? null : (
-          <span className={styles.groupCount}>{section.sessions.length}</span>
-        )}
-        {/* 操作位收进 session 行同一套可收放槽位，静止时不占宽，上面的会话数因此贴到行右，悬停/菜单展开/键盘聚焦时槽位展开，会话数隐去 */}
-        <span className={styles.rowActionSlot}>
-          <RowActions
-            menuOpen={menuOpen}
-            onMenuOpen={setMenuOpen}
-            onMenuSelect={select}
-            menuItems={menuItems}
-            actionsLabel={labels.groupActions(section.label)}
-            create={
-              onCreateSession && { label: labels.newSessionInGroup(section.label), onCreate: onCreateSession }
-            }
-          />
+        {/* 药丸：底色、圆角与悬停都在它身上，外层的带只承担与上一行之间的那点间距 */}
+        <span className={styles.headSurface}>
+          <span className={styles.slot}>
+            <IconTriangleRightFillRegular className={clsx(styles.arrow, expanded && styles.arrowOpen)} />
+          </span>
+          <span className={styles.groupLabel}>{section.label}</span>
+          {/* 会话数自己成格贴在行右，与 session 行的 time 同格同形，空分组不显示
+              只算会话，放进来的子工作区另用层级表达，混进同一个数会看不出组里是什么 */}
+          {section.sessions.length <= 0 ? null : (
+            <span className={styles.groupCount}>{section.sessions.length}</span>
+          )}
+          {/* 操作位收进 session 行同一套可收放槽位，静止时不占宽，上面的会话数因此贴到行右，悬停/菜单展开/键盘聚焦时槽位展开，会话数隐去 */}
+          <span className={styles.rowActionSlot}>
+            <RowActions
+              menuOpen={menuOpen}
+              onMenuOpen={setMenuOpen}
+              onMenuSelect={select}
+              menuItems={menuItems}
+              actionsLabel={labels.groupActions(section.label)}
+              create={
+                onCreateSession && { label: labels.newSessionInGroup(section.label), onCreate: onCreateSession }
+              }
+            />
+          </span>
         </span>
       </div>
       {/* 空分组既没有会话也没有子工作区，整块撑开体都不渲染 */}

@@ -64,7 +64,7 @@
 
 ## DOM 与样式
 
-按钮是所在 `.sessions` 段的最后一个直接子项，与同段会话行共用一条缩进线：`rows.module.css` 里那两条按容器写的规则把 `.row` 与 `.sessionOverflow` 写在同一组选择器里，缩进表达式因此只有一处。按钮文字再补上 `.rowTitle` 的左外边距，左缘于是压在会话标题那条线上（官方那条按钮同样如此）；间距走既有的 `.sessions > * + *`，按钮不必自己写 `margin`。
+按钮是所在 `.sessions` 段的最后一个直接子项，与同段会话行共用一条缩进线：`rows.module.css` 里那两条按容器写的规则把 `.row` 与 `.sessionOverflow` 写在同一组选择器里，缩进表达式因此只有一处。按钮文字再补上 `.rowTitle` 的左外边距，左缘于是压在会话标题那条线上（官方那条按钮同样如此）；间距走既有的 `.sessions > * + *`（它给后一项下发 `--wg-row-lead`，由那一项自己的上内边距吃下），按钮不必自己写 `margin`。
 
 几何与配色照官方 `.sessionOverflowButton`：`28px` 高、`12px` 字、`label-tertiary` 转 `label-secondary`。按钮与行一起参与所在撑开体的逐个淡入。
 

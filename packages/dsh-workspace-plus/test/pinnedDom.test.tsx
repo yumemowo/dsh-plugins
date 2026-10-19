@@ -805,9 +805,13 @@ describe('session row pin', () => {
     await expandSessionLists(container)
     const rows = Array.from(container.querySelectorAll<HTMLElement>('.workspaceBody .row'))
 
-    /** 一行里图钉与操作位的先后 */
+    /**
+     * 一行里图钉与操作位的先后
+     *
+     * 读药丸那一层：行的外层带着与上一行之间的间距，内容都在内层的 .rowSurface 里
+     */
     const order = (row: HTMLElement): string[] =>
-      Array.from(row.children)
+      Array.from(row.querySelector('.rowSurface')?.children ?? [])
         .map((child) => {
           if (child.classList.contains('rowPin')) return 'pin'
           if (child.classList.contains('rowActionSlot')) return 'action'

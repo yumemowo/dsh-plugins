@@ -170,23 +170,26 @@ export function WorkspaceRow({
       onContextMenu={contextMenu.onContextMenu}
     >
       {contextMenu.menu}
-      <span className={clsx(styles.slot, styles.folder, folderActive && styles.folderActive)}>
-        {expanded ? <IconFolderOpenRegular /> : <IconFolderCloseRegular />}
+      {/* 药丸：底色、圆角与悬停都在它身上，外层的带只承担与上一行之间的那点间距 */}
+      <span className={styles.headSurface}>
+        <span className={clsx(styles.slot, styles.folder, folderActive && styles.folderActive)}>
+          {expanded ? <IconFolderOpenRegular /> : <IconFolderCloseRegular />}
+        </span>
+        <span className={clsx(styles.slot, styles.chevron)}>
+          <IconTriangleRightFillRegular className={clsx(styles.arrow, expanded && styles.arrowOpen)} />
+        </span>
+        <span className={styles.workspaceTitle}>{title}</span>
+        <RowActions
+          menuOpen={menuOpen}
+          onMenuOpen={setMenuOpen}
+          onMenuSelect={select}
+          menuItems={menuItems}
+          actionsLabel={labels.workspaceActions(title)}
+          create={
+            onCreateSession && { label: labels.newSessionIn(title), onCreate: onCreateSession }
+          }
+        />
       </span>
-      <span className={clsx(styles.slot, styles.chevron)}>
-        <IconTriangleRightFillRegular className={clsx(styles.arrow, expanded && styles.arrowOpen)} />
-      </span>
-      <span className={styles.workspaceTitle}>{title}</span>
-      <RowActions
-        menuOpen={menuOpen}
-        onMenuOpen={setMenuOpen}
-        onMenuSelect={select}
-        menuItems={menuItems}
-        actionsLabel={labels.workspaceActions(title)}
-        create={
-          onCreateSession && { label: labels.newSessionIn(title), onCreate: onCreateSession }
-        }
-      />
     </div>
   )
 

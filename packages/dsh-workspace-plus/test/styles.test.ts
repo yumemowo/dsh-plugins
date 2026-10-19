@@ -67,28 +67,53 @@ describe('client stylesheet', () => {
     expect(readCss()).not.toContain('`')
   })
 
-  it('gives every row container a 2px gap between adjacent rows', () => {
-    const css = readCss()
-    // CSS 里这几条选择器是写成同一个逗号列表的，因此先把规则拆成
-    // 「选择器 -> 声明块」再逐条查，而不是对单个选择器配正则
+  it('never leaves a margin between two rows', () => {
+    // 行与行之间的间距由行带自己承担（.row / .workspaceHead / .groupHead 的上内边距）
+    // margin 是不属于任何一行的空白，拖拽按元素命中落点时指针停在上面就读不出可用落点
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
       selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
       body: m[2] ?? '',
     }))
 
-    /** 存在一条规则：选择器表含该选择器，且声明块里 margin-top 为 2px */
-    const hasGapRule = (selector: string): boolean =>
-      rules.some(
+    // 行容器上出现相邻兄弟的 margin 就是退回了行间距寄存于容器的那套写法
+    for (const container of ['workspace', 'workspaceBody', 'group', 'groupBody', 'nest', 'sessions']) {
+      const offender = rules.find(
         (rule) =>
-          rule.selectors.includes(selector) &&
-          /margin-top:\s*2px/.test(rule.body),
+          rule.selectors.includes(`.${container} > * + *`) &&
+          /margin(-top)?:/.test(rule.body),
       )
-
-    // 分组结构多包了几层包装元素，每条 `X > * + *` 只作用于自己的直接子项
-    // 因此每一层都必须有一条规则，否则「分组头 → 首个会话行」这类跨层相邻会漏掉间距
-    for (const container of ['workspace', 'workspaceBody', 'group', 'sessions']) {
-      expect(hasGapRule(`.${container} > * + *`), `missing 2px gap rule for .${container}`).toBe(true)
+      expect(offender, `.${container} > * + * still carries a margin`).toBeUndefined()
     }
+
+    // 撑开体内的首条行同样不留空档：那 2px 若写成体内容器的上内边距
+    // 就是「不属于任何一行」的像素，命中测试会落在容器上
+    for (const clip of [
+      '.expandClip > .workspaceBody > .sessions',
+      '.expandClip > .workspaceBody > .nest',
+      '.expandClip > .groupBody > .nest',
+    ]) {
+      const offender = rules.find(
+        (rule) => rule.selectors.includes(clip) && /padding-top:/.test(rule.body),
+      )
+      expect(offender, `${clip} still owns the gap between the header row and its first child`).toBeUndefined()
+    }
+
+    // 间距仍要存在，只是换了承担者：行带的上内边距读 --wg-row-lead
+    const band = rules.find((rule) => rule.selectors.includes('.row'))
+    expect(band?.body).toMatch(/padding-top:\s*var\(--wg-row-lead, 0px\)/)
+    // 撑开体整段下发 2px，行从它继承——段内相邻与「容器行 → 首条行」因此同一条规则
+    const clip = rules.find((rule) => rule.selectors.includes('.expandClip'))
+    expect(clip?.body).toMatch(/--wg-row-lead:\s*2px/)
+    // 平铺列表不在撑开体里，自己一条
+    const flat = rules.find((rule) => rule.selectors.includes('.flatList > * + *'))
+    expect(flat?.body).toMatch(/--wg-row-lead:\s*2px/)
+
+    // 空态不是行，没有带可以承担那一点：它自己多留一档，文案落点才不会上移
+    const empty = rules.find(
+      (rule) => rule.selectors.includes('.workspaceBody > .empty') && /padding-top:/.test(rule.body),
+    )
+    expect(empty?.body).toMatch(/padding-top:\s*18px/)
   })
 
   it('gives the session overflow button the same indentation as its rows', () => {
@@ -102,47 +127,45 @@ describe('client stylesheet', () => {
     const rulesWith = (selector: string) =>
       rules.filter((rule) => rule.selectors.includes(selector))
 
-    // 溢出按钮按容器取缩进：两条按结构链写死的规则都必须把它带上
-    // 漏掉一条时按钮会落在 0 缩进上（界面上只表现为「位置不对」），不会有任何报错
-    for (const button of [
-      '.workspaceBody > .sessions > .sessionOverflow',
-      '.group > .expand > .expandClip > .groupBody > .sessions > .sessionOverflow',
-    ]) {
-      const indent = rulesWith(button).find((rule) => /--wg-row-start:/.test(rule.body))
-      expect(indent, `${button} gets no --wg-row-start`).toBeDefined()
-      expect(indent?.body).toMatch(/--wg-row-start:\s*calc\((24|40)px \+ 16px/)
-      expect(indent?.body).toMatch(/padding-left:\s*var\(--wg-row-start\)/)
-
-      // 与同容器那条会话行规则写在同一张选择器表里：缩进表达式只有一处
-      // 两边各写一份时，改了行那份而忘了按钮那份不会报错，只表现为按钮不跟着缩进
-      const rowSelector = button.replace(' > .sessionOverflow', ' > .row')
-      expect(indent?.selectors, `${rowSelector} is not in the same selector list`).toContain(
-        rowSelector,
-      )
-    }
+    // 溢出按钮与同段会话行共用一条缩进规则：基准由所在体下发，表达式只有一处
+    // 漏掉按钮那一档时它会落在 0 缩进上（界面上只表现为「位置不对」），不会有任何报错
+    const indent = rulesWith('.sessions > .sessionOverflow').find((rule) =>
+      /--wg-row-start:/.test(rule.body),
+    )
+    expect(indent, '.sessions > .sessionOverflow gets no --wg-row-start').toBeDefined()
+    expect(indent?.body).toMatch(/--wg-row-start:\s*calc\(var\(--wg-row-base, 24px\) \+ 16px/)
+    // 与同段会话行写在同一张选择器表里
+    expect(indent?.selectors, 'the row selector is not in the same selector list').toContain(
+      '.sessions > .row',
+    )
+    // 缩进由药丸吃下（行那一侧写在 .rowSurface 上），按钮自己就是那个盒子
+    const box = rulesWith('.sessions > .sessionOverflow').find((rule) =>
+      /padding-left:/.test(rule.body),
+    )
+    expect(box?.body).toMatch(/padding-left:\s*calc\(var\(--wg-row-start\) \+ 4px\)/)
 
     // 文字左缘压在会话标题那条线上：标题在行里比 --wg-row-start 多让出 .rowTitle 的左外边距
     // 按钮补上同一个量，两条线才不会差 4px
+    // 排版与色阶写在共享规则里，左外边距另起一条，因此要把命中它的规则合起来读
     const titleMargin = /margin:\s*0 6px 0 (\d+)px/.exec(
-      rules.find((rule) => rule.selectors.includes('.rowTitle'))?.body ?? '',
+      rules
+        .filter((rule) => rule.selectors.includes('.rowTitle'))
+        .map((rule) => rule.body)
+        .join(';'),
     )?.[1]
     expect(titleMargin).toBeDefined()
-    for (const scope of ['.workspaceBody', '.group']) {
-      const offset = rules
-        .filter(
-          (rule) =>
-            rule.selectors.some((selector) => selector.startsWith(scope)) &&
-            rule.selectors.some((selector) => selector.endsWith('> .sessionOverflow')),
-        )
-        .map(
-          (rule) =>
-            /padding-left:\s*calc\(var\(--wg-row-start\)\s*\+\s*(\d+)px\)/.exec(rule.body)?.[1],
-        )
-        .filter((value): value is string => value !== undefined)
-      expect(offset.at(-1), `${scope} does not offset the button text to the title line`).toBe(
-        titleMargin,
+    const offset = rules
+      .filter(
+        (rule) =>
+          rule.selectors.includes('.sessions > .sessionOverflow') &&
+          /padding-left:/.test(rule.body),
       )
-    }
+      .map(
+        (rule) =>
+          /padding-left:\s*calc\(var\(--wg-row-start\)\s*\+\s*(\d+)px\)/.exec(rule.body)?.[1],
+      )
+      .filter((value): value is string => value !== undefined)
+    expect(offset.at(-1), 'the button text is not offset to the title line').toBe(titleMargin)
   })
 
   it('floats the indicator out of the row flow so titles never shift', () => {
@@ -176,7 +199,11 @@ describe('client stylesheet', () => {
     expect(indicator).toMatch(/z-index:\s*1/)
 
     // 标题左边距取官方 .title 那 4px：行的缩进下限（24px）本就大于指示器占的 4~20px
-    const title = bodyOf('.rowTitle')
+    // 排版声明在共享规则里，这条外边距单独一条，因此按「命中它的规则合起来」读
+    const title = rules
+      .filter((rule) => rule.selectors.includes('.rowTitle'))
+      .map((rule) => rule.body)
+      .join(';')
     expect(title).toMatch(/margin:\s*0 6px 0 4px/)
 
     // 「色条」样式的字形自己就是那条色，颜色继承指示器按状态取到的语义词
@@ -189,6 +216,22 @@ describe('client stylesheet', () => {
     expect(bodyOf("[data-wg-indicator='bar'] .indicator")).toMatch(/justify-content:\s*flex-start/)
     // 高度取设计稿那条色条（行高 32、上下各留 6）
     expect(bar).toMatch(/height:\s*20px/)
+
+    // 颜色按状态取语义词：运行蓝、待交互琥珀、完成绿
+    const stateColour = (state: string): string =>
+      bodyOf(`.indicator[data-wg-state='${state}']`)
+    expect(stateColour('ongoing')).toMatch(/--dsw-alias-state-business-primary/)
+    expect(stateColour('warning')).toMatch(/--dsw-alias-state-warn-primary/)
+    expect(stateColour('done')).toMatch(/--dsw-alias-state-success-primary/)
+    // 这条规则不必限定「指示器是药丸的直接内盒」：它只有一个产出点（SessionRowView 的
+    // StatusIndicator），会话行也不会互相嵌套，.indicator 在本包里不可能出现在别处
+    for (const state of ['ongoing', 'warning', 'done']) {
+      const selector = `.indicator[data-wg-state='${state}']`
+      const scoped = rules.filter((rule) =>
+        rule.selectors.some((entry) => entry.includes(selector) && entry !== selector),
+      )
+      expect(scoped, `${selector} is needlessly scoped under an ancestor`).toEqual([])
+    }
   })
 
   it('paints the status fill and deepens it only where there is an accent colour', () => {
@@ -204,17 +247,24 @@ describe('client stylesheet', () => {
         .filter((rule) => rule.selectors.includes(selector))
         .map((rule) => new RegExp(`${property}:\\s*([^;]+)`).exec(rule.body)?.[1]?.trim() ?? '')
 
+    // 底色画在药丸（.rowSurface）上，不在行带上：带含那段上行间距
+    // 底色若铺满整条带就比可见的行高出 2px
+    //
     // 运行与待交互各上一层浅色底；完成与空闲不设底色，否则整段长期泛色
-    expect(bodyOf(".row[data-wg-state='ongoing']")).toMatch(/background-color:\s*color-mix\(/)
-    expect(bodyOf(".row[data-wg-state='warning']")).toMatch(/background-color:\s*color-mix\(/)
-    expect(bodyOf(".row[data-wg-state='done']")).toBe('')
+    expect(bodyOf(".row[data-wg-state='ongoing'] > .rowSurface")).toMatch(
+      /background-color:\s*color-mix\(/,
+    )
+    expect(bodyOf(".row[data-wg-state='warning'] > .rowSurface")).toMatch(
+      /background-color:\s*color-mix\(/,
+    )
+    expect(bodyOf(".row[data-wg-state='done'] > .rowSurface")).toBe('')
 
     // 没有强调色的行与官方完全一致：悬停与选中同为那一档浅灰，不另加深
     const neutralHover = bodyOf(
-      ".row:not([data-wg-state='ongoing']):not([data-wg-state='warning']):hover",
+      ".row:not([data-wg-state='ongoing']):not([data-wg-state='warning']):hover > .rowSurface",
     )
     const neutralSelected = bodyOf(
-      ".row:not([data-wg-state='ongoing']):not([data-wg-state='warning']).rowSelected",
+      ".row:not([data-wg-state='ongoing']):not([data-wg-state='warning']) > .rowSurface.rowSelected",
     )
     expect(neutralHover).toMatch(/background-color:\s*var\(--dsw-alias-interactive-bg-hover\)/)
     expect(neutralSelected).toMatch(/background-color:\s*var\(--dsw-alias-interactive-bg-hover\)/)
@@ -226,35 +276,31 @@ describe('client stylesheet', () => {
       const value = declarations(selector, 'background-color').find((v) => v.includes('color-mix'))
       return Number(/ (\d+)%/.exec(value ?? '')?.[1] ?? Number.NaN)
     }
-    const ongoingHover = pct(".row[data-wg-state='ongoing']:hover")
-    const ongoingSelected = pct(".rowSelected[data-wg-state='ongoing']")
+    const ongoingHover = pct(".row[data-wg-state='ongoing']:hover > .rowSurface")
+    const ongoingSelected = pct(".row[data-wg-state='ongoing'] > .rowSurface.rowSelected")
     expect(Number.isNaN(ongoingHover)).toBe(false)
     expect(Number.isNaN(ongoingSelected)).toBe(false)
     expect(ongoingHover).toBeLessThan(ongoingSelected)
 
-    const warningHover = pct(".row[data-wg-state='warning']:hover")
-    const warningSelected = pct(".rowSelected[data-wg-state='warning']")
+    const warningHover = pct(".row[data-wg-state='warning']:hover > .rowSurface")
+    const warningSelected = pct(".row[data-wg-state='warning'] > .rowSurface.rowSelected")
     expect(warningHover).toBeLessThan(warningSelected)
 
-    // 选中那档必须同时覆盖 `:hover`：`.row[data-wg-state]:hover` 的权重更高
+    // 选中那档必须同时覆盖 :hover，因为 .row[data-wg-state]:hover > .rowSurface 的权重更高
     // 少了这一档，选中行被悬停时会被悬停那条盖回更浅的值
-    expect(
-      declarations(".rowSelected[data-wg-state='ongoing']", 'background-color').length,
-    ).toBeGreaterThan(0)
     for (const state of ['ongoing', 'warning']) {
-      const selectors = rules
-        .filter((rule) =>
-          rule.selectors.includes(`.rowSelected[data-wg-state='${state}']:hover`),
-        )
-        .map((rule) => rule.body)
-      expect(selectors.length, `.rowSelected[data-wg-state='${state}']:hover is missing`).toBeGreaterThan(0)
-      expect(selectors.some((body) => /26%/.test(body))).toBe(true)
+      const selector = `.row[data-wg-state='${state}']:hover > .rowSurface.rowSelected`
+      expect(
+        declarations(selector, 'background-color').length,
+        `${selector} is missing`,
+      ).toBeGreaterThan(0)
+      expect(declarations(selector, 'background-color').some((body) => /26%/.test(body))).toBe(true)
     }
 
     // 强调色行全程用 background-color：叠一层中性灰会把色相稀释掉
     for (const selector of [
-      ".row[data-wg-state='ongoing']:hover",
-      ".rowSelected[data-wg-state='ongoing']",
+      ".row[data-wg-state='ongoing']:hover > .rowSurface",
+      ".row[data-wg-state='ongoing'] > .rowSurface.rowSelected",
     ]) {
       for (const body of declarations(selector, 'background-image')) {
         expect(body).toBe('')
@@ -324,7 +370,8 @@ describe('client stylesheet', () => {
         .find((body) => body.includes('border-radius')) ?? ''
 
     // 容器行与会话行同属官方那一条 projectRow/sessionRow 规则：radius-md
-    for (const selector of ['.workspaceHead', '.row']) {
+    // 圆角挂在药丸上：行带只承担间距，它自己是透明且没有圆角的
+    for (const selector of ['.headSurface', '.rowSurface']) {
       expect(bodyOf(selector), `${selector} must take the official radius token`).toMatch(
         /border-radius:\s*var\(--dsw-radius-md\)/,
       )
@@ -357,21 +404,19 @@ describe('client stylesheet', () => {
     expect(declared('.workspaceHead', '--wg-row-start')).toBe(
       'calc(8px + 16px * var(--wg-depth, 0))',
     )
-    expect(declared('.workspaceHead', 'padding-left')).toBe('var(--wg-row-start)')
+    expect(declared('.headSurface', 'padding-left')).toBe('var(--wg-row-start, 8px)')
     expect(declared('.groupHead', '--wg-row-start')).toBe(
       'calc(24px + 16px * var(--wg-depth, 0))',
     )
-    expect(declared('.groupHead', 'padding-left')).toBe('var(--wg-row-start)')
+    // 行带只下发变量，内边距由药丸吃下——量一条就够，两个行类共用同一条规则
+    expect(declared('.headSurface', 'padding-left')).toBe('var(--wg-row-start, 8px)')
     // 会话行仍比同级容器多让一格：指示器不参与这套定位（它钉在行左缘），缩进才是「这几行是会话」的依据
-    expect(declared('.workspaceBody > .sessions > .row', '--wg-row-start')).toBe(
-      'calc(24px + 16px * var(--wg-depth, 0))',
+    // 基准由所在容器下发：工作区体内 24px、会话分组体内 40px，行那一侧只有一条规则
+    expect(declared('.sessions > .row', '--wg-row-start')).toBe(
+      'calc(var(--wg-row-base, 24px) + 16px * var(--wg-depth, 0))',
     )
-    expect(
-      declared(
-        '.group > .expand > .expandClip > .groupBody > .sessions > .row',
-        '--wg-row-start',
-      ),
-    ).toBe('calc(40px + 16px * var(--wg-depth, 0))')
+    expect(declared('.workspaceBody', '--wg-row-base')).toBe('24px')
+    expect(declared('.groupBody', '--wg-row-base')).toBe('40px')
   })
 
   it('draws one guide line per nested level at the parent icon column', () => {
@@ -635,11 +680,15 @@ describe('client stylesheet', () => {
       selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
       body: m[2] ?? '',
     }))
-    const bodyOf = (selector: string): string =>
-      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
-
-    const count = bodyOf('.groupCount')
-    const time = bodyOf('.rowTime')
+    // 同格同形的几条声明写在一条共享规则里，两边各只补自己那一项（会话数补负外边距）
+    // 因此按「命中该选择器的规则合起来」读，而不是只读第一条
+    const declaredFor = (selector: string): string =>
+      rules
+        .filter((rule) => rule.selectors.includes(selector))
+        .map((rule) => rule.body)
+        .join(';')
+    const count = declaredFor('.groupCount')
+    const time = declaredFor('.rowTime')
     expect(count).not.toBe('')
     for (const declaration of ['flex: none', 'color: var(--dsw-alias-label-tertiary)']) {
       expect(count).toContain(declaration)
@@ -647,6 +696,14 @@ describe('client stylesheet', () => {
     }
     expect(count).toMatch(/font-size:\s*12px/)
     expect(count).toMatch(/line-height:\s*20px/)
+    // 两者共用同一条排版规则，这正是「同格同形」最直接的证据
+    expect(
+      rules.some(
+        (rule) =>
+          rule.selectors.includes('.groupCount') && rule.selectors.includes('.rowTime'),
+      ),
+      'the session count and the row time do not share one rule',
+    ).toBe(true)
 
     // 分组头是 gap:6px，而 session 行是 gap:0，差的那份 gap 要还回去
     // 会话数才会落在与 time 同一条右缘线上
@@ -784,7 +841,8 @@ describe('client stylesheet', () => {
       rules.some((rule) => rule.selectors.includes(selector) && pattern.test(rule.body))
 
     // 工作区分组行本身落在根节点上，缩进与工作区行同为 8px，不是会话分组那档 24px
-    expect(hasRule('.groupHead.virtualWorkspaceHead', /padding:\s*0 8px/)).toBe(true)
+    // 缩进只下发变量，内边距由药丸吃下
+    expect(hasRule('.groupHead.virtualWorkspaceHead', /--wg-row-start:\s*8px/)).toBe(true)
     // 缩进层级不用 CSS 变量在容器间累加，把变量定义成「它自己 + 1」是循环引用
     // 浏览器会把整条声明当作无效值丢掉，偏移因此恒为 0、缩进静默失效
     // 层级改由 JS 算好（nesting.levelOf）经 --wg-depth 下发，样式表只做一次重命名
@@ -934,12 +992,18 @@ describe('client stylesheet', () => {
         .map((rule) => /--wg-row-start:\s*([^;]+)/.exec(rule.body)?.[1]?.trim())
         .find((value) => value !== undefined)
 
-    const wrapped = '.workspaceBody > .sessions > * > .row'
-    const groupedWrapped =
-      '.group > .expand > .expandClip > .groupBody > .sessions > * > .row'
+    const wrapped = '.sessions > * > .row'
 
-    expect(indentOf(wrapped)).toBe('calc(24px + 16px * var(--wg-depth, 0))')
-    expect(indentOf(groupedWrapped)).toBe('calc(40px + 16px * var(--wg-depth, 0))')
+    // 经过包装的那一档与直接子项写在同一张选择器表里，读同一个缩进表达式
+    expect(indentOf(wrapped)).toBe(
+      'calc(var(--wg-row-base, 24px) + 16px * var(--wg-depth, 0))',
+    )
+    // 分组那一档不再另写一套：基准改由 .groupBody 下发，两条链因此在样式表里只剩一条表达式
+    const bases = rules
+      .filter((rule) => rule.selectors.includes('.groupBody'))
+      .map((rule) => /--wg-row-base:\s*([^;]+)/.exec(rule.body)?.[1]?.trim())
+      .find((value) => value !== undefined)
+    expect(bases).toBe('40px')
   })
 
   it('paints the hover card text for a dark card rather than a theme-tinted one', () => {
@@ -1259,12 +1323,13 @@ describe('client stylesheet', () => {
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
     // 一条列表的成员排成一列，行距与工作区体内那几段同值（2px）
+    // 它由行带自己承担，因此这里读的是变量而不是 margin
     expect(bodyOf('.flatList')).toMatch(/flex-direction:\s*column/)
-    expect(bodyOf('.flatList > * + *')).toMatch(/margin-top:\s*2px/)
+    expect(bodyOf('.flatList > * + *')).toMatch(/--wg-row-lead:\s*2px/)
     // 平铺没有层级，但指示器仍占行左缘那 4~20px，缩进取会话行的下限 24px 让开它
-    // 它那两条选择器写在同一个逗号列表里，命中其一即可
+    // 变量下发给整条列表，行与悬停卡片的包装都从它继承
     const flatIndent = rules
-      .filter((rule) => rule.selectors.includes('.flatList > .row'))
+      .filter((rule) => rule.selectors.includes('.flatList'))
       .map((rule) => /--wg-row-start:\s*([^;]+)/.exec(rule.body)?.[1]?.trim())
       .find((value) => value !== undefined)
     expect(flatIndent).toBe('24px')
@@ -1341,7 +1406,11 @@ describe('client stylesheet', () => {
 
     // 指示器绝对定位在行左缘 4~20px，行默认的 8px 内边距会让标题压在它下面
     // 列表里的行由 .workspaceBody > .sessions > .row 让出这一格，置顶区不在那些容器里，得自己让
-    expect(indent).toContain('padding-left: var(--wg-row-start)')
+    //
+    // 这里只下发变量：内边距由药丸（.rowSurface）吃下，行带只承担与上一行之间的间距
+    // 在这一档里再写一条 padding-left 会落到带上，把可见的行推得比列表里的行更靠右
+    expect(indent).toContain('--wg-row-start: 24px')
+    expect(indent).not.toContain('padding')
     // 选择器只能用本模块的类名：.row 属于另一张样式表，跨模块引用编译后匹配不到
     const selector = css.slice(0, css.indexOf(indent))
     const last = selector.slice(selector.lastIndexOf('}') + 1).trim()

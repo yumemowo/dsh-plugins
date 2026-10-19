@@ -1,6 +1,61 @@
-.workspace { position: relative; display: flex; flex-direction: column; }
+/* 区块根与它的两个同类：都是「相对定位的一列」，放在一条规则里 */
+.workspace,
+.virtualWorkspace,
+.virtualWorkspaceBody { position: relative; display: flex; flex-direction: column; }
 
-.workspace + .workspace { margin-top: 4px; }
+/* ── 行带与药丸 ─────────────────────────────────────────────────
+   行与行之间不留 margin。margin 是一段不属于任何行的像素，
+   指针停在上面时事件由容器接住，按元素命中算的落点就读不到行
+
+   每一行因此是一条「带」：带高 = 上行间距（--wg-row-lead）+ 可见药丸
+   带自己承担那点上间距，相邻两条严丝合缝，指针落在哪一像素都归属于某一行
+   药丸（.rowSurface / .headSurface）是带里的内盒，底色、圆角与悬停都在它身上
+
+   间距按边界分档：段内与撑开体首条 2px、顶层两个工作区之间 4px、
+   列表首项与紧随虚拟分组之后的那一项 0 */
+.row,
+.workspaceHead,
+.groupHead {
+  box-sizing: border-box;
+  /* 落点标记、状态指示器与引导线都相对这一层定位 */
+  position: relative;
+  padding-top: var(--wg-row-lead, 0px);
+  cursor: pointer;
+  user-select: none;
+  color: var(--dsw-alias-label-primary);
+}
+
+.rowSurface,
+.headSurface {
+  box-sizing: border-box;
+  /* 指示器绝对定位在药丸左缘，因此定位元素是这一层而不是带 */
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: var(--dsw-radius-md);
+}
+
+.rowSurface {
+  height: 32px;
+  gap: 0;
+  padding: 0 8px;
+  /* 缩进读的是带下发的 --wg-row-start，与溢出按钮同源 */
+  padding-left: var(--wg-row-start, 8px);
+}
+
+.headSurface {
+  height: 34px;
+  gap: 6px;
+  padding: 0 8px;
+  padding-left: var(--wg-row-start, 8px);
+}
+
+/* 平铺列表不在撑开体里，自己下发一档；撑开体内那一档写在 .expandClip 上 */
+.flatList > * + * { --wg-row-lead: 2px; }
+
+/* 两个工作区之间是 4px
+   它落在工作区自己身上：工作区行从中读 4px，它体内各行再由撑开体那一档重置回 2px */
+.workspace + .workspace { --wg-row-lead: 4px; }
 
 /* 撑开体，轨道高度走 0fr ↔ 1fr，高度因此完全由内容决定
    与子元素数量和各自高度都无关，样式里不需要任何写死的尺寸
@@ -29,6 +84,15 @@
      延时取容器同一份时长，两者不可能失配 */
   visibility: hidden;
   transition: visibility 0s linear var(--wg-expand-duration);
+  /* 体内每一条行都吃 2px：变量下发给整个裁剪区，行从它继承
+   *
+   * 逐条点名「谁排在谁后面」也能写出同一个值，但那样每一档都要从 .expandClip
+   * 一路写穿到行，改一次渲染结构就得跟着改一次
+   * 列表里每一条行都住在某个撑开体里，因此这一条覆盖全部行
+   * 不受它管的只有平铺列表与顶层两个工作区之间，各自另写一条
+   *
+   * 变量落在裁剪区上、行的上内边距读它，因此带高仍等于「间距 + 药丸」 */
+  --wg-row-lead: 2px;
 }
 
 .expandOpen > .expandClip { visibility: visible; transition-delay: 0s; }
@@ -60,28 +124,13 @@
  * 行本身复用会话分组那一套（同一 .groupHead 基类、同一行尾操作位与可收放槽位）
  * 因此工作区数、悬停让位、操作位显隐都由既有规则承担，这里只覆盖两处
  * 它在根节点上，缩进取 8px（分组头是 24px，因为它落在工作区内部） */
-.groupHead.virtualWorkspaceHead { padding: 0 8px; }
-
-.virtualWorkspace { position: relative; display: flex; flex-direction: column; }
-
-.virtualWorkspaceBody { display: flex; flex-direction: column; position: relative; }
+.groupHead.virtualWorkspaceHead { --wg-row-start: 8px; }
 
 /* 缩进层级由行组件在 JS 里算好，经 --wg-depth 下发，样式表只把它当数值用
    层级不能在 CSS 里靠变量继承累加，把一个变量定义成它自己加一（自引用）是循环引用
    浏览器会把整条声明当作无效值丢掉，于是偏移恒为 0、缩进静默失效
    每个 .workspace 都自己下发一次 --wg-depth，子工作区因此不会被父的深度顺着继承下来
    行与引导线都读同一个值，两者不会错位 */
-/* 组内空态与组内工作区行落在同一缩进起点
-   那句占位文案是「这个分组里还没有东西」，浮在分组头左侧会读成根节点的内容 */
-.virtualWorkspaceBody > .empty { padding-left: 24px; }
-
-/* 撑开体自己承担「上一行与它之间」的那 2px，这段间距要连同内容一起收掉，否则收起后行下会留一条 2px 空档
-   间距取内层容器的上内边距——它落在 clip 的裁剪区内，轨道合拢时随之被裁掉 */
-.expandClip > .workspaceBody,
-.expandClip > .virtualWorkspaceBody,
-.expandClip > .groupBody,
-.expandClip > .sessions { padding-top: 2px; }
-
 /* 图标列：工作区的文件夹/箭头、分组的箭头共用同一列宽
    会话行不再占这一列，它的状态指示器绝对定位在行左侧（见 .indicator 一节） */
 .slot {
@@ -94,25 +143,10 @@
   display: inline-flex;
 }
 
-/* 容器行底色取官方 projectRow 的 label-primary，图标槽自己显式设 tertiary
-   所以这里的颜色只影响直接继承的行内文字 */
-.workspaceHead,
-.groupHead {
-  box-sizing: border-box;
-  cursor: pointer;
-  user-select: none;
-  color: var(--dsw-alias-label-primary);
-  border-radius: var(--dsw-radius-md);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  /* 行自身参与定位，引导线要落在行的悬停底色之下 */
-  position: relative;
-  height: 34px;
-}
-
-.workspaceHead:hover,
-.groupHead:hover { background: var(--dsw-alias-interactive-bg-hover); }
+/* 容器行的悬停底色画在药丸上，不在带上
+   带含那段上行间距，悬停底色若铺满整条带就比容器行高出 2px */
+.workspaceHead:hover > .headSurface,
+.groupHead:hover > .headSurface { background: var(--dsw-alias-interactive-bg-hover); }
 
 /* 层级缩进，每一层让出一个 16px 图标列，第 0 层取官方工作区行的 8px
    深度由行组件下发 --wg-depth（子工作区可以任意层，因此不能再按固定层数写死选择器）
@@ -128,43 +162,41 @@
    会话行多出「> *」那一档：挂了悬停卡片的行被官方 HoverCard 的根节点包了一层（那是个 display:block 的 span）
    行就不再是 .sessions 的直接子项。两条都写
    有没有卡片缩进都一致 */
-.workspaceHead {
-  --wg-row-start: calc(8px + 16px * var(--wg-depth, 0));
-  padding: 0 8px;
-  padding-left: var(--wg-row-start);
+.workspaceHead { --wg-row-start: calc(8px + 16px * var(--wg-depth, 0)); }
+
+.groupHead { --wg-row-start: calc(24px + 16px * var(--wg-depth, 0)); }
+
+/* 会话段里每一行的起点由所在段算出，段不从属于哪个容器就不用管
+   基准写在体上：工作区体内 24px、会话分组体内 40px（见 .workspaceBody / .groupBody）
+
+   这两档只差一个基准，缩进表达式因此只写一次
+   会话行比同级容器多让一格：指示器不参与这套定位（它钉在行左缘），缩进才是「这几行是会话」的依据
+   挂悬停卡片时行外面多一层官方包装，因此再补一条经过包装的档
+
+   溢出按钮（见 views/SessionList.tsx）与同段会话行写在同一组选择器里，缩进表达式只有一处
+   行把这一格交给药丸（.rowSurface）吃下，按钮自己就是那颗盒子
+   它的文字还要再让出 .rowTitle 那 4px 左外边距才压在标题那条线上，因此单独补一档内边距 */
+.sessions > .row,
+.sessions > * > .row,
+.sessions > .sessionOverflow {
+  --wg-row-start: calc(var(--wg-row-base, 24px) + 16px * var(--wg-depth, 0));
 }
 
-.groupHead {
-  --wg-row-start: calc(24px + 16px * var(--wg-depth, 0));
-  padding: 0 8px;
-  padding-left: var(--wg-row-start);
-}
-
-/* 会话溢出按钮与同段会话行写在同一条规则里，缩进表达式只有一处
-   见 views/SessionList.tsx */
-.workspaceBody > .sessions > .row,
-.workspaceBody > .sessions > * > .row,
-.workspaceBody > .sessions > .sessionOverflow {
-  --wg-row-start: calc(24px + 16px * var(--wg-depth, 0));
-  padding-left: var(--wg-row-start);
-}
-
-.group > .expand > .expandClip > .groupBody > .sessions > .row,
-.group > .expand > .expandClip > .groupBody > .sessions > * > .row,
-.group > .expand > .expandClip > .groupBody > .sessions > .sessionOverflow {
-  --wg-row-start: calc(40px + 16px * var(--wg-depth, 0));
-  padding-left: var(--wg-row-start);
-}
+.sessions > .sessionOverflow { padding-left: calc(var(--wg-row-start) + 4px); }
 
 /* ── 会话溢出按钮 ─────────────────────────────────────────
    一个展示范围内被收起的那些会话由它展开（见 views/SessionList.tsx）
-   缩进与同段会话行共用上面那两条规则给的 --wg-row-start，因此按钮的左缘不可能与行悄悄错开
+   缩进与同段会话行共用上面那条规则给的 --wg-row-start，左缘因此不会与行悄悄错开
    几何与配色照官方 .sessionOverflowButton：28px 高、12px 字、tertiary 转 secondary
-   它靠 .sessions 的相邻兄弟规则拿到与行之间同一个 2px，不必自己写 margin */
+
+   它与行一样是「带」：相邻兄弟规则给它下发同一个 2px，由它自己的上内边距吃下，
+   高度同时加回这一格，可见盒仍是 28px
+   那 2px 若留成行与它之间的空白，指针停上去就读不出行 */
 .sessionOverflow {
   box-sizing: border-box;
   width: 100%;
-  height: 28px;
+  height: calc(28px + var(--wg-row-lead, 0px));
+  padding-top: var(--wg-row-lead, 0px);
   border: none;
   border-radius: var(--dsw-radius-sm);
   cursor: pointer;
@@ -175,28 +207,22 @@
   line-height: 20px;
 }
 
-/* 文字左缘压在会话标题那条线上，与官方那条按钮同一取舍
-   标题在行里比 --wg-row-start 多让出 .rowTitle 的左外边距 4px，这里补上同一个量
-   这两条与上面那两条同层（选择器链相同），位置在后因此覆盖掉它们给按钮写下的 padding-left */
-.workspaceBody > .sessions > .sessionOverflow,
-.group > .expand > .expandClip > .groupBody > .sessions > .sessionOverflow {
-  padding-left: calc(var(--wg-row-start) + 4px);
-}
-
 .sessionOverflow:hover { color: var(--dsw-alias-label-secondary); }
-
-/* 子工作区这一段本身不再让出缩进，它的每个成员都是一个完整的工作区块
-   各自按自己的 --wg-depth 定位，这一段只负责把它们排成一列并让出彼此之间的间距 */
-.nest { display: flex; flex-direction: column; }
-
-.nest > * + * { margin-top: 2px; }
 
 /* 竖向引导线，落在父级图标列的中心（工作区 8 + 16/2 = 16，分组 24 + 16/2 = 32）
    把「这组行属于上一行」画出来。行本身是 position: relative 的定位元素
    按树序排在容器伪元素之后绘制，因此悬停/选中的行底色会盖住它
    不会出现线穿过高亮底色的割裂感 */
-.workspaceBody,
-.groupBody { position: relative; }
+/* 两个体各自下发会话行的缩进基准，同时是引导线的定位祖先 */
+.workspaceBody {
+  --wg-row-base: 24px;
+  position: relative;
+}
+
+.groupBody {
+  --wg-row-base: 40px;
+  position: relative;
+}
 
 .workspaceBody::before,
 .groupBody::before {
@@ -213,10 +239,14 @@
 
 .groupBody::before { left: calc(32px + 16px * var(--wg-depth, 0)); }
 
-/* 字号与行高成对写在叶子上（官方 .title 即如此），根节点不设 line-height */
+/* 四种标题共用同一套排版
+   会话标题与容器标题同色同字号，层级只由行高（34px vs 32px）承担
+   字号与行高成对写在叶子上（官方 .title 即如此），根节点不设 line-height
+   色阶分两档：工作区与会话取 label-primary，分组与工作区分组取更暗的 tertiary */
 .workspaceTitle,
 .groupLabel,
-.virtualWorkspaceLabel {
+.virtualWorkspaceLabel,
+.rowTitle {
   min-width: 0;
   flex: 1;
   overflow: hidden;
@@ -226,28 +256,21 @@
   line-height: 20px;
 }
 
-/* 官方工作区标题即 label-primary 14px/20px，不加字重，与会话标题同色同字号
-   层级只由行高（34px vs 32px）承担 */
 .workspaceTitle { color: var(--dsw-alias-label-primary); }
 
-/* 分组是工作区之下的一层，靠更暗的色阶表示「低一级」 */
-.groupLabel { color: var(--dsw-alias-label-tertiary); }
-
-/* 工作区分组在根节点上，是容器而不是工作区本身，因此与分组同一档色阶 */
+.groupLabel,
 .virtualWorkspaceLabel { color: var(--dsw-alias-label-tertiary); }
+
+/* 会话标题的左外边距取官方 .title 的 4px：行的缩进下限是 24px，指示器占 4~20px，两者因此不会相撞 */
+.rowTitle { margin: 0 6px 0 4px; }
 
 /* 分组的会话数，与 session 行的 .rowTime 同格同形（tertiary、12px/20px），内容为纯数字
    它排在可收放的操作槽之前，正对 time 相对操作槽的位置
-   槽位静止时不占宽，会话数因此贴在行右，悬停时槽位展开、会话数隐去，两者互换 */
-.groupCount {
-  flex: none;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 20px;
-  /* 分组头是 gap:6px 的 flex 行，而 session 行是 gap:0
-     会话数要落在与 time 同一条右缘线上，就得把自己与操作槽之间那份 gap 还回去 */
-  margin-right: -6px;
-}
+   槽位静止时不占宽，会话数因此贴在行右，悬停时槽位展开、会话数隐去，两者互换
+
+   分组头是 gap:6px 的 flex 行而 session 行是 gap:0
+   会话数要落在与 time 同一条右缘线上，就得把自己与操作槽之间那份 gap 还回去 */
+.groupCount { margin-right: -6px; }
 
 /* 工作区行静止时是文件夹，悬停时换成箭头，两个槽都在文档流里
    各自 16px，因此切换不会让标题横向跳动。悬停箭头的色阶同官方 .chevron */
@@ -266,44 +289,12 @@
 
 .arrowOpen { transform: rotate(90deg); }
 
-/* 相邻行的 2px 间距。官方一条 .groupSection > * + * 就同时覆盖了
-   「容器行 → 首个会话行」与「会话 → 会话」，因为那里的会话行是容器行的直接兄弟
-   本包把分组结构多包了 .workspaceBody / .group / .sessions 三层
-   同一规则要在每层各写一次，分组头与首个会话行之间才会有间距 */
 .workspaceBody,
 .group,
 .groupBody,
 .nest,
-.sessions { display: flex; flex-direction: column; }
-
-.virtualWorkspace > * + *,
-.workspace > * + *,
-.workspaceBody > * + *,
-.group > * + *,
-.groupBody > * + *,
-.nest > * + *,
-.sessions > * + * { margin-top: 2px; }
-
-/* 撑开体要抵消上一条规则给它写上的 margin-top，那段间距由 clip 内部的上内边距
-   承担（见撑开体规则处），这样它会落在裁剪区内，能随内容一起收掉 */
-.virtualWorkspace > .expand,
-.workspace > .expand,
-.group > .expand { margin-top: 0; }
-
-.row {
-  box-sizing: border-box;
-  cursor: pointer;
-  user-select: none;
-  color: var(--dsw-alias-label-primary);
-  border-radius: var(--dsw-radius-md);
-  height: 32px;
-  display: flex;
-  align-items: center;
-  gap: 0;
-  padding: 0 8px;
-  /* 与容器行同理，行要盖住所在层级的引导线 */
-  position: relative;
-}
+.sessions,
+.flatList { display: flex; flex-direction: column; }
 
 /* ── 状态指示器 ───────────────────────────────────────────
    绝对定位在行的最左侧（容器栏的左缘），与层级深度无关
@@ -329,9 +320,9 @@
 [data-wg-indicator='icon'] .indicator { left: var(--wg-indicator-inset-icon); }
 
 /* 「色条」样式的字形：一根两端圆角的竖条，颜色由行的 data-wg-state 给出
-   它不居中：这个 16px 的盒是给官方那枚 16px 图标用的，色条只有 3px 宽，
-   居中会让它的左缘落到 内缩 + 6.5px 上，比设计稿的落点右移 6.5px
-   靠左对齐，左缘因此正好压在 --wg-indicator-inset 上 */
+   它不居中，这个 16px 的盒是给官方那枚 16px 图标用的，色条只有 3px 宽
+   居中会让左缘落到 内缩 + 6.5px 上，比设计稿的落点右移 6.5px
+   靠左对齐后左缘正好压在 --wg-indicator-inset 上 */
 [data-wg-indicator='bar'] .indicator { justify-content: flex-start; }
 
 .indicatorBar {
@@ -342,76 +333,68 @@
 }
 
 /* 指示器的颜色按状态取语义词。完成与空闲共用中性色（空闲根本不渲染指示器）
-   运行取强调蓝、待交互取琥珀，与官方 StateDot 的两个状态色同一组 token */
-.row > .indicator[data-wg-state='ongoing'] { color: var(--dsw-alias-state-business-primary); }
+   运行取强调蓝、待交互取琥珀，与官方 StateDot 的两个状态色同一组 token
 
-.row > .indicator[data-wg-state='warning'] { color: var(--dsw-alias-state-warn-primary); }
+   这里不必限定「它是药丸的直接内盒」。.indicator 只有 StatusIndicator 一个产出点，
+   会话行也不会互相嵌套，因此它在本包里不可能出现在别处 */
+.indicator[data-wg-state='ongoing'] { color: var(--dsw-alias-state-business-primary); }
 
-.row > .indicator[data-wg-state='done'] { color: var(--dsw-alias-state-success-primary); }
+.indicator[data-wg-state='warning'] { color: var(--dsw-alias-state-warn-primary); }
+
+.indicator[data-wg-state='done'] { color: var(--dsw-alias-state-success-primary); }
 
 /* ── 行的状态底色与悬停 / 选中 ─────────────────────────────
    运行与待交互各上一层浅色底，颜色取上面的状态语义词
    完成与空闲不设底色，完成那次提醒已经由指示器的绿色表达，再铺一层底会让整段长期泛色
 
-   悬停与选中分两条路：
-   - 没有强调色的行（空闲、完成）与官方完全一致
-     悬停与选中都是同一档浅灰，官方那套本来就是这个值（官方的 sessionRow.selected 与 :hover 是同一条声明），不另加深
-   - 有强调色的行才走加深，在同一色相上把浓度提上去，悬停比选中浅一档
-     于是色相仍说明是哪种状态，深浅说明「指针在上面」还是「这是当前会话」
-     叠灰的做法会把这层色相稀释掉，因此强调色行不叠灰 */
-.row[data-wg-state='ongoing'] {
+   悬停与选中分两条路
+   - 没有强调色的行（空闲、完成）与官方完全一致：悬停与选中都是同一档浅灰
+     官方那套本来就是同一个值（sessionRow.selected 与 :hover 写在同一组选择器里），不另加深
+   - 有强调色的行才走加深，同一色相上把浓度提上去，悬停比选中浅一档
+     于是色相说明是哪种状态，深浅说明「指针在上面」还是「这是当前会话」
+     叠灰会把色相稀释掉，因此强调色行不叠灰 */
+.row[data-wg-state='ongoing'] > .rowSurface {
   background-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent);
 }
 
-.row[data-wg-state='warning'] {
+.row[data-wg-state='warning'] > .rowSurface {
   background-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 10%, transparent);
 }
 
 /* 无强调色的行，悬停与选中同为官方那档浅灰 */
-.row:not([data-wg-state='ongoing']):not([data-wg-state='warning']):hover,
-.row:not([data-wg-state='ongoing']):not([data-wg-state='warning']).rowSelected {
+.row:not([data-wg-state='ongoing']):not([data-wg-state='warning']):hover > .rowSurface,
+.row:not([data-wg-state='ongoing']):not([data-wg-state='warning']) > .rowSurface.rowSelected {
   background-color: var(--dsw-alias-interactive-bg-hover);
 }
 
 /* 强调色行的悬停，较浅的加深 */
-.row[data-wg-state='ongoing']:hover {
+.row[data-wg-state='ongoing']:hover > .rowSurface {
   background-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, transparent);
 }
 
-.row[data-wg-state='warning']:hover {
+.row[data-wg-state='warning']:hover > .rowSurface {
   background-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 18%, transparent);
 }
 
 /* 强调色行的选中，更深的加深
-   多带一档 :hover 是为了权重
-   .row[data-wg-state]:hover 是 (0,3,0)，比单写 .rowSelected[data-wg-state] 的 (0,2,0) 高
-   选中行被悬停时会被上面那条 18% 盖回去，反而变浅 */
-.rowSelected[data-wg-state='ongoing'],
-.rowSelected[data-wg-state='ongoing']:hover {
+   多带一档 :hover 是为了权重：.row[data-wg-state]:hover 是 (0,4,0)
+   比单写 .rowSurface.rowSelected[data-wg-state] 的 (0,3,0) 高
+   少了这一档，选中的行被悬停时会被那条 18% 盖回去、反而变浅 */
+.row[data-wg-state='ongoing'] > .rowSurface.rowSelected,
+.row[data-wg-state='ongoing']:hover > .rowSurface.rowSelected {
   background-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 26%, transparent);
 }
 
-.rowSelected[data-wg-state='warning'],
-.rowSelected[data-wg-state='warning']:hover {
+.row[data-wg-state='warning'] > .rowSurface.rowSelected,
+.row[data-wg-state='warning']:hover > .rowSurface.rowSelected {
   background-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 26%, transparent);
-}
-
-.rowTitle {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  /* 左外边距取官方 .title 的 4px，行的缩进下限是 24px，指示器占 4~20px，两者因此不会相撞 */
-  margin: 0 6px 0 4px;
-  font-size: 14px;
-  line-height: 20px;
 }
 
 /* 行尾相对时间，官方 .time 的几何与色阶（12px/20px、label-tertiary）
    悬停、菜单展开、键盘聚焦时让位给操作位——官方是同一处 CSS 互换（time → ellipsis）
    本包把「键盘聚焦」也列为一条显隐路径 */
-.rowTime {
+.rowTime,
+.groupCount {
   flex: none;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
@@ -454,12 +437,13 @@
    已置顶的图钉常驻可见并占着 16px：它的位置因此不随时间隐去、操作位展开而变
    未置顶的图钉与操作位一起显隐，静止时连宽度一起收成 0——不为一个看不见的状态图标留空位
 
-   颜色取官方那次置顶标记用的同一档色阶（label-caption），不另造一套
+   颜色取官方那次置顶标记用的同一档色阶（label-caption），不另造一套，两态共用，只有悬停时提亮
    overflow 与操作位槽同理：裁掉收起时溢出的图标，并把 flex 项的自动最小尺寸归零，否则子项 16px 会把 width: 0 顶回去 */
 .rowPin {
   flex: none;
   cursor: pointer;
   height: 16px;
+  color: var(--dsw-alias-label-caption);
   padding: 0;
   background: 0 0;
   border: none;
@@ -470,11 +454,10 @@
   overflow: hidden;
 }
 
-/* 已置顶：常驻可见，色阶比未置顶那一档强，因此它读起来是「这一行的状态」而不是一个待点的入口 */
+/* 已置顶：常驻可见，因此它读起来是「这一行的状态」而不是一个待点的入口 */
 .rowPinOn {
   width: 16px;
   opacity: 1;
-  color: var(--dsw-alias-label-caption);
 }
 
 .rowPinOn:hover {
@@ -486,13 +469,13 @@
   width: 0;
   opacity: 0;
   pointer-events: none;
-  color: var(--dsw-alias-label-caption);
 }
 
 /* 三条触发条件与 .rowTime / .rowActionSlot 那两组一一对应，保证行尾在任一时刻只有一套控件占位
-   图钉排在操作位之后，但仍读行自身的悬停与行内键盘焦点 */
-.row:hover > .rowPinOff,
-.row:focus-within > .rowPinOff,
+   图钉排在操作位之后，但仍读行自身的悬停与行内键盘焦点
+   它在药丸里，因此这一档写成后代选择器：仍是「行尾那一格」，只是隔了一层盒子 */
+.row:hover .rowPinOff,
+.row:focus-within .rowPinOff,
 .rowPinOff:focus-visible {
   width: 16px;
   opacity: 1;
@@ -635,25 +618,28 @@ body[data-wg-flip] [data-wg-hover-card] {
   font-size: 13px;
 }
 
-/* 空态占位要与它所在那一段的行对齐
-   左边距单独下发一次（与未归组会话那一档同值），否则它会停在上面那条 12px 上
-   比同一层的行更靠左，子工作区里尤其明显，父行缩进 1 层，子工作区的空态却跑回根节点那一列 */
+/* 体内空态占位：左边距要与它所在那一段的行对齐，上边距要自己承担
+ *
+ * 左边距单独下发一次（与未归组会话那一档同值）。缺了它空态会停在 .empty 基础规则的 12px 处
+ * 比同一层的行更靠左，子工作区里尤其明显：父行缩进了一层，子工作区的空态却跑回根节点那一列
+ *
+ * 上边距 18px = 空态自身那 16px + 「容器行 → 空态」的 2px
+ * 空态不是行，没有行带可以承担那一点，因此由它自己吃下 */
+.workspaceBody > .empty,
+.virtualWorkspaceBody > .empty {
+  padding-top: 18px;
+}
+
 .workspaceBody > .empty {
   padding-left: calc(24px + 16px * var(--wg-depth, 0));
 }
 
-/* 平铺列表，全部可见会话排在一条列里，没有工作区分组头
-   行距取官方 .flatList 的同一档（相邻行 2px），与工作区体内那几段一致
-   缩进取会话行的下限 24px：平铺没有层级，但指示器仍占行左缘那 4~20px，标题要让开它 */
-.flatList { display: flex; flex-direction: column; }
+/* 工作区分组体内没有层级，那句占位文案落在分组头右侧一格，读成「这个分组里还没有东西」 */
+.virtualWorkspaceBody > .empty { padding-left: 24px; }
 
-.flatList > * + * { margin-top: 2px; }
-
-.flatList > .row,
-.flatList > * > .row {
-  --wg-row-start: 24px;
-  padding-left: var(--wg-row-start);
-}
+/* 平铺列表没有层级，起点恒为 24px（会话行的下限，让开指示器占的 4~20px）
+   变量下发给整条列表，行与悬停卡片的包装都读得到 */
+.flatList { --wg-row-start: 24px; }
 
 /* 嵌套关着时那条说明，与底部那条实验性说明同形，但要在视觉上先被读到 */
 .noteNested { color: var(--dsw-alias-label-secondary); padding-top: 12px; }
@@ -666,10 +652,9 @@ body[data-wg-flip] [data-wg-hover-card] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .arrow { transition: none; }
-
-  /* 撑开体直接落位，不做撑开/收回动作
-       visibility 的延时也要一并去掉，否则收起后仍会多挡一个容器时长才交出焦点 */
+  /* 箭头与撑开体都直接落位，不做过渡
+     撑开体那条的 visibility 延时也要一并去掉，否则收起后仍会多挡一个容器时长才交出焦点 */
+  .arrow,
   .expand { transition: none; }
 
   .expandClip { transition: visibility 0s linear; }

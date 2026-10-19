@@ -2232,13 +2232,18 @@ describe('row context menu', () => {
   /**
    * 一行上显示的标题
    *
-   * 标题是行里的一个子节点（`.rowTitle`），不是行元素自己的 prop
+   * 标题是行里那颗药丸（`.rowSurface`）的一个子节点，不是行元素自己的 prop
    */
   function rowTitle(row: unknown): string | undefined {
     const children = (row as { props: { children?: unknown } }).props.children
     for (const child of Array.isArray(children) ? children : [children]) {
-      const element = child as { props?: { className?: unknown; children?: unknown } } | null
-      if (element?.props?.className === 'rowTitle') return String(element.props.children)
+      const surface = child as { props?: { className?: unknown; children?: unknown } } | null
+      if (surface?.props?.className !== 'rowSurface') continue
+      const inner = surface.props.children
+      for (const part of Array.isArray(inner) ? inner : [inner]) {
+        const element = part as { props?: { className?: unknown; children?: unknown } } | null
+        if (element?.props?.className === 'rowTitle') return String(element.props.children)
+      }
     }
     return undefined
   }

@@ -85,10 +85,13 @@ const hashed = (name) => `${prefix}_${name}`
  * @param inGroup - 为真时按「工作区内的一个会话分组」的结构拼，否则按「工作区的未归组会话」
  */
 function scope(depth, inGroup) {
+  // 行由「带 + 药丸」两层组成：外层带只承担与上一行之间的间距，缩进与内容都在内层药丸里
   const rows = ['会话 s0', '会话 s1'].map(
     (title) =>
       `<div class="${hashed('row')}">` +
-      `<span class="${hashed('rowTitle')}">${title}</span></div>`,
+      `<span class="${hashed('rowSurface')}">` +
+      `<span class="${hashed('rowTitle')}">${title}</span>` +
+      `</span></div>`,
   )
   const button = `<button type="button" class="${hashed('sessionOverflow')}">展开其余 3 个会话</button>`
   const sessions = `<div class="${hashed('sessions')}">${rows.join('')}${button}</div>`
@@ -125,7 +128,9 @@ ${[0, 1, 2].map((depth) => scope(depth, true)).join('\n')}
       scope: index < 3 ? 'workspace-' + index : 'group-' + (index - 3),
       titleLeft: row.querySelector('.${hashed('rowTitle')}').getBoundingClientRect().left,
       buttonTextLeft: box.left + parseFloat(style.paddingLeft),
-      height: box.height,
+      // 按钮自己也是一条「带」，上内边距吃掉与上一行之间的那点间距
+      // 可见高度因此是盒高减去内边距，与官方那 28px 比的是这一档
+      height: box.height - parseFloat(style.paddingTop || '0'),
       fontSize: parseFloat(style.fontSize),
       right: box.right,
       rowRight: row.getBoundingClientRect().right,

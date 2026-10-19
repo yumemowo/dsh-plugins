@@ -19,7 +19,7 @@
 `docs/render-performance.md` 里的毫秒数属于「历史测量记录」那一类；provider value 那条机制则是可复现的。
 
 **jsdom 算不了的东西另用真实浏览器探针**（尚不属 CI，手动跑）：`scripts/probes/` 下每个文件量一组只能在真实浏览器里看的结论，
-比如 `pin-hover.mjs` 量置顶区悬停展开的六条路径。它们**不进 `package.json` 的 scripts**：跑一次要自带浏览器、
+比如 `pin-hover.mjs` 量置顶区悬停展开的六条路径、`row-band.mjs` 沿整条列表逐像素确认行与行之间没有空档。它们**不进 `package.json` 的 scripts**：跑一次要自带浏览器、
 要读构建产物、结论也不是「通过 / 失败」那种能进 CI 的断言，写成一个命令会让人以为随便跑跑就行。
 
 `pin-hover.mjs` 的用法（它先把探针页面写进 `.preview/`，再驱动浏览器）：
