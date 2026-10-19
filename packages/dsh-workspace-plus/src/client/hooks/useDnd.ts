@@ -758,7 +758,7 @@ export function DndProvider({
       return
     }
     committedRef.current = true
-    debugLog('commit', {
+    debugWarn('commit', {
       inside: check.inside === undefined ? undefined : describeNode(check.inside),
       order: check.order === undefined ? undefined : describeNode(check.order),
       side: check.side,
@@ -782,7 +782,7 @@ export function DndProvider({
       zoneNodesRef.current = plan.tree?.nodesByZone() ?? new Map()
       searcherRef.current = maybeDropSearcher(plan.tree, collected.targets)
       paintRef.current = collected.paint
-      debugLog('drag begin', {
+      debugWarn('drag begin', {
         source: plan.source,
         targets: [...plan.targets.keys()],
         // 计划里有多少格真的在 DOM 上找到了元素：对不上就是「界面有格、计划没有」或反过来

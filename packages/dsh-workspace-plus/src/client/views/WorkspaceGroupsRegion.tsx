@@ -52,7 +52,7 @@ import {
 } from '../data/sessions.ts'
 import { frontPinnedRows, pinRanks, pinnedEntries, reconcilePinned } from '../data/pinned.ts'
 import { PINNED_KEY, stretchDragPlan } from '../data/dnd.ts'
-import { debugLog, debugWarn } from '../data/debug.ts'
+import { debugWarn } from '../data/debug.ts'
 import { buildWorkspaceTree } from '../data/tree.ts'
 import type { RootLayout, SessionRow } from '../data/types.ts'
 import type { HostInfo } from '../hostInfo.ts'
@@ -357,7 +357,7 @@ function useSnapshotFeed(
       void action.then(
         (next) => {
           const normalized = normalizeSnapshot(next)
-          debugLog('snapshot applied', {
+          debugWarn('snapshot applied', {
             groups: normalized.workspaceGroups.map(
               (group) => group.id + '[' + group.workspaceIds.join('|') + ']',
             ),

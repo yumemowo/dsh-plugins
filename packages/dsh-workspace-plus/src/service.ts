@@ -191,8 +191,15 @@ export async function createWorkspaceGroupsService(
   const logInfo = (message: string): void => {
     ctx.logger?.info?.(message)
   }
+  /**
+   * 打一条异常分叉
+   *
+   * 用 error 而不是 warn：exporter 按「阈值 < 级别就丢弃」过滤，warn 的级别是 2、
+   * 默认阈值是 1，因此 warn 在多数配置下根本不会出现。这几条标的是
+   * 「本该落下去却没落下」的分叉，看不见等于没写
+   */
   const logWarn = (message: string): void => {
-    ctx.logger?.warn?.(message)
+    ctx.logger?.error?.(message)
   }
 
   const domain = await ctx.storageDomain.open(workspaceGroupsSpec)
