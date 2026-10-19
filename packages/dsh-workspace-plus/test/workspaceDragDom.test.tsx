@@ -283,7 +283,7 @@ async function mount(
  */
 function workspaceBlock(container: HTMLElement, workspaceId: string): HTMLElement {
   const row = workspaceRow(container, workspaceId)
-  const block = row.closest<HTMLElement>('[data-wg-block-key]')
+  const block = row.closest<HTMLElement>('[data-wg-dnd-region]')
   if (block === null) throw new Error(`no workspace block for "${workspaceId}"`)
   return block
 }
@@ -552,7 +552,7 @@ describe('a source whose cwd parent sits inside a group', () => {
     expect(marked).toHaveLength(1)
     // 框落在这一块的整块上，而不是它外面那个分组：
     // 整块含体内的子工作区行，那些行是落点的子集，因此一并圈进来
-    expect(box).toBe(parentRow.closest('[data-wg-block-key]'))
+    expect(box).toBe(parentRow.closest('[data-wg-dnd-region]'))
     expect(box).not.toBe(zone(container, 'virtualWorkspaceBody/wg-1'))
     expect(box?.getAttribute('data-wg-drop')).toBe('inside')
     await act(async () => root.unmount())
@@ -572,7 +572,7 @@ describe('a source whose cwd parent sits inside a group', () => {
     fire(workspaceRow(container, SIBLING_CHILD_ID), 'dragover')
 
 
-    const parentBlock = workspaceRow(container, PARENT_ID).closest('[data-wg-block-key]')
+    const parentBlock = workspaceRow(container, PARENT_ID).closest('[data-wg-dnd-region]')
     const box = parentBlock?.getAttribute('data-wg-drop')
     const line = workspaceBlock(container, SIBLING_CHILD_ID).getAttribute('data-wg-drop')
 
@@ -629,27 +629,85 @@ describe('a root level source beside an unrelated root level sibling', () => {
     await act(async () => root.unmount())
   })
 
-  it('draws exactly one line on a whole block for a seam', async () => {
+  it('draws one line on a whole block for a seam from either side', async () => {
     // 一处缝从上面看是前一条的下半、从下面看是后一条的上半，两处各画一条就成了两条线。
-    // 无论指针从哪一侧靠近，都只该有一条，而且它必须画在**整块**上——
-    // 贴着标题那一行画会让线只有半行宽，读起来像「落点只覆盖那一行」
+    // 无论指针从哪一侧靠近，读数都必须逐字相同：同一个标记、画在同一个元素上。
+    // 而且它必须画在**整块**上——贴着标题那一行画会让线只有半行宽，
+    // 读起来像「落点只覆盖那一行」
     const { container, root } = await mount({ workspaceGroups: [] })
     band(workspaceRow(container, 'ws-1'), 0)
     band(workspaceRow(container, 'ws-2'), 20)
 
     fire(workspaceRow(container, MUN_ID), 'dragstart')
 
-    for (const [label, rowId, y] of [
-      ['from above', 'ws-1', 8],
-      ['from below', 'ws-2', 22],
+    const readings: { mark: string | null; holds: string | null }[] = []
+    for (const [rowId, y] of [
+      ['ws-1', 8],
+      ['ws-2', 22],
     ] as const) {
       fire(workspaceRow(container, rowId), 'dragover', y)
       const marked = [...container.querySelectorAll('[data-wg-drop]')]
-      expect(marked, label).toHaveLength(1)
+      expect(marked).toHaveLength(1)
       // 画的是整块，不是块里的标题行
-      expect(marked[0]?.hasAttribute('data-wg-block-key'), label).toBe(true)
-      expect(marked[0]?.contains(workspaceRow(container, rowId)), label).toBe(true)
+      expect(marked[0]?.hasAttribute('data-wg-dnd-region')).toBe(true)
+      // 线画在整块上，块里那一条标题行就是它指的位次参照
+      readings.push({
+        mark: marked[0]?.getAttribute('data-wg-drop') ?? null,
+        holds: marked[0]?.querySelector('[data-wg-dnd-row]')?.getAttribute('data-wg-dnd-row') ?? null,
+      })
     }
+
+    // 从上面靠近也读作「排到 ws-2 之前」：缝只有一处，标记因此只有一个
+    expect(readings[0]).toEqual({ mark: 'before', holds: 'ws-2' })
+    expect(readings[0]).toEqual(readings[1])
+    await act(async () => root.unmount())
+  })
+
+  it('reads the row spacing as the same seam the two rows share', async () => {
+    // 相邻两块之间那 4px 是 `margin-top`，不属于任何一块的盒子：指针停在那上面时
+    // 命中的是列表本身，按元素归属读不到任何一行。界面上它和「从上下两侧靠近」是同一处缝，
+    // 因此读数也必须逐字相同，否则用户移到那 4px 里落点线就整个消失
+    const { container, root } = await mount({ workspaceGroups: [] })
+    const list = container.querySelector<HTMLElement>('.list')
+    if (list === null) throw new Error('no list root')
+    band(workspaceRow(container, 'ws-1'), 0, 34)
+    band(workspaceRow(container, 'ws-2'), 38, 34)
+
+    fire(workspaceRow(container, MUN_ID), 'dragstart')
+
+    // 缝：36 是 ws-1 的下缘，38 是 ws-2 的上缘，指针停在 37
+    fire(list, 'dragover', 37)
+    const readings = [...container.querySelectorAll('[data-wg-drop]')].map((element) => [
+      element.getAttribute('data-wg-drop'),
+      element.getAttribute('data-wg-dnd-region'),
+    ])
+    expect(readings).toEqual([['before', 'workspaceBlock/ws-2']])
+
+    // 同一处缝从下面靠近（落在 ws-2 自己的上半）读数不变
+    fire(workspaceRow(container, 'ws-2'), 'dragover', 39)
+    expect([...container.querySelectorAll('[data-wg-drop]')].map((element) => [
+      element.getAttribute('data-wg-drop'),
+      element.getAttribute('data-wg-dnd-region'),
+    ])).toEqual(readings)
+    await act(async () => root.unmount())
+  })
+
+  it('reads the row spacing above the first row as dropping before it', async () => {
+    // 段首那一行上面那一段空白同样是一处缝：它同时是「排到第一条之前」，
+    // 而下面没有任何一条可以代言，因此这一档必须自己画出来
+    const { container, root } = await mount({ workspaceGroups: [] })
+    const list = container.querySelector<HTMLElement>('.list')
+    if (list === null) throw new Error('no list root')
+    band(workspaceRow(container, 'ws-1'), 20, 34)
+    band(workspaceRow(container, 'ws-2'), 58, 34)
+
+    fire(workspaceRow(container, MUN_ID), 'dragstart')
+    fire(list, 'dragover', 17)
+
+    expect([...container.querySelectorAll('[data-wg-drop]')].map((element) => [
+      element.getAttribute('data-wg-drop'),
+      element.getAttribute('data-wg-dnd-region'),
+    ])).toEqual([['before', 'workspaceBlock/ws-1']])
     await act(async () => root.unmount())
   })
 
@@ -704,7 +762,7 @@ describe('a root level source beside an unrelated root level sibling', () => {
     fire(workspaceRow(container, CHILD_ID), 'dragstart')
     fire(workspaceRow(container, PARENT_ID), 'dragover')
 
-    const parentBlock = workspaceRow(container, PARENT_ID).closest('[data-wg-block-key]')
+    const parentBlock = workspaceRow(container, PARENT_ID).closest('[data-wg-dnd-region]')
     expect(parentBlock?.getAttribute('data-wg-drop')).toBe('inside')
     await act(async () => root.unmount())
   })
@@ -741,7 +799,7 @@ describe('the real topology the user reported', () => {
     fire(workspaceRow(container, 'ws-5'), 'dragstart')
     fire(workspaceRow(container, 'ws-1'), 'dragover')
 
-    const group = zone(container, 'virtualWorkspaceHead/wg-1')!.closest('[data-wg-dnd-block]')
+    const group = zone(container, 'virtualWorkspaceHead/wg-1')!.closest('[data-wg-dnd-region]')
     expect(group?.getAttribute('data-wg-drop')).toBe('inside')
     const line = workspaceBlock(container, 'ws-1').getAttribute('data-wg-drop')
     expect(line === 'before' || line === 'after').toBe(true)
@@ -861,7 +919,7 @@ describe('a row that is not a container', () => {
     const line = workspaceBlock(container, CHILD_ID).getAttribute('data-wg-drop')
     expect(line).toBe('before')
     // 无关的那一块（checkin 的 cwd 父工作区所在的分组）一个标记都没有
-    const unrelated = zone(container, 'virtualWorkspaceHead/wg-1')!.closest('[data-wg-dnd-block]')
+    const unrelated = zone(container, 'virtualWorkspaceHead/wg-1')!.closest('[data-wg-dnd-region]')
     expect(unrelated?.getAttribute('data-wg-drop')).toBeNull()
     await act(async () => root.unmount())
   })
@@ -883,7 +941,7 @@ describe('a row that is not a container', () => {
 
     // 线落在目标那一块上，框落在目标所在的分组上：指着一行说「放这儿」就是这两件事
     expect(workspaceBlock(container, MUN_ID).getAttribute('data-wg-drop')).toBe('before')
-    const group = zone(container, 'virtualWorkspaceHead/wg-2')!.closest('[data-wg-dnd-block]')
+    const group = zone(container, 'virtualWorkspaceHead/wg-2')!.closest('[data-wg-dnd-region]')
     expect(group?.getAttribute('data-wg-drop')).toBe('inside')
 
     fire(workspaceRow(container, MUN_ID), 'drop', 102)

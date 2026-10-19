@@ -24,11 +24,13 @@ import {
   orderDragPlan,
   reorderTo,
   sessionGroupingPlan,
+  sessionGroupRegionKey,
   sessionGroupKey,
   stretchDragPlan,
   virtualWorkspaceBodyKey,
   virtualWorkspaceHeadKey,
   workspaceHeadKey,
+  workspaceRegionKey,
   workspaceOfZoneKey,
   workspaceTreeDragPlan,
 } from '../src/client/data/dnd.ts'
@@ -270,6 +272,25 @@ describe('building a session grouping plan', () => {
     expect(moved).toEqual([''])
   })
 
+  it('names the workspace as the unit the loose stretch lands in', () => {
+    // 未归组那一段只是工作区体内的一截，它自己不是容器：能放进去的是它所在的工作区，
+    // 框因此套住整块工作区，而不是缩成那一段
+    const { plan } = groupingPlan('group-a')
+
+    expect(plan.targets.get('loose/ws-1')?.regionOf).toBe(workspaceRegionKey('ws-1'))
+    // 标题行是同一份提交、同一个落点单位：拖到那一行上也是回到这个工作区
+    expect(plan.targets.get('workspaceHead/ws-1')?.regionOf).toBe(workspaceRegionKey('ws-1'))
+  })
+
+  it('names no unit for a group, so its own block stands for it', () => {
+    // 分组块本身就是整块（组头与组体同属那一块），它自己就是单位
+    const { plan } = groupingPlan('group-a')
+
+    expect(plan.targets.get('sessionGroup/ws-1/group-b')?.regionOf).toBe(
+      sessionGroupRegionKey('ws-1', 'group-b'),
+    )
+  })
+
   it('leaves the group when the workspace title row is hit', () => {
     // 标题行是目录性质的落点：拖到它上面与拖到未归组段上是同一件事
     const { plan, moved } = groupingPlan('group-a')
@@ -374,6 +395,47 @@ describe('building an ordering drag plan', () => {
 
     p.targets.get(groupHeadKey('ws-1', 'group-c'))?.commit({ kind: 'after', rowId: 'group-c' })
     expect(seen).toEqual([undefined])
+  })
+
+  it('names the next member for the seam after a member', () => {
+    // 「排到这一条之后」与「排到下一条之前」是同一处空白：后者天然画在下一条的上缘，
+    // 前者因此点名下一条，两条路径画出同一条线
+    const p = orderDragPlan({
+      source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-a' },
+      keyOf: (memberId) => groupHeadKey('ws-1', memberId),
+      order: ['group-a', 'group-b', 'group-c'],
+      movingId: 'group-a',
+      commit: () => {},
+    })
+
+    expect(p.targets.get(groupHeadKey('ws-1', 'group-b'))?.seamKey).toBe(
+      groupHeadKey('ws-1', 'group-c'),
+    )
+  })
+
+  it('names no seam when the next member is the one being dragged', () => {
+    // 下一条正是被拖走的那一条：那一处是原地投放，线画上去只会跟着那一行一起淡掉
+    const p = orderDragPlan({
+      source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-b' },
+      keyOf: (memberId) => groupHeadKey('ws-1', memberId),
+      order: ['group-a', 'group-b'],
+      movingId: 'group-b',
+      commit: () => {},
+    })
+
+    expect(p.targets.get(groupHeadKey('ws-1', 'group-a'))?.seamKey).toBeUndefined()
+  })
+
+  it('names no seam after the last member of a stretch', () => {
+    const p = orderDragPlan({
+      source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-z' },
+      keyOf: (memberId) => groupHeadKey('ws-1', memberId),
+      order: ['group-a', 'group-b', 'group-z'],
+      movingId: 'group-z',
+      commit: () => {},
+    })
+
+    expect(p.targets.get(groupHeadKey('ws-1', 'group-b'))?.seamKey).toBeUndefined()
   })
 
   it('keeps the plan target table empty for a stretch of one', () => {

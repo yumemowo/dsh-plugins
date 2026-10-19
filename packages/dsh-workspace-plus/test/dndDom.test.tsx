@@ -250,6 +250,7 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
+
 describe('dragging a session into a group', () => {
   it('moves a loose session into the group it was dropped on', async () => {
     const { container, root, moves } = await mount()
@@ -271,7 +272,12 @@ describe('dragging a session into a group', () => {
 
     fire(row(container, 'session-3'), 'dragstart')
     fire(target, 'dragover')
-    expect(target.getAttribute('data-wg-drop')).toBe('inside')
+    // 框套住的是这一段所在的工作区，不是这一段自己：会话不是容器，
+    // 未归组段也只是工作区体内的一截，落进去等于回到那个工作区
+    expect(target.getAttribute('data-wg-drop')).toBeNull()
+    const block = container.querySelector('[data-wg-dnd-region="workspaceBlock/ws-1"]')
+    expect(block?.getAttribute('data-wg-drop')).toBe('inside')
+    expect(block?.contains(target)).toBe(true)
     fire(target, 'drop')
     await flush()
 
@@ -355,7 +361,10 @@ describe('the workspace title row as a landing', () => {
 
     fire(row(container, 'session-3'), 'dragstart')
     fire(title, 'dragover')
-    expect(title.getAttribute('data-wg-drop')).toBe('inside')
+    // 与未归组段同一份提交，落点单位因此也是同一个工作区块
+    const block = container.querySelector('[data-wg-drop="inside"]')
+    expect(block?.getAttribute('data-wg-dnd-region')).toBe('workspaceBlock/ws-1')
+    expect(block?.contains(title)).toBe(true)
     fire(title, 'drop')
     await flush()
 

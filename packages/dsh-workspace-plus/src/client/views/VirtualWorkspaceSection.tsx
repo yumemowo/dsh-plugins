@@ -23,7 +23,7 @@ import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useOrderRow } from '../hooks/useDnd.ts'
-import { virtualWorkspaceHeadKey } from '../data/dnd.ts'
+import { REGION_ATTRIBUTE, virtualRegionKey, virtualWorkspaceHeadKey } from '../data/dnd.ts'
 import type { OrderDragging } from '../data/dnd.ts'
 import type { VirtualWorkspaceSection as VirtualWorkspaceSectionData } from '../data/types.ts'
 import styles from './components/rows.module.css'
@@ -104,7 +104,10 @@ export function VirtualWorkspaceSection({
 
   return (
     // 这一块是分组的整体：组头与组体各占一格区域，指针落在任何一格上框都该套住这里
-    <div className={styles.virtualWorkspace} data-wg-dnd-block="">
+    <div
+      className={styles.virtualWorkspace}
+      {...{ [REGION_ATTRIBUTE]: virtualRegionKey(section.id) }}
+    >
       <div
         className={clsx(
           styles.groupHead,

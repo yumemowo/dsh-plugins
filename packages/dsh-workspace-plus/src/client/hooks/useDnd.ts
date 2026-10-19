@@ -15,16 +15,15 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import {
-  BLOCK_ATTRIBUTE,
-  BLOCK_KEY_ATTRIBUTE,
   DIM_ATTRIBUTE,
   DROP_ATTRIBUTE,
+  REGION_ATTRIBUTE,
   ROW_ATTRIBUTE,
   SCOPE_ATTRIBUTE,
   SCROLL_ATTRIBUTE,
   ZONE_ATTRIBUTE,
 } from '../data/dnd.ts'
-import type { DragPlan } from '../data/dnd.ts'
+import type { DragPlan, DragPlanTarget } from '../data/dnd.ts'
 import { maybeDropSearcher } from '../data/dropSearcher.ts'
 import type { DropCheck, DropNode, DropSearcher, DropTarget } from '../data/dropSearcher.ts'
 import type { TreeContainerRef, TreeNodeRef } from '../data/tree.ts'
@@ -83,18 +82,49 @@ function rowsIn(element: Element): Element[] {
 }
 
 /**
- * 这次拖拽可能接住的所有位置，按深度从深到浅
+ * 两行之间最多隔多远还算同一处缝
  *
- * 名单从计划来：计划里每一格配什么档，这里就落成什么形状的落点
- * - `container` 档只给放入
- * - `rows` 档给排序，参照行是那一格里的每一行
- * - `banded` 档两种都给
+ * 行距是一两像素（见样式表里那几条 `margin-top`）。隔得更远的空白不是缝，
+ * 而是两段之间的结构（置顶区与列表之间的分隔、段的边界），那里既没有「上一条」也没有「下一条」，
+ * 读成缝会让指针停在列表空白处时莫名冒出一条线
+ */
+const MAX_SEAM_GAP = 12
+
+/**
+ * 指针停在那一行上缘之上一点点时，它停着的那一行
  *
- * 整块放入画在哪一个元素上由这里一次算定：一份提交可以对应不止一格（组块与它的组头是两格），
- * 它们合并到共同祖先，用户看到的因此是整块那一圈，而不是只套住标题的小圈
+ * 行距不是任何一行的盒子（`margin-top` 属于父容器），因此那段空白在元素归属上无处可去：
+ * 指针停在那里时命中的是容器，按元素向上找读不到任何一行。界面上的语义却很明确，
+ * 它同时是「上一条之后」与「下一条之前」，也就是一处缝；缝统一由下一条的上缘代言
+ * （见 `DragPlanTarget.seamKey`），所以这里只回答「缝下面是哪一行」，
+ * 判定照旧交给检测器——把指针当成落在那一行自己的上缘即可
  *
- * @param root - 本实例那一片的根节点
- * @param plan - 当前计划
+ * 段首那一行上方同样算一处：它下面是「排到第一条之前」，没有哪一条能替它画
+ *
+ * 按**上缘**排而不是按文档序或父元素：折叠的区块把「上一条」排在自己的展开体之前，
+ * 文档序走到那里时纵向已经折回去了；而行又可能被悬停卡片之类的包装套住，父元素各不相同
+ *
+ * 每次 `dragover` 都要量一遍矩形，因此只在正常命中读不到落点时才算
+ * @param rows - 本实例那一片里的全部行
+ * @param point - 指针坐标
+ * @returns 缝下面那一行；不落在任何缝上时为 null
+ */
+function seamBelow(rows: readonly Element[], point: { x: number; y: number }): Element | null {
+  const boxes = rows
+    .map((row) => ({ row, rect: row.getBoundingClientRect() }))
+    // 尚未布局的元素量不出位置（jsdom 恒为零矩形），它不构成任何缝
+    .filter((box) => box.rect.height > 0)
+    .sort((a, b) => a.rect.top - b.rect.top)
+  for (const box of boxes) {
+    const above = box.rect.top - point.y
+    if (above <= 0 || above > MAX_SEAM_GAP) continue
+    // 指针得压在行的那一条竖带上，否则行左侧的空白也会被读成缝
+    if (point.x < box.rect.left || point.x > box.rect.right) continue
+    return box.row
+  }
+  return null
+}
+
 /**
  * 这次拖拽可能接住的所有位置，以及每个位置该画在哪个元素上
  *
@@ -120,27 +150,24 @@ function collectDropTargets(
   const nodeOf = (key: string, fallback: DropNode): DropNode => zoneNodes.get(key) ?? fallback
 
   /**
-   * 一个格键在画面上对应的那一块
+   * 一格的落点单位：框与线该画的那个元素
    *
-   * 先按 `data-wg-block-key` 找整块（工作区那一块含体内，比标题行大一圈），
-   * 再退回那一格自己的元素；行 id 也在同一张查询里找得到，线让给下一条时要靠它
-   * @param key - 区域键或行 id
-   * @param scope - 先在这一片里找，缺省整片
+   * 落点单位由渲染层写在 `data-wg-dnd-region` 上，值是一处单位标识（见 `data/tree.ts` 的
+   * `regionOfKey`）。计划点名了 `regionOf` 就按它查；没点名表示这一格自己就是单位。
+   *
+   * 两种情形合成一次查询，因此「只有一行的块」与「很多行的块」在这里没有分支：
+   * 前者没有那个标记，退回那一格自己的元素；后者由标记直接交出整块
+   * @param key - 这一格的区域键
+   * @param target - 这一格的计划
    */
-  const lineElementOf = (key: string, scope: ParentNode = root): Element | undefined => {
-    const look = (where: ParentNode): Element | null => {
-      // 渲染层点名的整块优先：工作区块用 data-wg-block-key 标出「标题那一格对应的整块是它」
-      const named = where.querySelector(`[${BLOCK_KEY_ATTRIBUTE}="${key}"]`)
-      if (named !== null) return named
-      // 没有点名时取这一格自己所属的块：虚拟分组、会话分组的块标记挂在整块容器上，
-      // 那一格是块里的组头，直接拿组头会把线画在组头下缘而不是整个区域的下缘
-      const zone = where.querySelector(`[${ZONE_ATTRIBUTE}="${key}"]`)
-      if (zone !== null) return blockOf(zone)
-      return where.querySelector(`[${ROW_ATTRIBUTE}="${key}"]`)
+  const regionOf = (key: string, target: DragPlanTarget): Element | undefined => {
+    if (target.regionOf === undefined) {
+      // 没有点名表示这一格自己就是单位（「只有一行的块」）
+      return root.querySelector(`[${ZONE_ATTRIBUTE}="${key}"]`) ?? undefined
     }
-    // 先在指针这一片里找：一格装多行的段（置顶区）里同一行 id 在本包别处也有，
-    // 全局先命中会把线画到另一片那一行上
-    return look(scope) ?? look(root) ?? undefined
+    const region = root.querySelector(`[${REGION_ATTRIBUTE}="${target.regionOf}"]`)
+    if (region !== null) return region
+    return root.querySelector(`[${ZONE_ATTRIBUTE}="${target.regionOf}"]`) ?? undefined
   }
 
   /**
@@ -160,18 +187,15 @@ function collectDropTargets(
     const rowId = element.getAttribute(ROW_ATTRIBUTE) ?? key
     const node = nodeOf(key, { kind: 'row', id: rowId })
 
+    // 框与线都画在这一格的**落点单位**上：一片可以装下别的行（分组含组内成员、
+    // 工作区块含子工作区），框套住整个范围、线跨整个范围画在它的上下缘。
+    // 「只有一行的块」没有那个标记，单位就是这一格自己，这里因此不必分情况
+    const region = regionOf(key, target) ?? element
+
     if (target.mode === 'container' || target.mode === 'banded') {
-      // 框该套多大由渲染层指明：
-      // - 树点名了某一格（`blockKey`）时，那一格对应的整块写在 `data-wg-block-key` 上。
-      //   工作区的标题格对应整个工作区块（含体内的子工作区行、会话分组），
-      //   指针停在标题行或体内空白上时框因此把落点的那些子集一并圈进来
-      // - 没点名时取格子自己的块标记（分组把组头与组体圈在同一块里）；
-      //   没有块标记的格子自成一块（未归组段是工作区体内单独的一格，不该扩到整块）
-      const named = target.blockKey === undefined ? undefined : lineElementOf(target.blockKey)
-      const block = named ?? blockOf(element)
       // 绘制表按**区域键**存：一个节点可以有好几格（标题、体内、未归组段），
-      // 框该画在指针真正落着的那一格上，而不是按节点身份合并
-      paint.set('inside/' + key, () => ({ element: block, mark: 'inside' }))
+      // 框该画在指针真正落着的那一格对应的单位上，而不是按节点身份合并
+      paint.set('inside/' + key, () => ({ element: region, mark: 'inside' }))
       targets.push({
         kind: 'inside',
         node,
@@ -180,76 +204,48 @@ function collectDropTargets(
     }
 
     if (target.mode === 'rows' || target.mode === 'banded') {
-      // 一片可以点名让线跨整片画（`orderBlock`）：那时线只有一条，画在整块的上下缘。
-      // 不点名时仍按片里的行算，与分组头那种「一格即一行」的段落一致
-      const lineKey = target.orderBlock ?? key
-      // 渲染层可以用 data-wg-block-key 点名「这一格对应的整块是哪一个元素」：
-      // 工作区块与虚拟工作区分组都这么写，线因此跨整个区域，而不是只贴着标题那一行
-      const lineBlock = lineElementOf(lineKey) ?? element
-      // 线挂在整块上时，参照行 id 从整块里取：整块元素自己没有行标记，
-      // 而这一片可能占好几格（标题行与体内那一格），两格必须交出同一个 id
-      const anchorRow = rowsIn(lineBlock)[0]
-      const anchorId = anchorRow?.getAttribute(ROW_ATTRIBUTE) ?? ''
       /**
-       * 这一侧的线画在哪一块上
+       * 单位里可供排序的行
        *
-       * 线始终跨**整块**，两端就是这一块的上缘与下缘：一片可以装下别的行（分组块含组内成员、
-       * 工作区块含子工作区），只有整块才能让线横跨整个区域。把线让给相邻那一行会让它缩到
-       * 那一行的宽度，读起来像「落点只在那一行上」
+       * 一格即一条时（虚拟分组、会话分组、工作区标题格）就是这一格自己，线跨它的单位；
+       * 一格装多行时（置顶区）是单位里的每一条行，线画在那一行身上——它们是同段里的
+       * 并列成员，各自就是一处单位。两种只是行数不同，这里交出同一个形状
        *
-       * 落在压淡里时干脆不画：压淡按元素叠乘，线会跟着一起淡下去，用户读到的是
-       * 「这条线的颜色不对」而不是「这里能放」。这种情况出现在指针还停在被拖走的那一块上，
-       * 那本来也是一次不改变结果的投放
+       * `paintKey` 与 `rowId` 分开：绘制表按**查得到的键**存，一格即一条时是区域键
+       * （绘制查询按区域键走），一格装多行时是行 id（那时按行 id 查）；
+       * 而提交要的是参照行的 id，两者不是同一个东西
        */
-      const markFor = (side: 'before' | 'after', own: Element): PaintMark | undefined =>
-        fadedAt(own) ? undefined : { element: own, mark: side }
-      // 落在树上的节点：一个节点一条关系，线画在它整块上
-      const treeNode = zoneNodes.get(lineKey)
-      if (treeNode !== undefined) {
-        paint.set('order/before/' + lineKey, () => markFor('before', lineBlock))
-        paint.set('order/after/' + lineKey, () => markFor('after', lineBlock))
-        targets.push({
-          kind: 'order',
-          node: treeNode,
-          commit: (side) =>
-            target.commit(
-              side === 'before'
-                ? { kind: 'before', rowId: anchorId }
-                : { kind: 'after', rowId: anchorId },
-            ),
+      const ownRow = element.getAttribute(ROW_ATTRIBUTE)
+      const lines: { rowId: string; paintKey: string; identity: DropNode; carrier: Element }[] =
+        ownRow !== null
+          ? [{ rowId: ownRow, paintKey: key, identity: node, carrier: region }]
+          : rowsIn(region).flatMap((row) => {
+              const id = row.getAttribute(ROW_ATTRIBUTE)
+              return id === null
+                ? []
+                : [{ rowId: id, paintKey: id, identity: { kind: 'row', id } as DropNode, carrier: row }]
+            })
+      for (const [index, line] of lines.entries()) {
+        const markFor = (side: 'before' | 'after'): PaintMark | undefined =>
+          fadedAt(line.carrier) ? undefined : { element: line.carrier, mark: side }
+        paint.set('order/before/' + line.paintKey, () => markFor('before'))
+        // 这一条之后那处缝归下一条的上缘：屏幕上只有一处空白，从哪一侧靠近都该是
+        // 同一个像素位置、同一个标记，因此「之后」这里改去取下一份「之前」
+        //
+        // 下一条可能就在同一格里（置顶段那样一格装多行），也可能在隔壁那一格
+        // （每个成员各占一格时可排序的段）：前者按行 id 就在手边，后者由计划点名
+        const seamKey = lines[index + 1]?.paintKey ?? target.seamKey
+        paint.set('order/after/' + line.paintKey, () => {
+          // 下一条画在压淡里时那处是原地投放，交给它只会让线跟着一起淡掉，退回本条下缘
+          const shared = seamKey === undefined ? undefined : paint.get('order/before/' + seamKey)?.()
+          return shared ?? markFor('after')
         })
-        continue
-      }
-      // 一格即一条（虚拟分组、会话分组、工作区）：线画在整块上，跨整个区域
-      // 那一格自己就是一条行，块是它所属的容器；按行画会把线缩到标题那一行
-      if (element.getAttribute(ROW_ATTRIBUTE) !== null) {
-        paint.set('order/before/' + rowOf(element, anchorId), () => markFor('before', lineBlock))
-        paint.set('order/after/' + rowOf(element, anchorId), () => markFor('after', lineBlock))
         targets.push({
           kind: 'order',
-          node: { kind: 'row', id: rowOf(element, anchorId) },
+          node: line.identity,
           commit: (side) =>
             target.commit(
-              side === 'before'
-                ? { kind: 'before', rowId: rowOf(element, anchorId) }
-                : { kind: 'after', rowId: rowOf(element, anchorId) },
-            ),
-        })
-        continue
-      }
-      // 一格装多行（置顶区）：每一行各成一条关系，
-      // 成员身份就是行自己——指针落着哪一行，谈先后的就是那一行
-      for (const row of rowsIn(lineBlock)) {
-        const rowId = row.getAttribute(ROW_ATTRIBUTE)
-        if (rowId === null) continue
-        paint.set('order/before/' + rowId, () => markFor('before', row))
-        paint.set('order/after/' + rowId, () => markFor('after', row))
-        targets.push({
-          kind: 'order',
-          node: { kind: 'row', id: rowId },
-          commit: (side) =>
-            target.commit(
-              side === 'before' ? { kind: 'before', rowId } : { kind: 'after', rowId },
+              side === 'before' ? { kind: 'before', rowId: line.rowId } : { kind: 'after', rowId: line.rowId },
             ),
         })
       }
@@ -302,31 +298,6 @@ function fadedAt(element: Element): boolean {
     if (node.hasAttribute(DIM_ATTRIBUTE) || node.hasAttribute(DRAGGING_ATTRIBUTE)) return true
   }
   return false
-}
-
-/**
- * 一条行元素的 id
- * @param element - 带行标记的元素
- * @param fallback - 元素自己没有行标记时用它
- */
-function rowOf(element: Element, fallback: string): string {
-  return element.getAttribute(ROW_ATTRIBUTE) ?? fallback
-}
-
-/**
- * 一个格子所属的那一块
- *
- * 渲染层用块标记画出「哪几格同属一块」：分组把组头与组体圈在同一个分组块里。
- * 没有块标记的格子自成一块——未归组段是工作区体内单独的一格，它自己就是范围
- * @param element - 落点格子
- */
-function blockOf(element: Element): Element {
-  // 只看**它自己**：块标记是渲染层明确写下的，一处标记代表那一格属于那一块。
-  // 向上找 closest 会让没有标记的格子（未归组段）继承外层工作区块，
-  // 于是「移出会话分组」的框变成了整个工作区
-  return element.hasAttribute(BLOCK_ATTRIBUTE)
-    ? element
-    : (element.closest(`[${BLOCK_ATTRIBUTE}]`) ?? element)
 }
 
 /**
@@ -529,6 +500,8 @@ export function DndProvider({
   const paintRef = useRef<Map<string, () => PaintMark | undefined>>(new Map())
   /** 区域键 → 节点身份：把指针落着的那个元素读成节点，检测层只认节点 */
   const zoneNodesRef = useRef<ReadonlyMap<string, TreeNodeRef | TreeContainerRef>>(new Map())
+  /** 本实例那一片里的全部行，行距那段空白按它们的矩形认（见 `seamBelow`） */
+  const rowsRef = useRef<readonly Element[]>([])
   /**
    * 上一次 `dragover` 算出的落点
    *
@@ -575,6 +548,7 @@ export function DndProvider({
     dimmedRef.current = []
     searcherRef.current = null
     paintRef.current = new Map()
+    rowsRef.current = []
     checkRef.current = null
     currentPlan = null
   }, [stopAutoScroll])
@@ -655,14 +629,27 @@ export function DndProvider({
     // 指针正落着哪个节点：适配层读一次（元素带区域键，经树换成节点身份），
     // 此后落点判定全在节点上做，检测层沿树往上走
     const node = inside ? nodeAt(target) : null
-    const check = inside && node !== null ? searcher.checkDrop(target, point, node) : null
+    let check = inside && node !== null ? searcher.checkDrop(target, point, node) : null
+    /**
+     * 指针落在行距那段空白上时按元素归属读不到任何一行（那段空白属于父容器），
+     * 因此按矩形补一次：把它当成落在缝下面那一行的上缘，判定仍交给检测器
+     *
+     * 只在正常命中什么都没读到时才算——容器本身可能就是一个落点（整片列表接「移出分组」），
+     * 那时按元素归属得出的答案优先，行距不会把它盖掉
+     */
+    let seam: Element | null = null
+    if (check === null) {
+      seam = seamBelow(rowsRef.current, point)
+      if (seam !== null) check = searcher.checkDrop(seam, point, nodeAt(seam))
+    }
     checkRef.current = check
 
     // 一次最多两个节点：一个画框、一个画线。
     // 先按**指针落着的那一格**查绘制表，再退回节点身份——
-    // 同一个节点可以有好几格（标题、体内、未归组段），用户指着哪一格就该画在哪一格
+    // 同一个节点可以有好几格（标题、体内、未归组段），用户指着哪一格就该画在哪一格。
+    // 缝那一档按缝下面那一行算，它是同一件事：指针指着的是那一行上方
     const drawn = new Map<Element, string>()
-    const here = node === null ? null : owningZoneKey(target as Element)
+    const here = seam !== null ? owningZoneKey(seam) : node === null ? null : owningZoneKey(target as Element)
     const box =
       check?.inside === undefined ? undefined : paintFor('inside', check.inside, here)
     const line =
@@ -778,13 +765,17 @@ export function DndProvider({
       // 名单、检测器与绘制表一场拖拽只建一次，指针移动期间只问它
       // 绘制表反过来读：元素上的区域键经树换算成节点身份，
       // 检测器因此拿到的与交回的都是节点，只有这里那一层 map 需要碰 DOM
-      const collected = collectDropTargets(region?.current ?? document, plan)
+      const scope = region?.current ?? document
+      const collected = collectDropTargets(scope, plan)
       zoneNodesRef.current = plan.tree?.nodesByZone() ?? new Map()
       searcherRef.current = maybeDropSearcher(plan.tree, collected.targets)
       paintRef.current = collected.paint
+      // 行距那段空白按**全部行**认，不只按落点：来源自己那一行不在计划里，
+      // 而它下面的那条缝正是「排到它之后」要走的那处
+      rowsRef.current = Array.from(scope.querySelectorAll(`[${ROW_ATTRIBUTE}]`))
 
       // 压淡够不着的那一片：判定与命中层同源，因此不会出现「淡着却能放进去」
-      const dimmed = dimmedElements(region?.current ?? document, plan)
+      const dimmed = dimmedElements(scope, plan)
       for (const element of dimmed) element.setAttribute(DIM_ATTRIBUTE, '')
       dimmedRef.current = dimmed
 

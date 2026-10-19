@@ -321,7 +321,8 @@ describe('dragging a pinned row', () => {
   })
 
   it('marks the anchor row it was dropped on', async () => {
-    // 落点标记画在参照行自己身上：线要贴着那一行，画在段容器上会跑到整段的上边或下边
+    // 置顶段的每一行自己就是一处落点单位（它们没有单位标记）：线画在参照行身上，
+    // 画在段容器上会跑到整段的上边或下边
     const { container, root } = await mount()
     band(pinnedRow(container, 'session-1'), 0)
     band(pinnedRow(container, 'session-2'), 20)
@@ -337,21 +338,68 @@ describe('dragging a pinned row', () => {
   })
 
   it('draws one line for a seam from above or below alike', async () => {
-    // 一处缝从上面看是前一条的下半、从下面看是后一条的上半：两处各画一条就是两条线。
-    // 一次命中只交回一侧，因此屏幕上同时只有一条线
+    // 一处缝从上面看是前一条的下半、从下面看是后一条的上半：屏幕上是同一处空白，
+    // 因此必须落在同一个像素位置、给同一个标记。后者天然画在下一条的上缘，
+    // 前者交给它代言，「之后」因此读作下一条的「之前」
+    const { container, root } = await mount({ pinned: [...PINNED_IDS, 'session-3'] })
+    band(pinnedRow(container, 'session-1'), 0)
+    band(pinnedRow(container, 'session-2'), 20)
+    band(pinnedRow(container, 'session-3'), 40)
+
+    fire(pinnedRow(container, 'session-3'), 'dragstart')
+
+    // 从上面靠近：指针在 session-2 的上半，交回「session-2 之前」
+    fire(pinnedRow(container, 'session-2'), 'dragover', 22)
+    const fromAbove = [...container.querySelectorAll('[data-wg-drop]')].map((element) => [
+      element.getAttribute('data-wg-drop'),
+      element.getAttribute('data-wg-dnd-row'),
+    ])
+    // 从下面靠近：指针在 session-1 的下半，交回「session-1 之后」——
+    // 同一处缝，读数必须逐字相同
+    fire(pinnedRow(container, 'session-1'), 'dragover', 8)
+    const fromBelow = [...container.querySelectorAll('[data-wg-drop]')].map((element) => [
+      element.getAttribute('data-wg-drop'),
+      element.getAttribute('data-wg-dnd-row'),
+    ])
+
+    expect(fromAbove).toEqual([['before', 'session-2']])
+    expect(fromAbove).toEqual(fromBelow)
+    await act(async () => root.unmount())
+  })
+
+  it('reads the row spacing between two rows as the seam they share', async () => {
+    // 置顶段相邻两条之间那 2px 是 `margin-top`，不属于任何一行的盒子：
+    // 指针停在那上面时命中的是段容器，按元素归属读不到任何一行。
+    // 界面上它和「从上下两侧靠近」是同一处缝，读数因此必须逐字相同
+    const { container, root } = await mount({ pinned: [...PINNED_IDS, 'session-3'] })
+    const stretch = zone(container, 'pinned')
+    band(pinnedRow(container, 'session-1'), 0)
+    band(pinnedRow(container, 'session-2'), 12)
+    band(pinnedRow(container, 'session-3'), 24)
+
+    fire(pinnedRow(container, 'session-3'), 'dragstart')
+    fire(stretch, 'dragover', 11)
+
+    expect([...container.querySelectorAll('[data-wg-drop]')].map((element) => [
+      element.getAttribute('data-wg-drop'),
+      element.getAttribute('data-wg-dnd-row'),
+    ])).toEqual([['before', 'session-2']])
+    await act(async () => root.unmount())
+  })
+
+  it('keeps the seam off the row it is dragging', async () => {
+    // 下一条正是被拖走的那一条时，那一处是原地投放：它画淡着，线抢过去只会一起淡掉。
+    // 缝因此留在前一条的下缘，位置一样，仍然是同一条线
     const { container, root } = await mount()
     band(pinnedRow(container, 'session-1'), 0)
     band(pinnedRow(container, 'session-2'), 20)
 
     fire(pinnedRow(container, 'session-2'), 'dragstart')
-
-    // 从上面靠近：指针在前一条的下半
     fire(pinnedRow(container, 'session-1'), 'dragover', 8)
+
     expect(container.querySelectorAll('[data-wg-drop]')).toHaveLength(1)
     expect(pinnedRow(container, 'session-1').getAttribute('data-wg-drop')).toBe('after')
 
-    // 从下面靠近：指针落在正被拖走的那一行上。那一行画淡着，线画上去会被一起压暗，
-    // 因此这一档干脆不给线——它本来也是一次不改变结果的投放
     fire(pinnedRow(container, 'session-2'), 'dragover', 22)
     expect(container.querySelectorAll('[data-wg-drop]')).toHaveLength(0)
     await act(async () => root.unmount())

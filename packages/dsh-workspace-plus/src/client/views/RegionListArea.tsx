@@ -22,7 +22,9 @@ import {
   SCROLL_ATTRIBUTE,
   groupHeadKey,
   orderDragPlan,
+  sessionGroupRegionKey,
   sessionGroupingPlan,
+  virtualRegionKey,
   virtualWorkspaceBodyKey,
   virtualWorkspaceHeadKey,
   workspaceTreeDragPlan,
@@ -228,6 +230,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
       orderDragPlan({
         source: { kind: 'virtualWorkspace', groupId },
         keyOf: virtualWorkspaceHeadKey,
+        regionKeyOf: virtualRegionKey,
         // 根节点那一层还平铺着未归组的工作区，它们不参与排序，因此这一段只收分组自己的顺序
         order: dragOrderSections.current.map((section) => section.id),
         movingId: groupId,
@@ -409,6 +412,7 @@ function WorkspaceNode({
       orderDragPlan({
         source: { kind: 'sessionGroup', workspaceId, groupId },
         keyOf: (memberId) => groupHeadKey(workspaceId, memberId),
+        regionKeyOf: (memberId) => sessionGroupRegionKey(workspaceId, memberId),
         // 只收分组自己的顺序，会话行不在这段里，因此拖到组内会话上也读不出落点
         order: dragBuilt.current.groups.map((section) => section.id),
         movingId: groupId,

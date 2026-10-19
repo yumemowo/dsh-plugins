@@ -469,6 +469,37 @@ export function zoneKeyOf(
 export function looseZoneKeyOf(workspaceId: string): string {
   return `loose/${workspaceId}`
 }
+
+// ── 落点单位 ──
+
+/**
+ * 一格的落点单位标识
+ *
+ * 落点单位是「框与线该套住的整个范围」，它未必等于区域键：同一个区域键在两种关系里
+ * 可以是不同的大小——工作区标题行承接「移出分组」时只是那一行，与它谈先后时却是整块工作区。
+ * 因此单位另起一套标识，与区域键不共用命名空间。
+ *
+ * 没有子节点的行不在这里列：它们没有单位标记，自己就是自己的单位
+ * @param node - 节点或容器
+ * @param part - 要哪一格
+ * @returns 那一格的落点单位标识，该格自成一块时 undefined
+ */
+export function regionOfKey(
+  node: TreeNodeRef | TreeContainerRef,
+  part: ZonePart,
+): string | undefined {
+  switch (node.kind) {
+    case 'workspace':
+      return part === 'head' ? `workspaceBlock/${node.id}` : undefined
+    case 'virtual':
+      return part === 'head' ? `virtualBlock/${node.id}` : undefined
+    case 'group':
+      return `sessionGroupBlock/${node.workspaceId}/${node.groupId}`
+    case 'root':
+      return undefined
+  }
+}
+
 // ── 落点关系 ──
 
 /**
@@ -487,12 +518,12 @@ export type DropRelation =
       /** 这一片在界面上占的那几格 */
       zones: readonly string[]
       /**
-       * 框该画在哪一格所在的元素上
+       * 这一片的落点单位由哪一格代言
        *
-       * 一片可以占好几格（一个工作区的标题行与它体内那一格），它们未必落在同一个块标记之下。
-       * 给出这一项时以它为准，缺省表示用这几格各自最近的那一块
+       * 一片可以占好几格（一个工作区的标题行与它体内那一格），而框只画在一处。
+       * 给出这一项时以它为准；缺省表示落到哪一格就画在那一格自己的落点单位上
        */
-      block?: string
+      region?: string
       /** 落到这一片时执行的那次写入 */
       commit: () => void
     }
@@ -506,18 +537,22 @@ export type DropRelation =
        */
       zones: readonly string[]
       /**
-       * 线画在哪一格所在的元素上
+       * 线跨哪一格所在的落点单位
        *
-       * 给出这一项时线跨整个元素画在它的上下缘，而不是贴着标题那一行画一条短边
+       * 给出这一项时线跨整个元素画在它的上下缘，而不是贴着标题那一行画一条短边。
+       * 缺省表示落到哪一格就画在那一格自己的落点单位上（「只有一行的块」）
        */
-      block?: string
+      region?: string
       /**
-       * 同一处缝由上一条代言时，上一条的格键
+       * 这一行**之后**那处缝由那一行那一格代言
        *
-       * 「排到这一行之前」与「排到上一条之后」是同一处缝，两行各画一条就成了两条线。
-       * 线因此一律画在上一条的下缘；这里没有上一条时，线画在这一行自己的上缘
+       * 「排到这一行之后」与「排到下一行之前」是同一处空白，只能画一条线。
+       * 给出时命中层把「之后」改读作那一格的「之前」，位置、标记、写入因此是同一件事
+       *
+       * 缺省表示没有下一条可代言：它是这条序列的最后一条，或者下一条正被拖走
+       * （那一处是原地投放，交给一个画淡的元素只会让线跟着淡下去）
        */
-      above?: string
+      seam?: string
       /** 排到这一行之前 / 之后 */
       place: (side: 'before' | 'after') => void
     }
@@ -559,6 +594,30 @@ function orderWith(
  */
 function nextIdAfter(order: readonly string[], movingId: string): string | undefined {
   return order[order.indexOf(movingId) + 1]
+}
+
+/**
+ * 「排到这一行之后」那处缝该由哪一格代言
+ *
+ * 那一处空白同时是「下一条之前」，因此交给下一条的上缘画，屏幕上就只剩一条线。
+ * 下一条是此刻并排的那一行，不是「把被拖的抽走之后」的那一行：后者会让线跳到更远的
+ * 一行上去，而用户在屏幕上看到的是紧邻的这一处
+ * @param order - 这次换位要在其上算的那份序列
+ * @param movingId - 被拖的成员
+ * @param targetId - 参照行
+ * @returns 下一条的标题格键，无下一条时 undefined
+ */
+function seamOfOrder(
+  order: readonly string[],
+  movingId: string,
+  targetId: string,
+): string | undefined {
+  const at = order.indexOf(targetId)
+  // 参照行不在这条序列上时这次换位本来就不成立，也就无所谓下一格
+  if (at < 0) return undefined
+  const next = order[at + 1]
+  // 段尾没有下一条；下一条正是被拖走的那一条时那处是原地投放，线交给它只会跟着一起淡掉
+  return next === undefined || next === movingId ? undefined : `workspaceHead/${next}`
 }
 
 export function dropRelationsOf(
@@ -630,19 +689,13 @@ export function dropRelationsOf(
     // （见 dropSearcher 的 chainOf）；把它塞进位次关系里，就等于用**目标那一行**
     // 的祖先去回答**指针**的问题——目标行有一个 cwd 父工作区、而它与来源毫无关系时，
     // 那一块会被无缘无故高亮起来
-    // 同一处缝只画一条线：一律由前一条的下缘代表，这一条只在没有上一条时才画自己的上缘
-    // 上一条正是来源时不交给它：它整片画淡着，线画到它身上会跟着一起淡下去
-    const at = order.indexOf(targetId)
-    const prev = at < 1 ? undefined : order[at - 1]
-    const above = prev === node.id ? undefined : prev
-    return {
+    const relation: DropRelation = {
       kind: 'order',
       // 整片都算这一行的检测范围：标题行与它体内的那一格。指针停在体内的会话上时，
       // 读出的仍然是「排在这个工作区之前 / 之后」——那一格属于这一片，与标题行是同一件事
       zones: [`workspaceHead/${targetId}`, `workspaceBody/${targetId}`],
       // 线跨整块工作区画：贴着标题那一行画会在体内有内容时显得只有半截
-      block: `workspaceHead/${targetId}`,
-      ...(above === undefined ? {} : { above: `workspaceHead/${above}` }),
+      region: regionOfKey({ kind: 'workspace', id: targetId }, 'head') as string,
       place: (side) => {
         const next = orderWith(order, node.id, side, targetId)
         if (next === null) return
@@ -653,6 +706,10 @@ export function dropRelationsOf(
         writes.reorder(nextIdAfter(next, node.id))
       },
     }
+    // 这一处缝交给下一条：标题那一格得说出「下一条」是哪一格
+    // 序列不同时下一条也不同，因此在这里按本次换算用的那份序列算
+    const seam = seamOfOrder(order, node.id, targetId)
+    return seam === undefined ? relation : { ...relation, seam }
   }
 
   // 全遍历整棵树：任何节点都可能与来源构成某种关系
@@ -708,7 +765,9 @@ export function dropRelationsOf(
         zoneKeyOf(target, 'head') as string,
         zoneKeyOf(target, 'body') as string,
       ]
-      relations.push({ kind: 'inside', zones, commit: () => writes.moveToGroup(other.id) })
+      // 组头与组体是两格、同一片：框与线都该套住整块分组，单位因此挂在整块容器上
+      const region = regionOfKey({ kind: 'virtual', id: other.id }, 'head') as string
+      relations.push({ kind: 'inside', zones, region, commit: () => writes.moveToGroup(other.id) })
       continue
     }
 
@@ -716,13 +775,13 @@ export function dropRelationsOf(
     const isAncestor = tree.dropAncestorsOf(node).some((entry) => entry.id === other.id)
     if (isAncestor) {
       const ancestorZones = [`workspaceHead/${other.id}`, `workspaceBody/${other.id}`]
-      const ancestorBlock = `workspaceHead/${other.id}`
+      const ancestorRegion = regionOfKey({ kind: 'workspace', id: other.id }, 'head') as string
       // 已经住在它体内：落回它这一行读作回到它的直接管辖
       if (bound !== undefined && bound.parentId === other.id) {
         relations.push({
           kind: 'inside',
           zones: ancestorZones,
-          block: ancestorBlock,
+          region: ancestorRegion,
           commit: () => writes.unnest(),
         })
         continue
@@ -732,7 +791,7 @@ export function dropRelationsOf(
       // 这一条只在两者**已经在同一片里**时成立。跨片的兄弟不在此列——那时界面上并没有嵌进去，
       // 这次投放恰恰是要把来源移进祖先所在的那一片，移进去之后 cwd 关系才在界面上成立
       if (selfParent !== undefined && selfParent.id === other.id && container === tree.containerOf(other)) {
-        relations.push({ kind: 'inside', zones: ancestorZones, block: ancestorBlock, commit: () => {} })
+        relations.push({ kind: 'inside', zones: ancestorZones, region: ancestorRegion, commit: () => {} })
         continue
       }
       const target = tree.containerOf(other)
@@ -740,7 +799,7 @@ export function dropRelationsOf(
       relations.push({
         kind: 'inside',
         zones: ancestorZones,
-        block: ancestorBlock,
+        region: ancestorRegion,
         commit: () => {
           if (target.kind === 'group') writes.nestInto(target.workspaceId, target.groupId)
           else writes.moveToGroup(target.kind === 'root' ? '' : target.id)
@@ -760,7 +819,13 @@ export function dropRelationsOf(
       if (bound !== undefined && bound.parentId === ancestor.id && bound.groupId === groupId) continue
       const holder = tree.containers.groupOf(ancestor.id, groupId)
       const zones = [zoneKeyOf(holder, 'head') as string, zoneKeyOf(holder, 'body') as string]
-      relations.push({ kind: 'inside', zones, commit: () => writes.nestInto(ancestor.id, groupId) })
+      const region = regionOfKey({ kind: 'group', workspaceId: ancestor.id, groupId }, 'head') as string
+      relations.push({
+        kind: 'inside',
+        zones,
+        region,
+        commit: () => writes.nestInto(ancestor.id, groupId),
+      })
     }
   }
 

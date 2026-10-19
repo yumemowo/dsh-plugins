@@ -12,7 +12,7 @@
  * 区域键的形状也由那边一处决定，本模块保留的同名构造器只是给渲染层的薄封装
  */
 
-import { dropRelationsOf, looseZoneKeyOf, zoneKeyOf } from './tree.ts'
+import { dropRelationsOf, looseZoneKeyOf, regionOfKey, zoneKeyOf } from './tree.ts'
 import type { TreeNodeRef, WorkspaceTree } from './tree.ts'
 
 // ── 计划 ──
@@ -49,28 +49,28 @@ export interface DragPlanTarget {
    */
   mode: 'container' | 'rows' | 'banded'
   /**
-   * 框画在哪一格所在的元素上
+   * 这一片的落点单位由哪一格代言
    *
-   * 一片可以占好几格，它们未必落在同一个块标记之下：一个工作区的标题行与它体内那一格就是这样。
-   * 这时要靠这一项点名标题行，否则框会沿着体内那一格一路找到外面那个虚拟分组。
+   * 一片可以占好几格（工作区的标题行与体内那一格、虚拟分组的组头与组体），
+   * 而框与线的落点单位只有一个元素。这里点名其中一格，命中层用它的键查
+   * {@link REGION_ATTRIBUTE} 找回那一整块。
+   *
+   * 缺省表示这一格自己就是落点单位——「只有一行的块」不必额外声明
    */
-  blockKey?: string
+  regionOf?: string
   /**
-   * 线画在哪一格所在的元素上
+   * 这一条**之后**那处缝由哪一格代言
    *
-   * 与 {@link blockKey} 同一个道理，只是给排序那一档用：一片可以占好几格，
-   * 线要跨整片画在它的上下缘，而不是贴着标题那一行画一条短边。
-   * 给出这一项时，前后半也按整片的矩形算
-   */
-  orderBlock?: string
-  /**
-   * 同一处缝由上一条代言时，上一条的格键
+   * 「排到这一条之后」与「排到下一条之前」是同一处缝：屏幕上只有一处空白，
+   * 因此只能有一个像素位置、一条线。它天然属于下一条的上缘，于是这一片认领它，
+   * 「之后」在命中时改读作下一条的「之前」——标记、位置、写入因此仍是同一件事。
    *
-   * 「排到这一行之前」与「排到上一条之后」是同一处缝，统一画在上一条的下缘，
-   * 一处缝因此只有一条线。交出 undefined 表示这一条就是本段第一个，画在它自己的上缘
-   * @param rowId - 指针正落着的那一条参照行
+   * 取值是**下一条那一格的绘制键**（见 `collectDropTargets` 里的 `paintKey`）：
+   * 命中层拿着它去取那一条自己的「之前」。
+   * 缺省表示这一处之后没有可代言的下一条：它是本段最后一条，或者下一条正被拖走
+   * （那一处是原地投放，交给一个画淡的元素只会让线跟着淡下去）
    */
-  orderAbove?: (rowId: string) => string | undefined
+  seamKey?: string
   /** 放开时执行。闭包在计划构造时绑定全量顺序等数据，执行前自行复核 */
   commit: (anchor: DropAnchor) => void
 }
@@ -136,26 +136,18 @@ export const SCOPE_ATTRIBUTE = 'data-wg-dnd-scope'
 export const DROP_ATTRIBUTE = 'data-wg-drop'
 
 /**
- * 一片区域里「框该画在哪一整块上」的标记，业务渲染期写好
+ * 一片区域的**落点单位**标记，由渲染层写在代表它的那个元素上
  *
- * 一片区域可以由好几格组成：虚拟分组的组头与组体是两格，会话分组的组头与组体也是两格。
- * 指针落在其中任何一格，用户看到的都是「放进这一片」，框因此该套住整块而不是只套住标题。
- * 挂这个标记的就是那一块。
+ * 落点单位是「这一片能接住投放、框与线该套住的整个范围」：分组把组头与组体圈成一块，
+ * 工作区块把标题行与体内的子工作区、会话圈成一块；没有子节点的行自成一块，范围就是那一行。
  *
- * 没有这个标记的格自己就是框的位置。未归组段与工作区标题行虽然共用一份提交，
- * 但它们处在工作区的两头、是两处独立的地方，不该被套进同一个框——不挂标记即可区分，
- * 不必由命中层去猜它们的共同祖先是不是「够小」
+ * 取值是**它代表的区域键**。命中层拿计划点名的 {@link DragPlanTarget.regionOf} 一次查回，
+ * 不做任何「沿祖先链往上找到哪一层」的推断——一片是不是一个单位，是渲染层写下的事实。
+ *
+ * 一片只有一格时不挂这个标记：那时它自己就是自己的单位（「只有一行的块」），
+ * 于是「只有一行」与「很多行」在机制层是同一件事，只是单位的元素不同
  */
-export const BLOCK_ATTRIBUTE = 'data-wg-dnd-block'
-
-/**
- * 某一格对应的**整块**标记
- *
- * {@link BLOCK_ATTRIBUTE} 说的是「这一格属于哪一块」（分组把组头与组体圈在一起）；
- * 这一个说的是「某一格对应的整块是哪个元素」——工作区的标题格对应整个工作区块，
- * 指针停在标题行上时框因此套住整块工作区（含它体内的子工作区行），而不是只套住标题那一行
- */
-export const BLOCK_KEY_ATTRIBUTE = 'data-wg-block-key'
+export const REGION_ATTRIBUTE = 'data-wg-dnd-region'
 
 /** 本次拖拽够不着的元素，由命中层在拖拽期间写上 */
 export const DIM_ATTRIBUTE = 'data-wg-dnd-dim'
@@ -196,6 +188,21 @@ export function looseKey(workspaceId: string): string {
 /** 一个工作区标题行那一格 */
 export function workspaceHeadKey(workspaceId: string): string {
   return zoneKeyOf({ kind: 'workspace', id: workspaceId }, 'head') as string
+}
+
+/** 一个工作区的落点单位：标题行与它整个区块同属的那一块 */
+export function workspaceRegionKey(workspaceId: string): string {
+  return regionOfKey({ kind: 'workspace', id: workspaceId }, 'head') as string
+}
+
+/** 一个虚拟工作区分组的落点单位：组头与组体同属的那一块 */
+export function virtualRegionKey(groupId: string): string {
+  return regionOfKey({ kind: 'virtual', id: groupId }, 'head') as string
+}
+
+/** 一个会话分组的落点单位：组头与组体同属的那一块 */
+export function sessionGroupRegionKey(workspaceId: string, groupId: string): string {
+  return regionOfKey({ kind: 'group', workspaceId, groupId }, 'head') as string
 }
 
 /**
@@ -281,8 +288,10 @@ export function sessionGroupingPlan(input: {
   for (const section of sections) {
     if (section.id === currentGroupId) continue
     // 分组头自己另占一格，因此这里也得收一格：拖到头上会先命中那一格，它不在计划里就读成「这一段不接」
+    // 两格同属一整块：框与线都该套住整个分组，挂在头上会只描住那一行
     const toGroup: DragPlanTarget = {
       mode: 'container',
+      regionOf: sessionGroupRegionKey(workspaceId, section.id),
       commit: () => input.moveToGroup(section.id),
     }
     targets.set(sessionGroupKey(workspaceId, section.id), toGroup)
@@ -291,8 +300,12 @@ export function sessionGroupingPlan(input: {
 
   // 来源已在未归组段时，拖回那一段是原地投放，两格因此都不进表
   if (currentGroupId !== '') {
+    // 落到未归组段读作「回到这个工作区」：那一段只是工作区体内的一截，
+    // 自己不是容器，能放进去的是它所在的那一个工作区——框因此套住整块工作区。
+    // 标题行那一格共用这一份提交，单位自然也是同一块
     const toLoose: DragPlanTarget = {
       mode: 'container',
+      regionOf: workspaceRegionKey(workspaceId),
       commit: () => input.moveToGroup(''),
     }
     targets.set(looseKey(workspaceId), toLoose)
@@ -359,26 +372,22 @@ export function workspaceTreeDragPlan(input: {
   // 或者两个虚拟分组里的同层兄弟互相指着对方时，都会落到这里
   interface Slot {
     inside?: () => void
-    /** 这一片点名把框画在哪一格上 */
-    insideBlock?: string
     order?: (side: 'before' | 'after') => void
-    /** 这一片点名把线画在哪一格上 */
-    orderBlock?: string
-    /** 上一条的格键，见 {@link DragPlanTarget.orderAbove} */
-    orderAbove?: string
+    /** 这一片的落点单位由哪一格代言，见 {@link DragPlanTarget.regionOf} */
+    regionOf?: string
+    /** 这一片之后那处缝由哪一格代言，见 {@link DragPlanTarget.seamKey} */
+    seamKey?: string
   }
   const byZone = new Map<string, Slot>()
   for (const relation of relations) {
     for (const key of relation.zones) {
       const slot = byZone.get(key) ?? {}
-      if (relation.kind === 'inside') {
-        slot.inside = () => relation.commit()
-        if (relation.block !== undefined) slot.insideBlock = relation.block
-      } else {
+      if (relation.kind === 'inside') slot.inside = () => relation.commit()
+      else {
         slot.order = (side) => relation.place(side)
-        if (relation.block !== undefined) slot.orderBlock = relation.block
-        if (relation.above !== undefined) slot.orderAbove = relation.above
+        if (relation.seam !== undefined) slot.seamKey = relation.seam
       }
+      if (relation.region !== undefined) slot.regionOf = relation.region
       byZone.set(key, slot)
     }
   }
@@ -388,9 +397,8 @@ export function workspaceTreeDragPlan(input: {
       const order = slot.order
       targets.set(key, {
         mode: 'banded',
-        ...(slot.insideBlock === undefined ? {} : { blockKey: slot.insideBlock }),
-        ...(slot.orderBlock === undefined ? {} : { orderBlock: slot.orderBlock }),
-        ...(slot.orderAbove === undefined ? {} : { orderAbove: () => slot.orderAbove }),
+        ...(slot.regionOf === undefined ? {} : { regionOf: slot.regionOf }),
+        ...(slot.seamKey === undefined ? {} : { seamKey: slot.seamKey }),
         commit: (anchor) =>
           anchor.kind === 'inside'
             ? inside()
@@ -402,7 +410,7 @@ export function workspaceTreeDragPlan(input: {
       const inside = slot.inside
       targets.set(key, {
         mode: 'container',
-        ...(slot.insideBlock === undefined ? {} : { blockKey: slot.insideBlock }),
+        ...(slot.regionOf === undefined ? {} : { regionOf: slot.regionOf }),
         commit: () => inside(),
       })
       continue
@@ -410,13 +418,44 @@ export function workspaceTreeDragPlan(input: {
     const order = slot.order
     targets.set(key, {
       mode: 'rows',
-      ...(slot.orderBlock === undefined ? {} : { orderBlock: slot.orderBlock }),
-      ...(slot.orderAbove === undefined ? {} : { orderAbove: () => slot.orderAbove }),
+      ...(slot.regionOf === undefined ? {} : { regionOf: slot.regionOf }),
+      ...(slot.seamKey === undefined ? {} : { seamKey: slot.seamKey }),
       commit: (anchor) => order?.(anchor.kind === 'before' ? 'before' : 'after'),
     })
   }
 
   return { source: { kind: 'workspace', id: workspaceId }, targets, tree }
+}
+
+/**
+ * 一条成员「之后」那处缝由哪一格代言
+ *
+ * 相邻两条之间只有一处空白。指针停在上面那一条的下半时读作「排到它之后」，
+ * 停在下一条的上半时读作「排到它之前」——两种读法换算出的新顺序完全一样，
+ * 屏幕上也是同一处，因此只能画出一条线。这里把「之后」交给下一条的上缘：
+ * 命中层拿着这个键去取那一条自己的「之前」那一条线。
+ *
+ * 本段最后一条没有下一条，段尾照常画在它自己的下缘
+ * 下一条正是被拖走的那一条时不代言：那一处是原地投放，线画上去会跟着它一起淡掉
+ *
+ * 交给的是**下一条那一格的键**，不是一个「是的，我来认领」的开关：命中层拿它去查
+ * 「下一条的之前」，那一格画在哪个元素上由它自己决定，这里因此不必认识块与行
+ * @param order - 这一段的全量成员顺序
+ * @param memberId - 这一条的成员 id
+ * @param movingId - 被拖走的成员
+ * @param keyOf - 成员的绘制键
+ * @returns 下一条的绘制键，无下一条时 undefined
+ */
+function seamKeyOf(
+  order: readonly string[],
+  memberId: string,
+  movingId: string,
+  keyOf: (memberId: string) => string,
+): { seamKey?: string } {
+  const next = order[order.indexOf(memberId) + 1]
+  // 本段最后一条没有下一条；下一条正是被拖走的那一条时那处是原地投放，也不认领
+  if (next === undefined || next === movingId) return {}
+  return { seamKey: keyOf(next) }
 }
 
 /**
@@ -429,6 +468,13 @@ export function orderDragPlan(input: {
   source: DragSource
   /** 这段成员各自的落点区域键 */
   keyOf: (memberId: string) => string
+  /**
+   * 一个成员的落点单位
+   *
+   * 缺省表示它自己就是单位（「只有一行的块」）。分组头不是：它与组体同属一整块，
+   * 线要跨整块画，因此由调用方交出那一块的标识
+   */
+  regionKeyOf?: (memberId: string) => string
   /** 这一段的全量成员顺序，在 dragstart 那一刻绑定 */
   order: readonly string[]
   movingId: string
@@ -436,12 +482,15 @@ export function orderDragPlan(input: {
   commit: (beforeId: string | undefined) => void
 }): DragPlan {
   const targets = new Map<string, DragPlanTarget>()
-  const { order, movingId, keyOf } = input
+  const { order, movingId, keyOf, regionKeyOf } = input
   for (const memberId of order) {
     if (memberId === movingId) continue
+    const region = regionKeyOf?.(memberId)
     targets.set(keyOf(memberId), {
       mode: 'rows',
-      orderAbove: () => aboveZoneOfByRow(order, memberId, keyOf),
+      ...(region === undefined ? {} : { regionOf: region }),
+      // 两行之间只有一处缝：它由下一条的上缘代言，紧挨着的两条不会各画一条
+      ...seamKeyOf(order, memberId, movingId, keyOf),
       // 换算用的是构造期绑定的那一份全量顺序，不是露出的那些行，折起的成员因此不动
       // 相邻位与「锚点已不是本段成员」两种落点都在换算里返回 undefined，那时不写
       commit: (anchor) => {
@@ -475,24 +524,15 @@ export function stretchDragPlan(input: {
   /** 这一段的全量成员顺序，在 dragstart 那一刻绑定 */
   order: readonly string[]
   movingId: string
-  /**
-   * 一个成员的区域键，缺省表示整段共用 {@link zoneKey}
-   *
-   * 给出时下半交给下一位成员代言，同一处缝因此只有一条线
-   */
-  keyOf?: (memberId: string) => string
   /** 换算出的新顺序整份落成一次写入，换算判出无变化时不被调用 */
   commit: (order: readonly string[]) => void
 }): DragPlan {
   const targets = new Map<string, DragPlanTarget>()
-  const { order, movingId, keyOf } = input
+  const { order, movingId } = input
   targets.set(input.zoneKey, {
     mode: 'rows',
-    ...(keyOf === undefined
-      ? {}
-      : {
-          orderAbove: (rowId: string) => aboveZoneOfByRow(order, rowId, keyOf),
-        }),
+    // 一处缝只有一条线：一格装好几行时下一条就在同一格里，命中层按行 id 自己接过去，
+    // 这里因此不必点名（`seamKey` 缺省），段尾那一条照常画在它自己的下缘
     // 相邻位与「锚点就是来源自己」两种落点都在换算里返回 undefined，那时不写
     commit: (anchor) => {
       const next = reorderTo(order, movingId, anchor)
@@ -501,25 +541,6 @@ export function stretchDragPlan(input: {
     },
   })
   return { source: input.source, targets }
-}
-
-/**
- * 一条成员的上半那处缝交给谁
- *
- * 「排到这一条之前」与「排到上一条之后」是同一处缝，统一由上一条的下缘代表
- * @param order - 这一段的全量成员顺序
- * @param rowId - 指针正落着的那一条
- * @param keyOf - 一个成员的区域键
- * @returns 接过上半的格键，本段没有上一条时为 undefined
- */
-function aboveZoneOfByRow(
-  order: readonly string[],
-  rowId: string,
-  keyOf: (memberId: string) => string,
-): string | undefined {
-  const at = order.indexOf(rowId)
-  const above = at < 1 ? undefined : order[at - 1]
-  return above === undefined ? undefined : keyOf(above)
 }
 
 /**

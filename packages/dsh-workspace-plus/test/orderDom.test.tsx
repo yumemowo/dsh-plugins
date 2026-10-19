@@ -284,8 +284,35 @@ describe('dragging a session group head', () => {
 
     // 线跨整块画在分组头所在的那一块上，而不是缩到组头那一行：
     // 组头只是这一片的标题行，贴着它画会读成「落点只覆盖那一行」
-    const block = target.closest('[data-wg-dnd-block]')
+    const block = target.closest('[data-wg-dnd-region]')
     expect(block?.getAttribute('data-wg-drop')).toBe('before')
+    await act(async () => root.unmount())
+  })
+
+  it('draws one line for a seam from either side', async () => {
+    // 「排到 group-a 之后」与「排到 group-b 之前」是同一处空白，读数必须逐字相同：
+    // 同一个标记、画在同一个元素上，用户看不出自己是从哪一侧靠过来的
+    const { container, root } = await mount()
+    const above = zone(container, 'groupHead/ws-1/group-a')
+    const below = zone(container, 'groupHead/ws-1/group-b')
+    band(above, true)
+    band(below, false)
+
+    fire(row(container, 'group-c'), 'dragstart')
+
+    const readings: { mark: string | null; on: string | null }[] = []
+    for (const target of [above, below]) {
+      fire(target, 'dragover', 0)
+      const marked = [...container.querySelectorAll('[data-wg-drop]')]
+      expect(marked).toHaveLength(1)
+      readings.push({
+        mark: marked[0]?.getAttribute('data-wg-drop') ?? null,
+        on: marked[0]?.getAttribute('data-wg-dnd-region') ?? null,
+      })
+    }
+
+    expect(readings[0]).toEqual({ mark: 'before', on: 'sessionGroupBlock/ws-1/group-b' })
+    expect(readings[0]).toEqual(readings[1])
     await act(async () => root.unmount())
   })
 
@@ -401,7 +428,7 @@ describe('dragging a workspace group head', () => {
     fire(target, 'dragover', 0)
 
     // 同上一处：线画在整个虚拟分组那一块上，不缩到组头那一行
-    const block = target.closest('[data-wg-dnd-block]')
+    const block = target.closest('[data-wg-dnd-region]')
     expect(block?.getAttribute('data-wg-drop')).toBe('before')
     await act(async () => root.unmount())
   })

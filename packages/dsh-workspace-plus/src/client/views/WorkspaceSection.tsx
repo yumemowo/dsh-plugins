@@ -17,7 +17,8 @@ import { useExpansion } from '../hooks/useExpansion.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useDnd, useOrderRow } from '../hooks/useDnd.ts'
 import {
-  BLOCK_KEY_ATTRIBUTE,
+  REGION_ATTRIBUTE,
+  workspaceRegionKey,
   SCOPE_ATTRIBUTE,
   looseKey,
   workspaceBodyKey,
@@ -140,7 +141,7 @@ export function WorkspaceSection({
       className={styles.workspace}
       style={indent}
       {...{ [SCOPE_ATTRIBUTE]: '' }}
-      {...{ [BLOCK_KEY_ATTRIBUTE]: workspaceHeadKey(workspaceId) }}
+      {...{ [REGION_ATTRIBUTE]: workspaceRegionKey(workspaceId) }}
     >
       <WorkspaceRow {...row} dnd={rowDnd} />
       <ExpandableBody open={row.expanded}>
