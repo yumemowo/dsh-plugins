@@ -81,7 +81,13 @@ export interface DragPlan {
 1. 行上的 `dragstart`：行业务侧构造计划，调 `beginDrag(plan)`。计划被写入模块级单例 `currentPlan`，手势层往 `document` 挂 `dragover` / `drop` 接管，同时按计划给够不着的那几片写上 `data-wg-dnd-dim`，并起一轮边缘自动滚动。
 2. `dragover`：适配层把事件目标换成**节点身份**（`nodeAt`），检测器沿树往上走出那条链，取链上第一个在名单里的节点。区域目标是 `rows` 档时按指针正落着的那条带算前后半（量不出高度时读 `before`）。检测结果交回的是两个节点，再由绘制表映射回元素、写落点标记（`data-wg-drop="before|after|inside"`，移走时删掉）。指针位置同时被记下，供自动滚动那一帧使用。
 3. `drop`：取当前命中，查计划拿到 `commit`，执行。提交只发生一次。
-4. `dragend`：清标记与压淡、停自动滚动、摘监听、清单例。
+4. `dragend`：若这一场拖拽还没提交过、且 `dropEffect` 仍是 `move`，先补交一次；然后清标记与压淡、停自动滚动、摘监听、清单例。
+
+**第 4 步的补交不是保险丝，是主路径的一半。** 浏览器会在指针静止期间放弃当前目标：此后它不再向页面派 `dragover`，松手也不派 `drop`，而界面上框和线都还停在那里——用户看到的是一次正常的投放，松手却什么也不发生。实测这种现象持续数秒也可能发生（最后一次 `dragover` 与松手相隔近 2 秒，其间一次事件都没有），因此不能假设 `drop` 一定到。
+
+`drop` 与 `dragend` 的差别在于**取消也会派 `dragend`**（用户按 Esc）。两者靠 `dropEffect` 分开：它只在本包的 `dragover` 里被写成 `move`，取消时浏览器把它重置成 `none`。因此只认 `move`——拿不到 `dataTransfer`、或停在 `none` 时都不补交。
+
+这条兜底有两条回归用例（`test/dndDom.test.tsx` 的「releasing after the browser gave up the target」）：一条断言 `dragover` 之后只来 `dragend` 仍然提交，一条断言取消时不提交。前者能被 `dragend` 里去掉那句提交而红。
 
 ### 落点关系由树一次给全
 
@@ -474,6 +480,8 @@ jsdom 不做布局（`getBoundingClientRect()` 恒为零矩形）也不实现 `D
 | 常开 | 浏览器 | `commit`：松手时提交的框与线 |
 | 常开 | 浏览器 | `snapshot applied`：宿主回来的那份分组状态 |
 | 常开 | 浏览器 | `drop with no landing`：松手时没有任何落点 |
+| 常开 | 浏览器 | `drop event`：浏览器真的派了 `drop`（与上一条对照可分清「没派 `drop`」与「派了但没提交」） |
+| 常开 | 浏览器 | `teardown`：监听从哪条路径被摘掉（`dragend` / `commit` / `provider-unmount`） |
 | 常开 | 浏览器 | `group change failed`：写入被宿主拒绝 |
 | 常开 | 终端 | `moveWorkspace 写入完成`：写的是哪个工作区、写进哪个分组、写完之后各分组的成员 |
 | 常开 | 终端 | `moveWorkspace 拒绝写入，分组不存在`：客户端拿了一个服务端已经没有的分组 id |
