@@ -431,10 +431,9 @@ function WorkspaceNode({
   /**
    * 拖起一条工作区行时的计划
    *
-   * 枚举面与合法性判定都收在树那一层，这里只交出树与四个写入
-   * 四类落点落在三个写入面上：移入 / 移出虚拟分组走 `moveWorkspace`，
-   * 换位一律走官方 `insertBefore`（注册表序是各层共用的顺序来源），
-   * 会话分组那一族走 `nestWorkspaces` 与 `unnestWorkspaces`
+   * 枚举面与合法性判定都收在树那一层，这里只交出树与四个写入出口
+   * 移入 / 移出虚拟分组走 `moveWorkspace`，换位一律走官方 `insertBefore`
+   * （注册表序是各层共用的顺序来源），会话分组那一族走 `nestWorkspaces` 与 `unnestWorkspaces`
    */
   const buildWorkspaceDragPlan = useCallback(
     (memberId: string) =>
