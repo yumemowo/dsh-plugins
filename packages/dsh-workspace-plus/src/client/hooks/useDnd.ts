@@ -454,7 +454,7 @@ export function DndProvider({
   const listenersRef = useRef<{
     dragover: (event: DragEvent) => void
     drop: (event: DragEvent) => void
-    dragend: () => void
+    dragend: (event: DragEvent) => void
   } | null>(null)
 
   /** 自动滚动那一帧的句柄，没有循环在跑时为 null */
@@ -526,7 +526,12 @@ export function DndProvider({
    *
    * `dragend` 与「提交完成后」都走它，因此两处不会各写一份清理
    */
-  const teardown = useCallback(() => {
+  const teardown = useCallback((from: string) => {
+    // 常开：几处清理入口互相踩踏时，缺了「谁先摘掉监听」这一条就分不清
+    // 「浏览器没派 drop」与「自己把 drop 监听摘早了」——两者在界面上都表现为「拖了没反应」
+    if (listenersRef.current !== null) {
+      debugWarn('teardown', { from, committed: committedRef.current })
+    }
     stopAutoScroll()
     const listeners = listenersRef.current
     if (listeners !== null) {
@@ -765,13 +770,13 @@ export function DndProvider({
       side: check.side,
     })
     searcher.commit(check)
-    teardown()
+    teardown('commit')
   }, [teardown])
 
   const beginDrag = useCallback(
     (plan: DragPlan) => {
       // 后到的调用覆盖先到的：浏览器本身保证同一时刻只有一场原生拖拽，这里只是防御
-      if (listenersRef.current !== null) teardown()
+      if (listenersRef.current !== null) teardown('begin-drag-overwrite')
       currentPlan = plan
       committedRef.current = false
 
@@ -799,6 +804,11 @@ export function DndProvider({
       const dragover = (event: DragEvent): void => {
         // 接管这一格，浏览器才会把元素读成可放置的容器，`drop` 才会派发
         event.preventDefault()
+        // 松手能不能落下由这一格决定，不由 preventDefault 决定：
+        // `dropEffect` 停在 `none` 时浏览器照样不派 `drop`，界面上表现为「框线都在、松手什么都没发生」。
+        // 浏览器只在 `dropEffect` 属于 `effectAllowed` 允许的集合时才认这次赋值，
+        // 因此给它 move（拖拽起手处 setData 时写的也是 move）
+        if (event.dataTransfer !== null) event.dataTransfer.dropEffect = 'move'
         const point = { x: event.clientX, y: event.clientY }
         // 自动滚动那一帧没有事件可读，指针位置只能在这里留下
         pointerRef.current = point
@@ -815,11 +825,20 @@ export function DndProvider({
         })
         commit()
       }
-      const dragend = (): void => {
-        // 常开：drop 之后浏览器还会派 dragend，两条都出现说明松手正常；
-        // 只有 dragend 而没有 drop，说明这次拖拽被浏览器取消了（拖动的元素在中途从文档里消失就会这样）
-        debugWarn('drag end', { committed: committedRef.current })
-        teardown()
+      /**
+       * 松手
+       *
+       * 正常路径是 `drop` 先到、这里只做清理。但有另一种情形：浏览器在指针静止期间
+       * 放弃了这个目标，之后再没向本片派过任何事件——框和线留在界面上，松手什么也不发生。
+       * `drop` 在那种情形下永远不会来，而 `dragend` 一定来，因此在这里补交一次。
+       *
+       * 补交有误交的风险：用户按 Esc 取消拖拽时也只有 `dragend`。
+       * 两者靠 `dropEffect` 分开——它只在本包的 `dragover` 里被写成 `move`，
+       * 取消时浏览器把它重置成 `none`。因此只认 `move`
+       */
+      const dragend = (event: DragEvent): void => {
+        if (event.dataTransfer?.dropEffect === 'move') commit()
+        teardown('dragend')
       }
 
       listenersRef.current = { dragover, drop, dragend }
@@ -833,7 +852,7 @@ export function DndProvider({
 
   // 提供者被卸载时那一场拖拽跟着作废：监听留着会指到一个已经不渲染的树
   useEffect(() => () => {
-    if (listenersRef.current !== null) teardown()
+    if (listenersRef.current !== null) teardown('provider-unmount')
   }, [teardown])
 
   const dndZoneProps = useCallback(
@@ -858,11 +877,12 @@ export function DndProvider({
         event.dataTransfer.setData('text/plain', `${PAYLOAD_PREFIX}${id}`)
         beginDrag(plan)
       },
-      onDragEnd: () => {
-        teardown()
-      },
+      // 这里**不**清理：React 的事件挂在根容器上，它比 `document` 那一层先跑，
+      // 在这里 teardown 会把 `document` 上的 dragend 监听摘掉，那条「拖拽结束了」的日志
+      // 因此永远打不出来，事后分不清「浏览器没派 drop」与「自己摘早了」。
+      onDragEnd: () => {},
     }),
-    [beginDrag, teardown],
+    [beginDrag],
   )
 
   // 三个成员都由 `useCallback` 稳定，value 因此只在它们换引用时重建

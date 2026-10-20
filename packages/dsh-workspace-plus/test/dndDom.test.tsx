@@ -63,16 +63,46 @@ function transferable(event: Event): Event {
  * @param target - 事件目标
  * @param type - 事件类型
  * @param y - 指针纵坐标，缺省 0，段内换位要按它算参照行的前后半
+ * @param shared - 整场拖拽共用的那份 dataTransfer
+ *
+ * 真实浏览器里一场拖拽只有一个 dataTransfer 对象，`dropEffect` 横跨整场保留；
+ * 逐条事件各造一份就复现不出「`dragover` 写过 move、`dragend` 还读得到」这条链
  */
-function fire(target: Element, type: string, y = 0): void {
+function fire(
+  target: Element,
+  type: string,
+  y = 0,
+  shared?: { effectAllowed: string; dropEffect: string },
+): void {
   act(() => {
-    const event = transferable(new Event(type, { bubbles: true }))
+    const event = shared === undefined
+      ? transferable(new Event(type, { bubbles: true }))
+      : withTransfer(new Event(type, { bubbles: true }), shared)
     Object.defineProperties(event, {
       clientX: { value: 0 },
       clientY: { value: y },
     })
     target.dispatchEvent(event)
   })
+}
+
+/** 造一份整场拖拽共用的 dataTransfer 替身，载有三个方法以走完 dragstart */
+function sharedTransfer(): { effectAllowed: string; dropEffect: string; setData: (format: string, value: string) => void; getData: (format: string) => string } {
+  const store = new Map<string, string>()
+  return {
+    effectAllowed: 'move',
+    dropEffect: 'none',
+    setData: (format, value) => store.set(format, value),
+    getData: (format) => store.get(format) ?? '',
+  }
+}
+/** 把一份现成的 dataTransfer 挂到事件上，供整场拖拽共用 */
+function withTransfer(
+  event: Event,
+  transfer: { effectAllowed: string; dropEffect: string; setData?: (format: string, value: string) => void; getData?: (format: string) => string },
+): Event {
+  Object.defineProperty(event, 'dataTransfer', { value: transfer })
+  return event
 }
 
 /** 等一次提交落地：`moveSession` 回的是一个 Promise */
@@ -436,6 +466,25 @@ describe('the marker while the pointer moves', () => {
     expect(moves).toEqual([])
   })
 
+  it('asks the browser for a move drop effect while the pointer is over a zone', async () => {
+    // 松手能不能落下由 `dataTransfer.dropEffect` 决定，`preventDefault()` 只表示「我接受」。
+    // 停在 `none` 时浏览器不派 `drop`：界面上框与线都画着，松手却什么都不发生。
+    // 症状与「拖到空白处」无法区分，因此这条要钉住那个赋值本身
+    const { container, root } = await mount()
+    const target = zone(container, 'sessionGroup/ws-1/group-a')
+
+    fire(row(container, 'session-1'), 'dragstart')
+    const event = transferable(new Event('dragover', { bubbles: true }))
+    Object.defineProperties(event, { clientX: { value: 0 }, clientY: { value: 0 } })
+    act(() => {
+      target.dispatchEvent(event)
+    })
+    const effect = (event as unknown as { dataTransfer: { dropEffect: string } }).dataTransfer.dropEffect
+
+    expect(effect).toBe('move')
+    await act(async () => root.unmount())
+  })
+
   it('still commits when the pointer leaves the zone before releasing', async () => {
     // 用户常见的走法：先把指针挪到目标上确认标记，再放手（放手时指针可能已经偏出那一格）
     // 提交用的是上一次命中算出的落点，因此这一条必须仍然落进那个分组
@@ -517,6 +566,43 @@ describe('a zone this drag does not accept', () => {
     expect(moves).toEqual([])
     // 没有计划时命中层连区域都认不出来，顺序位自然也不该被写
     expect(slots).toEqual([])
+    await act(async () => root.unmount())
+  })
+})
+
+describe('releasing after the browser gave up the target', () => {
+  it('commits on release when no drop arrives but the pointer had settled on a landing', async () => {
+    // 浏览器在指针静止期间会放弃当前目标：此后一个事件也不派，松手也不派 drop。
+    // 界面上框和线都还在，用户看到的是一次正常的投放，因此松手仍然要提交
+    const { container, root, moves } = await mount()
+    const target = zone(container, 'sessionGroup/ws-1/group-a')
+    const transfer = sharedTransfer()
+
+    fire(row(container, 'session-1'), 'dragstart', 0, transfer)
+    fire(target, 'dragover', 0, transfer)
+    // dragover 里本包把 dropEffect 写成 move，浏览器据此判定这一次可以放下
+    expect(transfer.dropEffect).toBe('move')
+    fire(row(container, 'session-1'), 'dragend', 0, transfer)
+    await flush()
+
+    expect(moves).toEqual([['ws-1', 'session-1', 'group-a']])
+    await act(async () => root.unmount())
+  })
+
+  it('does not commit when the drag was cancelled', async () => {
+    // 按 Esc 取消时浏览器把 dropEffect 重置成 none，这是「用户不要这一次」的唯一信号
+    const { container, root, moves } = await mount()
+    const target = zone(container, 'sessionGroup/ws-1/group-a')
+    const transfer = sharedTransfer()
+
+    fire(row(container, 'session-1'), 'dragstart', 0, transfer)
+    fire(target, 'dragover', 0, transfer)
+    // 取消：浏览器在派 dragend 之前把它还原
+    transfer.dropEffect = 'none'
+    fire(row(container, 'session-1'), 'dragend', 0, transfer)
+    await flush()
+
+    expect(moves).toEqual([])
     await act(async () => root.unmount())
   })
 })
