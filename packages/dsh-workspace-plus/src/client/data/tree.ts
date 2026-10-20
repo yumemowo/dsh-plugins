@@ -825,10 +825,17 @@ export function dropRelationsOf(
   // 一旦别的分支 continue 掉，整段就静默失效
   for (const ancestor of tree.dropAncestorsOf(node)) {
     for (const groupId of tree.sessionGroupsOf(ancestor)) {
-      if (bound !== undefined && bound.parentId === ancestor.id && bound.groupId === groupId) continue
       const holder = tree.containers.groupOf(ancestor.id, groupId)
       const zones = [zoneKeyOf(holder, 'head') as string, zoneKeyOf(holder, 'body') as string]
       const region = regionOfKey({ kind: 'group', workspaceId: ancestor.id, groupId }, 'head') as string
+      // 已经住在这个分组里：落回它这一片读作原地投放，不写，但这一片必须留在名单里
+      //
+      // 直接跳过整条关系会让指针落在组头时读不到这一片，链于是继续往上走到外层的
+      // 虚拟分组——框套在整个虚拟分组上，而这一行明明就在这个分组体内
+      if (bound !== undefined && bound.parentId === ancestor.id && bound.groupId === groupId) {
+        relations.push({ kind: 'inside', zones, region, commit: () => {} })
+        continue
+      }
       relations.push({
         kind: 'inside',
         zones,

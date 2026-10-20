@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { maybeDropSearcher } from '../src/client/data/dropSearcher.ts'
 import type { DropNode, DropTarget } from '../src/client/data/dropSearcher.ts'
-import { buildWorkspaceTree } from '../src/client/data/tree.ts'
+import { buildWorkspaceTree, dropRelationsOf } from '../src/client/data/tree.ts'
 import type { WorkspaceTree } from '../src/client/data/tree.ts'
 import { deriveNesting } from '../src/client/data/nest.ts'
 
@@ -247,5 +247,59 @@ describe('maybeDropSearcher', () => {
     // 框与线必须说同一层：框落在那个会话分组上，而不是父工作区
     expect(check?.inside).toEqual(group)
     expect(check?.order).toEqual({ kind: 'workspace', id: 'ws-c1' })
+  })
+
+  it('keeps the pointer in the group a child already sits in', () => {
+    // 子工作区已经住进父工作区的会话分组：拖到那个分组的组头上读作原地投放。
+    //
+    // 这一片必须留在名单里。整条跳过它时指针一落到组头就没人接，链继续往上走到外层的
+    // 虚拟分组——框因此套在整个虚拟分组上，而这一行明明就在这个分组体内
+    const workspaceIds = ['ws-p', 'ws-c', 'ws-x']
+    const paths: Record<string, string> = {
+      'ws-p': '/repo',
+      'ws-c': '/repo/pkg',
+      'ws-x': '/repo/other',
+    }
+    const bindingOf = (id: string): { workspaceId: string; groupId: string } | undefined =>
+      id === 'ws-c' ? { workspaceId: 'ws-p', groupId: 'g-111' } : undefined
+    const nesting = deriveNesting({
+      enabled: true,
+      workspaceIds,
+      pathOf: (id) => paths[id],
+      virtualOf: () => 'vg-1',
+      bindingOf,
+      groupIdsOf: (id) => (id === 'ws-p' ? new Set(['g-111']) : new Set<string>()),
+    })
+    const tree = buildWorkspaceTree({
+      workspaceIds,
+      virtualGroups: [{ id: 'vg-1', workspaceIds }],
+      nesting,
+      sessionGroupsOf: (id) => (id === 'ws-p' ? ['g-111'] : []),
+      pathOf: (id) => paths[id],
+    })
+    const node = tree.workspaceNodes.find((entry) => entry.id === 'ws-c')
+    if (node === undefined) throw new Error('fixture 少了 ws-c')
+    const writes: string[] = []
+    const relations = dropRelationsOf(tree, node, {
+      moveToGroup: (groupId) => writes.push('moveToGroup:' + groupId),
+      reorder: () => writes.push('reorder'),
+      nestInto: () => writes.push('nestInto'),
+      unnest: () => writes.push('unnest'),
+    })
+    const searcher = maybeDropSearcher(
+      tree,
+      relations.map((relation) => ({
+        kind: relation.kind,
+        node: tree.nodesByZone().get(relation.zones[0] ?? '') ?? tree.containers.root,
+        commit: () => (relation.kind === 'inside' ? relation.commit() : relation.place('before')),
+      })),
+    )
+    const group = tree.containers.groupOf('ws-p', 'g-111')
+
+    const check = searcher.checkDrop(el({ top: 0, height: 10 }), at(0), group)
+
+    expect(check?.inside).toEqual(group)
+    if (check !== null) searcher.commit(check)
+    expect(writes).toEqual([])
   })
 })

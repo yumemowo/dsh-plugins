@@ -659,17 +659,23 @@ describe('building a tree driven workspace drag plan', () => {
     expect(writes.nests).toEqual(['ws-p1/group-a'])
   })
 
-  it('leaves the session group the source already belongs to out of its target table', () => {
-    // 已经归属的那一组不再承接「放进去」——归属没有变化，宿主仍会写一次盘。
-    // 但它的组头仍可作位次参照：组里其他成员的先后是合法的，那一格因此留着，只是不接 inside
+  it('writes nothing when the source is dropped on the group it already belongs to', () => {
+    // 已经归属的那一组落上去是原地投放：归属与位次都没有变化，因此一笔都不写。
+    //
+    // 那一格必须仍在表里：整条跳过它时指针一落到组头就没人接，检测层沿链继续往上走，
+    // 框于是套到外层的虚拟分组上——而这一行明明就在这个分组体内
+    const writes = { moves: [] as string[], orders: [] as (string | undefined)[], nests: [] as string[], unnests: [] as string[] }
     const p = planFor('ws-c1', {
       bindings: { 'ws-c1': { workspaceId: 'ws-p1', groupId: 'group-a' } },
       groupIds: { 'ws-p1': ['group-a', 'group-b'] },
-      writes: { moves: [], orders: [], nests: [], unnests: [] },
+      writes,
     })
 
-    expect(p.targets.get(groupHeadKey("ws-p1", "group-a"))?.mode).not.toBe('container')
+    expect(p.targets.get(groupHeadKey("ws-p1", "group-a"))?.mode).toBe('container')
     expect(p.targets.get(groupHeadKey("ws-p1", "group-b"))?.mode).toBe('container')
+
+    p.targets.get(groupHeadKey("ws-p1", "group-a"))?.commit({ kind: 'inside' })
+    expect(writes).toEqual({ moves: [], orders: [], nests: [], unnests: [] })
   })
 
   it('reads a drop on the parent workspace row as leaving the session group', () => {
