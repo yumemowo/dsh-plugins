@@ -16,7 +16,6 @@ import {
   ROW_ATTRIBUTE,
   SCROLL_ATTRIBUTE,
   ZONE_ATTRIBUTE,
-  bandOf,
   beforeIdOf,
   groupHeadKey,
   groupOfZoneKey,
@@ -74,28 +73,6 @@ describe('zone keys', () => {
     // 未归组段没有分组这一层，硬读出来一个空串会被当成「有个叫空串的分组」
     expect(groupOfZoneKey('loose/ws-1')).toBeUndefined()
     expect(groupOfZoneKey(PINNED_KEY)).toBeUndefined()
-  })
-})
-
-describe('the three bands of a container row', () => {
-  const band = { top: 100, height: 40 }
-
-  it('reads the top quarter as before, the middle half as inside and the bottom quarter as after', () => {
-    // 同一行身兼排序参照与放入落点两件事时按这条分流，比例是产品手感参数
-    expect(bandOf(band, 100)).toBe('before')
-    expect(bandOf(band, 109)).toBe('before')
-    // 两条边界都算中间那一段：上四分之一与下四分之一因此各是开区间，中二分之一恰好占满一半
-    expect(bandOf(band, 110)).toBe('inside')
-    expect(bandOf(band, 120)).toBe('inside')
-    expect(bandOf(band, 130)).toBe('inside')
-    expect(bandOf(band, 131)).toBe('after')
-    expect(bandOf(band, 140)).toBe('after')
-  })
-
-  it('reads a zero-height band as inside everywhere', () => {
-    // jsdom 恒零矩形，尚未布局的节点也如此：那时上下段都无从谈起，退回不需要像素的放入读法
-    expect(bandOf({ top: 100, height: 0 }, 100)).toBe('inside')
-    expect(bandOf({ top: 100, height: 0 }, 999)).toBe('inside')
   })
 })
 
@@ -724,6 +701,7 @@ describe('building a tree driven workspace drag plan', () => {
 
     expect(p.source).toEqual({ kind: 'workspace', id: 'ws-p2' })
   })
+
 })
 
 

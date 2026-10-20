@@ -713,6 +713,10 @@ export function dropRelationsOf(
   }
 
   // 全遍历整棵树：任何节点都可能与来源构成某种关系
+  //
+  // 这一轮同时决定了「一行只有一个身份」：祖先工作区只承接放入、不当位次参照，
+  // 两者因此不会落在同一个工作区上。虚拟分组今天只承接放入，没有位次关系可言，
+  // 于是也不会有「同一格两种读法」。分组嵌套要做时，这两条是首先要放宽的
   for (const other of tree.allNodes()) {
     if (other.id === node.id) continue
 
@@ -767,7 +771,12 @@ export function dropRelationsOf(
       ]
       // 组头与组体是两格、同一片：框与线都该套住整块分组，单位因此挂在整块容器上
       const region = regionOfKey({ kind: 'virtual', id: other.id }, 'head') as string
-      relations.push({ kind: 'inside', zones, region, commit: () => writes.moveToGroup(other.id) })
+      relations.push({
+        kind: 'inside',
+        zones,
+        region,
+        commit: () => writes.moveToGroup(other.id),
+      })
       continue
     }
 
@@ -841,13 +850,5 @@ export function dropRelationsOf(
     })
   }
 
-  // 同一行不能同时是「位次参照」与「放进去」：一行若有 order 关系，
-  // 它就不再承接放入——那时它的直接父工作区承接 inside，
-  // 因为「能与这一行谈先后」意味着「一定能被放进它所在的那一片」
-  const orderZones = new Set(
-    relations.filter((entry) => entry.kind === 'order').flatMap((entry) => entry.zones),
-  )
-  return relations.filter(
-    (entry) => entry.kind === 'order' || !entry.zones.some((key) => orderZones.has(key)),
-  )
+  return relations
 }

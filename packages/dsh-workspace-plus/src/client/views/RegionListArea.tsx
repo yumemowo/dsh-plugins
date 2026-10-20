@@ -30,6 +30,7 @@ import {
   workspaceTreeDragPlan,
 } from '../data/dnd.ts'
 import type { OrderDragging } from '../data/dnd.ts'
+import { debugWarn } from '../data/debug.ts'
 import type { Nesting } from '../data/nest.ts'
 import type { WorkspaceTree } from '../data/tree.ts'
 import { relativeTimeOfRow, statusViewOfRow } from '../data/rows.ts'
@@ -440,10 +441,25 @@ function WorkspaceNode({
       workspaceTreeDragPlan({
         tree: scope.layout.tree,
         workspaceId: memberId,
-        moveToGroup: (groupId) => commands.moveWorkspaceToGroup(memberId, groupId),
-        reorder: (beforeWorkspaceId) => commands.moveWorkspaceInOrder(memberId, beforeWorkspaceId),
-        nestInto: (parentId, groupId) => commands.nestWorkspaceInto(memberId, parentId, groupId),
-        unnest: () => commands.unnestWorkspace(memberId),
+        // 四个写入出口是这次投放**真正要做的那件事**。
+        // 视觉层交回的是「框在哪一片、线在哪一行」，两者可以各自沿链找；
+        // 只有在这里才看得出它们落成了哪个动作——框与线是否指向同一件事，只能在这里对照
+        moveToGroup: (groupId) => {
+          debugWarn('write: moveToGroup', { workspace: memberId, groupId: groupId === '' ? '(root)' : groupId })
+          commands.moveWorkspaceToGroup(memberId, groupId)
+        },
+        reorder: (beforeWorkspaceId) => {
+          debugWarn('write: reorder', { workspace: memberId, before: beforeWorkspaceId ?? '(end)' })
+          commands.moveWorkspaceInOrder(memberId, beforeWorkspaceId)
+        },
+        nestInto: (parentId, groupId) => {
+          debugWarn('write: nestInto', { workspace: memberId, parent: parentId, groupId })
+          commands.nestWorkspaceInto(memberId, parentId, groupId)
+        },
+        unnest: () => {
+          debugWarn('write: unnest', { workspace: memberId })
+          commands.unnestWorkspace(memberId)
+        },
       }),
     [
       scope.layout.tree,

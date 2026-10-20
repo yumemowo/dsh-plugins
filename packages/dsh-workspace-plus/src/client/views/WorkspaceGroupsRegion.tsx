@@ -1157,8 +1157,8 @@ function useRegionNestActions(
   ui: RegionUiState,
   apply: (action: Promise<WorkspaceGroupsSnapshot>) => void,
 ): RegionNestActions {
-  const { moveWorkspace, insertWorkspaceBefore, moveVirtualWorkspaceBefore, nestWorkspaces,
-    unnestWorkspaces, setNested } = props
+  const { moveWorkspace, insertWorkspaceBefore, moveVirtualWorkspaceBefore,
+    nestWorkspaces, unnestWorkspaces, setNested } = props
 
   /**
    * header 入口：新建一个工作区分组

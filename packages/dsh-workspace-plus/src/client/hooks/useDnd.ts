@@ -92,7 +92,8 @@ function rowsIn(element: Element): Element[] {
  * 名单从计划来：计划里每一格配什么档，这里就落成什么形状的落点
  * - `container` 档只给放入
  * - `rows` 档给排序，参照行是那一格里的每一行
- * - `banded` 档两种都给
+ *
+ * 一格只落成一档，因此每次检测最多拿到一个框和一个线，且来自两格
  *
  * @param root - 本实例那一片的根节点
  * @param plan - 当前计划
@@ -149,7 +150,7 @@ function collectDropTargets(
     // 「只有一行的块」没有那个标记，单位就是这一格自己，这里因此不必分情况
     const region = regionOf(key, target) ?? element
 
-    if (target.mode === 'container' || target.mode === 'banded') {
+    if (target.mode === 'container') {
       // 绘制表按**区域键**存：一个节点可以有好几格（标题、体内、未归组段），
       // 框该画在指针真正落着的那一格对应的单位上，而不是按节点身份合并
       paint.set('inside/' + key, () => ({ element: region, mark: 'inside' }))
@@ -160,7 +161,7 @@ function collectDropTargets(
       })
     }
 
-    if (target.mode === 'rows' || target.mode === 'banded') {
+    if (target.mode === 'rows') {
       /**
        * 单位里可供排序的行
        *

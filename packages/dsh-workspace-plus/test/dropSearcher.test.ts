@@ -105,6 +105,21 @@ describe('maybeDropSearcher', () => {
     expect(check?.inside).toEqual({ kind: 'virtual', id: 'vg-1' })
   })
 
+  it('refuses a drop that lands both readings on one node', () => {
+    // 同一格两种读法都成立是分组嵌套的性质，那件事尚未实现。
+    // 判定点守在检测层：框与线各自沿链找、互不知道对方在哪一层，
+    // 只有在这里才看得出它们是不是指着同一格
+    const tree = fixture()
+    const searcher = maybeDropSearcher(tree, [
+      targetOf('order', ws('ws-2')),
+      targetOf('inside', ws('ws-2')),
+    ])
+
+    expect(() => searcher.checkDrop(el({ top: 0, height: 10 }), at(0), ws('ws-2'))).toThrow(
+      /banded/,
+    )
+  })
+
   it('draws no box for a line that names none', () => {
     // 线只回答「排到这一行前后」，框问的是「指针这一点归哪一片」——
     // 那条链上没有能放进去的东西时，就只剩一条线

@@ -41,13 +41,41 @@ export interface DragPlanTarget {
    *
    * `container`：整块只接 inside
    * `rows`：按区域内的行算 before / after，指针落在段内空白（行与行之间的缝隙、段尾）时读作追加到段尾
-   * `banded`：同一格上两种读法都成立，按指针落在这条带的哪一段分流
    *
-   * `banded` 给的是**容器对容器**的情形：一个分组既能承接放入（成为它的下级），也能与它谈先后。
-   * 拖拽的对象本身就是容器时两种读法才并存，因此这一档留给分组之间的嵌套排序。
-   * 拖工作区时用不上——工作区不是容器，它要么被放进去、要么作为参照行排队，不会兼两职
+   * 第三种读法「同一格上两种都成立，按指针在带里的位置分流」今天没有：它服务分组嵌套，
+   * 那一能力尚未实现。判定点留在 `dropSearcher` 的 `checkDrop` 里，见那里的说明
+   *
+   * ## 「一行只有一个身份」与框线并存的区别
+   *
+   * 指针停在一行上时，这一行的语义只有一个：要么承接放入（inside），要么作为位次参照
+   * （order），不会既是又是。这个不变量由 `tree.ts` 的 `dropRelationsOf` 保证——
+   * 祖先工作区不当位次参照（`isAncestorRow`），因此同一个工作区不会两样都給。
+   *
+   * 框与线**同时出现**不等于一行兼两职，两者是不同层次的答案：
+   * **拖一条行到分组体上**时，框说「放进这一组」、线说「排在组内某一行之前」。
+   * 承载 inside 的是分组那一片，承载 order 是组体内某一条合法行——两个不同的语义主体。
+   * 这类落点因此走两格：`container` 一档管框，`rows` 一档管线，各自独立登记。
+   *
+   * **合成写入尚未接线**：`DropTarget.mergeInto` 只有形状、没有调用方，
+   * 因此今天一次投放仍会发出两笔独立写入（改归属一笔、改位次一笔）。
+   * 把它接进 `useDnd` 的命中层之前，这里描述的设计没有在运行时生效。
+   *
+   * ## 留下来的那个判定点
+   *
+   * 「同一格上两种读法都成立、按指针在带里的位置分流」这一档服务**分组能嵌套分组**，
+   * 那件事尚未实现。它今天一行都产生不出来：`dropRelationsOf` 只给 workspace 节点算位次关系
+   * （`if (other.kind === 'workspace')`），虚拟分组根本不进那条分支，
+   * 因此不可能有同一格既承接放入又承接同一节点的位次。
+   *
+   * 判定点留在 `dropSearcher.ts` 的 `checkDrop`：那里是唯一同时握着两种答案的地方，
+   * 走到那里时两条链各自找到自己的节点，才谈得上「比较它们是不是同一格」。
+   * 该分支今天会报错，见那里的注释。
+   *
+   * 真要启用它，改动集中在中间层三处，渲染与手势一行不用动：
+   * `tree.ts` 让虚拟分组也能当位次参照、`tree.ts` 的 `isAncestorRow` 放宽排他、
+   * `dropSearcher.ts` 的 `checkDrop` 给那一支真实实现。
    */
-  mode: 'container' | 'rows' | 'banded'
+  mode: 'container' | 'rows'
   /**
    * 这一片的落点单位由哪一格代言
    *
@@ -73,33 +101,6 @@ export interface DragPlanTarget {
   seamKey?: string
   /** 放开时执行。闭包在计划构造时绑定全量顺序等数据，执行前自行复核 */
   commit: (anchor: DropAnchor) => void
-}
-
-/**
- * 一条带上下分流的落点，两段的边界各占带高的比例
- *
- * 上段读 before、下段读 after、中间读 inside
- * 比例是产品手感参数，只写在这里一处，样式与计划都不各写一份
- */
-const BAND_EDGE = 0.25
-
-/**
- * 指针落在一条带的哪一段
- *
- * 带高为零（jsdom 恒如此、尚未布局的节点也如此）时读作中间那一段：
- * 那时上下半都无从谈起，退回「整块落进容器」这个不需要像素的读法
- * @param rect - 参照行的矩形
- * @param y - 指针的纵坐标
- */
-export function bandOf(
-  rect: { top: number; height: number },
-  y: number,
-): 'before' | 'inside' | 'after' {
-  if (rect.height <= 0) return 'inside'
-  const offset = (y - rect.top) / rect.height
-  if (offset < BAND_EDGE) return 'before'
-  if (offset > 1 - BAND_EDGE) return 'after'
-  return 'inside'
 }
 
 /** 一次拖拽的完整计划，dragstart 时构造，dragend 时销毁 */
@@ -365,11 +366,8 @@ export function workspaceTreeDragPlan(input: {
     unnest: input.unnest,
   })
 
-  // 同一格上两种读法都成立时合成一个目标，档记作 banded：
-  // 上四分之一读 before、下四分之一读 after、中二分之一读 inside
-  //
-  // 这不是特例——它正是「一行既是容器、又能谈位次」的情形。祖先行与同层兄弟撞在同一格上，
-  // 或者两个虚拟分组里的同层兄弟互相指着对方时，都会落到这里
+  // 一格只给一档：给框的那一格与给线的那一格是两格，各自独立登记。
+  // 同一格两档并存的读法服务分组嵌套，尚未实现，判定点在 dropSearcher 的 checkDrop
   interface Slot {
     inside?: () => void
     order?: (side: 'before' | 'after') => void
@@ -382,8 +380,9 @@ export function workspaceTreeDragPlan(input: {
   for (const relation of relations) {
     for (const key of relation.zones) {
       const slot = byZone.get(key) ?? {}
-      if (relation.kind === 'inside') slot.inside = () => relation.commit()
-      else {
+      if (relation.kind === 'inside') {
+        slot.inside = () => relation.commit()
+      } else {
         slot.order = (side) => relation.place(side)
         if (relation.seam !== undefined) slot.seamKey = relation.seam
       }
@@ -392,20 +391,10 @@ export function workspaceTreeDragPlan(input: {
     }
   }
   for (const [key, slot] of byZone) {
-    if (slot.inside !== undefined && slot.order !== undefined) {
-      const inside = slot.inside
-      const order = slot.order
-      targets.set(key, {
-        mode: 'banded',
-        ...(slot.regionOf === undefined ? {} : { regionOf: slot.regionOf }),
-        ...(slot.seamKey === undefined ? {} : { seamKey: slot.seamKey }),
-        commit: (anchor) =>
-          anchor.kind === 'inside'
-            ? inside()
-            : order(anchor.kind === 'before' ? 'before' : 'after'),
-      })
-      continue
-    }
+    // 一格两档都成立时不能静默取其中一档：那正是分组嵌套要用的读法，
+    // 而网关层（dropSearcher 的 checkDrop）已经在同一格两档并存的落点上拦了一道。
+    // 这里**不抛错**也是有意的：计划是纯函数，抛错会让一次页面渲染失败；
+    // 真正的守门放在检测层，那里才有「指针落在这一格上」这个事实
     if (slot.inside !== undefined) {
       const inside = slot.inside
       targets.set(key, {
