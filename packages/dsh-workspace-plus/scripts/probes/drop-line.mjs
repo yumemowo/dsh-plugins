@@ -277,8 +277,21 @@ async function probeMark(target, mark, name) {
       const el = document.querySelector('[data-wg-drop]')
       const r = el.getBoundingClientRect()
       const cs = getComputedStyle(el, '${mark === 'inside' ? '::before' : mark === 'before' ? '::before' : '::after'}')
+      // 线左端的期望起点：**这一块头行**的真实缩进，而不是块自己的属性
+      //
+      // 直接把变量值读出来是没用的：calc(...) 读到的是未解析的字符串，parseFloat 得 NaN；
+      // 而按块自己的值去算又等于复述伪元素那条规则，永远成立、守不住任何东西。
+      // 因此把 var() 交给浏览器解析一次，量出来的才是这一行文字真正落在哪一列
+      const row = el.matches('[data-wg-dnd-row]') ? el : el.querySelector('[data-wg-dnd-row]')
+      const probe = document.createElement('div')
+      probe.style.position = 'absolute'
+      probe.style.visibility = 'hidden'
+      probe.style.paddingLeft = 'var(--wg-row-start, 24px)'
+      ;(row ?? el).append(probe)
+      const indent = parseFloat(getComputedStyle(probe).paddingLeft)
+      probe.remove()
       return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width,
-               pseudoTop: cs.top, pseudoBottom: cs.bottom, pseudoHeight: cs.height }
+               pseudoTop: cs.top, pseudoBottom: cs.bottom, pseudoHeight: cs.height, indent }
     })()
   `)
 
@@ -326,6 +339,18 @@ async function probeMark(target, mark, name) {
   // 线必须落在元素盒子之内：伸到外面会被裁剪，而且指针瞄着它命中不到这个元素
   if (line.y < box.top - 1 || line.y > box.bottom) {
     fail(`${name}: 线在 y=${line.y}，落在元素盒子 ${box.top}..${box.bottom} 之外`)
+  }
+  // 线的左端必须跟着**这一块自己那一层**的缩进走，不能是一根固定的 24px
+  //
+  // 块与行带不在同一层：块上不声明 --wg-row-start 时那条规则退回兜底 24px，
+  // 于是第 0 层工作区（头行 8px）与组内成员（头行 24px）画出起点相同的线——
+  // 屏幕上读作「它们在同一层」，而实际指向的是两层不同的落点
+  const expected = Math.round(box.left + (box.indent ?? 24))
+  if (Math.abs(line.first - expected) > 2) {
+    fail(
+      `${name}: 线从 x=${line.first} 起，而这一块的缩进要求 x=${expected}` +
+        `（块左缘 ${Math.round(box.left)} + ${box.indent}px）`,
+    )
   }
 }
 

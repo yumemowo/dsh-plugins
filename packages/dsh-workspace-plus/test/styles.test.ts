@@ -417,6 +417,18 @@ describe('client stylesheet', () => {
     )
     expect(declared('.workspaceBody', '--wg-row-base')).toBe('24px')
     expect(declared('.groupBody', '--wg-row-base')).toBe('40px')
+
+    // 落点线画在**整块**上，而块不含行带的层，读不到头行那一格变量。
+    // 块上不声明时线退回伪元素那条规则的兜底 24px：第 0 层工作区（头行 8px）、
+    // 虚拟分组（8px）与组内成员（24px）因此画出起点相同的线，屏幕上读作「它们在同一层」。
+    // 三档必须与各自头行同值，线才与它指向的那一层的标题对齐
+    expect(declared('.workspace', '--wg-row-start')).toBe(
+      'calc(8px + 16px * var(--wg-depth, 0))',
+    )
+    expect(declared('.virtualWorkspace', '--wg-row-start')).toBe('8px')
+    expect(declared('.group', '--wg-row-start')).toBe(
+      'calc(24px + 16px * var(--wg-depth, 0))',
+    )
   })
 
   it('draws one guide line per nested level at the parent icon column', () => {
