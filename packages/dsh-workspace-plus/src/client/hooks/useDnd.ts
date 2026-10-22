@@ -626,7 +626,9 @@ export function DndProvider({
     // 指针正落着哪个节点：适配层读一次（元素带区域键，经树换成节点身份），
     // 此后落点判定全在节点上做，检测层沿树往上走
     const node = inside ? nodeAt(target) : null
-    const check = inside && node !== null ? searcher.checkDrop(target, point, node) : null
+    // 捡到这一步才量带宽：检测器只在真的要分上下半时才问它，指针每移动一次都会走一遍这里
+    const band = target === null ? null : () => target.getBoundingClientRect()
+    const check = inside && node !== null && band !== null ? searcher.checkDrop(band, point, node) : null
     checkRef.current = check
 
     // 一次最多两个节点：一个画框、一个画线。

@@ -4,10 +4,24 @@
  * 判定全部在节点上完成，而且检测器**拿着整棵树**：指针落在哪个节点上，由适配层读出来交给它；
  * 那个节点能接什么、它的上位容器是谁、谁罩着它，全部从树现算，不靠调用方预先枚举一份格子清单。
  *
- * 唯一的例外是线的上下半：那要量指针正落着的那个元素的矩形，因此 `Element` 只出现在
- * {@link DropSearcher.checkDrop} 的入参签名里。
+ * 唯一的例外是线的上下半：那要量指针正落着的那个元素有多高、顶边在哪，因此
+ * {@link DropSearcher.checkDrop} 收两个几何读数。它不收元素——元素只属于调用方那半边。
  */
 import type { TreeContainerRef, TreeNodeRef, WorkspaceTree } from './tree.ts'
+
+/** 一条带的几何读数：只有分上下半要用的那两格 */
+export interface BandRect {
+  top: number
+  height: number
+}
+
+/**
+ * 量一条带的口子
+ *
+ * 交给检测器的是这个函数而不是读数本身：线的上下半只在真的对上参照行时才要量，
+ * 而指针每移动一次都会走一遍检测。传读数会让调用方每帧量一次，传这个口子只在需要时量
+ */
+export type BandMeasure = () => BandRect
 
 /** 线画在参照行的哪一侧 */
 type DropSide = 'before' | 'after'
@@ -44,13 +58,13 @@ export interface DropCheck {
 export interface DropSearcher {
   /**
    * 指针此刻落在名单里的哪些位置上
-   * @param target - 指针下的元素，只用来量线的上下半
+   * @param band - 量指针正落着的那一条带的口子，只用来分线的上下半；指针不在任何一条带上时为 null
    * @param point - 指针坐标
    * @param node - 指针正落着的那个节点，由适配层读出来
    * @returns 最多一个画框的节点与一个画线的节点；都不接时为 null
    */
   checkDrop(
-    target: Element | null,
+    band: BandMeasure | null,
     point: { x: number; y: number },
     node: DropNode,
   ): DropCheck | null
@@ -170,8 +184,8 @@ export function maybeDropSearcher(
   }
 
   return {
-    checkDrop(target, point, node) {
-      if (target === null) return null
+    checkDrop(band, point, node) {
+      if (band === null) return null
       const chain = chainOf(node)
       const check: DropCheck = {}
 
@@ -179,7 +193,7 @@ export function maybeDropSearcher(
       const order = first('order', chain)
       if (order !== undefined) {
         check.order = order.node
-        check.side = sideOf(target.getBoundingClientRect(), point)
+        check.side = sideOf(band(), point)
       }
 
       // 框：链上第一个能放进去的节点。

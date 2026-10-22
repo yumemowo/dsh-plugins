@@ -167,7 +167,8 @@ export interface DragPlan {
 `data/dropSearcher.ts` 是检测当前落点的唯一 API。它**拿整棵树**，一次拖拽的名单由 `collectDropTargets` 从计划算出来（都是节点身份），收进 `maybeDropSearcher(tree, targets)`；此后检测只剩 `checkDrop` 一个调用：
 
 ```ts
-const check = searcher.checkDrop(pointerElement, point, pointerNode)  // 三个都是身份，元素只用来量线的上下半
+// 三个入参都不是 DOM 元素：节点是身份，带只交一个「量多高、顶边在哪」的口子
+const check = searcher.checkDrop(() => target.getBoundingClientRect(), point, pointerNode)
 if (check.inside !== undefined) 在它那一格画一圈
 if (check.order !== undefined) 在它那一格画一条线，side 给出上侧还是下侧
 ```
