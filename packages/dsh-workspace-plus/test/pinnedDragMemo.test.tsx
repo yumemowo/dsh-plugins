@@ -42,6 +42,7 @@ const { officialAddLabels, officialSessionLabels, timeLabel } = await import(
 const { regionTranslate, sidebarTranslate, workspaceTranslate } = await import('./locale-stub.ts')
 const { snapshot } = await import('./snapshot-stub.ts')
 const { storeViewModeProps, viewModeStoreStub } = await import('./viewMode-stub.ts')
+const { summary } = await import('./support/dndDom.ts')
 
 const h = React.createElement
 
@@ -49,18 +50,6 @@ const h = React.createElement
 const PINNED_IDS = ['session-1', 'session-2']
 
 const ALL_IDS = [...PINNED_IDS, 'session-3']
-
-/** 造一份会话摘要 */
-function summary(id: string): Record<string, unknown> {
-  return {
-    id,
-    displayTitle: `会话 ${id}`,
-    running: false,
-    blank: false,
-    retainedBy: {},
-    updatedAt: 1_000,
-  }
-}
 
 /** 工作区快照，模块级建好、每次返回同一份引用 */
 const WORKSPACES = {

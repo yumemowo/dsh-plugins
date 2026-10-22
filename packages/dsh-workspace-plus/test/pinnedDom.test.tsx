@@ -9,6 +9,7 @@ import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/clie
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { setHoverCapable } from './matchMedia-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { summary } from './support/dndDom.ts'
 import { pinnedOf } from '../src/client/store/viewMode.ts'
 import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
 
@@ -66,19 +67,6 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
  * `useSyncExternalStore` 判定为快照变过，渲染因此无限循环
  */
 const CREATED = new Date(2026, 0, 1, 0, 0).toISOString()
-
-/** 造一份会话摘要 */
-function summary(id: string, updatedAt: number, extra: Record<string, unknown> = {}) {
-  return {
-    id,
-    displayTitle: `会话 ${id}`,
-    running: false,
-    blank: false,
-    retainedBy: {},
-    updatedAt,
-    ...extra,
-  }
-}
 
 const ALL_IDS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'sub']
 

@@ -8,6 +8,7 @@ import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRe
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { summary } from './support/dndDom.ts'
 import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
 
 /**
@@ -33,22 +34,14 @@ const NOW = Date.now()
  * @param id - 会话 id
  * @param ageHours - 距今多少小时没被用过
  */
-function summary(id: string, ageHours: number, extra: Record<string, unknown> = {}) {
-  return {
-    id,
-    displayTitle: `会话 ${id}`,
-    running: false,
-    blank: false,
-    retainedBy: {},
-    updatedAt: NOW - ageHours * HOUR,
-    ...extra,
-  }
+function agedSummary(id: string, ageHours: number, extra: Record<string, unknown> = {}) {
+  return summary(id, NOW - ageHours * HOUR, extra)
 }
 
 /** 造一条明确落在判定窗口之外的会话摘要 */
 function staleSummary(id: string, extra: Record<string, unknown> = {}) {
   // 4 天：离 3 天的窗口线还差一天，不会因为用例跑得久一点就翻面
-  return summary(id, 4 * 24, extra)
+  return agedSummary(id, 4 * 24, extra)
 }
 
 /** 工作区里那 8 条会话，都在窗口内：`s0` 最近，`s7` 最旧 */
@@ -65,7 +58,7 @@ const SUMMARIES: Record<string, unknown> = Object.fromEntries(
     const ageHours = index < WORKSPACE_IDS.length
       ? index + 1
       : index - WORKSPACE_IDS.length + 1
-    return [id, summary(id, ageHours)]
+    return [id, agedSummary(id, ageHours)]
   }),
 )
 
@@ -336,7 +329,7 @@ describe('collapsed session rows', () => {
       stray,
       byId: {
         ...Object.fromEntries(
-          ['a0', 'a1'].map((id, index) => [id, summary(id, index + 1)]),
+          ['a0', 'a1'].map((id, index) => [id, agedSummary(id, index + 1)]),
         ),
         ...Object.fromEntries(stray.map((id) => [id, staleSummary(id)])),
       },
@@ -391,7 +384,7 @@ describe('collapsed session rows', () => {
     const few = ['f0', 'f1', 'f2', 'f3']
     const sessions: OwnedSessions = {
       owned: few,
-      byId: Object.fromEntries(few.map((id, index) => [id, summary(id, index + 1)])),
+      byId: Object.fromEntries(few.map((id, index) => [id, agedSummary(id, index + 1)])),
     }
     const { container, root } = await mount({
       loadGroups: async () => snapshot(),
