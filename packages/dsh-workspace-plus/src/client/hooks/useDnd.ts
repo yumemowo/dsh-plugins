@@ -16,6 +16,7 @@ import { createContext, createElement, useCallback, useContext, useEffect, useMe
 import type { ReactElement, ReactNode } from 'react'
 import {
   DIM_ATTRIBUTE,
+  DRAGGING_ATTRIBUTE,
   DROP_ATTRIBUTE,
   REGION_ATTRIBUTE,
   ROW_ATTRIBUTE,
@@ -37,9 +38,6 @@ import type { ScrollBox } from '../data/scroll.ts'
  * 本包不读它，写它是为了让外部插件的监听认得出「这是另一个插件的拖拽」而让路
  */
 const PAYLOAD_PREFIX = 'wg-dnd:'
-
-/** 被拖行的画淡标记，行自己监听 dragstart / dragend 置本地状态 */
-const DRAGGING_ATTRIBUTE = 'data-wg-dragging'
 
 /**
  * 一处落点标记：画在哪个元素上、带哪个值
@@ -1013,6 +1011,3 @@ export function useOrderRow(
   )
   return { zone, drag: dragProps, rowAttribute, dragging: drag.dragging }
 }
-
-/** 被拖行的画淡标记名，行的样式按它选档 */
-export const ROW_DRAGGING_ATTRIBUTE = DRAGGING_ATTRIBUTE

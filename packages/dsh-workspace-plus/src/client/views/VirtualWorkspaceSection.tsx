@@ -23,7 +23,7 @@ import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useOrderRow } from '../hooks/useDnd.ts'
-import { REGION_ATTRIBUTE, virtualRegionKey, virtualWorkspaceHeadKey } from '../data/dnd.ts'
+import { REGION_ATTRIBUTE, draggingProps, virtualRegionKey, virtualWorkspaceHeadKey } from '../data/dnd.ts'
 import type { OrderDragging } from '../data/dnd.ts'
 import type { VirtualWorkspaceSection as VirtualWorkspaceSectionData } from '../data/types.ts'
 import styles from './components/rows.module.css'
@@ -117,7 +117,7 @@ export function VirtualWorkspaceSection({
         {...order.zone}
         {...order.rowAttribute}
         {...order.drag}
-        data-wg-dragging={order.dragging ? '' : undefined}
+        {...draggingProps(order.dragging)}
         role="button"
         tabIndex={0}
         aria-expanded={expanded}

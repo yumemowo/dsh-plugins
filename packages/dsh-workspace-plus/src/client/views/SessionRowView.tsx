@@ -22,6 +22,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { IconPinFillRegular, IconPinOutlineRegular, StateDot } from '../runtime.ts'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { sameSessionStatus } from '../data/status.ts'
+import { draggingProps } from '../data/dnd.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useLocalViewOptions } from '../hooks/useLocalViewOptions.ts'
 import type { DragStartEvent } from '../hooks/useDnd.ts'
@@ -215,7 +216,7 @@ function SessionRowViewImpl({
       data-wg-stagger=""
       data-wg-clipped={clipped ? '' : undefined}
       // 被拖的那一行画淡，与落点标记同一类「拖拽期间的临时外观」
-      data-wg-dragging={dragging ? '' : undefined}
+      {...draggingProps(dragging)}
       // 面板开合标在行自己身上：置顶区用 `:has()` 从段里反向读它，真值因此只有行上这一处
       data-wg-panel-open={panelOpen ? '' : undefined}
       draggable={draggable}

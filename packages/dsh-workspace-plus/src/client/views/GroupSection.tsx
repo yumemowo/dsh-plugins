@@ -16,7 +16,13 @@ import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useDnd, useOrderRow } from '../hooks/useDnd.ts'
-import { REGION_ATTRIBUTE, groupHeadKey, sessionGroupRegionKey, sessionGroupZoneKey } from '../data/dnd.ts'
+import {
+  REGION_ATTRIBUTE,
+  draggingProps,
+  groupHeadKey,
+  sessionGroupRegionKey,
+  sessionGroupZoneKey,
+} from '../data/dnd.ts'
 import type { GroupSection as GroupSectionData } from '../data/types.ts'
 import type { OrderDragging } from '../data/dnd.ts'
 import styles from './components/rows.module.css'
@@ -114,7 +120,7 @@ export function GroupSection({
         {...order.zone}
         {...order.rowAttribute}
         {...order.drag}
-        data-wg-dragging={order.dragging ? '' : undefined}
+        {...draggingProps(order.dragging)}
         // 参与所在撑开体的逐个淡入，序号由撑开体按文档序下发
         data-wg-stagger=""
         role="button"

@@ -161,6 +161,25 @@ export const DIM_ATTRIBUTE = 'data-wg-dnd-dim'
  */
 export const SCROLL_ATTRIBUTE = 'data-wg-dnd-scroll'
 
+/**
+ * 被拖起的那一行自己带上的标记，由行在 dragstart / dragend 时按本地状态写
+ *
+ * 机制层只读它一处：压淡时这些行不再压淡，否则被拖的那一条会连自己一起淡掉
+ */
+export const DRAGGING_ATTRIBUTE = 'data-wg-dragging'
+
+/**
+ * 画淡那一格，摊在行元素上
+ *
+ * 行自己在 dragstart / dragend 时置本地状态，这里只把状态换成属性：四处行组件各写一遍
+ * 属性名，写错一处就是「这一行拖起来不画淡」，而它不会报错
+ * @param dragging - 这一行是否正被拖
+ * @returns 拖拽期间才有的那一格属性
+ */
+export function draggingProps(dragging: boolean): Record<string, string> {
+  return dragging ? { [DRAGGING_ATTRIBUTE]: '' } : {}
+}
+
 
 // ── 区域键 ──
 

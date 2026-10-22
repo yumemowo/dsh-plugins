@@ -35,6 +35,7 @@ import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import type { DragStartEvent } from '../hooks/useDnd.ts'
+import { draggingProps } from '../data/dnd.ts'
 import styles from './components/rows.module.css'
 import clsx from 'clsx'
 
@@ -191,7 +192,7 @@ export function WorkspaceRow({
       {...dnd?.zone}
       {...dnd?.rowAttribute}
       {...dnd?.drag}
-      data-wg-dragging={dnd?.dragging === true ? '' : undefined}
+      {...draggingProps(dnd?.dragging === true)}
       role="button"
       tabIndex={0}
       aria-expanded={expanded}
