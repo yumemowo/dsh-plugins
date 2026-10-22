@@ -36,7 +36,7 @@ import { useHoverCapable } from '../hooks/useHoverCapable.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useLocalViewOptions } from '../hooks/useLocalViewOptions.ts'
 import type { DragPlan } from '../data/protocol.ts'
-import { SCROLL_ATTRIBUTE } from '../data/protocol.ts'
+import { scrollProps } from '../data/protocol.ts'
 import { SessionRowItem } from './SessionRowItem.tsx'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { PinnedLabels, RegionLabels } from '../labels.ts'
@@ -230,7 +230,7 @@ export function PinnedSection({
           data-wg-overflowing={overflowing ? '' : undefined}
           // 展开档里这一格静止时被裁在高度之外、要浮出才可滚，标记照挂：
           // 能不能滚由机制层每帧按实高判，这里不替它决定
-          {...{ [SCROLL_ATTRIBUTE]: '' }}
+          {...scrollProps()}
           // 整段只有这一格区域键：置顶行的落点按最近的那一行算前后半
           // 收起时不渲染预览区，因此这一格只在展开态存在，收起态本来就拖不动
           {...(zoneKey === undefined ? {} : dndZoneProps(zoneKey))}

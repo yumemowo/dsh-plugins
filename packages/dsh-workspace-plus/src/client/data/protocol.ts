@@ -188,6 +188,51 @@ export function draggingProps(dragging: boolean): Record<string, string> {
   return dragging ? { [DRAGGING_ATTRIBUTE]: '' } : {}
 }
 
+/**
+ * 区域键那一格属性
+ *
+ * 渲染层写下它，命中层沿祖先链读它；两处只经由这个函数与 {@link ZONE_ATTRIBUTE} 见面
+ * @param key - 区域键，与计划表里的键一一对应
+ */
+export function zoneProps(key: string): Record<string, string> {
+  return { [ZONE_ATTRIBUTE]: key }
+}
+
+/**
+ * 落点单位那一格属性
+ *
+ * 与区域键分开：区域键说「这一格是哪儿」，单位标识说「框该套在哪个元素上」。
+ * 一片可以占好几格而框只画一个，因此两套标识并不同名
+ * @param unit - 由 `tree.ts` 的 `regionOfKey` 算出的单位标识
+ */
+export function regionProps(unit: string): Record<string, string> {
+  return { [REGION_ATTRIBUTE]: unit }
+}
+
+/**
+ * 可作 before / after 参照物的行 id 那一格属性
+ *
+ * 与 `draggable` 分开：前者写在元素上供命中层读，后者是 DOM 的拖放开关
+ * @param id - 参照行 id
+ */
+export function rowIdProps(id: string): Record<string, string> {
+  return { [ROW_ATTRIBUTE]: id }
+}
+
+/** 一个可滚容器：拖拽期间边缘自动滚动靠这个属性找它 */
+export function scrollProps(): Record<string, string> {
+  return { [SCROLL_ATTRIBUTE]: '' }
+}
+
+/**
+ * 一片可整块压暗的范围
+ *
+ * 压淡按这一层算：整片淡一次，里面那些行不必各自再标
+ */
+export function scopeProps(): Record<string, string> {
+  return { [SCOPE_ATTRIBUTE]: '' }
+}
+
 // ── 区域键 ──
 
 /**

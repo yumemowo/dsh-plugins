@@ -17,9 +17,9 @@ import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useDnd, useOrderRow } from '../hooks/useDnd.ts'
 import {
-  REGION_ATTRIBUTE,
   draggingProps,
   groupHeadKey,
+  regionProps,
   sessionGroupRegionKey,
   sessionGroupZoneKey,
 } from '../data/protocol.ts'
@@ -113,7 +113,7 @@ export function GroupSection({
     <div
       className={styles.group}
       {...dndZoneProps(sessionGroupZoneKey(workspaceId, section.id))}
-      {...{ [REGION_ATTRIBUTE]: sessionGroupRegionKey(workspaceId, section.id) }}
+      {...regionProps(sessionGroupRegionKey(workspaceId, section.id))}
     >
       <div
         className={clsx(styles.groupHead, order.dragging && styles.rowDragging)}

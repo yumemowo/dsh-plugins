@@ -53,7 +53,8 @@ src/
     ├── store/                  浏览器内持久化状态
     │   └── viewMode.ts         展示方式 / 指示器 / 三层折叠态的存储（官方 defineStore + localStorage，插槽 store 座位的句柄）
     ├── hooks/                  与具体业务无关的通用 hook
-    │   ├── useDnd.ts           行拖拽机制层（DndProvider、beginDrag、区域与行属性助手，见 [行拖拽](row-drag.md)）
+    │   ├── useDnd.ts           行拖拽机制层（DndProvider、beginDrag、监听、自动滚动与提交，见 [行拖拽](row-drag.md)）
+    │   ├── dnd/marks.ts        拖拽的 DOM 胶水（元素 ↔ 节点 ↔ 像素：绘制表、压淡范围、可滚容器）
     │   ├── useHoverCapable.ts  设备是否具备悬停能力（环境读数，置顶区 expand 档的可用前提）
     │   ├── useLocale.ts        区域文案的唯一读取入口（RegionLocaleProvider + useLocale）
     │   ├── useLocalViewOptions.ts  浏览器 store 里展示方式 / 指示器样式的读取入口（同上）

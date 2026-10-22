@@ -2,7 +2,7 @@
 
 dsh-workspace-plus 侧边栏里的五类行——置顶会话、会话、会话分组、工作区、虚拟工作区——都可以被拖动，完成归组与排序两类操作。会话行只做归组与移出（不做段内排序，见「会话段没有顺序位」），置顶行与另外三类行做排序。本文记录这套拖拽基础设施的架构与顺序存储：手势怎么收、落点怎么算、顺序存哪里、多个拖拽环境怎么共存。
 
-实现分布在 `src/client/hooks/useDnd.ts`（机制层）、`src/client/data/protocol.ts`（计划的形状、DOM 标记属性与区域键封装）、`src/client/data/plan.ts`（五类来源各自的计划构造）、`src/client/data/tree.ts`（工作区与虚拟分组的统一节点树、容器归属与区域键形状）、`src/client/data/relations.ts`（一个节点此刻能落到哪儿）、`src/client/data/dropSearcher.ts`（唯一的落点检测入口）、`src/client/data/move.ts`（一次移动要写哪几笔）、`src/client/data/pinned.ts`（置顶顺序合成与段键）、`src/order.ts`（一段顺序的换位换算）。本文是它们的架构说明，不逐文件复述。
+实现分布在 `src/client/hooks/useDnd.ts`（机制层）、`src/client/hooks/dnd/marks.ts`（DOM 胶水：元素 ↔ 节点 ↔ 像素）、`src/client/data/protocol.ts`（计划的形状、DOM 标记属性与区域键封装）、`src/client/data/plan.ts`（五类来源各自的计划构造）、`src/client/data/tree.ts`（工作区与虚拟分组的统一节点树、容器归属与区域键形状）、`src/client/data/relations.ts`（一个节点此刻能落到哪儿）、`src/client/data/dropSearcher.ts`（唯一的落点检测入口）、`src/client/data/move.ts`（一次移动要写哪几笔）、`src/client/data/pinned.ts`（置顶顺序合成与段键）、`src/order.ts`（一段顺序的换位换算）。本文是它们的架构说明，不逐文件复述。
 
 ## 总体架构：计划驱动
 

@@ -31,7 +31,7 @@ import { NameDialog } from './components/dialogs/NameDialog.tsx'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useDnd, useRowDragging } from '../hooks/useDnd.ts'
 import type { DragStartEvent } from '../hooks/useDnd.ts'
-import { ROW_ATTRIBUTE } from '../data/protocol.ts'
+import { rowIdProps } from '../data/protocol.ts'
 import type { DragPlan } from '../data/protocol.ts'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { SessionStatus } from '../data/status.ts'
@@ -272,7 +272,7 @@ function SessionRowItemView({
     if (dnd === null) return {}
     return {
       draggable: dnd.draggable,
-      rowIdAttribute: { [ROW_ATTRIBUTE]: dnd.rowId },
+      rowIdAttribute: rowIdProps(dnd.rowId),
       onDragStart: (event: DragStartEvent) => {
         drag.onDragStart()
         dnd.onDragStart(event)
