@@ -22,9 +22,9 @@ import {
   groupHeadKey,
   sessionGroupRegionKey,
   sessionGroupZoneKey,
-} from '../data/dnd.ts'
+} from '../data/protocol.ts'
 import type { GroupSection as GroupSectionData } from '../data/types.ts'
-import type { OrderDragging } from '../data/dnd.ts'
+import type { OrderDragging } from '../data/protocol.ts'
 import styles from './components/rows.module.css'
 import clsx from 'clsx'
 

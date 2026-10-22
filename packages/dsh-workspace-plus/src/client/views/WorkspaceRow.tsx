@@ -35,7 +35,7 @@ import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import type { DragStartEvent } from '../hooks/useDnd.ts'
-import { draggingProps } from '../data/dnd.ts'
+import { draggingProps } from '../data/protocol.ts'
 import styles from './components/rows.module.css'
 import clsx from 'clsx'
 

@@ -21,15 +21,13 @@ import {
   ROOT_KEY,
   SCROLL_ATTRIBUTE,
   groupHeadKey,
-  orderDragPlan,
   sessionGroupRegionKey,
-  sessionGroupingPlan,
   virtualRegionKey,
   virtualWorkspaceBodyKey,
   virtualWorkspaceHeadKey,
-  workspaceTreeDragPlan,
-} from '../data/dnd.ts'
-import type { OrderDragging } from '../data/dnd.ts'
+} from '../data/protocol.ts'
+import type { OrderDragging } from '../data/protocol.ts'
+import { orderDragPlan, sessionGroupingPlan, workspaceTreeDragPlan } from '../data/plan.ts'
 import { debugWarn } from '../utils/debug.ts'
 import type { Nesting } from '../data/nest.ts'
 import type { WorkspaceTree } from '../data/tree.ts'

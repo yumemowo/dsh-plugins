@@ -18,18 +18,20 @@ import {
   ZONE_ATTRIBUTE,
   groupHeadKey,
   looseKey,
-  orderDragPlan,
-  sessionGroupingPlan,
   sessionGroupRegionKey,
   sessionGroupZoneKey,
-  stretchDragPlan,
   virtualWorkspaceBodyKey,
   virtualWorkspaceHeadKey,
   workspaceHeadKey,
   workspaceRegionKey,
+} from '../src/client/data/protocol.ts'
+import type { DragPlan, DragPlanTarget, DropAnchor } from '../src/client/data/protocol.ts'
+import {
+  orderDragPlan,
+  sessionGroupingPlan,
+  stretchDragPlan,
   workspaceTreeDragPlan,
-} from '../src/client/data/dnd.ts'
-import type { DragPlan, DragPlanTarget, DropAnchor } from '../src/client/data/dnd.ts'
+} from '../src/client/data/plan.ts'
 import { deriveNesting } from '../src/client/data/nest.ts'
 import { buildWorkspaceTree } from '../src/client/data/tree.ts'
 

@@ -17,6 +17,7 @@ src/
     ├── official.ts             官方 workspace 语言包与相对时间的复用面
     ├── directoryFlow.ts        官方 directoryFlow 洞的占用者读数（添加工作区的交互来源）
     ├── hostInfo.ts             宿主固定事实（home 目录）的读数（悬停卡片的路径缩写要用）
+    ├── order.ts                一段顺序的换位换算（挪到某成员之前 / 之后 / 末尾，三处写入共用）
     ├── useFlipMarker.ts        量区域矩形、按需在 body 上挂浮层翻转标记
     ├── actions.ts              RegionActions / RegionDataHooks（组件与宿主的接口）
     ├── compare.tsx             对照模式：挂进原生右侧栏 tab
@@ -40,7 +41,8 @@ src/
     │   ├── picker.ts           下拉菜单的条目与分区（根节点条目、三个分区、聚焦布局、聚焦解析）
     │   ├── sessions.ts         会话快照 → 渲染行（含可见性过滤、空白行命名、未分组收集）
     │   ├── collapse.ts         一个展示范围内折几条（五步判定、置顶与未空闲行，见 [会话折叠](session-collapse.md)）
-    │   ├── dnd.ts              拖拽计划的类型、命中换算与区域键封装（见 [行拖拽](row-drag.md)）
+    │   ├── plan.ts             五类来源各自的计划构造（会话归组、三种排序、工作区换位）
+    │   ├── protocol.ts         拖拽计划的形状、DOM 标记属性与区域键封装（见 [行拖拽](row-drag.md)）
     │   ├── outline.ts          一份扁平的行序列（题头行 / 会话行 / 溢出 / 空态的顺序与露面）
     │   └── rows.ts             会话行的显示事实（状态位与相对时间，两者都只依赖快照与文案）
     ├── utils/                  组件与样式表共用的零散常量、单点小工具与诊断出口

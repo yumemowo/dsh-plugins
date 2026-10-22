@@ -19,7 +19,7 @@ import { ExpansionProvider } from '../src/client/hooks/useExpansion.ts'
 import { SessionScopesProvider } from '../src/client/hooks/useSessionScopes.ts'
 import type { SessionScopes } from '../src/client/hooks/useSessionScopes.ts'
 import type { Expansion } from '../src/client/hooks/useExpansion.ts'
-import type { DragPlan } from '../src/client/data/dnd.ts'
+import type { DragPlan } from '../src/client/data/protocol.ts'
 import { viewModeProps } from './viewMode-stub.ts'
 
 /**

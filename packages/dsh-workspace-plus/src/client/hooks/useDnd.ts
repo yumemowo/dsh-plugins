@@ -23,8 +23,8 @@ import {
   SCOPE_ATTRIBUTE,
   SCROLL_ATTRIBUTE,
   ZONE_ATTRIBUTE,
-} from '../data/dnd.ts'
-import type { DragPlan, DragPlanTarget } from '../data/dnd.ts'
+} from '../data/protocol.ts'
+import type { DragPlan, DragPlanTarget } from '../data/protocol.ts'
 import { maybeDropSearcher } from '../data/dropSearcher.ts'
 import type { DropCheck, DropNode, DropSearcher, DropTarget } from '../data/dropSearcher.ts'
 import type { TreeContainerRef, TreeNodeRef } from '../data/tree.ts'

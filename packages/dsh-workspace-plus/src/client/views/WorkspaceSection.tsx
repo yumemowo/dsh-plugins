@@ -23,8 +23,8 @@ import {
   looseKey,
   workspaceBodyKey,
   workspaceHeadKey,
-} from '../data/dnd.ts'
-import type { OrderDragging } from '../data/dnd.ts'
+} from '../data/protocol.ts'
+import type { OrderDragging } from '../data/protocol.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
 import styles from './components/rows.module.css'
 

@@ -51,7 +51,8 @@ import {
   straySessions,
 } from '../data/sessions.ts'
 import { frontPinnedRows, pinRanks, pinnedEntries, reconcilePinned } from '../data/pinned.ts'
-import { PINNED_KEY, stretchDragPlan } from '../data/dnd.ts'
+import { PINNED_KEY } from '../data/protocol.ts'
+import { stretchDragPlan } from '../data/plan.ts'
 import { debugWarn } from '../utils/debug.ts'
 import { buildWorkspaceTree } from '../data/tree.ts'
 import type { RootLayout, SessionRow } from '../data/types.ts'

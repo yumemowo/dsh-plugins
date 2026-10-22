@@ -43,7 +43,7 @@ const ENTRY = `
 import * as React from 'react'
 import { createRoot } from 'react-dom/client'
 import { DndProvider, useDnd } from '${join(ROOT, 'src/client/hooks/useDnd.ts')}'
-import { SCROLL_ATTRIBUTE } from '${join(ROOT, 'src/client/data/dnd.ts')}'
+import { SCROLL_ATTRIBUTE } from '${join(ROOT, 'src/client/data/protocol.ts')}'
 
 const ROWS = 60
 
