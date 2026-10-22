@@ -149,6 +149,38 @@ export function band(element: HTMLElement, top: number, height = 10): void {
 }
 
 /**
+ * 六格恒定的座位：文案、搜索额度、官方会话动作、添加工作区入口
+ *
+ * 每个 DOM 测试都要写一遍这六格，而它们与用例关心的东西无关。
+ * 展示方式的 store 座位不在这里：那一格各文件用法不同（有的要可订阅读数，有的要可控初值）
+ */
+export function shellSeats(): Pick<
+  WorkspaceGroupsProps,
+  'searchResultLimit' | 't' | 'tWorkspace' | 'tSidebar' | 'official' | 'addWorkspace'
+> {
+  return {
+    searchResultLimit: 20,
+    t: regionTranslate(),
+    tWorkspace: workspaceTranslate(),
+    tSidebar: sidebarTranslate(),
+    official: () => ({
+      renameSession: async () => {},
+      forkSession: () => {},
+      archiveSession: async () => {},
+      labels: officialSessionLabels(workspaceTranslate()),
+      relativeTime: (updatedAt: number, now: number) =>
+        timeLabel(updatedAt, now, workspaceTranslate()),
+    }),
+    addWorkspace: () => ({
+      createWorkspace: async (path: string) => ({ workspaceId: `w-${path}`, title: path }),
+      startSession: () => {},
+      occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
+      labels: officialAddLabels(workspaceTranslate()),
+    }),
+  }
+}
+
+/**
  * 一份注入面完整的区域 props
  *
  * 区域组件有四十来格动作与数据 hook，绝大多数用例只关心其中一两格。

@@ -7,10 +7,11 @@ import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion
 import { workspaceAddress, virtualAddress } from '../src/rootEntry.ts'
 import type { RootEntryAddress } from '../src/rootEntry.ts'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
-import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
+import { officialAddLabels } from '../src/client/official.ts'
+import { workspaceTranslate } from './locale-stub.ts'
 import { readAllCss } from './readCss.ts'
-import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { shellSeats } from './support/dndDom.ts'
 import { viewModeProps, viewModeStoreStub, storeViewModeProps } from './viewMode-stub.ts'
 
 // 对话框与按钮在基线替身里渲染成 null，而「关闭前先确认」这条路径必须看得到名单
@@ -148,25 +149,8 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
-    searchResultLimit: 20,
-    t: regionTranslate(),
-    tWorkspace: workspaceTranslate(),
-    tSidebar: sidebarTranslate(),
+    ...shellSeats(),
     ...viewModeProps(),
-    official: () => ({
-      renameSession: async () => {},
-      forkSession: () => {},
-      archiveSession: async () => {},
-      labels: officialSessionLabels(workspaceTranslate()),
-      relativeTime: (updatedAt: number, now: number) =>
-        timeLabel(updatedAt, now, workspaceTranslate()),
-    }),
-    addWorkspace: () => ({
-      createWorkspace: async (path: string) => ({ workspaceId: `w-${path}`, title: path }),
-      startSession: () => {},
-      occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
-      labels: officialAddLabels(workspaceTranslate()),
-    }),
     ...overrides,
   }
 }
