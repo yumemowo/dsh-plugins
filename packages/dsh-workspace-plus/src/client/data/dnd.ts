@@ -12,7 +12,8 @@
  * 区域键的形状也由那边一处决定，本模块保留的同名构造器只是给渲染层的薄封装
  */
 
-import { dropRelationsOf, looseZoneKeyOf, regionOfKey, zoneKeyOf } from './tree.ts'
+import { dropRelationsOf } from './relations.ts'
+import { bodyKeyOf, headKeyOf, looseZoneKeyOf, regionKeyOf } from './tree.ts'
 import type { TreeNodeRef, WorkspaceTree } from './tree.ts'
 
 // ── 计划 ──
@@ -183,20 +184,21 @@ export function draggingProps(dragging: boolean): Record<string, string> {
 // ── 区域键 ──
 
 /**
- * 一格的区域键
+ * 按对象取的一层区域键封装
  *
- * 形状由 `data/tree.ts` 的 `zoneKeyOf` 一处决定，这里只是给渲染层一层按对象取的薄封装
- * 分成两个模块是因为渲染层只知道「我在画哪个工作区、哪个分组」，还不认识节点身份
+ * 形状由 `data/tree.ts` 的 `bodyKeyOf` / `headKeyOf` / `regionKeyOf` 一处决定，这里只把
+ * 「我在画哪个工作区、哪个分组」翻译成节点身份。分成两个模块是因为渲染层还不认识节点身份，
+ * 而拖拽层只按节点身份要键
  */
 
 /** 一个会话分组整块那一格 */
 export function sessionGroupZoneKey(workspaceId: string, groupId: string): string {
-  return zoneKeyOf({ kind: 'group', workspaceId, groupId }, 'body') as string
+  return bodyKeyOf({ kind: 'group', workspaceId, groupId })
 }
 
 /** 一个会话分组头那一格 */
 export function groupHeadKey(workspaceId: string, groupId: string): string {
-  return zoneKeyOf({ kind: 'group', workspaceId, groupId }, 'head') as string
+  return headKeyOf({ kind: 'group', workspaceId, groupId })
 }
 
 /** 一个工作区未归组那一段 */
@@ -206,22 +208,22 @@ export function looseKey(workspaceId: string): string {
 
 /** 一个工作区标题行那一格 */
 export function workspaceHeadKey(workspaceId: string): string {
-  return zoneKeyOf({ kind: 'workspace', id: workspaceId }, 'head') as string
+  return headKeyOf({ kind: 'workspace', id: workspaceId })
 }
 
 /** 一个工作区的落点单位：标题行与它整个区块同属的那一块 */
 export function workspaceRegionKey(workspaceId: string): string {
-  return regionOfKey({ kind: 'workspace', id: workspaceId }, 'head') as string
+  return regionKeyOf({ kind: 'workspace', id: workspaceId })
 }
 
 /** 一个虚拟工作区分组的落点单位：组头与组体同属的那一块 */
 export function virtualRegionKey(groupId: string): string {
-  return regionOfKey({ kind: 'virtual', id: groupId }, 'head') as string
+  return regionKeyOf({ kind: 'virtual', id: groupId })
 }
 
 /** 一个会话分组的落点单位：组头与组体同属的那一块 */
 export function sessionGroupRegionKey(workspaceId: string, groupId: string): string {
-  return regionOfKey({ kind: 'group', workspaceId, groupId }, 'head') as string
+  return regionKeyOf({ kind: 'group', workspaceId, groupId })
 }
 
 /**
@@ -231,17 +233,17 @@ export function sessionGroupRegionKey(workspaceId: string, groupId: string): str
  * 而那一行渲染在它体内、并不在标题行之内
  */
 export function workspaceBodyKey(workspaceId: string): string {
-  return `workspaceBody/${workspaceId}`
+  return bodyKeyOf({ kind: 'workspace', id: workspaceId })
 }
 
 /** 一个虚拟工作区分组头那一格 */
 export function virtualWorkspaceHeadKey(groupId: string): string {
-  return zoneKeyOf({ kind: 'virtual', id: groupId }, 'head') as string
+  return headKeyOf({ kind: 'virtual', id: groupId })
 }
 
 /** 一个虚拟工作区分组组体那一格 */
 export function virtualWorkspaceBodyKey(groupId: string): string {
-  return zoneKeyOf({ kind: 'virtual', id: groupId }, 'body') as string
+  return bodyKeyOf({ kind: 'virtual', id: groupId })
 }
 
 /**
@@ -251,7 +253,7 @@ export function virtualWorkspaceBodyKey(groupId: string): string {
  * 平铺在根节点上的工作区行另各占一格 `workspaceHeadKey`，两格同一档
  * 行那一格不能省，命中层停在指针下第一个带区域键的元素上，拖到行上时若它不在计划里，这次落点就到此为止
  */
-export const ROOT_KEY = zoneKeyOf({ kind: 'root' }, 'body') as string
+export const ROOT_KEY = bodyKeyOf({ kind: 'root' })
 
 /** 置顶区的区域键，跨工作区共用一格 */
 export const PINNED_KEY = 'pinned'

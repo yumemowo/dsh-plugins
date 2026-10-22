@@ -2,7 +2,7 @@
 
 dsh-workspace-plus 侧边栏里的五类行——置顶会话、会话、会话分组、工作区、虚拟工作区——都可以被拖动，完成归组与排序两类操作。会话行只做归组与移出（不做段内排序，见「会话段没有顺序位」），置顶行与另外三类行做排序。本文记录这套拖拽基础设施的架构与顺序存储：手势怎么收、落点怎么算、顺序存哪里、多个拖拽环境怎么共存。
 
-实现分布在 `src/client/hooks/useDnd.ts`（机制层）、`src/client/data/dnd.ts`（计划构造）、`src/client/data/tree.ts`（工作区与虚拟分组的统一节点树）、`src/client/data/dropSearcher.ts`（唯一的落点检测入口）、`src/client/data/move.ts`（一次移动要写哪几笔）、`src/client/data/pinned.ts`（置顶顺序合成与段键）。本文是它们的架构说明，不逐文件复述。
+实现分布在 `src/client/hooks/useDnd.ts`（机制层）、`src/client/data/dnd.ts`（计划构造）、`src/client/data/tree.ts`（工作区与虚拟分组的统一节点树、区域键与落点单位）、`src/client/data/relations.ts`（一个节点此刻能落到哪儿）、`src/client/data/dropSearcher.ts`（唯一的落点检测入口）、`src/client/data/move.ts`（一次移动要写哪几笔）、`src/client/data/pinned.ts`（置顶顺序合成与段键）。本文是它们的架构说明，不逐文件复述。
 
 ## 总体架构：计划驱动
 
@@ -140,11 +140,11 @@ export interface DragPlan {
 
 **改动集中在中间层，渲染与手势一行不用动**——这条边界是这个模块能被安全迭代的前提，下面三处都落在它里面：
 
-1. `tree.ts` 的位次关系只给 workspace 节点算（`if (other.kind === 'workspace')`），虚拟分组因此没有位次关系。做分组嵌套时要让它也参与。
-2. `tree.ts` 的 `isAncestorRow` 保证祖先工作区只承接放入、不当位次参照。分组嵌套要允许「既是容器、又是参照」并存，这一条要放宽。
+1. `relations.ts` 的位次关系只给 workspace 节点算（`if (other.kind === 'workspace')`），虚拟分组因此没有位次关系。做分组嵌套时要让它也参与。
+2. `relations.ts` 的 `isAncestorRow` 保证祖先工作区只承接放入、不当位次参照。分组嵌套要允许「既是容器、又是参照」并存，这一条要放宽。
 3. `dropSearcher.ts` 的 `checkDrop` 把那条报错换成真实分流，并按需引入带高比例（今天没有这个常量，别处也没有引用它）。
 
-**这条路径之所以还算便宜，靠的是中间层的边界本身**：判定在 `tree.ts` 与 `dropSearcher.ts`，渲染只负责把结果画出来。一旦某次重构把判定散回渲染层，上面三处的改动面就会扩大。守住这条边界比守住这段文字重要。
+**这条路径之所以还算便宜，靠的是中间层的边界本身**：判定在 `relations.ts` 与 `dropSearcher.ts`，渲染只负责把结果画出来。一旦某次重构把判定散回渲染层，上面三处的改动面就会扩大。守住这条边界比守住这段文字重要。
 
 ### 一次投放两笔写入：也还没有合成
 

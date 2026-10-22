@@ -30,7 +30,8 @@ src/
     │   ├── types.ts            SessionRow / GroupSection / WorkspaceLayout / RootLayout / 草稿类型
     │   ├── layout.ts           分组元数据 → 渲染布局（会话那一层与根节点那一层）
     │   ├── nest.ts             子工作区嵌套推导（路径祖先关系、容器归属、段内森林）
-    │   ├── tree.ts             工作区与虚拟分组的统一节点树（容器、兄弟段、区域键）
+    │   ├── tree.ts             工作区与虚拟分组的统一节点树（容器、兄弟段、区域键与落点单位）
+    │   ├── relations.ts        一个节点此刻能落到哪儿（放入与位次两类关系，只有拖拽会读）
     │   ├── dropSearcher.ts     拖拽落点的唯一检测入口（拿整棵树，沿链现算，交回节点）
     │   ├── move.ts             一次移动要写哪几笔（虚拟分组归属、会话分组归属、跟随的后代）
     │   ├── status.ts           会话状态位推导（待交互 / 运行 / 完成）

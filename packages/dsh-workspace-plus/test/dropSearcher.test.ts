@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { maybeDropSearcher } from '../src/client/data/dropSearcher.ts'
 import type { DropNode, DropTarget } from '../src/client/data/dropSearcher.ts'
-import { buildWorkspaceTree, dropRelationsOf } from '../src/client/data/tree.ts'
+import { buildWorkspaceTree } from '../src/client/data/tree.ts'
+import { dropRelationsOf } from '../src/client/data/relations.ts'
 import type { WorkspaceTree } from '../src/client/data/tree.ts'
 import { deriveNesting } from '../src/client/data/nest.ts'
 
