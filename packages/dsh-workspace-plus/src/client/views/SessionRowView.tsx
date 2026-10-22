@@ -20,9 +20,8 @@
 import { memo, useEffect, useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { IconPinFillRegular, IconPinOutlineRegular, StateDot } from '../runtime.ts'
-import { handleRowKeyDown } from './components/rowKeyboard.ts'
+import { RowHeadShell } from './components/RowHeadShell.tsx'
 import { sameSessionStatus } from '../data/status.ts'
-import { draggingProps } from '../data/protocol.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useLocalViewOptions } from '../hooks/useLocalViewOptions.ts'
 import type { DragStartEvent } from '../hooks/useDnd.ts'
@@ -207,28 +206,26 @@ function SessionRowViewImpl({
   // 行是一条带（外层）与一颗药丸（内层）：带承担与上一行之间的间距，指针落在哪一像素都归属于某一行
   // 菜单开合标记、悬停卡片都由组装它的 SessionRowItem 负责
   return (
-    <div
-      ref={rowRef}
-      className={clsx(styles.row, dragging && styles.rowDragging)}
-      // 状态色底与选中加深都由样式表按它选档，行组件不感知配色
-      data-wg-state={status?.state ?? 'idle'}
-      // 参与所在撑开体的逐个淡入，序号由撑开体按文档序下发
-      data-wg-stagger=""
-      data-wg-clipped={clipped ? '' : undefined}
-      // 被拖的那一行画淡，与落点标记同一类「拖拽期间的临时外观」
-      {...draggingProps(dragging)}
-      // 面板开合标在行自己身上：置顶区用 `:has()` 从段里反向读它，真值因此只有行上这一处
-      data-wg-panel-open={panelOpen ? '' : undefined}
-      draggable={draggable}
-      // 可作 before / after 参照物的行把自己那一格 id 写在元素上，命中层据此认出参照行
-      {...rowIdAttribute}
-      role="button"
-      tabIndex={0}
-      onClick={open}
-      onKeyDown={(event) => handleRowKeyDown(event, open)}
+    <RowHeadShell
+      elementRef={rowRef}
+      className={styles.row}
+      dragging={dragging}
+      activate={open}
       onContextMenu={onContextMenu}
+      menu={null}
+      // 可作 before / after 参照物的行把自己那一格 id 写在元素上，命中层据此认出参照行
+      rowAttribute={rowIdAttribute}
+      // 会话行是自己拼的那几格：归组那个落点不需要排序计划，因此可拖与排序计划无关
+      draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      // 状态色底与选中加深都由样式表按它选档，行组件不感知配色
+      // 面板开合标在行自己身上：置顶区用 `:has()` 从段里反向读它，真值因此只有行上这一处
+      dataProps={{
+        'data-wg-state': status?.state ?? 'idle',
+        'data-wg-clipped': clipped ? '' : undefined,
+        'data-wg-panel-open': panelOpen ? '' : undefined,
+      }}
     >
       <span className={clsx(styles.rowSurface, selected && styles.rowSelected)}>
         {status && <StatusIndicator status={status} />}
@@ -240,7 +237,7 @@ function SessionRowViewImpl({
         {actionSlot}
         {pin}
       </span>
-    </div>
+    </RowHeadShell>
   )
 }
 

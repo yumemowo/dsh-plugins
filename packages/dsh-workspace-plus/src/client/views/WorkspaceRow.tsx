@@ -32,10 +32,9 @@ import type { ParentGroupMenuInput, VirtualWorkspaceMenuInput } from '../menus.t
 import { RowActions } from './RowActions.tsx'
 import { WorkspaceHoverContent } from './components/HoverCards.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
-import { handleRowKeyDown } from './components/rowKeyboard.ts'
+import { RowHeadShell } from './components/RowHeadShell.tsx'
 import { useLocale } from '../hooks/useLocale.ts'
 import type { DragStartEvent } from '../hooks/useDnd.ts'
-import { draggingProps } from '../data/protocol.ts'
 import styles from './components/rows.module.css'
 import clsx from 'clsx'
 
@@ -186,21 +185,20 @@ export function WorkspaceRow({
   })
 
   const row = (
-    <div
-      className={clsx(styles.workspaceHead, dnd?.dragging === true && styles.rowDragging)}
-      // 区域属性恒在（有接线时）：这一行是别的落点接收方的参照物，只有拖起那一半随计划有无而变
-      {...dnd?.zone}
-      {...dnd?.rowAttribute}
-      {...dnd?.drag}
-      {...draggingProps(dnd?.dragging === true)}
-      role="button"
-      tabIndex={0}
-      aria-expanded={expanded}
-      onClick={onToggle}
-      onKeyDown={(event) => handleRowKeyDown(event, onToggle)}
+    // 区域属性恒在（有接线时）：这一行是别的落点接收方的参照物，只有拖起那一半随计划有无而变
+    <RowHeadShell
+      className={styles.workspaceHead}
+      expanded={expanded}
+      // 工作区行不参与撑开体的逐个淡入：它在根节点那一层，外层没有容器给它下发序号
+      stagger={false}
+      dragging={dnd?.dragging === true}
+      activate={onToggle}
       onContextMenu={contextMenu.onContextMenu}
+      menu={contextMenu.menu}
+      zone={dnd?.zone}
+      rowAttribute={dnd?.rowAttribute}
+      drag={dnd?.drag}
     >
-      {contextMenu.menu}
       {/* 药丸：底色、圆角与悬停都在它身上，外层的带只承担与上一行之间的那点间距 */}
       <span className={styles.headSurface}>
         <span className={clsx(styles.slot, styles.folder, folderActive && styles.folderActive)}>
@@ -221,7 +219,7 @@ export function WorkspaceRow({
           }
         />
       </span>
-    </div>
+    </RowHeadShell>
   )
 
   // 没有正文（未分组桶）或拿不到官方文案时不挂浮层

@@ -13,11 +13,10 @@ import { GROUP_MENU, ROW_MENU, buildGroupMenuItems, buildRowContextMenuItems } f
 import { ExpandableBody } from './components/ExpandableBody.tsx'
 import { RowActions } from './RowActions.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
-import { handleRowKeyDown } from './components/rowKeyboard.ts'
+import { RowHeadShell } from './components/RowHeadShell.tsx'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useDnd, useOrderRow } from '../hooks/useDnd.ts'
 import {
-  draggingProps,
   groupHeadKey,
   regionProps,
   sessionGroupRegionKey,
@@ -115,22 +114,17 @@ export function GroupSection({
       {...dndZoneProps(sessionGroupZoneKey(workspaceId, section.id))}
       {...regionProps(sessionGroupRegionKey(workspaceId, section.id))}
     >
-      <div
-        className={clsx(styles.groupHead, order.dragging && styles.rowDragging)}
-        {...order.zone}
-        {...order.rowAttribute}
-        {...order.drag}
-        {...draggingProps(order.dragging)}
-        // 参与所在撑开体的逐个淡入，序号由撑开体按文档序下发
-        data-wg-stagger=""
-        role="button"
-        tabIndex={0}
-        aria-expanded={expanded}
-        onClick={onToggle}
-        onKeyDown={(event) => handleRowKeyDown(event, onToggle)}
+      <RowHeadShell
+        className={styles.groupHead}
+        expanded={expanded}
+        dragging={order.dragging}
+        activate={onToggle}
         onContextMenu={contextMenu.onContextMenu}
+        menu={contextMenu.menu}
+        zone={order.zone}
+        rowAttribute={order.rowAttribute}
+        drag={order.drag}
       >
-        {contextMenu.menu}
         {/* 药丸：底色、圆角与悬停都在它身上，外层的带只承担与上一行之间的那点间距 */}
         <span className={styles.headSurface}>
           <span className={styles.slot}>
@@ -156,7 +150,7 @@ export function GroupSection({
             />
           </span>
         </span>
-      </div>
+      </RowHeadShell>
       {/* 空分组既没有会话也没有子工作区，整块撑开体都不渲染 */}
       {section.sessions.length <= 0 && childIds.length <= 0 ? null : (
         // 组内同样是「子工作区 → 会话」，先文件夹后文件，与父工作区体内同一顺序

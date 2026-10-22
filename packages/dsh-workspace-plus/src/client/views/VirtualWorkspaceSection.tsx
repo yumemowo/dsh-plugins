@@ -20,10 +20,10 @@ import {
 import { ExpandableBody } from './components/ExpandableBody.tsx'
 import { RowActions } from './RowActions.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
-import { handleRowKeyDown } from './components/rowKeyboard.ts'
+import { RowHeadShell } from './components/RowHeadShell.tsx'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useOrderRow } from '../hooks/useDnd.ts'
-import { draggingProps, regionProps, virtualRegionKey, virtualWorkspaceHeadKey } from '../data/protocol.ts'
+import { regionProps, virtualRegionKey, virtualWorkspaceHeadKey } from '../data/protocol.ts'
 import type { OrderDragging } from '../data/protocol.ts'
 import type { VirtualWorkspaceSection as VirtualWorkspaceSectionData } from '../data/types.ts'
 import styles from './components/rows.module.css'
@@ -108,24 +108,19 @@ export function VirtualWorkspaceSection({
       className={styles.virtualWorkspace}
       {...regionProps(virtualRegionKey(section.id))}
     >
-      <div
-        className={clsx(
-          styles.groupHead,
-          styles.virtualWorkspaceHead,
-          order.dragging && styles.rowDragging,
-        )}
-        {...order.zone}
-        {...order.rowAttribute}
-        {...order.drag}
-        {...draggingProps(order.dragging)}
-        role="button"
-        tabIndex={0}
-        aria-expanded={expanded}
-        onClick={onToggle}
-        onKeyDown={(event) => handleRowKeyDown(event, onToggle)}
+      <RowHeadShell
+        className={clsx(styles.groupHead, styles.virtualWorkspaceHead)}
+        expanded={expanded}
+        // 组头不参与逐个淡入：它的撑开体里没有按序下发的容器，淡入序号只发给药丸那一层之外的行
+        stagger={false}
+        dragging={order.dragging}
+        activate={onToggle}
         onContextMenu={contextMenu.onContextMenu}
+        menu={contextMenu.menu}
+        zone={order.zone}
+        rowAttribute={order.rowAttribute}
+        drag={order.drag}
       >
-        {contextMenu.menu}
         {/* 药丸：底色、圆角与悬停都在它身上，外层的带只承担与上一行之间的那点间距 */}
         <span className={styles.headSurface}>
           {/* 文件夹槽与箭头槽常驻同一个 16px 列，与工作区行同一套：静止时显示文件夹、悬停换成箭头，因此切换不会让标题位移
@@ -153,7 +148,7 @@ export function VirtualWorkspaceSection({
             />
           </span>
         </span>
-      </div>
+      </RowHeadShell>
       {/* 空分组照样有内容要露：占位文案落在撑开体里，因此「建完分组还没移入
           工作区」时用户看得到它，而不是一个点下去什么都没发生的分组头 */}
       <ExpandableBody open={expanded}>
