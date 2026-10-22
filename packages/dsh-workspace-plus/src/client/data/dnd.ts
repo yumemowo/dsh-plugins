@@ -172,7 +172,7 @@ export const SCROLL_ATTRIBUTE = 'data-wg-dnd-scroll'
  */
 
 /** 一个会话分组整块那一格 */
-export function sessionGroupKey(workspaceId: string, groupId: string): string {
+export function sessionGroupZoneKey(workspaceId: string, groupId: string): string {
   return zoneKeyOf({ kind: 'group', workspaceId, groupId }, 'body') as string
 }
 
@@ -295,7 +295,7 @@ export function sessionGroupingPlan(input: {
       regionOf: sessionGroupRegionKey(workspaceId, section.id),
       commit: () => input.moveToGroup(section.id),
     }
-    targets.set(sessionGroupKey(workspaceId, section.id), toGroup)
+    targets.set(sessionGroupZoneKey(workspaceId, section.id), toGroup)
     targets.set(groupHeadKey(workspaceId, section.id), toGroup)
   }
 

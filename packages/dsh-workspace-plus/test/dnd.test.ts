@@ -24,7 +24,7 @@ import {
   reorderTo,
   sessionGroupingPlan,
   sessionGroupRegionKey,
-  sessionGroupKey,
+  sessionGroupZoneKey,
   stretchDragPlan,
   virtualWorkspaceBodyKey,
   virtualWorkspaceHeadKey,
@@ -49,7 +49,7 @@ function plan(targets: Record<string, DragPlanTarget>): DragPlan {
 
 describe('zone keys', () => {
   it('encodes the workspace and the group into a session group key', () => {
-    expect(sessionGroupKey('ws-1', 'group-a')).toBe('sessionGroup/ws-1/group-a')
+    expect(sessionGroupZoneKey('ws-1', 'group-a')).toBe('sessionGroup/ws-1/group-a')
   })
 
   it('encodes a loose stretch key per workspace', () => {

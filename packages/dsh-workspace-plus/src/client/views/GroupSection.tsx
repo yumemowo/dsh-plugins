@@ -16,7 +16,7 @@ import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { handleRowKeyDown } from './components/rowKeyboard.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useDnd, useOrderRow } from '../hooks/useDnd.ts'
-import { REGION_ATTRIBUTE, groupHeadKey, sessionGroupKey, sessionGroupRegionKey } from '../data/dnd.ts'
+import { REGION_ATTRIBUTE, groupHeadKey, sessionGroupRegionKey, sessionGroupZoneKey } from '../data/dnd.ts'
 import type { GroupSection as GroupSectionData } from '../data/types.ts'
 import type { OrderDragging } from '../data/dnd.ts'
 import styles from './components/rows.module.css'
@@ -106,7 +106,7 @@ export function GroupSection({
   return (
     <div
       className={styles.group}
-      {...dndZoneProps(sessionGroupKey(workspaceId, section.id))}
+      {...dndZoneProps(sessionGroupZoneKey(workspaceId, section.id))}
       {...{ [REGION_ATTRIBUTE]: sessionGroupRegionKey(workspaceId, section.id) }}
     >
       <div
