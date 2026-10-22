@@ -325,7 +325,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
                   now={scope.session.now}
                   open={expansion.isWorkspaceExpanded(UNGROUPED_KEY)}
                   revealSessionId={session.revealSessionId}
-                  renderSession={(row) => ungroupedRowElement(row, session, rowLabels)}
+                  renderSession={(row) => sessionRowElement(row, session, rowLabels)}
                 />
               </div>
             </div>
@@ -621,9 +621,11 @@ function rowTimes(
 /**
  * 渲染一个会话行
  *
+ * `grouping` 缺省表示该行没有分组可归（平铺列表与未分组桶）：那一层少了归组菜单项，
+ * 行本身其余的取值完全相同，因此不另写一个工厂
+ *
  * 空白行的名字取语言包的固定名（官方 `session.new`），并且像官方一样不挂行尾菜单
  * 它只是「准备开始一个新会话」的占位，没有会话可重命名或归档
- * `grouping` 缺省表示该行没有分组可归（平铺列表）
  *
  * 传下去的字段都是原语或稳定引用，动作传的是未绑定的函数本身，行级 memo 要按字段比对，任何一处每渲染新建都会让它整片失效
  */
@@ -673,50 +675,6 @@ export function sessionRowElement(
       onReveal={reveal}
     />
   );
-}
-
-/**
- * 渲染未分组桶里的一个会话行
- *
- * 这些会话不属于任何工作区，没有分组可归，因此菜单里只有官方操作块（归组项无处落）
- * 与工作区内的行分开成两处：那里的行按分组上下文渲染，这里的行没有那层上下文
- */
-export function ungroupedRowElement(
-  row: SessionRow,
-  context: SessionRowScope,
-  labels: SessionRowLabels,
-): ReactElement {
-  const view = statusViewOfRow(row, context.statusSnapshot, labels.status)
-  const reveal =
-    row.id === context.revealSessionId ? () => context.acknowledgeReveal(row.id) : undefined
-  const { time, hoverTime } = rowTimes(row, context, labels)
-  return (
-    <SessionRowItem
-      key={row.id}
-      row={row}
-      title={row.blank ? null : row.title}
-      selected={row.id === context.currentSessionId}
-      status={view.dot}
-      time={time}
-      official={context.official}
-      // 宿主没加载官方 ui-workspace 时官方文案整体拿不到，浮出一个空壳不如不浮
-      card={
-        context.official === undefined
-          ? undefined
-          : { time: hoverTime, statuses: view.statuses, copy: row.blank ? undefined : row.title }
-      }
-      // 空白会话是「准备开始一个新会话」的占位，不提供置顶入口
-      {...(row.blank
-        ? {}
-        : {
-            pinned: context.pinnedSessionIds.has(row.id),
-            canPin: context.canPin,
-            onTogglePin: context.onTogglePin,
-          })}
-      onOpenSession={context.openSession}
-      onReveal={reveal}
-    />
-  )
 }
 
 /**

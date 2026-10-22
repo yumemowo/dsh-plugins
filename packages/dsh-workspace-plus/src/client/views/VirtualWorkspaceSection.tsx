@@ -111,7 +111,7 @@ export function VirtualWorkspaceSection({
       <RowHeadShell
         className={clsx(styles.groupHead, styles.virtualWorkspaceHead)}
         expanded={expanded}
-        // 组头不参与逐个淡入：它的撑开体里没有按序下发的容器，淡入序号只发给药丸那一层之外的行
+        // 不参与逐个淡入：组头落在根节点那一层，外层没有撑开体按文档序给它下发延迟
         stagger={false}
         dragging={order.dragging}
         activate={onToggle}

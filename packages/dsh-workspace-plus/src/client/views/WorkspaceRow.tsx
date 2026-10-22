@@ -189,7 +189,7 @@ export function WorkspaceRow({
     <RowHeadShell
       className={styles.workspaceHead}
       expanded={expanded}
-      // 工作区行不参与撑开体的逐个淡入：它在根节点那一层，外层没有容器给它下发序号
+      // 不参与逐个淡入：工作区行落在根节点那一层，外层没有撑开体按文档序给它下发延迟
       stagger={false}
       dragging={dnd?.dragging === true}
       activate={onToggle}
