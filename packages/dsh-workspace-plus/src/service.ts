@@ -9,6 +9,7 @@ import type {
   WorkspaceGroupsSnapshot,
   WorkspaceNesting,
 } from './spec.ts'
+import { placeAt } from './order.ts'
 import { normalizePickerState, withFocus, withPinnedToggled, withoutEntry } from './pickerState.ts'
 import { virtualAddress, workspaceAddress } from './rootEntry.ts'
 import type { RootEntryAddress } from './rootEntry.ts'
@@ -137,22 +138,17 @@ function newVirtualWorkspaceId(): string {
   return `wg${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
 }
 
-/**
- * 一次换位的结果
- *
- * 三种情形分开，因为它们对调用方的含义不同：「动了」要写盘、「没动」是正常无操作、
- * 「对不上」是两侧数据已经不同步（来源不在这一份里，或锚点不是这一份的成员）。
- * 后两种以前都返回 undefined，于是「拖到相邻位」与「拖一个服务端已经删掉的成员」在日志里长得一样
- */
+/** 一次换位的结果：把换算交回的 id 序列换回原对象 */
 type ReorderResult<T> =
-  | { kind: 'moved'; order: T[] }
+  | { kind: 'placed'; order: T[] }
   | { kind: 'unchanged' }
   | { kind: 'unknown'; reason: 'source' | 'anchor' }
 
 /**
- * 把一个带 id 的成员挪到另一个成员之前
+ * 把一段带 id 的成员按换位换算重排
  *
- * 锚点缺省表示挪到末尾，与会话分组的落点换算同一个读法
+ * 换算本身在 {@link placeAt} 里，与拖拽计划用的是同一份实现；这里只做「字符串序列 ↔ 带 id 的对象序列」
+ * 的适配：换算只认 id，而这一层交出去的是整份对象，写入时需要它们原本的字段
  * @param items - 当前顺序
  * @param movingId - 被挪动的成员
  * @param beforeId - 挪到哪个成员之前，缺省表示挪到末尾
@@ -163,16 +159,19 @@ function reorderById<T extends { id: string }>(
   movingId: string,
   beforeId: string | undefined,
 ): ReorderResult<T> {
-  const moving = items.find((item) => item.id === movingId)
-  if (moving === undefined) return { kind: 'unknown', reason: 'source' }
-  // 锚点就是自己：挪到自己前面等于没动，不必走下面那条会把锚点判成未命中的路
-  if (beforeId === movingId) return { kind: 'unchanged' }
-  const rest = items.filter((item) => item.id !== movingId)
-  const at = beforeId === undefined ? rest.length : rest.findIndex((item) => item.id === beforeId)
-  if (at < 0) return { kind: 'unknown', reason: 'anchor' }
-  const next = [...rest.slice(0, at), moving, ...rest.slice(at)]
-  if (next.every((item, index) => item.id === items[index]?.id)) return { kind: 'unchanged' }
-  return { kind: 'moved', order: next }
+  const byId = new Map(items.map((item) => [item.id, item]))
+  const placement = placeAt(
+    items.map((item) => item.id),
+    movingId,
+    beforeId === undefined ? { kind: 'end' } : { kind: 'before', id: beforeId },
+  )
+  if (placement.kind !== 'placed') return placement
+  // 换算结果里只留下仍然认得的成员：它按传入序列交集而来，因此每一项都能查回原对象
+  const order = placement.order.flatMap((id) => {
+    const found = byId.get(id)
+    return found === undefined ? [] : [found]
+  })
+  return { kind: 'placed', order }
 }
 
 /** 两份顺序是否逐位相同，用来把一次没有改变任何位置的写入挡在盘外 */
@@ -476,7 +475,7 @@ export async function createWorkspaceGroupsService(
         return snapshot()
       }
       // 无变化时连写都不发：拖到自己的相邻位不该在盘上留下一次改动
-      return reorder.kind === 'moved' ? save(workspaceId, reorder.order) : snapshot()
+      return reorder.kind === 'placed' ? save(workspaceId, reorder.order) : snapshot()
     },
 
     async createVirtualWorkspace(name) {
@@ -495,7 +494,7 @@ export async function createWorkspaceGroupsService(
         )
         return snapshot()
       }
-      return reorder.kind === 'moved' ? saveTree(reorder.order) : snapshot()
+      return reorder.kind === 'placed' ? saveTree(reorder.order) : snapshot()
     },
 
     async renameVirtualWorkspace(groupId, name) {

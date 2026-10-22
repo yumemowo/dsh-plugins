@@ -440,7 +440,7 @@ orderSlots: Record<string, string[]>  // 段键 → 手动顺序，缺省表示�
 
 | 层 | 用例 | 覆盖 |
 | --- | --- | --- |
-| 命中与计划 | `test/dnd.test.ts` | 命中几何、区域键、落点换算（`reorderTo`）、会话归组计划（块 / 头 / 未归组段 / 工作区标题行，以及原地投放的构造期缺席）、工作区计划、折叠段保序 |
+| 命中与计划 | `test/dnd.test.ts` | 命中几何、区域键、落点换算（`src/order.ts` 的 `placeBefore`）、会话归组计划（块 / 头 / 未归组段 / 工作区标题行，以及原地投放的构造期缺席）、工作区计划、折叠段保序 |
 | 顺序合成 | `test/pinned.test.ts` | 合成全分支：无槽位零变化、空槽位、槽位序优先、新成员接后、取消再置顶回原槽位、失效 id 丢弃、成员不重不漏 |
 | 宿主写入 | `test/service.test.ts` | `setSegmentOrder`（同序不写盘、空表删格）、`moveSession` 只改归属、`moveGroupBefore` / `moveVirtualWorkspaceBefore`（换位、锚点资格、相邻 noop）、`nestWorkspaces` / `unnestWorkspaces`、无关写入不擦槽位 |
 | 移动的那几笔 | `test/move.test.ts` | `planWorkspaceMove` 的三份名单：已在目的地不写、跨片才挪、跟随的子工作区、指名分组时不解除、没指名时丢掉失效归属 |

@@ -10,6 +10,7 @@
  *
  * 纯数据变换：输入是一棵装配好的树与几个写入回调，不碰 React、不碰 DOM
  */
+import { beforeIdOf, placeBefore } from '../../order.ts'
 import { bodyKeyOf, headKeyOf, regionKeyOf, zoneKeysOf } from './tree.ts'
 import type { TreeContainerRef, TreeNodeRef, WorkspaceTree } from './tree.ts'
 
@@ -66,37 +67,6 @@ type DropRelation =
       /** 排到这一行之前 / 之后 */
       place: (side: 'before' | 'after') => void
     }
-
-/**
- * 一条新顺序：把被拖的那个挪到参照行之前 / 之后
- * @param order - 这条序列的全量成员
- * @param movingId - 被拖的成员
- * @param side - 排在参照行之前还是之后
- * @param rowId - 参照行
- * @returns 新顺序，参照行不是这条序列的成员时返回 null
- */
-function orderWith(
-  order: readonly string[],
-  movingId: string,
-  side: 'before' | 'after',
-  rowId: string,
-): string[] | null {
-  const rest = order.filter((id) => id !== movingId)
-  const at = rest.indexOf(rowId)
-  if (at < 0) return null
-  const next = [...rest]
-  next.splice(side === 'before' ? at : at + 1, 0, movingId)
-  return next
-}
-
-/**
- * 新顺序里「插到谁之前」那一格
- * @param order - 换算出的新顺序
- * @param movingId - 被拖的成员
- */
-function nextIdAfter(order: readonly string[], movingId: string): string | undefined {
-  return order[order.indexOf(movingId) + 1]
-}
 
 /**
  * 「排到这一行之后」那处缝该由哪一格代言
@@ -196,13 +166,12 @@ export function dropRelationsOf(
       // 线跨整块工作区画：贴着标题那一行画会在体内有内容时显得只有半截
       region: regionKeyOf({ kind: 'workspace', id: targetId }),
       place: (side) => {
-        const next = orderWith(order, node.id, side, targetId)
-        if (next === null) return
+        // 位次没变（拖到自己的相邻位）与锚点对不上都在换算里判掉，那时不写
+        const next = placeBefore(order, node.id, { kind: side, id: targetId })
+        if (next === undefined) return
         // 落盘的会话分组归属不在这条序列上，单独补一笔
         if (leavesGroup && bound !== undefined) writes.unnest()
-        // 换完之后位次没变就是原地投放
-        if (next.every((id, index) => id === order[index])) return
-        writes.reorder(nextIdAfter(next, node.id))
+        writes.reorder(beforeIdOf(next, node.id))
       },
     }
     // 这一处缝交给下一条：标题那一格得说出「下一条」是哪一格

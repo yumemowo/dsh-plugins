@@ -9,17 +9,16 @@
  * 不必拉起 jsdom 或搭一棵真实元素树
  */
 import { describe, expect, it } from 'vitest'
+import { beforeIdOf, placeBefore } from '../src/order.ts'
 import {
   DROP_ATTRIBUTE,
   ROOT_KEY,
   ROW_ATTRIBUTE,
   SCROLL_ATTRIBUTE,
   ZONE_ATTRIBUTE,
-  beforeIdOf,
   groupHeadKey,
   looseKey,
   orderDragPlan,
-  reorderTo,
   sessionGroupingPlan,
   sessionGroupRegionKey,
   sessionGroupZoneKey,
@@ -93,7 +92,7 @@ describe('turning a drop anchor into a new order', () => {
   const ORDER = ['group-a', 'group-b', 'group-c']
 
   it('moves a member before the row it was dropped above', () => {
-    expect(reorderTo(ORDER, 'group-c', { kind: 'before', rowId: 'group-a' })).toEqual([
+    expect(placeBefore(ORDER, 'group-c', { kind: 'before', id: 'group-a' })).toEqual([
       'group-c',
       'group-a',
       'group-b',
@@ -101,7 +100,7 @@ describe('turning a drop anchor into a new order', () => {
   })
 
   it('moves a member after the row it was dropped below', () => {
-    expect(reorderTo(ORDER, 'group-a', { kind: 'after', rowId: 'group-c' })).toEqual([
+    expect(placeBefore(ORDER, 'group-a', { kind: 'after', id: 'group-c' })).toEqual([
       'group-b',
       'group-c',
       'group-a',
@@ -110,7 +109,7 @@ describe('turning a drop anchor into a new order', () => {
 
   it('appends the member when the drop reads as inside', () => {
     // 区域里一行都没有时命中层给的是 inside，读作追加到段尾
-    expect(reorderTo(ORDER, 'group-a', { kind: 'inside' })).toEqual([
+    expect(placeBefore(ORDER, 'group-a', { kind: 'end' })).toEqual([
       'group-b',
       'group-c',
       'group-a',
@@ -119,30 +118,30 @@ describe('turning a drop anchor into a new order', () => {
 
   it('reports no change when the member is dropped on the row just below it', () => {
     // 落在下一位的上半：算出来仍是原位，这是一次相邻位空操作，不该写盘
-    expect(reorderTo(ORDER, 'group-a', { kind: 'before', rowId: 'group-b' })).toBeUndefined()
+    expect(placeBefore(ORDER, 'group-a', { kind: 'before', id: 'group-b' })).toBeUndefined()
   })
 
   it('reports no change when the member is dropped on the row just above it', () => {
-    expect(reorderTo(ORDER, 'group-b', { kind: 'after', rowId: 'group-a' })).toBeUndefined()
+    expect(placeBefore(ORDER, 'group-b', { kind: 'after', id: 'group-a' })).toBeUndefined()
   })
 
   it('reports no change when the member is dropped on itself', () => {
-    expect(reorderTo(ORDER, 'group-b', { kind: 'before', rowId: 'group-b' })).toBeUndefined()
-    expect(reorderTo(ORDER, 'group-b', { kind: 'after', rowId: 'group-b' })).toBeUndefined()
+    expect(placeBefore(ORDER, 'group-b', { kind: 'before', id: 'group-b' })).toBeUndefined()
+    expect(placeBefore(ORDER, 'group-b', { kind: 'after', id: 'group-b' })).toBeUndefined()
   })
 
   it('reports no change when the member is not part of the stretch', () => {
     // 快照可能在拖拽期间被别处改过，来源已不在这一段里时按无操作读
-    expect(reorderTo(ORDER, 'group-z', { kind: 'before', rowId: 'group-a' })).toBeUndefined()
+    expect(placeBefore(ORDER, 'group-z', { kind: 'before', id: 'group-a' })).toBeUndefined()
   })
 
   it('reports no change when the anchor is not part of the stretch', () => {
     // 锚点资格的第二半：锚点必须仍是这一段的其他成员
-    expect(reorderTo(ORDER, 'group-a', { kind: 'before', rowId: 'group-z' })).toBeUndefined()
+    expect(placeBefore(ORDER, 'group-a', { kind: 'before', id: 'group-z' })).toBeUndefined()
   })
 
   it('keeps a single-member stretch unchanged', () => {
-    expect(reorderTo(['group-a'], 'group-a', { kind: 'inside' })).toBeUndefined()
+    expect(placeBefore(['group-a'], 'group-a', { kind: 'end' })).toBeUndefined()
   })
 
   it('reads the next member as the anchor of the new order', () => {
@@ -491,7 +490,7 @@ describe('building a stretch drag plan', () => {
   })
 
   it('appends the member when the drop lands on the stretch tail', () => {
-    // 段尾空白读作追加到末尾：锚点缺省时 `reorderTo` 把成员放到最后
+    // 段尾空白读作追加到末尾：落点读作 inside 时换算把成员放到最后
     const seen: (readonly string[])[] = []
     const p = stretchDragPlan({
       source: { kind: 'session', id: 's-1' },

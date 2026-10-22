@@ -12,6 +12,8 @@
  * 区域键的形状也由那边一处决定，本模块保留的同名构造器只是给渲染层的薄封装
  */
 
+import { beforeIdOf, placeBefore } from '../../order.ts'
+import type { Anchor } from '../../order.ts'
 import { dropRelationsOf } from './relations.ts'
 import { bodyKeyOf, headKeyOf, looseZoneKeyOf, regionKeyOf } from './tree.ts'
 import type { TreeNodeRef, WorkspaceTree } from './tree.ts'
@@ -486,7 +488,7 @@ export function orderDragPlan(input: {
       // 换算用的是构造期绑定的那一份全量顺序，不是露出的那些行，折起的成员因此不动
       // 相邻位与「锚点已不是本段成员」两种落点都在换算里返回 undefined，那时不写
       commit: (anchor) => {
-        const next = reorderTo(input.order, input.movingId, anchor)
+        const next = placeBefore(input.order, input.movingId, anchorOf(anchor))
         if (next === undefined) return
         input.commit(beforeIdOf(next, input.movingId))
       },
@@ -503,7 +505,7 @@ export function orderDragPlan(input: {
  * 落点因此由离指针最近的那一行算前后半，与段容器本身无关
  *
  * 来源自己那一行仍在计划里：一格区域罩着多行，行与区域分不开
- * 拖回原位的落点由 {@link reorderTo} 判成无变化，因此不写盘
+ * 拖回原位的落点由换位换算判成无变化，因此不写盘
  *
  * 换算绑的是构造那一刻的顺序，不是成员名单的原始序
  * 一段已有顺序位时同步跟的是用户当时看见的那一版，接管因此零跳变
@@ -527,7 +529,7 @@ export function stretchDragPlan(input: {
     // 这里因此不必点名（`seamKey` 缺省），段尾那一条照常画在它自己的下缘
     // 相邻位与「锚点就是来源自己」两种落点都在换算里返回 undefined，那时不写
     commit: (anchor) => {
-      const next = reorderTo(order, movingId, anchor)
+      const next = placeBefore(order, movingId, anchorOf(anchor))
       if (next === undefined) return
       input.commit(next)
     },
@@ -536,54 +538,13 @@ export function stretchDragPlan(input: {
 }
 
 /**
- * 把「参照成员 + 前后半」换算成这一段的新顺序
+ * 把一次落点换成 {@link Anchor}
  *
- * 换算在整段成员顺序上做，而不是在露出的那些行上，因此被折起的成员不动，相对位置自动保持
- *
- * 返回 `undefined` 表示这次落点不改变任何顺序，调用方据此跳过写入
- * 三种落点读作无变化：来源不在这一段里、锚点不是这一段的其他成员、以及换算出的新顺序与现状逐位相同
- * 最后一种是「拖到自己的相邻位」——拖动发生了，顺序没变
- * @param order - 这一段当前的完整成员顺序
- * @param movingId - 被拖的成员
+ * 落点用的是界面语言（落在哪一格、落在它的哪一半），换位换算用的是序列语言（插到谁之前 / 之后 / 末尾）。
+ * 这一处是两种语言之间唯一的翻译：「落到整块上」读作追加到末尾
  * @param anchor - 命中层算出的落点
- * @returns 新顺序，无变化时为 undefined
  */
-export function reorderTo(
-  order: readonly string[],
-  movingId: string,
-  anchor: DropAnchor,
-): string[] | undefined {
-  if (!order.includes(movingId)) return undefined
-  const rest = order.filter((id) => id !== movingId)
-  const next = anchor.kind === 'inside' ? [...rest, movingId] : insertRelative(rest, movingId, anchor)
-  if (next === null) return undefined
-  if (next.every((id, index) => id === order[index])) return undefined
-  return next
-}
-
-/**
- * 新顺序里「插到谁之前」那一格
- *
- * 被拖成员排到末尾时没有下一个成员，返回 `undefined`，宿主方法把缺参数读作同一个意思
- * @param order - 换算出的新顺序
- * @param movingId - 被拖的成员
- */
-export function beforeIdOf(order: readonly string[], movingId: string): string | undefined {
-  return order[order.indexOf(movingId) + 1]
-}
-
-/**
- * 把被拖成员插到参照成员的前一位或后一位
- * @returns 新顺序，参照成员不是这一段的其他成员时返回 null
- */
-function insertRelative(
-  rest: readonly string[],
-  movingId: string,
-  anchor: { kind: 'before' | 'after'; rowId: string },
-): string[] | null {
-  const at = rest.indexOf(anchor.rowId)
-  if (at < 0) return null
-  const next = [...rest]
-  next.splice(anchor.kind === 'before' ? at : at + 1, 0, movingId)
-  return next
+export function anchorOf(anchor: DropAnchor): Anchor {
+  if (anchor.kind === 'inside') return { kind: 'end' }
+  return { kind: anchor.kind, id: anchor.rowId }
 }
