@@ -13,7 +13,7 @@
  */
 
 /** localStorage 里的开关键 */
-export const DEBUG_STORAGE_KEY = 'workspace-plus:debug'
+const DEBUG_STORAGE_KEY = 'workspace-plus:debug'
 
 /** 日志前缀，便于在控制台按关键词过滤 */
 const PREFIX = '[workspace-plus]'

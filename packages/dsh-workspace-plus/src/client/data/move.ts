@@ -31,7 +31,7 @@ export interface WorkspaceMoveTarget {
 }
 
 /** 一次移动要写的那几笔，按执行顺序给出 */
-export interface WorkspaceMoveWrites {
+interface WorkspaceMoveWrites {
   /** 要改虚拟分组归属的，值是要挪进去的分组（空串表示根节点） */
   reslotted: readonly { workspaceId: string; scope: string }[]
   /** 要写会话分组归属的 */
@@ -41,7 +41,7 @@ export interface WorkspaceMoveWrites {
 }
 
 /** 规划一次移动 */
-export interface WorkspaceMoveInput {
+interface WorkspaceMoveInput {
   /** 被挪动的那个工作区 */
   workspaceId: string
   /** 目的地 */

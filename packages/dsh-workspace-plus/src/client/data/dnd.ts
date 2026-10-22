@@ -56,9 +56,8 @@ export interface DragPlanTarget {
    * 承载 inside 的是分组那一片，承载 order 是组体内某一条合法行——两个不同的语义主体。
    * 这类落点因此走两格：`container` 一档管框，`rows` 一档管线，各自独立登记。
    *
-   * **合成写入尚未接线**：`DropTarget.mergeInto` 只有形状、没有调用方，
-   * 因此今天一次投放仍会发出两笔独立写入（改归属一笔、改位次一笔）。
-   * 把它接进 `useDnd` 的命中层之前，这里描述的设计没有在运行时生效。
+   * **这一类投放今天发出两笔独立写入**（改归属一笔、改位次一笔）。宿主侧没有「一次写完归属与顺序」的接口，
+   * 两笔落在两个存储里，因此中途失败会留下半个状态；那一半是可恢复的，重投一次即可。
    *
    * ## 留下来的那个判定点
    *
@@ -256,23 +255,6 @@ export const ROOT_KEY = zoneKeyOf({ kind: 'root' }, 'body') as string
 
 /** 置顶区的区域键，跨工作区共用一格 */
 export const PINNED_KEY = 'pinned'
-
-/** 一个区域键所属的工作区，不落在任何工作区里时为 undefined */
-export function workspaceOfZoneKey(key: string): string | undefined {
-  const parts = key.split('/')
-  if (parts[0] !== 'sessionGroup' && parts[0] !== 'loose') return undefined
-  return parts[1] === undefined || parts[1] === '' ? undefined : parts[1]
-}
-
-/**
- * 一个会话分组区域键里的分组 id
- * @returns 分组 id，该键不是会话分组区域键时返回 undefined
- */
-export function groupOfZoneKey(key: string): string | undefined {
-  const parts = key.split('/')
-  if (parts[0] !== 'sessionGroup') return undefined
-  return parts[2] === undefined || parts[2] === '' ? undefined : parts[2]
-}
 
 // ── 计划构造与落点换算 ──
 

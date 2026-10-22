@@ -11,14 +11,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   DROP_ATTRIBUTE,
-  PINNED_KEY,
   ROOT_KEY,
   ROW_ATTRIBUTE,
   SCROLL_ATTRIBUTE,
   ZONE_ATTRIBUTE,
   beforeIdOf,
   groupHeadKey,
-  groupOfZoneKey,
   looseKey,
   orderDragPlan,
   reorderTo,
@@ -30,7 +28,6 @@ import {
   virtualWorkspaceHeadKey,
   workspaceHeadKey,
   workspaceRegionKey,
-  workspaceOfZoneKey,
   workspaceTreeDragPlan,
 } from '../src/client/data/dnd.ts'
 import type { DragPlan, DragPlanTarget, DropAnchor } from '../src/client/data/dnd.ts'
@@ -56,24 +53,6 @@ describe('zone keys', () => {
     expect(looseKey('ws-1')).toBe('loose/ws-1')
   })
 
-  it('reads the workspace back out of both key families', () => {
-    expect(workspaceOfZoneKey('sessionGroup/ws-1/group-a')).toBe('ws-1')
-    expect(workspaceOfZoneKey('loose/ws-2')).toBe('ws-2')
-  })
-
-  it('reads no workspace out of a key that belongs to no workspace', () => {
-    // 置顶区与根节点两层跨工作区共用一格，归属问题对它们没有答案
-    expect(workspaceOfZoneKey(PINNED_KEY)).toBeUndefined()
-    expect(workspaceOfZoneKey(ROOT_KEY)).toBeUndefined()
-    expect(workspaceOfZoneKey('')).toBeUndefined()
-  })
-
-  it('reads the group back out of a session group key only', () => {
-    expect(groupOfZoneKey('sessionGroup/ws-1/group-a')).toBe('group-a')
-    // 未归组段没有分组这一层，硬读出来一个空串会被当成「有个叫空串的分组」
-    expect(groupOfZoneKey('loose/ws-1')).toBeUndefined()
-    expect(groupOfZoneKey(PINNED_KEY)).toBeUndefined()
-  })
 })
 
 describe('a plan that leaves the origin out', () => {

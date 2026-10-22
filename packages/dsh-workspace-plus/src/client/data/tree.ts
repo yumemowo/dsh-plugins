@@ -30,34 +30,6 @@ export type TreeContainerRef =
   /** 一个工作区体内某个会话分组的组体 */
   | { kind: 'group'; workspaceId: string; groupId: string }
 
-/**
- * 一段兄弟的排列由谁持有
- *
- * 这是「段顺序合同」在代码里的形态：一段一个顺序持有者，换位写入面由持有者决定
- * - `registry`：官方注册表序，换位写 `insertBefore`
- * - `virtualList`：本包 `virtualWorkspaces[]` 数组序，换位写 `moveVirtualWorkspaceBefore`
- */
-export type OrderHolder =
-  | { kind: 'registry' }
-  | { kind: 'virtualList' }
-
-/**
- * 一个节点此刻能落到哪儿
- *
- * 两类关系分开列，因为它们在界面上是两件事：
- * - `containers` 回答「能放进哪一片」——落到这一片上画框
- * - `rows` 回答「能排到谁的前后」——落到这一行上画线
- *
- * 一条行只会出现在 `rows` 里，不会因为它恰好在某一片里就变成 `containers` 的一项：
- * 行是那一片的成员，不是那一片本身
- */
-export interface DropPlaces {
-  /** 能收下这个节点的每一片 */
-  containers: readonly TreeContainerRef[]
-  /** 能作位次参照的那些行 */
-  rows: readonly TreeNodeRef[]
-}
-
 /** 树的输入 */
 export interface TreeInput {
   /** 工作区 id，按宿主给的注册表顺序 */
@@ -74,8 +46,6 @@ export interface TreeInput {
 
 /** 树对外交出的事实 */
 export interface WorkspaceTree {
-  /** 根节点的有序条目：先是全部分组，再是平铺在根节点的工作区顶层 */
-  entries: readonly TreeNodeRef[]
   /**
    * 容器发牌器
    *
@@ -98,8 +68,6 @@ export interface WorkspaceTree {
   rootsOf: (container: TreeContainerRef) => readonly TreeNodeRef[]
   /** 节点所在的那一段兄弟，按注册表序；换位换算读的就是它 */
   siblingsOf: (node: TreeNodeRef) => readonly TreeNodeRef[]
-  /** 一段兄弟的排列由谁持有 */
-  orderHolderOf: (node: TreeNodeRef) => OrderHolder
   /** 工作区节点在树上的父节点，虚拟分组节点没有父节点 */
   parentOf: (node: TreeNodeRef) => TreeNodeRef | undefined
   /** 工作区节点的祖先链，从近到远（跟着渲染走：跨虚拟分组的两个工作区不算父子） */
@@ -143,23 +111,9 @@ export interface WorkspaceTree {
    * 因此先做一次低效但正确的全遍历，而不是分门别类去挑「哪些行能当参照」
    */
   allNodes: () => readonly TreeNodeRef[]
-  /**
-   * 一个节点此刻能落到哪儿
-   *
-   * 这是嵌套与排序两类关系的**唯一出口**：三种来源（cwd 祖先、虚拟分组归属、会话分组归属）
-   * 在这一处收成一个答案，解析层因此不再自己推「这个关系的嵌套是从哪来的」
-   */
-  /**
-   * 平铺在根节点那一层的工作区 id，按注册表序
-   *
-   * 这一层是一条连续的名字序列：它们彼此之间只有先后，没有谁是谁的容器
-   */
-  rootLooseOrder: () => readonly string[]
 }
 
 const ROOT: TreeContainerRef = { kind: 'root' }
-const REGISTRY: OrderHolder = { kind: 'registry' }
-const VIRTUAL_LIST: OrderHolder = { kind: 'virtualList' }
 
 /**
  * 装配统一节点树
@@ -349,9 +303,6 @@ export function buildWorkspaceTree(input: TreeInput): WorkspaceTree {
       .map(workspaceNode)
   }
 
-  const orderHolderOf = (node: TreeNodeRef): OrderHolder =>
-    node.kind === 'virtual' ? VIRTUAL_LIST : REGISTRY
-
   const ancestorsOf = (node: TreeNodeRef): readonly TreeNodeRef[] =>
     node.kind === 'virtual' ? [] : nesting.ancestorsOf(node.id).map(workspaceNode)
 
@@ -366,14 +317,11 @@ export function buildWorkspaceTree(input: TreeInput): WorkspaceTree {
   }
 
   return {
-    // 条目名单是渲染层真正要列出来的那些：被嵌套进另一个成员体内的不在其中，否则会在父工作区里外各渲染一次
-    entries: rootsOf(ROOT),
     containers: { root: ROOT, virtualOf: virtualContainerOf, groupOf: groupContainerOf },
     containerOf,
     membersOf,
     rootsOf,
     siblingsOf,
-    orderHolderOf,
     parentOf,
     ancestorsOf,
     dropParentOf,
@@ -392,10 +340,6 @@ export function buildWorkspaceTree(input: TreeInput): WorkspaceTree {
     workspaceNodes: workspaceIds.filter((id) => known.has(id)).map(workspaceNode),
     // 先虚拟分组、再按注册表序的全部工作区：顺序只影响遍历先后，不影响判定
     allNodes: () => [...virtualGroupNodes, ...workspaceIds.map(workspaceNode)],
-    rootLooseOrder: () =>
-      rootsOf(ROOT)
-        .filter((entry) => entry.kind === 'workspace')
-        .map((entry) => entry.id),
     nodesByZone: () => {
       if (zoneIndex !== undefined) return zoneIndex
       const index = new Map<string, TreeNodeRef | TreeContainerRef>()
@@ -425,7 +369,7 @@ export function buildWorkspaceTree(input: TreeInput): WorkspaceTree {
 // ── 区域键 ──
 
 /** 一个节点上的一格区域 */
-export type ZonePart =
+type ZonePart =
   /** 标题行那一格，既是放入落点也是排序参照行 */
   | 'head'
   /** 整块那一格，只接放入 */
@@ -512,7 +456,7 @@ export function regionOfKey(
  * - `inside` 落到这一片上画框
  * - `order` 落到那一行上画线，且这一手同时会把它移出当前所在的那一片（换一片才谈得上新位次）
  */
-export type DropRelation =
+type DropRelation =
   | {
       kind: 'inside'
       /** 这一片在界面上占的那几格 */

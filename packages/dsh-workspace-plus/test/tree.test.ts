@@ -76,9 +76,9 @@ describe('buildWorkspaceTree', () => {
   it('lists every virtual group before the loose workspaces at the root', () => {
     const tree = fixture(base)
 
-    // 根节点那一层的条目名单与根节点布局的单一有序名单同序：分组在前、平铺在后
+    // 根节点那一层的顶层成员与根节点布局的单一有序名单同序：分组在前、平铺在后
     // 两个分组都在名单里——空分组同样是一个条目，不因为它没有成员就消失
-    expect(tree.entries).toEqual([vg('vg-1'), vg('vg-2'), ws('ws-3')])
+    expect(tree.rootsOf(tree.containers.root)).toEqual([vg('vg-1'), vg('vg-2'), ws('ws-3')])
   })
 
   it('leaves a nested loose workspace out of the root entries', () => {
@@ -88,7 +88,7 @@ describe('buildWorkspaceTree', () => {
       paths: { 'ws-1': '/repo', 'ws-c1': '/repo/pkg' },
     })
 
-    expect(tree.entries).toEqual([ws('ws-1')])
+    expect(tree.rootsOf(tree.containers.root)).toEqual([ws('ws-1')])
     expect(tree.membersOf(tree.containers.root)).toEqual([ws('ws-1'), ws('ws-c1')])
   })
 
@@ -161,15 +161,6 @@ describe('buildWorkspaceTree', () => {
     expect(tree.siblingsOf(ws('ws-c1'))).toEqual([ws('ws-c1')])
     // 虚拟分组的兄弟就是整份分组名单，数组序即界面序
     expect(tree.siblingsOf(vg('vg-2'))).toEqual([vg('vg-1'), vg('vg-2')])
-  })
-
-  it('names the order holder of a segment by what its members are', () => {
-    const tree = fixture(base)
-
-    // 工作区类段落的顺序住在官方注册表里，分组那一层住在本包自己的数组里
-    // 这条判据就是段顺序合同：一段的顺序需要本包单独存储，当且仅当成员含有宿主没有顺序原语的实体
-    expect(tree.orderHolderOf(ws('ws-1'))).toBe(tree.orderHolderOf(ws('ws-3')))
-    expect(tree.orderHolderOf(vg('vg-1'))).not.toBe(tree.orderHolderOf(ws('ws-1')))
   })
 
   it('reports the parent and the ancestor chain of a workspace', () => {

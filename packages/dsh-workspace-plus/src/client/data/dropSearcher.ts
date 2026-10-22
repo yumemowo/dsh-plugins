@@ -10,7 +10,7 @@
 import type { TreeContainerRef, TreeNodeRef, WorkspaceTree } from './tree.ts'
 
 /** 线画在参照行的哪一侧 */
-export type DropSide = 'before' | 'after'
+type DropSide = 'before' | 'after'
 
 /**
  * 一个落点身份
@@ -28,22 +28,6 @@ export interface DropTarget {
   node: DropNode
   /** 放开时执行 */
   commit: (side?: DropSide) => void
-  /**
-   * 把这一片承接的「放进去」与另一条位次锚点合成一次写入
-   *
-   * 拖到分组体上时，框说「放进这一组」、线说「排在组内某一行之前」，两个语义都成立，
-   * 而且说的本来就是同一件事的两半。分成两笔独立写入会留下半个状态——分组成员变了而位置没变，
-   * 或者反过来。因此这一片自己交出一笔能同时做完两件事的写入，由检测器在两者同时命中时选用。
-   *
-   * 缺省表示这一片没有这样的合成写入（例如根节点那一片），此时两笔各做各的
-   *
-   * **尚未接线**：字段只有形状，`checkDrop` 与 `commit` 都还没有用它。
-   * 接上之前，一次投放仍会发出两笔独立写入（改归属一笔、改位次一笔）
-   *
-   * @param anchorRowId - 位次锚点行，缺省表示落到末尾
-   * @param side - 排在那一行之前还是之后
-   */
-  mergeInto?: (anchorRowId: string | undefined, side: DropSide) => void
 }
 
 /** 一次检测的结果：两个节点，最多再带一个方向 */
