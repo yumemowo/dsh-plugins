@@ -16,6 +16,8 @@ function createFakeContext(initialGlobal?: unknown): {
   records: Map<string, { groups: Group[] }>
   /** 落盘的那份 global（未解析的原始形状），读取时按真实 schema 解析 */
   readStored: () => unknown
+  /** 服务打出来的异常分叉，按出现顺序 */
+  errors: string[]
 } {
   const records = new Map<string, { groups: Group[] }>()
 
@@ -43,6 +45,9 @@ function createFakeContext(initialGlobal?: unknown): {
     },
   }
 
+  // 服务用 error 级别打「本该落下却没落下」的那些分叉（warn 会被 cordis 的默认阈值滤掉），
+  // 因此替身记的是 error 那一格
+  const errors: string[] = []
   const ctx = {
     storageDomain: {
       open: async (spec: unknown) => {
@@ -51,9 +56,13 @@ function createFakeContext(initialGlobal?: unknown): {
       },
     },
     effect: (install: () => () => void) => install(),
+    logger: {
+      error: (message: string) => errors.push(message),
+      info: () => {},
+    },
   } as unknown as Context
 
-  return { ctx, records, readStored: () => stored }
+  return { ctx, records, readStored: () => stored, errors }
 }
 
 describe('workspace groups service', () => {
@@ -151,11 +160,13 @@ describe('workspace groups service', () => {
   })
 
   it('rejects a move into an unknown group', async () => {
-    const { ctx } = createFakeContext()
+    const { ctx, errors } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     await service.createGroup('w1', '前端')
 
     await expect(service.moveSession('w1', 's1', 'nope')).rejects.toThrow(/unknown group/)
+    // 拒绝发生在用户已经看过落点之后，抛错本身不会出现在界面上，只有日志留得下现场
+    expect(errors.some((line) => line.includes('moveSession') && line.includes('groupId=nope'))).toBe(true)
   })
 
   it('changes only the membership when a session moves', async () => {
@@ -206,7 +217,7 @@ describe('workspace groups service', () => {
   })
 
   it('writes nothing when a segment order is unchanged', async () => {
-    const { ctx, readStored } = createFakeContext()
+    const { ctx, errors, readStored } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     await service.setSegmentOrder('pinned', ['s2', 's1'])
     const before = JSON.stringify(readStored())
@@ -214,6 +225,8 @@ describe('workspace groups service', () => {
     await service.setSegmentOrder('pinned', ['s2', 's1'])
 
     expect(JSON.stringify(readStored())).toBe(before)
+    // 客户端那边的换位换算本该把无变化的落点判掉，走到这里说明它漏判了一次
+    expect(errors.some((line) => line.includes('setSegmentOrder') && line.includes('key=pinned'))).toBe(true)
   })
 
   it('keeps the segment order through an unrelated write', async () => {
@@ -265,17 +278,19 @@ describe('workspace groups service', () => {
   })
 
   it('leaves the order alone when the anchor is the group itself', async () => {
-    const { ctx } = createFakeContext()
+    const { ctx, errors } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     const groupId = (await service.createGroup('w1', '第一')).byWorkspace['w1']?.[0]?.id ?? ''
 
     const snapshot = await service.moveGroupBefore('w1', groupId, groupId)
 
     expect(snapshot.byWorkspace['w1']?.map((group) => group.id)).toEqual([groupId])
+    // 锚点是自己属于「没动」，不属于「对不上」，因此不该留下一条拒绝
+    expect(errors.some((line) => line.includes('moveGroupBefore'))).toBe(false)
   })
 
   it('leaves the order alone when the group is unknown', async () => {
-    const { ctx } = createFakeContext()
+    const { ctx, errors } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     const groupId = (await service.createGroup('w1', '第一')).byWorkspace['w1']?.[0]?.id ?? ''
 
@@ -283,6 +298,7 @@ describe('workspace groups service', () => {
     const snapshot = await service.moveGroupBefore('w1', 'nope', groupId)
 
     expect(snapshot.byWorkspace['w1']?.map((group) => group.id)).toEqual([groupId])
+    expect(errors.some((line) => line.includes('moveGroupBefore') && line.includes('source'))).toBe(true)
   })
 
   it('writes nothing when a group is dropped on its own neighbour', async () => {
@@ -425,10 +441,11 @@ describe('root-level workspace groups', () => {
   })
 
   it('rejects a move into an unknown workspace group', async () => {
-    const { ctx } = createFakeContext()
+    const { ctx, errors } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
 
     await expect(service.moveWorkspace('w1', 'nope')).rejects.toThrow(/unknown workspace group/)
+    expect(errors.some((line) => line.includes('moveWorkspace') && line.includes('groupId=nope'))).toBe(true)
   })
 
   it('moves a workspace group before another workspace group', async () => {
@@ -456,13 +473,15 @@ describe('root-level workspace groups', () => {
   })
 
   it('leaves the order alone when a workspace group anchor is unknown', async () => {
-    const { ctx } = createFakeContext()
+    const { ctx, errors } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     const groupId = (await service.createVirtualWorkspace('第一')).workspaceGroups[0]?.id ?? ''
 
     const snapshot = await service.moveVirtualWorkspaceBefore(groupId, 'nope')
 
     expect(snapshot.workspaceGroups.map((group) => group.id)).toEqual([groupId])
+    // 锚点对不上与「拖到相邻位」都是跳过写入，界面上完全一样，靠这一条分开
+    expect(errors.some((line) => line.includes('moveVirtualWorkspaceBefore') && line.includes('anchor'))).toBe(true)
   })
 
   it('writes nothing when a workspace group is dropped on its own neighbour', async () => {
@@ -476,6 +495,20 @@ describe('root-level workspace groups', () => {
     await service.moveVirtualWorkspaceBefore(first, second)
 
     expect(JSON.stringify(readStored())).toBe(before)
+  })
+
+  it('reports nothing when a workspace group is dropped on its own neighbour', async () => {
+    // 相邻位是正常无操作，不该在日志里留下一条「拒绝」
+    const { ctx, errors } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const first = (await service.createVirtualWorkspace('第一')).workspaceGroups[0]?.id ?? ''
+    const groups = (await service.createVirtualWorkspace('第二')).workspaceGroups
+    const second = groups[groups.length - 1]?.id ?? ''
+    const before = errors.length
+
+    await service.moveVirtualWorkspaceBefore(first, second)
+
+    expect(errors.length).toBe(before)
   })
 
   it('renames a workspace group in place', async () => {

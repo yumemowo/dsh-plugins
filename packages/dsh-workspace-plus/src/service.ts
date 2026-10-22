@@ -138,31 +138,41 @@ function newVirtualWorkspaceId(): string {
 }
 
 /**
+ * 一次换位的结果
+ *
+ * 三种情形分开，因为它们对调用方的含义不同：「动了」要写盘、「没动」是正常无操作、
+ * 「对不上」是两侧数据已经不同步（来源不在这一份里，或锚点不是这一份的成员）。
+ * 后两种以前都返回 undefined，于是「拖到相邻位」与「拖一个服务端已经删掉的成员」在日志里长得一样
+ */
+type ReorderResult<T> =
+  | { kind: 'moved'; order: T[] }
+  | { kind: 'unchanged' }
+  | { kind: 'unknown'; reason: 'source' | 'anchor' }
+
+/**
  * 把一个带 id 的成员挪到另一个成员之前
  *
  * 锚点缺省表示挪到末尾，与会话分组的落点换算同一个读法
- * 返回 undefined 的两种情形都在这里判掉：来源不在这一份里、锚点不是这一份的其他成员
- * 即「锚点必须仍是同层成员、不是来源自己」，拖拽期间快照被别处改过时按无操作返回
- *
- * 顺序没有变化的也返回 undefined，调用方据此跳过写入
  * @param items - 当前顺序
  * @param movingId - 被挪动的成员
  * @param beforeId - 挪到哪个成员之前，缺省表示挪到末尾
- * @returns 新顺序，无需变更时为 undefined
+ * @returns 新顺序、无变化、或对不上
  */
 function reorderById<T extends { id: string }>(
   items: readonly T[],
   movingId: string,
   beforeId: string | undefined,
-): T[] | undefined {
+): ReorderResult<T> {
   const moving = items.find((item) => item.id === movingId)
-  if (moving === undefined) return undefined
+  if (moving === undefined) return { kind: 'unknown', reason: 'source' }
+  // 锚点就是自己：挪到自己前面等于没动，不必走下面那条会把锚点判成未命中的路
+  if (beforeId === movingId) return { kind: 'unchanged' }
   const rest = items.filter((item) => item.id !== movingId)
   const at = beforeId === undefined ? rest.length : rest.findIndex((item) => item.id === beforeId)
-  if (at < 0) return undefined
+  if (at < 0) return { kind: 'unknown', reason: 'anchor' }
   const next = [...rest.slice(0, at), moving, ...rest.slice(at)]
-  if (next.every((item, index) => item.id === items[index]?.id)) return undefined
-  return next
+  if (next.every((item, index) => item.id === items[index]?.id)) return { kind: 'unchanged' }
+  return { kind: 'moved', order: next }
 }
 
 /** 两份顺序是否逐位相同，用来把一次没有改变任何位置的写入挡在盘外 */
@@ -427,7 +437,17 @@ export async function createWorkspaceGroupsService(
       }))
       if (groupId !== null) {
         const target = groups.find((group) => group.id === groupId)
-        if (target === undefined) throw new Error(`unknown group "${groupId}" in workspace "${workspaceId}"`)
+        if (target === undefined) {
+          // 与 moveWorkspace 同一形态：写入被拒而界面已经画过落点，抛错之前先留痕
+          logWarn(
+            `workspace-plus: moveSession 拒绝写入，分组不存在 workspace=${workspaceId} ` +
+              `sessionId=${sessionId} groupId=${groupId}`,
+          )
+          logWarn(
+            `workspace-plus: 现有分组=${groups.map((group) => group.id).join(',') || '(none)'}`,
+          )
+          throw new Error(`unknown group "${groupId}" in workspace "${workspaceId}"`)
+        }
         target.sessionIds.push(sessionId)
       }
       return save(workspaceId, groups)
@@ -435,15 +455,28 @@ export async function createWorkspaceGroupsService(
 
     async setSegmentOrder(key, order) {
       const slot = tree.get().orderSlots[key]
-      // 写一份与现状相同的顺序不该在盘上留下一次改动，与分组排序对相邻位空操作的取舍一致
-      if (slot !== undefined && sameOrder(slot, order)) return snapshot()
+      // 写一份与现状相同的顺序不该在盘上留下一次改动，与分组排序对相邻位空操作的取舍一致。
+      // 这一支本该到不了：客户端那边的换位换算已经把无变化的落点判掉了，走到这里说明它漏判了一次
+      if (slot !== undefined && sameOrder(slot, order)) {
+        logWarn(`workspace-plus: setSegmentOrder 顺序与现状逐位相同，跳过写入 key=${key} 成员=${order.length}`)
+        return snapshot()
+      }
       return saveSegmentOrder(key, order)
     },
 
     async moveGroupBefore(workspaceId, groupId, beforeGroupId) {
-      const order = reorderById(groupsOf(workspaceId), groupId, beforeGroupId)
+      const reorder = reorderById(groupsOf(workspaceId), groupId, beforeGroupId)
+      if (reorder.kind === 'unknown') {
+        // 两侧数据已经不同步：客户端拿的是一份旧快照，或分组在别处被删。
+        // 写入被跳过而界面已经画过落点，用户看到的就是「拖了没反应」，因此这一条必须留痕
+        logWarn(
+          `workspace-plus: moveGroupBefore 换位对不上 workspace=${workspaceId} groupId=${groupId} ` +
+            `beforeGroupId=${beforeGroupId ?? '(end)'} 原因=${reorder.reason}`,
+        )
+        return snapshot()
+      }
       // 无变化时连写都不发：拖到自己的相邻位不该在盘上留下一次改动
-      return order === undefined ? snapshot() : save(workspaceId, order)
+      return reorder.kind === 'moved' ? save(workspaceId, reorder.order) : snapshot()
     },
 
     async createVirtualWorkspace(name) {
@@ -453,8 +486,16 @@ export async function createWorkspaceGroupsService(
     },
 
     async moveVirtualWorkspaceBefore(groupId, beforeGroupId) {
-      const order = reorderById(treeGroups(), groupId, beforeGroupId)
-      return order === undefined ? snapshot() : saveTree(order)
+      const reorder = reorderById(treeGroups(), groupId, beforeGroupId)
+      if (reorder.kind === 'unknown') {
+        // 同 moveGroupBefore：跳过写入而界面已经画过落点，这一条必须留痕
+        logWarn(
+          `workspace-plus: moveVirtualWorkspaceBefore 换位对不上 groupId=${groupId} ` +
+            `beforeGroupId=${beforeGroupId ?? '(end)'} 原因=${reorder.reason}`,
+        )
+        return snapshot()
+      }
+      return reorder.kind === 'moved' ? saveTree(reorder.order) : snapshot()
     },
 
     async renameVirtualWorkspace(groupId, name) {
