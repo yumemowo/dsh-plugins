@@ -1,25 +1,22 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest'
-import * as React from 'react'
 import { act } from 'react'
-import { createRoot } from 'react-dom/client'
-import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
-import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
-import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
-import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
+import { band, fire, flush, mountRegion, regionProps } from './support/dndDom.ts'
 import { snapshot } from './snapshot-stub.ts'
 import { viewModeProps } from './viewMode-stub.ts'
 
 /**
  * 工作区行拖拽的真实 DOM
  *
- * 四类落点里放错一类时界面不会报错，只表现为「拖过去松手什么都没发生」或「进了另一个容器」
- * 因此逐条断言的是交给宿主的那几次写入，以及命中层真实画下的落点标记
+ * 工作区这一族的落点由树现算，算错时界面上不会报错，只表现为「拖过去没反应」或「落到了隔壁那一片」
+ * 因此逐条断言的是交给宿主的写入实参，以及落点标记画在哪个元素上
  *
  * jsdom 不实现 `DataTransfer`（用例里用最小替身），也不做布局（`getBoundingClientRect()` 恒为全零）
  * 因此命中走事件目标向上找标记元素，「整块投放」那一档不吃坐标，用例不必替身矩形带
  *
  * 数据一律用 `ws-1` / `group-a` 这类中性样例，不读真实工作区、目录或会话 id
+ *
+ * 造事件、挂载区域这些每个 DOM 测试都要的东西在 `./support/dndDom.ts`
  */
 
 /** 一个工作区分组里的两条工作区，用来验证组内换位 */
@@ -54,69 +51,9 @@ const PATH_OF: Record<string, string> = {
   'ws-8': '/elsewhere/mun',
 }
 
-/** 给事件挂一份最小的 dataTransfer，手势层只对它写载荷前缀 */
-function transferable(event: Event): Event {
-  Object.defineProperty(event, 'dataTransfer', {
-    value: {
-      effectAllowed: '',
-      dropEffect: '',
-      setData: () => {},
-      getData: () => '',
-    },
-  })
-  return event
-}
-
-/**
- * 派发一个拖拽事件
- * @param target - 事件目标
- * @param type - 事件类型
- */
-function fire(target: Element, type: string, y = 0): void {
-  act(() => {
-    const event = transferable(new Event(type, { bubbles: true }))
-    Object.defineProperties(event, {
-      clientX: { value: 0 },
-      clientY: { value: y },
-    })
-    target.dispatchEvent(event)
-  })
-}
-
-/**
- * 给一个元素一条假的矩形带
- *
- * jsdom 不做布局，`getBoundingClientRect()` 恒为零矩形，无坐标的事件因此永远算出「落在下半」
- * 组内换位要靠参照行的前后半定前后，用例得先把行摆到不同的高度上，命中才有确定读数
- * @param element - 要摆位置的行
- * @param top - 这一行的上沿纵坐标
- * @param height - 这一行的高度，缺省 10
- */
-function band(element: HTMLElement, top: number, height = 10): void {
-  element.getBoundingClientRect = (): DOMRect =>
-    ({
-      top,
-      bottom: top + height,
-      height,
-      left: 0,
-      right: 100,
-      width: 100,
-      x: 0,
-      y: top,
-      toJSON: () => ({}),
-    }) as DOMRect
-}
-
-/** 等一次提交落地：宿主写入回的是一份 Promise */
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve()
-    await Promise.resolve()
-  })
-}
-
-/** 收到的那几次写入，逐条记下方法名与实参 */
+/** 收到的写入，逐条记下实参 */
 interface Writes {
+  /** 工作区归属写入：被挪的工作区与目标分组 */
   moves: [string, string][]
   /** 换位写入注册表序：被挪的工作区与锚点（undefined 表示挪到末尾） */
   reorders: [string, string | undefined][]
@@ -125,7 +62,7 @@ interface Writes {
   clears: [string, readonly string[]][]
 }
 
-/** 工作区列表快照，模块级建好、每次返回同一份引用 */
+/** 工作区列表快照 */
 function workspaceState(): Record<string, unknown> {
   return {
     items: ALL_WORKSPACES.map((workspaceId) => ({
@@ -142,7 +79,11 @@ function workspaceState(): Record<string, unknown> {
   }
 }
 
-/** 区域 props */
+/**
+ * 区域 props
+ * @param writes - 收到的写入
+ * @param options - 初始工作区分组、嵌套关系与顺序位，以及写入之后宿主要回的快照
+ */
 function props(
   writes: Writes,
   options: {
@@ -164,7 +105,7 @@ function props(
       groupId: string,
     ) => ReturnType<typeof snapshot>
   } = {},
-): WorkspaceGroupsProps {
+): ReturnType<typeof regionProps> {
   const stored = snapshot({
     byWorkspace: { [PARENT_ID]: [{ id: 'group-a', name: '分组甲', sessionIds: [] }] },
     workspaceGroups: options.workspaceGroups ?? [
@@ -175,20 +116,15 @@ function props(
   })
   /** 宿主那份「当前」快照：每一笔写入都基于上一笔的结果累积 */
   let live = stored
-  return {
-    wide: true,
-    expandSidebar: () => {},
-    useWorkspaces: ((select: (s: unknown) => unknown) => select(workspaceState())) as never,
-    useSessions: ((select: (s: unknown) => unknown) =>
-      select({ ids: [], byId: {}, phase: 'ready' })) as never,
-    useSessionStatus: ((select: (s: unknown) => unknown) => select(new Map())) as never,
-    useDirectoryFlow: ((select: (occupied: boolean) => unknown) => select(true)) as never,
+  // 工作区读数在这里建好、每次渲染交出同一份引用：否则下游的 memo 与 effect 依赖每渲染都换引用
+  const workspaces = workspaceState()
+  const sessions = { ids: [], byId: {}, phase: 'ready' }
+  return regionProps({
+    useWorkspaces: ((select: (s: unknown) => unknown) => select(workspaces)) as never,
+    useSessions: ((select: (s: unknown) => unknown) => select(sessions)) as never,
     useHostInfo: ((select: (info: { home: string | undefined }) => unknown) =>
       select({ home: '/repo' })) as never,
-    openSession: () => {},
-    startSession: async () => undefined,
     loadGroups: async () => stored,
-    onReady: () => () => {},
     createGroup: async () => stored,
     renameGroup: async () => stored,
     deleteGroup: async () => stored,
@@ -222,65 +158,27 @@ function props(
     forgetWorkspace: async () => stored,
     focusEntry: async () => stored,
     togglePinned: async () => stored,
-    setSessionPinned: async () => {},
     insertWorkspaceBefore: async (workspaceId: string, beforeWorkspaceId: string | undefined) => {
       writes.reorders.push([workspaceId, beforeWorkspaceId])
     },
-    renameWorkspace: async () => {},
-    deleteWorkspace: async () => {},
-    searchResultLimit: 20,
-    t: regionTranslate(),
-    tWorkspace: workspaceTranslate(),
-    tSidebar: sidebarTranslate(),
     ...viewModeProps(),
-    official: () => ({
-      renameSession: async () => {},
-      forkSession: () => {},
-      archiveSession: async () => {},
-      labels: officialSessionLabels(workspaceTranslate()),
-      relativeTime: (updatedAt: number, now: number) =>
-        timeLabel(updatedAt, now, workspaceTranslate()),
-    }),
-    addWorkspace: () => ({
-      createWorkspace: async (path: string) => ({ workspaceId: `ws-${path}`, title: path }),
-      startSession: () => {},
-      occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
-      labels: officialAddLabels(workspaceTranslate()),
-    }),
-  }
+  })
 }
 
 /** 挂载区域并等分组元数据落地 */
 async function mount(
   options: Parameters<typeof props>[1] = {},
-): Promise<{ container: HTMLElement; root: ReturnType<typeof createRoot>; writes: Writes }> {
+): Promise<{
+  container: HTMLElement
+  root: Awaited<ReturnType<typeof mountRegion>>['root']
+  writes: Writes
+}> {
   const writes: Writes = { moves: [], reorders: [], nests: [], unnests: [], clears: [] }
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  await act(async () => {
-    root.render(React.createElement(WorkspaceGroupsRegion, props(writes, options)))
-  })
-  await act(async () => {
-    await Promise.resolve()
-    await Promise.resolve()
-  })
+  const { container, root } = await mountRegion(props(writes, options))
   return { container, root, writes }
 }
 
-/**
- * 一条工作区行
- * @param container - 挂载容器
- * @param workspaceId - 工作区 id
- */
-/**
- * 一条工作区行所在的整块
- *
- * 落点线跨整片画在这一块上，而不是贴着标题那一行：体内有内容时，
- * 只贴标题画会显得线只有半截，与「排在整个工作区之前 / 之后」读出的语义也不一致
- * @param container - 挂载容器
- * @param workspaceId - 工作区 id
- */
+/** 一条工作区行所在的整块 */
 function workspaceBlock(container: HTMLElement, workspaceId: string): HTMLElement {
   const row = workspaceRow(container, workspaceId)
   const block = row.closest<HTMLElement>('[data-wg-dnd-region]')
@@ -288,23 +186,26 @@ function workspaceBlock(container: HTMLElement, workspaceId: string): HTMLElemen
   return block
 }
 
+/**
+ * 一条工作区行
+ * @param container - 挂载容器
+ * @param workspaceId - 工作区 id
+ */
 function workspaceRow(container: HTMLElement, workspaceId: string): HTMLElement {
-  const found = container.querySelector<HTMLElement>(
-    `[data-wg-dnd-row="${workspaceId}"]`,
-  )
+  const found = container.querySelector<HTMLElement>(`[data-wg-dnd-row="${workspaceId}"]`)
   if (found === null) throw new Error(`no workspace row for "${workspaceId}"`)
   return found
 }
 
-/** 当前画着落点标记的元素个数：一处缝只该有一个 */
+/** 当前画着落点标记的元素个数 */
 function countMarked(container: HTMLElement): number {
   return container.querySelectorAll('[data-wg-drop]').length
 }
 
 /**
- * 一个带区域键的元素
- * @param container - 挂载容器
- * @param key - 区域键
+ * 一个带区域键的元素，没有时交回 null
+ *
+ * 这一族的用例要断言「这一格不接」，因此不能像会话归组那一族那样「取不到就抛」
  */
 function zone(container: HTMLElement, key: string): HTMLElement | null {
   return container.querySelector<HTMLElement>(`[data-wg-dnd="${key}"]`)

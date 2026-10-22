@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client'
 import { DndProvider, useDnd } from '../src/client/hooks/useDnd.ts'
 import { SCROLL_ATTRIBUTE } from '../src/client/data/protocol.ts'
 import type { DragPlan } from '../src/client/data/protocol.ts'
+import { fire } from './support/dndDom.ts'
 
 /**
  * 拖拽期间跟着指针自动滚动
@@ -33,37 +34,6 @@ function planOf(zoneKeys: readonly string[]): DragPlan {
     ]),
   )
   return { source: { kind: 'session', id: 'row-1' }, targets }
-}
-
-/** 给事件挂一份最小的 dataTransfer，手势层只对它写载荷前缀 */
-function transferable(event: Event): Event {
-  const store = new Map<string, string>()
-  Object.defineProperty(event, 'dataTransfer', {
-    value: {
-      effectAllowed: '',
-      dropEffect: '',
-      setData: (format: string, value: string) => store.set(format, value),
-      getData: (format: string) => store.get(format) ?? '',
-    },
-  })
-  return event
-}
-
-/**
- * 派发一个拖拽事件
- * @param target - 事件目标
- * @param type - 事件类型
- * @param point - 指针位置，缺省在容器中部
- */
-function fire(target: Element, type: string, point = { x: 150, y: 400 }): void {
-  act(() => {
-    const event = transferable(new Event(type, { bubbles: true }))
-    Object.defineProperties(event, {
-      clientX: { value: point.x },
-      clientY: { value: point.y },
-    })
-    target.dispatchEvent(event)
-  })
 }
 
 /**

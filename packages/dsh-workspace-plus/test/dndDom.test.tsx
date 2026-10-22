@@ -5,10 +5,8 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
-import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
-import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
+import { zone, row, fire, flush, mountRegion, regionProps, sharedTransfer, summary, transferable } from './support/dndDom.ts'
 import { snapshot } from './snapshot-stub.ts'
-import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
 
 /**
  * 会话归组拖拽的真实 DOM
@@ -19,6 +17,8 @@ import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
  * jsdom 不实现 `DataTransfer`（用例里用最小替身），也不做布局（`getBoundingClientRect()` 恒为全零），
  * `elementFromPoint` 与 `setPointerCapture` 同样缺席，因此命中走事件目标向上找标记元素，
  * 用例只需把事件派发到目标元素上，不必给定确切坐标
+ *
+ * 造事件、造矩形带、挂载区域这些每个 DOM 测试都要的东西在 `./support/dndDom.ts`
  */
 
 /** 未归组那一段的会话 */
@@ -32,88 +32,7 @@ const GROUP_B_IDS = ['session-4']
 
 const ALL_IDS = [...LOOSE_IDS, ...GROUP_A_IDS, ...GROUP_B_IDS]
 
-/** 造一份会话摘要 */
-function summary(id: string): Record<string, unknown> {
-  return {
-    id,
-    displayTitle: `会话 ${id}`,
-    running: false,
-    blank: false,
-    retainedBy: {},
-    updatedAt: Date.now() - ALL_IDS.indexOf(id) * 1000,
-  }
-}
-
-/** 给事件挂一份最小的 dataTransfer，手势层只对它写载荷前缀 */
-function transferable(event: Event): Event {
-  const store = new Map<string, string>()
-  Object.defineProperty(event, 'dataTransfer', {
-    value: {
-      effectAllowed: '',
-      dropEffect: '',
-      setData: (format: string, value: string) => store.set(format, value),
-      getData: (format: string) => store.get(format) ?? '',
-    },
-  })
-  return event
-}
-
-/**
- * 派发一个拖拽事件
- * @param target - 事件目标
- * @param type - 事件类型
- * @param y - 指针纵坐标，缺省 0，段内换位要按它算参照行的前后半
- * @param shared - 整场拖拽共用的那份 dataTransfer
- *
- * 真实浏览器里一场拖拽只有一个 dataTransfer 对象，`dropEffect` 横跨整场保留；
- * 逐条事件各造一份就复现不出「`dragover` 写过 move、`dragend` 还读得到」这条链
- */
-function fire(
-  target: Element,
-  type: string,
-  y = 0,
-  shared?: { effectAllowed: string; dropEffect: string },
-): void {
-  act(() => {
-    const event = shared === undefined
-      ? transferable(new Event(type, { bubbles: true }))
-      : withTransfer(new Event(type, { bubbles: true }), shared)
-    Object.defineProperties(event, {
-      clientX: { value: 0 },
-      clientY: { value: y },
-    })
-    target.dispatchEvent(event)
-  })
-}
-
-/** 造一份整场拖拽共用的 dataTransfer 替身，载有三个方法以走完 dragstart */
-function sharedTransfer(): { effectAllowed: string; dropEffect: string; setData: (format: string, value: string) => void; getData: (format: string) => string } {
-  const store = new Map<string, string>()
-  return {
-    effectAllowed: 'move',
-    dropEffect: 'none',
-    setData: (format, value) => store.set(format, value),
-    getData: (format) => store.get(format) ?? '',
-  }
-}
-/** 把一份现成的 dataTransfer 挂到事件上，供整场拖拽共用 */
-function withTransfer(
-  event: Event,
-  transfer: { effectAllowed: string; dropEffect: string; setData?: (format: string, value: string) => void; getData?: (format: string) => string },
-): Event {
-  Object.defineProperty(event, 'dataTransfer', { value: transfer })
-  return event
-}
-
-/** 等一次提交落地：`moveSession` 回的是一个 Promise */
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve()
-    await Promise.resolve()
-  })
-}
-
-/** 工作区快照，模块级建好、每次返回同一份引用 */
+/** 工作区快照 */
 function workspaceState(): Record<string, unknown> {
   return {
     items: [
@@ -132,10 +51,10 @@ function workspaceState(): Record<string, unknown> {
   }
 }
 
-/** 会话快照，同上 */
+/** 会话快照：时间序与官方集合顺序刻意相同，这一组用例不关心两者的区别 */
 function sessionState(): Record<string, unknown> {
   const byId: Record<string, unknown> = {}
-  for (const id of ALL_IDS) byId[id] = summary(id)
+  for (const [index, id] of ALL_IDS.entries()) byId[id] = summary(id, 10_000 - index * 1_000)
   return { ids: ALL_IDS, byId, phase: 'ready' }
 }
 
@@ -149,31 +68,24 @@ const SNAPSHOT = snapshot({
 })
 
 /**
- * 区域 props
+ * 区域 props，记下收到的三类写入
  * @param moves - 收到的 `moveSession` 调用，逐条记下三个实参
- * @param orders - 收到的分组排序调用，逐条记下实参，缺省表示这一处不关心排序
- * @param slots - 收到的手动顺序写入，逐条记下段键与整份顺序，缺省表示这一处不关心接管
+ * @param orders - 收到的分组排序调用，逐条记下实参
+ * @param slots - 收到的手动顺序写入，逐条记下段键与整份顺序
  */
 function props(
   moves: string[][],
   orders: string[][] = [],
   slots: [string, readonly string[]][] = [],
 ): WorkspaceGroupsProps {
+  // 两份快照在这里建好、每次渲染交出同一份引用：选择器每次新建对象会让下游的 memo 与
+  // effect 依赖每渲染都换引用，于是「派生 → 写入 → 重渲染」一路自激
   const state = workspaceState()
   const sessions = sessionState()
-  return {
-    wide: true,
-    expandSidebar: () => {},
+  return regionProps({
     useWorkspaces: ((select: (s: unknown) => unknown) => select(state)) as never,
     useSessions: ((select: (s: unknown) => unknown) => select(sessions)) as never,
-    useSessionStatus: ((select: (s: unknown) => unknown) => select(new Map())) as never,
-    useDirectoryFlow: ((select: (occupied: boolean) => unknown) => select(true)) as never,
-    useHostInfo: ((select: (info: { home: string | undefined }) => unknown) =>
-      select({ home: '/tmp' })) as never,
-    openSession: () => {},
-    startSession: async () => undefined,
     loadGroups: async () => SNAPSHOT,
-    onReady: () => () => {},
     createGroup: async () => SNAPSHOT,
     renameGroup: async () => SNAPSHOT,
     deleteGroup: async () => SNAPSHOT,
@@ -198,6 +110,7 @@ function props(
       orders.push(['', groupId, beforeGroupId ?? ''])
       return SNAPSHOT
     },
+    // 这一组用例只验会话归组，其余写入不换快照
     createVirtualWorkspace: async () => SNAPSHOT,
     renameVirtualWorkspace: async () => SNAPSHOT,
     deleteVirtualWorkspace: async () => SNAPSHOT,
@@ -208,36 +121,13 @@ function props(
     forgetWorkspace: async () => SNAPSHOT,
     focusEntry: async () => SNAPSHOT,
     togglePinned: async () => SNAPSHOT,
-    setSessionPinned: async () => {},
-    insertWorkspaceBefore: async () => {},
-    renameWorkspace: async () => {},
-    deleteWorkspace: async () => {},
-    searchResultLimit: 20,
-    t: regionTranslate(),
-    tWorkspace: workspaceTranslate(),
-    tSidebar: sidebarTranslate(),
-    ...storeViewModeProps(viewModeStoreStub()),
-    official: () => ({
-      renameSession: async () => {},
-      forkSession: () => {},
-      archiveSession: async () => {},
-      labels: officialSessionLabels(workspaceTranslate()),
-      relativeTime: (updatedAt: number, now: number) =>
-        timeLabel(updatedAt, now, workspaceTranslate()),
-    }),
-    addWorkspace: () => ({
-      createWorkspace: async (path: string) => ({ workspaceId: `ws-${path}`, title: path }),
-      startSession: () => {},
-      occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
-      labels: officialAddLabels(workspaceTranslate()),
-    }),
-  }
+  })
 }
 
-/** 挂载区域并交出容器与收到的移动调用 */
+/** 挂载区域并交出容器与收到的三类写入 */
 async function mount(): Promise<{
   container: HTMLElement
-  root: ReturnType<typeof createRoot>
+  root: Awaited<ReturnType<typeof mountRegion>>['root']
   moves: string[][]
   orders: string[][]
   slots: [string, readonly string[]][]
@@ -245,41 +135,13 @@ async function mount(): Promise<{
   const moves: string[][] = []
   const orders: string[][] = []
   const slots: [string, readonly string[]][] = []
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  await act(async () => {
-    root.render(React.createElement(WorkspaceGroupsRegion, props(moves, orders, slots)))
-  })
-  await act(async () => {
-    await Promise.resolve()
-    await Promise.resolve()
-  })
+  const { container, root } = await mountRegion(props(moves, orders, slots))
   return { container, root, moves, orders, slots }
-}
-
-/**
- * 一个区域的元素，按区域键取
- * @param container - 挂载容器
- * @param key - 区域键
- */
-function zone(container: HTMLElement, key: string): HTMLElement {
-  const found = container.querySelector<HTMLElement>(`[data-wg-dnd="${key}"]`)
-  if (found === null) throw new Error(`no drop zone for "${key}"`)
-  return found
-}
-
-/** 一行会话的元素，按会话 id 取 */
-function row(container: HTMLElement, id: string): HTMLElement {
-  const found = container.querySelector<HTMLElement>(`[data-wg-dnd-row="${id}"]`)
-  if (found === null) throw new Error(`no draggable row for "${id}"`)
-  return found
 }
 
 afterEach(() => {
   document.body.replaceChildren()
 })
-
 
 describe('dragging a session into a group', () => {
   it('moves a loose session into the group it was dropped on', async () => {

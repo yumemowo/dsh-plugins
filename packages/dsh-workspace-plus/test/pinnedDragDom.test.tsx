@@ -2,23 +2,22 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import * as React from 'react'
 import { act } from 'react'
-import { createRoot } from 'react-dom/client'
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
-import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
-import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
-import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
+import { band, fire, flush, mountRegion, regionProps, summary, zone } from './support/dndDom.ts'
 import { snapshot } from './snapshot-stub.ts'
 import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
 
 /**
- * 置顶区排序拖拽的真实 DOM
+ * 置顶区拖拽的真实 DOM
  *
- * 顺序位写错、写漏、或置顶区与分组内就地置顶段各读一套顺序时，界面上都不会报错
- * 只表现为「拖过去松手又弹回官方顺序」或「置顶区换了先后、分组里那一段没跟着换」
- * 因此逐条断言的是交给宿主的顺序位写入，以及两个表面上真实渲染出来的先后
+ * 置顶区的顺序是三份来源合成的（官方置顶集合、本包顺序位、段内名次），
+ * 算错时界面上不会报错，只表现为「拖完位置没变」或「拖一条别的跟着动」
+ * 因此逐条断言交给宿主的顺序位写入，以及界面上那几行到底排成了什么顺序
  *
  * jsdom 不实现 `DataTransfer`（用例里用最小替身），也不做布局（`getBoundingClientRect()` 恒为全零）
  * 因此命中走事件目标向上找标记元素，前后半由用例显式替身参照行的矩形带
+ *
+ * 造事件、造矩形带、挂载区域这些每个 DOM 测试都要的东西在 `./support/dndDom.ts`
  */
 
 /** 置顶集合，两条以便段内换位能真的换出位次 */
@@ -32,83 +31,7 @@ const LATE_ID = 'session-4'
 
 const ALL_IDS = [...GROUP_IDS, LATE_ID]
 
-/** 造一份会话摘要 */
-function summary(id: string): Record<string, unknown> {
-  return {
-    id,
-    displayTitle: `会话 ${id}`,
-    running: false,
-    blank: false,
-    retainedBy: {},
-    // 时间序与官方集合顺序刻意相反，两个顺序因此可区分
-    updatedAt: 10_000 - ALL_IDS.indexOf(id) * 1_000,
-  }
-}
-
-/** 给事件挂一份最小的 dataTransfer，手势层只对它写载荷前缀 */
-function transferable(event: Event): Event {
-  const store = new Map<string, string>()
-  Object.defineProperty(event, 'dataTransfer', {
-    value: {
-      effectAllowed: '',
-      dropEffect: '',
-      setData: (format: string, value: string) => store.set(format, value),
-      getData: (format: string) => store.get(format) ?? '',
-    },
-  })
-  return event
-}
-
-/**
- * 派发一个拖拽事件
- * @param target - 事件目标
- * @param type - 事件类型
- * @param y - 指针纵坐标，段内换位要按它算参照行的前后半
- */
-function fire(target: Element, type: string, y = 0): void {
-  act(() => {
-    const event = transferable(new Event(type, { bubbles: true }))
-    Object.defineProperties(event, {
-      clientX: { value: 0 },
-      clientY: { value: y },
-    })
-    target.dispatchEvent(event)
-  })
-}
-
-/**
- * 给一个元素一条假的矩形带
- *
- * jsdom 不做布局，`getBoundingClientRect()` 恒为零矩形，无坐标的事件因此永远算出「离第一行最近」
- * 段内换位要靠参照行的前后半定前后，用例得先把行摆到不同的高度上，命中才有确定读数
- * @param element - 要摆位置的行
- * @param top - 这一行的上沿纵坐标
- * @param height - 这一行的高度，缺省 10
- */
-function band(element: HTMLElement, top: number, height = 10): void {
-  element.getBoundingClientRect = (): DOMRect =>
-    ({
-      top,
-      bottom: top + height,
-      height,
-      left: 0,
-      right: 100,
-      width: 100,
-      x: 0,
-      y: top,
-      toJSON: () => ({}),
-    }) as DOMRect
-}
-
-/** 等一次提交落地：顺序位写入回的是一个 Promise */
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve()
-    await Promise.resolve()
-  })
-}
-
-/** 工作区快照，模块级建好、每次返回同一份引用 */
+/** 工作区快照 */
 function workspaceState(pinned: readonly string[]): Record<string, unknown> {
   return {
     items: [
@@ -127,10 +50,11 @@ function workspaceState(pinned: readonly string[]): Record<string, unknown> {
   }
 }
 
-/** 会话快照，同上 */
+/** 会话快照 */
 function sessionState(): Record<string, unknown> {
   const byId: Record<string, unknown> = {}
-  for (const id of ALL_IDS) byId[id] = summary(id)
+  // 时间序与官方集合顺序刻意相反，两个顺序因此可区分
+  for (const [index, id] of ALL_IDS.entries()) byId[id] = summary(id, 10_000 - index * 1_000)
   return { ids: ALL_IDS, byId, phase: 'ready' }
 }
 
@@ -141,8 +65,12 @@ function sessionState(): Record<string, unknown> {
  */
 function props(
   slots: [string, readonly string[]][],
-  options: { pinned?: readonly string[]; orderSlots?: Record<string, string[]> } = {},
-): WorkspaceGroupsProps {
+  options: {
+    pinned?: readonly string[] | undefined
+    orderSlots?: Record<string, string[]> | undefined
+    store?: ReturnType<typeof viewModeStoreStub> | undefined
+  } = {},
+): ReturnType<typeof regionProps> {
   const state = workspaceState(options.pinned ?? PINNED_IDS)
   const sessions = sessionState()
   const stored = snapshot({
@@ -151,19 +79,10 @@ function props(
     },
     orderSlots: options.orderSlots ?? {},
   })
-  return {
-    wide: true,
-    expandSidebar: () => {},
+  return regionProps({
     useWorkspaces: ((select: (s: unknown) => unknown) => select(state)) as never,
     useSessions: ((select: (s: unknown) => unknown) => select(sessions)) as never,
-    useSessionStatus: ((select: (s: unknown) => unknown) => select(new Map())) as never,
-    useDirectoryFlow: ((select: (occupied: boolean) => unknown) => select(true)) as never,
-    useHostInfo: ((select: (info: { home: string | undefined }) => unknown) =>
-      select({ home: '/tmp' })) as never,
-    openSession: () => {},
-    startSession: async () => undefined,
     loadGroups: async () => stored,
-    onReady: () => () => {},
     createGroup: async () => stored,
     renameGroup: async () => stored,
     deleteGroup: async () => stored,
@@ -184,34 +103,12 @@ function props(
     forgetWorkspace: async () => stored,
     focusEntry: async () => stored,
     togglePinned: async () => stored,
-    setSessionPinned: async () => {},
-    insertWorkspaceBefore: async () => {},
-    renameWorkspace: async () => {},
-    deleteWorkspace: async () => {},
-    searchResultLimit: 20,
-    t: regionTranslate(),
-    tWorkspace: workspaceTranslate(),
-    tSidebar: sidebarTranslate(),
     // 就地置顶那一档才把名次交给分组内的比较器
-    ...storeViewModeProps(inlineScope()),
-    official: () => ({
-      renameSession: async () => {},
-      forkSession: () => {},
-      archiveSession: async () => {},
-      labels: officialSessionLabels(workspaceTranslate()),
-      relativeTime: (updatedAt: number, now: number) =>
-        timeLabel(updatedAt, now, workspaceTranslate()),
-    }),
-    addWorkspace: () => ({
-      createWorkspace: async (path: string) => ({ workspaceId: `ws-${path}`, title: path }),
-      startSession: () => {},
-      occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
-      labels: officialAddLabels(workspaceTranslate()),
-    }),
-  }
+    ...storeViewModeProps(options.store ?? inlineScope()),
+  })
 }
 
-/** 一份「就地置顶」档的 store 句柄 */
+/** 就地置顶那一档的 store：名次交给分组内的比较器，而不是跟着官方集合走 */
 function inlineScope() {
   const store = viewModeStoreStub()
   store.setPinned({ scope: 'inline' })
@@ -220,60 +117,46 @@ function inlineScope() {
 
 /** 挂载区域并交出容器、收到的顺序位写入与重渲染入口 */
 async function mount(
-  options: { pinned?: readonly string[]; orderSlots?: Record<string, string[]> } = {},
+  options: {
+    pinned?: readonly string[] | undefined
+    orderSlots?: Record<string, string[]> | undefined
+    store?: ReturnType<typeof viewModeStoreStub> | undefined
+  } = {},
 ): Promise<{
   container: HTMLElement
-  root: ReturnType<typeof createRoot>
+  root: Awaited<ReturnType<typeof mountRegion>>['root']
   slots: [string, readonly string[]][]
   /** 带着新的顺序位重渲染，模拟宿主回了整份快照 */
   rerender: (orderSlots: Record<string, string[]>) => Promise<void>
 }> {
   const slots: [string, readonly string[]][] = []
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
+  const { container, root } = await mountRegion(props(slots, options))
   const draw = async (
-    next: { pinned?: readonly string[]; orderSlots?: Record<string, string[]> },
+    next: {
+      pinned?: readonly string[] | undefined
+      orderSlots?: Record<string, string[]> | undefined
+      store?: ReturnType<typeof viewModeStoreStub> | undefined
+    },
   ): Promise<void> => {
     await act(async () => {
-      root.render(React.createElement(WorkspaceGroupsRegion, props(slots, next)))
+      root.render(
+        React.createElement(WorkspaceGroupsRegion, props(slots, next)),
+      )
     })
-    await act(async () => {
-      await Promise.resolve()
-      await Promise.resolve()
-    })
+    await flush()
   }
-  await draw(options)
   return {
     container,
     root,
     slots,
-    rerender: (orderSlots) => draw({ ...options, orderSlots }),
+    rerender: (orderSlots) => draw({ ...options, store: options.store, orderSlots }),
   }
 }
 
-/**
- * 置顶区里的一个可作参照行的元素
- *
- * 同一个会话在置顶区与工作区列表里各渲染一行，两行都带参照行标记
- * 因此这里限定在 `.pinScroll` 之内，取到的才是置顶段那一行
- * @param container - 挂载容器
- * @param id - 会话 id
- */
+/** 一条置顶行 */
 function pinnedRow(container: HTMLElement, id: string): HTMLElement {
   const found = container.querySelector<HTMLElement>(`.pinScroll [data-wg-dnd-row="${id}"]`)
   if (found === null) throw new Error(`no pinned row for "${id}"`)
-  return found
-}
-
-/**
- * 一个带区域键的元素
- * @param container - 挂载容器
- * @param key - 区域键
- */
-function zone(container: HTMLElement, key: string): HTMLElement {
-  const found = container.querySelector<HTMLElement>(`[data-wg-dnd="${key}"]`)
-  if (found === null) throw new Error(`no drop zone for "${key}"`)
   return found
 }
 
