@@ -28,7 +28,7 @@ import type { DragPlan, DragPlanTarget } from '../data/dnd.ts'
 import { maybeDropSearcher } from '../data/dropSearcher.ts'
 import type { DropCheck, DropNode, DropSearcher, DropTarget } from '../data/dropSearcher.ts'
 import type { TreeContainerRef, TreeNodeRef } from '../data/tree.ts'
-import { debugLog, debugWarn } from '../data/debug.ts'
+import { debugLog, debugWarn } from '../utils/debug.ts'
 import { autoScrollStep } from '../data/scroll.ts'
 import type { ScrollBox } from '../data/scroll.ts'
 

@@ -52,7 +52,7 @@ import {
 } from '../data/sessions.ts'
 import { frontPinnedRows, pinRanks, pinnedEntries, reconcilePinned } from '../data/pinned.ts'
 import { PINNED_KEY, stretchDragPlan } from '../data/dnd.ts'
-import { debugWarn } from '../data/debug.ts'
+import { debugWarn } from '../utils/debug.ts'
 import { buildWorkspaceTree } from '../data/tree.ts'
 import type { RootLayout, SessionRow } from '../data/types.ts'
 import type { HostInfo } from '../hostInfo.ts'
@@ -998,7 +998,7 @@ function useRegionGroupActions(
     // 不经过 `apply`，改名不动分组元数据，官方控制器返回的是工作区视图而不是分组快照
     // `apply` 因此只收「回整份快照」的改动。失败仍要留下痕迹
     void renameWorkspace(draft.workspaceId, name).catch((reason: unknown) => {
-      console.error('workspace-plus: workspace rename failed', reason)
+      debugWarn('workspace rename failed', { workspaceId: draft.workspaceId, reason })
     })
   }
 
@@ -1752,7 +1752,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
         .setSessionPinned(sessionId, !unpinning)
         .then(() => followUp?.())
         .catch((reason: unknown) => {
-          console.error('workspace-plus: pin change failed', reason)
+          debugWarn('pin change failed', { sessionId, unpinning, reason })
         })
     },
     [pinnedIds, canPin, props.setSessionPinned],

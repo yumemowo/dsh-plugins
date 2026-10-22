@@ -30,7 +30,7 @@ import {
   workspaceTreeDragPlan,
 } from '../data/dnd.ts'
 import type { OrderDragging } from '../data/dnd.ts'
-import { debugWarn } from '../data/debug.ts'
+import { debugWarn } from '../utils/debug.ts'
 import type { Nesting } from '../data/nest.ts'
 import type { WorkspaceTree } from '../data/tree.ts'
 import { relativeTimeOfRow, statusViewOfRow } from '../data/rows.ts'
