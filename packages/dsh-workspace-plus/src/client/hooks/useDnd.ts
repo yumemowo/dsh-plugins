@@ -113,6 +113,9 @@ function collectDropTargets(
    *
    * 两种情形合成一次查询，因此「只有一行的块」与「很多行的块」在这里没有分支：
    * 前者没有那个标记，退回那一格自己的元素；后者由标记直接交出整块
+   *
+   * 查不到时交回 undefined 而不是退到区域键上：两套标识不共用命名空间，
+   * 单位标识（`workspaceBlock/…`、`virtualBlock/…`、`sessionGroupBlock/…`）在任何元素上都不会是区域键的取值
    * @param key - 这一格的区域键
    * @param target - 这一格的计划
    */
@@ -121,9 +124,7 @@ function collectDropTargets(
       // 没有点名表示这一格自己就是单位（「只有一行的块」）
       return root.querySelector(`[${ZONE_ATTRIBUTE}="${key}"]`) ?? undefined
     }
-    const region = root.querySelector(`[${REGION_ATTRIBUTE}="${target.regionOf}"]`)
-    if (region !== null) return region
-    return root.querySelector(`[${ZONE_ATTRIBUTE}="${target.regionOf}"]`) ?? undefined
+    return root.querySelector(`[${REGION_ATTRIBUTE}="${target.regionOf}"]`) ?? undefined
   }
 
   /**
@@ -786,16 +787,15 @@ export function DndProvider({
       zoneNodesRef.current = plan.tree?.nodesByZone() ?? new Map()
       searcherRef.current = maybeDropSearcher(plan.tree, collected.targets)
       paintRef.current = collected.paint
+      // 压淡够不着的那一片：判定与命中层同源，因此不会出现「淡着却能放进去」
+      const dimmed = dimmedElements(scope, plan)
       debugWarn('drag begin', {
         source: plan.source,
         targets: [...plan.targets.keys()],
         // 计划里有多少格真的在 DOM 上找到了元素：对不上就是「界面有格、计划没有」或反过来
         painted: collected.paint.size,
-        dimmed: dimmedElements(scope, plan).length,
+        dimmed: dimmed.length,
       })
-
-      // 压淡够不着的那一片：判定与命中层同源，因此不会出现「淡着却能放进去」
-      const dimmed = dimmedElements(scope, plan)
       for (const element of dimmed) element.setAttribute(DIM_ATTRIBUTE, '')
       dimmedRef.current = dimmed
 
