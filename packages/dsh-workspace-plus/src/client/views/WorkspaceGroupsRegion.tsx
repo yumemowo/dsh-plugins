@@ -25,7 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement, RefObject } from 'react'
 import { EMPTY_PICKER_STATE } from '../../pickerState.ts'
 import type { AddWorkspaceActions, OfficialSessionActions, RegionActions, RegionDataHooks } from '../actions.ts'
-import { buildRootLayout, virtualWorkspaceIdOf } from '../data/layout.ts'
+import { buildLayout, buildRootLayout, virtualWorkspaceIdOf } from '../data/layout.ts'
 import { planWorkspaceMove } from '../data/move.ts'
 import type { WorkspaceMoveTarget } from '../data/move.ts'
 import { descendantsOf, deriveNesting, nearestAncestorForPath } from '../data/nest.ts'
@@ -51,11 +51,24 @@ import {
   straySessions,
 } from '../data/sessions.ts'
 import { frontPinnedRows, pinRanks, pinnedEntries, reconcilePinned } from '../data/pinned.ts'
-import { PINNED_KEY } from '../data/protocol.ts'
+import {
+  PINNED_KEY,
+  groupHeadKey,
+  looseKey,
+  sessionGroupRegionKey,
+  sessionGroupZoneKey,
+  virtualRegionKey,
+  virtualWorkspaceBodyKey,
+  virtualWorkspaceHeadKey,
+  workspaceBodyKey,
+  workspaceHeadKey,
+  workspaceRegionKey,
+} from '../data/protocol.ts'
+import { useOutline } from '../hooks/useOutline.ts'
 import { stretchDragPlan } from '../data/plan.ts'
 import { debugWarn } from '../utils/debug.ts'
 import { buildWorkspaceTree } from '../data/tree.ts'
-import type { RootLayout, SessionRow } from '../data/types.ts'
+import type { RootLayout, SessionRow, WorkspaceLayout } from '../data/types.ts'
 import type { HostInfo } from '../hostInfo.ts'
 import { regionLabels } from '../labels.ts'
 import type { RegionLabels } from '../labels.ts'
@@ -1563,6 +1576,31 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     archivedSessionIds,
     statusSnapshot,
   )
+
+  /**
+   * workspaceId → 该工作区体内的分段与子工作区
+   *
+   * 原先由 WorkspaceNode 在递归层各自算一遍；outline 要按同一份布局排行，两处就都得算
+   * 同一件事算两遍正是要消灭的东西，因此上提到这一层：渲染与序列读同一个 Map
+   *
+   * 依赖只留那三格：会话行、分组元数据、嵌套推导都是稳定引用，因此它不会在每次流式重渲染时重建
+   */
+  const layoutByWorkspace = useMemo(() => {
+    const built = new Map<string, WorkspaceLayout>()
+    for (const [workspaceId, rows] of rowsByWorkspace) {
+      built.set(
+        workspaceId,
+        buildLayout(
+          rows,
+          snapshot.byWorkspace[workspaceId] ?? [],
+          // 组内子工作区，放进这个分组、且父工作区是当前工作区的那些
+          (groupId) => layout.nesting.groupedChildIdsOf(workspaceId, groupId),
+          layout.nesting.looseChildIdsOf(workspaceId),
+        ),
+      )
+    }
+    return built
+  }, [rowsByWorkspace, snapshot.byWorkspace, layout.nesting])
   // 不属于任何工作区的会话，只有存在时才渲染末尾的「未分组」区段
   // 聚焦时整段不出现（`focusedLayout` 只交出被聚焦的那一片），因此这里也不必为它留位
   // 就地置顶在下面按名次表处理，这里先取列表原序
@@ -1774,6 +1812,47 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
           focusedWorkspaceIds(layout.rootLayout, layout.pickerEntries, snapshot.picker.focused),
         ).sort((a, b) => compareSessionRowsWithPins(pinRanksByScope, a, b))
 
+  /**
+   * 整片区域的行序列
+   *
+   * 由这一层算一次，渲染与（下一步的）拖拽都读它：它们原本各算各的，同一件事算两遍
+   * 布局是输入而不是被重算——这一层只决定「按什么顺序、露不露面、多高」
+   */
+  const outline = useOutline({
+    rootLayout: layout.rootLayout,
+    workspaceLayoutOf: (workspaceId) =>
+      layoutByWorkspace.get(workspaceId) ?? { groups: [], loose: [], children: [] },
+    depthOf: (workspaceId) => layout.nesting.levelOf(workspaceId),
+    containers: {
+      root: layout.nesting.containers.root,
+      virtualOf: layout.nesting.containers.virtualOf,
+      groupOf: layout.nesting.containers.groupOf,
+    },
+    expansion: {
+      isWorkspaceExpanded: expansion.read.isWorkspaceExpanded,
+      isVirtualWorkspaceExpanded: expansion.read.isVirtualWorkspaceExpanded,
+      isGroupExpanded: (workspaceId, groupId) =>
+        expansion.read.isGroupExpanded({ workspaceId, groupId }),
+    },
+    isScopeExpanded: (ref) => ui.sessionScopes[sessionScopeKey(ref)] === true,
+    alwaysVisibleSessionIds,
+    now,
+    stray,
+    hideStray: layout.focused,
+    compareRows: (a, b) => compareSessionRowsWithPins(pinRanksByScope, a, b),
+    keys: {
+      workspaceHead: workspaceHeadKey,
+      workspaceBody: workspaceBodyKey,
+      workspaceRegion: workspaceRegionKey,
+      sessionGroupHead: groupHeadKey,
+      sessionGroupZone: sessionGroupZoneKey,
+      sessionGroupRegion: sessionGroupRegionKey,
+      virtualHead: virtualWorkspaceHeadKey,
+      virtualBody: virtualWorkspaceBodyKey,
+      virtualRegion: virtualRegionKey,
+      loose: looseKey,
+    },
+  })
   const session: SessionRowScope = {
     currentSessionId,
     official,
@@ -1814,6 +1893,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     edits,
     commands,
     rowsByWorkspace,
+    layoutByWorkspace,
+    outline,
     currentSessionId,
     home,
     session,

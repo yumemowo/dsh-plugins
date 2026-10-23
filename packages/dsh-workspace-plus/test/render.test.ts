@@ -9,6 +9,22 @@ import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { compareSessionRows } from '../src/client/data/sessions.ts'
+import { outlineOf } from '../src/client/hooks/useOutline.ts'
+import type { Outline } from '../src/client/hooks/useOutline.ts'
+import { deriveNesting } from '../src/client/data/nest.ts'
+import type { WorkspaceLayout } from '../src/client/data/types.ts'
+import {
+  groupHeadKey,
+  looseKey,
+  sessionGroupRegionKey,
+  sessionGroupZoneKey,
+  virtualRegionKey,
+  virtualWorkspaceBodyKey,
+  virtualWorkspaceHeadKey,
+  workspaceBodyKey,
+  workspaceHeadKey,
+  workspaceRegionKey,
+} from '../src/client/data/protocol.ts'
 import { RegionLocaleProvider } from '../src/client/hooks/useLocale.ts'
 import { DndProvider } from '../src/client/hooks/useDnd.ts'
 import { regionLabels } from '../src/client/labels.ts'
@@ -646,6 +662,56 @@ function renderGroupRow(
   return out
 }
 
+/**
+ * 一个工作区区块的行序列
+ *
+ * 区块读序列取「本段露哪几条」，因此测试也要有一份；名次为空表时比较器与 `compareSessionRows` 同序
+ * 空名单意味着一条始终展示的行也没有，折叠额度按普通行算
+ */
+function sectionOutline(
+  workspaceId: string,
+  layout: WorkspaceLayout,
+  expanded: boolean,
+): Outline {
+  const containers = deriveNesting({
+    enabled: false,
+    workspaceIds: [workspaceId],
+    pathOf: () => undefined,
+    virtualOf: () => '',
+    bindingOf: () => undefined,
+    groupIdsOf: () => new Set<string>(),
+  }).containers
+  return outlineOf({
+    rootLayout: { groups: [], loose: [workspaceId], entries: [] },
+    workspaceLayoutOf: () => layout,
+    depthOf: () => 0,
+    containers: { root: containers.root, virtualOf: containers.virtualOf, groupOf: containers.groupOf },
+    expansion: {
+      isWorkspaceExpanded: () => expanded,
+      isVirtualWorkspaceExpanded: () => true,
+      isGroupExpanded: () => false,
+    },
+    isScopeExpanded: () => false,
+    alwaysVisibleSessionIds: new Set<string>(),
+    now: 0,
+    stray: [],
+    hideStray: true,
+    compareRows: compareSessionRows,
+    keys: {
+      workspaceHead: workspaceHeadKey,
+      workspaceBody: workspaceBodyKey,
+      workspaceRegion: workspaceRegionKey,
+      sessionGroupHead: groupHeadKey,
+      sessionGroupZone: sessionGroupZoneKey,
+      sessionGroupRegion: sessionGroupRegionKey,
+      virtualHead: virtualWorkspaceHeadKey,
+      virtualBody: virtualWorkspaceBodyKey,
+      virtualRegion: virtualRegionKey,
+      loose: looseKey,
+    },
+  })
+}
+
 /** 渲染一个工作区区块并返回可断言的撑开结构 */
 function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
   const loose = Array.from({ length: looseCount }, (_, index) => ({
@@ -679,12 +745,8 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
       onDelete: () => {},
     },
     layout: { groups: [], loose, children: [] },
+    outline: sectionOutline('w1', { groups: [], loose, children: [] }, expanded),
     depth: 0,
-    // 名次为空表时这个比较器与 `compareSessionRows` 同序，断言因此与没有置顶时相同
-    compareRows: compareSessionRows,
-    // 空名单：一条始终展示的行也没有，折叠额度按普通行算
-    alwaysVisibleSessionIds: new Set(),
-    now: 0,
     revealSessionId: undefined,
     groupActions: {
       onRename: () => {},

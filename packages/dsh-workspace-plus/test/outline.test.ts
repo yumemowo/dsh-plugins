@@ -279,4 +279,5 @@ describe('buildOutline', () => {
     // 收起的工作区那条仍在序列里，只是不在这一份里
     expect(rows.some((row) => !row.visible)).toBe(true)
   })
+
 })

@@ -16,7 +16,9 @@ import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/c
 import { useCallback, useMemo, useRef } from 'react'
 import type { ReactElement } from 'react'
 import type { OfficialSessionActions } from '../actions.ts'
-import { buildLayout, containsSession, groupIdOfSession, virtualWorkspaceIdOf } from '../data/layout.ts'
+import { containsSession, groupIdOfSession, virtualWorkspaceIdOf } from '../data/layout.ts'
+import type { Outline } from '../hooks/useOutline.ts'
+import { rowsOfScope } from '../hooks/useOutline.ts'
 import {
   ROOT_KEY,
   scrollProps,
@@ -96,6 +98,9 @@ export interface SessionRowScope {
   onTogglePin: (sessionId: string) => void
 }
 
+/** 一个分段都没有的工作区：取不到布局时用它，避免每次渲染新建一份 */
+const EMPTY_WORKSPACE_LAYOUT: WorkspaceLayout = { groups: [], loose: [], children: [] }
+
 /** 列表侧消费的派生布局 */
 export interface RegionListLayout {
   /** 聚焦生效后的根节点布局 */
@@ -168,6 +173,18 @@ export interface RegionListCommands {
 export interface WorkspaceNodeScope {
   snapshot: WorkspaceGroupsSnapshot
   layout: RegionListLayout
+  /**
+   * 整片区域的行序列
+   *
+   * 渲染与拖拽都读它取「这一段有哪几条、谁排第几」，因此它由容器算一次后整份交给递归层
+   */
+  outline: Outline
+  /**
+   * workspaceId → 该工作区体内的分段与子工作区
+   *
+   * 容器算一次，递归层按 id 取：原先每个 WorkspaceNode 自己算一遍，序列又得再算一遍
+   */
+  layoutByWorkspace: ReadonlyMap<string, WorkspaceLayout>
   edits: RegionListEdits
   commands: RegionListCommands
   /** 会话 id → 该工作区的会话行，只随会话快照重建 */
@@ -320,9 +337,8 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
               <div className={rowsStyles.sessions}>
                 <SessionList
                   scope={{ kind: 'stray' }}
-                  rows={props.stray}
-                  alwaysVisibleSessionIds={scope.alwaysVisibleSessionIds}
-                  now={scope.session.now}
+                  rows={rowsOfScope(scope.outline, { kind: 'stray' })}
+                  total={props.stray.length}
                   open={expansion.isWorkspaceExpanded(UNGROUPED_KEY)}
                   revealSessionId={session.revealSessionId}
                   renderSession={(row) => sessionRowElement(row, session, rowLabels)}
@@ -360,7 +376,7 @@ function WorkspaceNode({
   scope: WorkspaceNodeScope
 }): ReactElement | null {
   const { labels } = useLocale()
-  const { snapshot, layout, edits, commands, rowsByWorkspace } = scope
+  const { snapshot, layout, edits, commands, rowsByWorkspace, layoutByWorkspace } = scope
   const expansion = useExpansion()
 
   /**
@@ -476,13 +492,8 @@ function WorkspaceNode({
   // 布局只包含快照里存在的工作区，因此这里不会落空，防御一下避免类型断言
   if (workspace === undefined) return null
   const expanded = expansion.isWorkspaceExpanded(workspaceId)
-  const built = buildLayout(
-    rowsByWorkspace.get(workspaceId) ?? [],
-    snapshot.byWorkspace[workspaceId] ?? [],
-    // 组内子工作区，放进这个分组、且父工作区是当前工作区的那些。它们自己可能还有后代，渲染时逐层向下取
-    (groupId) => layout.nesting.groupedChildIdsOf(workspaceId, groupId),
-    layout.nesting.looseChildIdsOf(workspaceId),
-  )
+  // 分段由容器算过一次，这里按 id 取：序列按同一份布局排行，两处因此不可能对不上
+  const built = layoutByWorkspace.get(workspaceId) ?? EMPTY_WORKSPACE_LAYOUT
   dragBuilt.current = built
   /**
    * 该工作区行上那份「移动工作区分组」菜单的选项集
@@ -569,10 +580,8 @@ function WorkspaceNode({
         onDelete: () => edits.onDeleteWorkspace(workspaceId, workspace.title),
       }}
       layout={built}
+      outline={scope.outline}
       depth={layout.nesting.levelOf(workspaceId)}
-      compareRows={scope.compareRows}
-      alwaysVisibleSessionIds={scope.alwaysVisibleSessionIds}
-      now={scope.session.now}
       revealSessionId={scope.session.revealSessionId}
       groupActions={{
         onRename: (section) => edits.onRenameGroup(workspaceId, section.id, section.label),

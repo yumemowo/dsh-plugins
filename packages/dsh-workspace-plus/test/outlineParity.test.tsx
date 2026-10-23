@@ -153,6 +153,11 @@ function props(): WorkspaceGroupsProps {
     focusEntry: async () => stored,
     togglePinned: async () => stored,
     setSessionPinned: async () => {},
+    // 顺序位与换位的四个写入面：这份夹具只验行序，不碰拖拽提交
+    setSegmentOrder: async () => stored,
+    moveGroupBefore: async () => stored,
+    moveVirtualWorkspaceBefore: async () => stored,
+    insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,

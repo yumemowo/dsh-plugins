@@ -26,6 +26,8 @@ import {
 } from '../data/protocol.ts'
 import type { OrderDragging } from '../data/protocol.ts'
 import type { SessionRow, WorkspaceLayout } from '../data/types.ts'
+import type { Outline } from '../hooks/useOutline.ts'
+import { rowsOfScope } from '../hooks/useOutline.ts'
 import styles from './components/rows.module.css'
 
 /** 本工作区块体内会话分组的操作，作用于哪个分组由参数指明；开合不在这里，它走 `useExpansion` */
@@ -41,19 +43,14 @@ export interface WorkspaceSectionProps {
   /** 工作区标题行的全部输入，整体交给 `WorkspaceRow`，撑开体的开合也读它的 `expanded` */
   row: WorkspaceRowProps
   layout: WorkspaceLayout
+  /**
+   * 整片区域的行序列
+   *
+   * 两段会话各按自己的坐标取那一截：露哪几条、还差几条被收起都由它算好，这一层不再自己折叠
+   */
+  outline: Outline
   /** 该工作区块在层级里的深度，从 0 起，缩进由它换算 */
   depth: number
-  /**
-   * 会话行的排序比较器
-   *
-   * 由区域组件按「置顶会话显示方式」选定后下发：置顶要在各分组内也排到最前时，它会把置顶名次收进去
-   * 三种段落（分组内、未归组段、平铺列表）共用同一个
-   */
-  compareRows: (a: SessionRow, b: SessionRow) => number
-  /** 本工作区体内始终展示并占额度的会话行 id */
-  alwaysVisibleSessionIds: ReadonlySet<string>
-  /** 折叠判定的基准时刻，与行尾相对时间取同一刻 */
-  now: number
   /** 待揭示的会话 id，转交给两段会话列表 */
   revealSessionId: string | undefined
   groupActions: WorkspaceGroupActions
@@ -79,10 +76,8 @@ export function WorkspaceSection({
   workspaceId,
   row,
   layout,
+  outline,
   depth,
-  compareRows,
-  alwaysVisibleSessionIds,
-  now,
   revealSessionId,
   groupActions,
   orderDragging,
@@ -180,9 +175,8 @@ export function WorkspaceSection({
               >
                 <SessionList
                   scope={{ kind: 'group', workspaceId, groupId: section.id }}
-                  rows={[...section.sessions].sort(compareRows)}
-                  alwaysVisibleSessionIds={alwaysVisibleSessionIds}
-                  now={now}
+                  rows={rowsOfScope(outline, { kind: 'group', workspaceId, groupId: section.id })}
+                  total={section.sessions.length}
                   open={groupExpanded}
                   revealSessionId={revealSessionId}
                   renderSession={renderSession}
@@ -196,9 +190,8 @@ export function WorkspaceSection({
             <div className={styles.sessions} {...looseZone}>
               <SessionList
                 scope={{ kind: 'loose', workspaceId }}
-                rows={[...layout.loose].sort(compareRows)}
-                alwaysVisibleSessionIds={alwaysVisibleSessionIds}
-                now={now}
+                rows={rowsOfScope(outline, { kind: 'loose', workspaceId })}
+                total={layout.loose.length}
                 open={row.expanded}
                 revealSessionId={revealSessionId}
                 renderSession={renderSession}
