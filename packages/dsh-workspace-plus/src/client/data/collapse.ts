@@ -15,6 +15,30 @@
  */
 import type { SessionRow } from './types.ts'
 
+/**
+ * 一个展示范围的坐标
+ *
+ * 展示范围只有三种：一个工作区的未归组会话、工作区内的一个会话分组、末尾的「未分组」桶
+ * 三者各自一份展开态，坐标因此要能指到具体那一个
+ */
+export type SessionScopeRef =
+  | { kind: 'loose'; workspaceId: string }
+  | { kind: 'group'; workspaceId: string; groupId: string }
+  | { kind: 'stray' }
+
+/**
+ * 把一个展示范围坐标编码成展开记录的键
+ *
+ * 编码只此一处：它既是界面状态的键，也是 outline 认这一段的方式
+ * 会话分组那一支留一个可当前缀用的形态（末尾的分组 id 为空即前缀），收起工作区时按它一次清掉名下各段
+ * @param ref - 展示范围坐标
+ */
+export function sessionScopeKey(ref: SessionScopeRef): string {
+  if (ref.kind === 'stray') return 'stray'
+  if (ref.kind === 'loose') return 'loose:' + ref.workspaceId
+  return 'group:' + ref.workspaceId + ':' + ref.groupId
+}
+
 /** 一个展示范围内展示条数的上限 */
 export const COLLAPSED_SESSION_LIMIT_MAX = 5
 

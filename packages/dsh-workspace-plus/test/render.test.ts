@@ -15,6 +15,8 @@ import { regionTranslate, sidebarTranslate, translateWith, workspaceTranslate } 
 import { menuLabelArrow, menuLabelText } from './menu-label.ts'
 import { snapshot } from './snapshot-stub.ts'
 import { ExpansionProvider } from '../src/client/hooks/useExpansion.ts'
+import { SessionScopesProvider } from '../src/client/hooks/useSessionScopes.ts'
+import type { SessionScopes } from '../src/client/hooks/useSessionScopes.ts'
 import type { Expansion } from '../src/client/hooks/useExpansion.ts'
 import { viewModeProps } from './viewMode-stub.ts'
 
@@ -489,6 +491,17 @@ function withLocale(node: ReactElement): ReactElement {
   })
 }
 
+/** 会话区段展开态：默认一段都不展开，与真实 provider 在初值上的行为一致 */
+function sessionScopesStub(overrides: Partial<SessionScopes> = {}): SessionScopes {
+  return {
+    isExpanded: () => false,
+    toggle: () => {},
+    expand: () => {},
+    clear: () => {},
+    ...overrides,
+  }
+}
+
 /**
  * 折叠态提供者的一份替身
  *
@@ -683,9 +696,12 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
   }
   render(
     withLocale(
-      React.createElement(ExpansionProvider, {
-        value: expansionStub(),
-        children: React.createElement(WorkspaceSection, props),
+      React.createElement(SessionScopesProvider, {
+        value: sessionScopesStub(),
+        children: React.createElement(ExpansionProvider, {
+          value: expansionStub(),
+          children: React.createElement(WorkspaceSection, props),
+        }),
       }),
     ),
     out,
