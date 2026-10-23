@@ -1199,6 +1199,37 @@ describe('client stylesheet', () => {
     }
   })
 
+  /**
+   * 行带与药丸分开之后，菜单项是 `.row` 的唯一一个没有药丸的读者
+   *
+   * 布局与底色都搬去了 `.rowSurface` 那一层，只挂 `.row` 的元素因此两样都拿不到
+   * 两者失效都不影响编译、类型与 DOM 结构断言，界面上就是「布局乱了、悬停没反应」
+   */
+  it('keeps the picker row a flex box with its own hover fill', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+    const bodyOf = (selector: string): string =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
+
+    const band = bodyOf('.row')
+    // 行带自己不再承担对齐与排布：那几条只在药丸上
+    expect(band).not.toMatch(/display:\s*flex/)
+    const pill = bodyOf('.rowSurface')
+    expect(pill).toMatch(/display:\s*flex/)
+    expect(pill).toMatch(/align-items:\s*center/)
+
+    const row = bodyOf('.pickerRow')
+    expect(row).toMatch(/display:\s*flex/)
+    expect(row).toMatch(/align-items:\s*center/)
+    // 底色不用 background 简写：简写会清掉同一元素上另一条声明
+    const hover = bodyOf('.pickerRow:hover')
+    expect(hover).toMatch(/background-color:\s*var\(--dsw-alias-interactive-bg-hover\)/)
+    expect(hover).not.toMatch(/(^|;)\s*background:/)
+  })
+
   it('makes the dialog checkbox a full-row label', () => {
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({

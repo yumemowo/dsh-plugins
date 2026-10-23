@@ -556,9 +556,15 @@
    行的可点区与按钮的可点区因此是包含关系，而不是并排的两个热区
 
    行高与内边距取官方菜单项的几何（min-height 34px、内边距 6px 8px、圆角 --dsw-radius-md）
-   比列表里的工作区行略高一点，菜单项外围还有面板自己的 4px 内边距 */
+   比列表里的工作区行略高一点，菜单项外围还有面板自己的 4px 内边距
+
+   它自己就是那颗药丸，不再套一层 .rowSurface：菜单项不需要「带 + 药丸」两层
+   （面板的 4px 内边距已经隔开相邻条目，没有上行间距要由带承担），
+   而药丸那一档的 32px 定高与菜单项的 34px 不同，套上去反而要多写一组覆盖 */
 .pickerRow {
   box-sizing: border-box;
+  display: flex;
+  align-items: center;
   min-height: 34px;
   height: auto;
   gap: 6px;
@@ -570,6 +576,11 @@
   font-size: 13px;
   line-height: 20px;
 }
+
+/* 悬停底色与列表里的行同一档
+   列表里这一档画在药丸上（.row:hover > .rowSurface），菜单项没有那一层，
+   少了这一条条目就悬停无声 */
+.pickerRow:hover { background-color: var(--dsw-alias-interactive-bg-hover); }
 
 /* 操作位里的三枚按钮沿用工作区行那一套显隐（.rowAction 默认透明、悬停/菜单展开/键盘聚焦时浮现）
    因此这里只覆盖一处，置顶按下时常驻可见
