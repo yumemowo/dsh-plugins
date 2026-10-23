@@ -2,12 +2,11 @@
  * 一份扁平的行序列：界面上从上到下每占一行，这里就有一条
  *
  * 容器与行一起进序列：题头行（工作区分组、会话分组、工作区）、会话行、溢出按钮与空态都在其中
- * 界面上的竖直高度由它们共同构成
  *
  * 它是布局的下游而不是替代：`layout.ts` 答「哪些分组成员是谁」
- * 这一层答「此刻界面上从上到下是什么」，比布局多要三样：三层折叠态、每段露出额度、行的几何
+ * 这一层答「此刻界面上从上到下是什么」，比布局多要两样：三层折叠态与每段露出额度
  *
- * 不碰 React、不碰 DOM：高度按样式表里那几个常量算，样式表仍由它自己决定外观
+ * 不碰 React、不碰 DOM，也不记几何：一行多高由样式表按内容决定，这一层只说顺序与露面
  */
 import { collapseSessionRows, sessionScopeKey } from './collapse.ts'
 import type { SessionScopeRef } from './collapse.ts'
@@ -45,15 +44,11 @@ export interface OutlineRow {
   workspaceId: string
   /** 缩进层级，与 `nest` 的 `levelOf` 同值 */
   depth: number
-  /** 这一行竖直占多少像素，含它自己带着的那点上间距 */
-  height: number
-  /** 其中属于上间距的那一份：段内 2、顶层两个工作区之间 4、列表首项 0 */
-  lead: number
   /**
    * 此刻是否真的露面
    *
    * 收起的工作区里那些行仍在文档里（撑开体靠内容常驻才能收回），因此它们留在序列里、但为 false
-   * 不露面的行不占竖直高度，{@link offsetOf} 与 {@link visibleRows} 都按这一格分档
+   * {@link visibleRows} 按这一格分档
    */
   visible: boolean
   /** 这一行在 DOM 上占的那几格区域键 */
@@ -81,23 +76,6 @@ export type ContainerKey =
   | { kind: 'root' }
   | { kind: 'virtual'; groupId: string }
   | { kind: 'group'; workspaceId: string; groupId: string }
-
-// ── 高度 ──
-
-/** 会话行药丸高度，与 `components/rows.module.css` 的 `.rowSurface` 同值 */
-export const ROW_HEIGHT = 32
-
-/** 题头行药丸高度，与 `.headSurface` 同值 */
-export const HEAD_HEIGHT = 34
-
-/** 溢出按钮高度，与 `.sessionOverflow` 同值 */
-export const OVERFLOW_HEIGHT = 28
-
-/** 段内上间距，与 `.expandClip` 下发的 `--wg-row-lead` 同值 */
-export const LEAD_IN_SCOPE = 2
-
-/** 顶层两个工作区之间的上间距，与 `.workspace + .workspace` 同值 */
-export const LEAD_BETWEEN_WORKSPACES = 4
 
 // ── 输入 ──
 
@@ -167,18 +145,17 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
   const { containers, rootLayout } = input
 
   const push = (
-    row: Omit<OutlineRow, 'height' | 'hiddenCount' | 'scopeExpanded'> & {
-      pill: number
+    row: Omit<OutlineRow, 'hiddenCount' | 'scopeExpanded'> & {
       hiddenCount?: number
       scopeExpanded?: boolean
     },
   ): void => {
-    const { pill, hiddenCount = 0, scopeExpanded = false, ...rest } = row
-    rows.push({ ...rest, hiddenCount, scopeExpanded, height: pill + rest.lead })
+    const { hiddenCount = 0, scopeExpanded = false, ...rest } = row
+    rows.push({ ...rest, hiddenCount, scopeExpanded })
   }
 
   /** 一个工作区区块 */
-  const addWorkspace = (workspaceId: string, container: ContainerKey, lead: number): void => {
+  const addWorkspace = (workspaceId: string, container: ContainerKey): void => {
     const layout = input.workspaceLayoutOf(workspaceId)
     const depth = input.depthOf(workspaceId)
     const open = input.expansion.isWorkspaceExpanded(workspaceId)
@@ -190,15 +167,13 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       container,
       workspaceId,
       depth,
-      pill: HEAD_HEIGHT,
-      lead,
       visible: true,
       zoneKeys: [input.keys.workspaceHead(workspaceId), input.keys.workspaceBody(workspaceId)],
       regionKey: input.keys.workspaceRegion(workspaceId),
     })
 
     // 子工作区排在会话分组之前，与分组内部同一顺序
-    for (const childId of childIds) addWorkspace(childId, container, LEAD_IN_SCOPE)
+    for (const childId of childIds) addWorkspace(childId, container)
 
     for (const section of layout.groups) {
       const groupOpen = input.expansion.isGroupExpanded(workspaceId, section.id)
@@ -208,8 +183,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
         container: containers.groupOf(workspaceId, section.id),
         workspaceId,
         depth,
-        pill: HEAD_HEIGHT,
-        lead: LEAD_IN_SCOPE,
         visible: open,
         zoneKeys: [
           input.keys.sessionGroupHead(workspaceId, section.id),
@@ -244,8 +217,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
         container,
         workspaceId,
         depth,
-        pill: 0,
-        lead: 0,
         visible: open,
         zoneKeys: [],
         regionKey: undefined,
@@ -283,8 +254,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
         container,
         workspaceId,
         depth,
-        pill: ROW_HEIGHT,
-        lead: LEAD_IN_SCOPE,
         visible: open,
         zoneKeys: zoneKey === undefined ? [] : [zoneKey],
         regionKey: undefined,
@@ -300,8 +269,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
         container,
         workspaceId,
         depth,
-        pill: OVERFLOW_HEIGHT,
-        lead: LEAD_IN_SCOPE,
         visible: open,
         zoneKeys: [],
         regionKey: undefined,
@@ -321,24 +288,18 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       container: containers.root,
       workspaceId: '',
       depth: 0,
-      pill: HEAD_HEIGHT,
-      lead: 0,
       visible: true,
       zoneKeys: [input.keys.virtualHead(section.id), input.keys.virtualBody(section.id)],
       regionKey: input.keys.virtualRegion(section.id),
     })
     const before = rows.length
-    for (const [index, workspaceId] of section.roots.entries()) {
-      addWorkspace(
-        workspaceId,
-        containers.virtualOf(section.id),
-        index === 0 ? LEAD_IN_SCOPE : LEAD_BETWEEN_WORKSPACES,
-      )
+    for (const workspaceId of section.roots) {
+      addWorkspace(workspaceId, containers.virtualOf(section.id))
     }
     if (!open) hideRange(rows, before)
   }
-  for (const [index, workspaceId] of rootLayout.loose.entries()) {
-    addWorkspace(workspaceId, containers.root, index === 0 ? 0 : LEAD_BETWEEN_WORKSPACES)
+  for (const workspaceId of rootLayout.loose) {
+    addWorkspace(workspaceId, containers.root)
   }
 
   if (!input.hideStray && input.stray.length > 0) {
@@ -348,8 +309,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       container: containers.root,
       workspaceId: '',
       depth: 0,
-      pill: HEAD_HEIGHT,
-      lead: LEAD_BETWEEN_WORKSPACES,
       visible: true,
       zoneKeys: [],
       regionKey: undefined,
@@ -375,21 +334,4 @@ function hideRange(rows: OutlineRow[], from: number): void {
  */
 export function visibleRows(rows: readonly OutlineRow[]): OutlineRow[] {
   return rows.filter((row) => row.visible)
-}
-
-/**
- * 从序列顶部到某一行的高度合计
- *
- * 只有露面的行计高：收起的那一段仍留在序列里，但它不占竖直空间
- * @param rows - {@link buildOutline} 的结果
- * @param key - 目标行的 key
- * @returns 目标行之前的合计高度，找不到时为 undefined
- */
-export function offsetOf(rows: readonly OutlineRow[], key: string): number | undefined {
-  let total = 0
-  for (const row of rows) {
-    if (row.key === key) return total
-    if (row.visible) total += row.height
-  }
-  return undefined
 }

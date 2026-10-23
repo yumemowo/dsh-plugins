@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildOutline, offsetOf, visibleRows } from '../src/client/data/outline.ts'
+import { buildOutline, visibleRows } from '../src/client/data/outline.ts'
 import type { OutlineInput } from '../src/client/data/outline.ts'
 import { buildRootLayout, buildLayout } from '../src/client/data/layout.ts'
 import { deriveNesting } from '../src/client/data/nest.ts'
@@ -200,61 +200,6 @@ describe('buildOutline', () => {
     expect(loose?.visible).toBe(true)
   })
 
-  it('gives each row its own height including the lead', () => {
-    const rows = buildOutline(fixture())
-    const head = rows.find((row) => row.kind === 'workspaceHead')
-    const session = rows.find((row) => row.kind === 'session')
-
-    expect(head?.lead).toBe(2)
-    expect(head?.height).toBe(34 + 2)
-    expect(session?.height).toBe(32 + 2)
-  })
-
-  it('leaves the very first row of the list without a lead', () => {
-    const rows = buildOutline(fixture())
-
-    // 根节点第一项上方没有上一条，样式表那里也是 0
-    expect(rows[0]?.lead).toBe(0)
-  })
-
-  it('gives the second workspace of a segment the wider lead', () => {
-    // 关掉嵌套且谁都不在谁体内：这一段的两条都是顶层，第二条与前一条之间是 4
-    const nesting = deriveNesting({
-      enabled: false,
-      workspaceIds: ['ws-1', 'ws-2'],
-      pathOf: () => undefined,
-      virtualOf: () => 'vg-1',
-      bindingOf: () => undefined,
-      groupIdsOf: () => new Set<string>(),
-    })
-    const emptyLayout = { groups: [], loose: [], children: [] }
-    const rows = buildOutline({
-      ...fixture(),
-      rootLayout: buildRootLayout(
-        ['ws-1', 'ws-2'],
-        [{ id: 'vg-1', name: '甲', workspaceIds: ['ws-1', 'ws-2'] }],
-        nesting,
-      ),
-      workspaceLayoutOf: () => emptyLayout,
-      depthOf: () => 0,
-      containers: {
-        root: nesting.containers.root,
-        virtualOf: nesting.containers.virtualOf,
-        groupOf: nesting.containers.groupOf,
-      },
-    })
-
-    const heads = rows.filter((row) => row.kind === 'workspaceHead')
-    expect(heads.map((row) => row.lead)).toEqual([2, 4])
-  })
-
-  it('keeps a nested workspace inside the lead band of its parent', () => {
-    // 子工作区排在父工作区体内，它与父工作区之间只有段内那 2px，不拉宽
-    const rows = buildOutline(fixture())
-
-    expect(rows.find((row) => row.key === 'workspace/ws-2')?.lead).toBe(2)
-  })
-
   it('adds an overflow row only while a section hides something', () => {
     const many = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
     const rowsOf = many.map((id) => row(id, NOW - (many.indexOf(id) + 1) * 60_000))
@@ -333,25 +278,5 @@ describe('buildOutline', () => {
     expect(shown.every((row) => row.visible)).toBe(true)
     // 收起的工作区那条仍在序列里，只是不在这一份里
     expect(rows.some((row) => !row.visible)).toBe(true)
-  })
-
-  it('counts only the showing rows into the offset', () => {
-    const rows = buildOutline(
-      fixture({
-        expansion: {
-          isWorkspaceExpanded: (key) => key !== 'ws-1',
-          isVirtualWorkspaceExpanded: () => true,
-          isGroupExpanded: () => true,
-        },
-      }),
-    )
-    const target = rows[rows.length - 1]
-    const expected = rows
-      .slice(0, rows.length - 1)
-      .filter((row) => row.visible)
-      .reduce((total, row) => total + row.height, 0)
-
-    expect(offsetOf(rows, target?.key ?? '')).toBe(expected)
-    expect(offsetOf(rows, 'no-such-row')).toBeUndefined()
   })
 })
