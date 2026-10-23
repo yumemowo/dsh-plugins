@@ -19,10 +19,10 @@ import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
 /**
  * outline 与真实渲染的对拍
  *
- * outline 存在的意义是替掉「map 套 map 现场展开」那条链，因此它交出的顺序必须与今天渲染出来的逐项相同
- * 这一份就钉住那件事：同一份快照下，outline 里会话行的先后与 DOM 里行的先后一致，题头行的条数也一致
+ * 同一份快照下，outline 里会话行的先后必须与 DOM 里行的先后一致，题头行的条数也要一致
+ * 顺序错了界面会错位而类型看不出来，只能靠这条对拍兜
  *
- * 它是全流程唯一能在旧实现还在时验证新模型的时刻——渲染一旦改吃 outline，这条对拍就退化成自证
+ * 价值在渲染改吃 outline 之前：那之后两边同源，对拍就退化成自证
  */
 
 const CREATED = new Date(2026, 0, 1).toISOString()

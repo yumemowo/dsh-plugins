@@ -176,7 +176,6 @@ interface RegionUiState {
    * 各区段溢出展开的记录，键由 `sessionScopeKey` 交出
    *
    * 与另外三层折叠态不同源：它不落盘（和官方那条溢出按钮同一取舍），因此留在这一层而不是 store
-   * 提到这一层是为了让 outline 能回答「这一行此刻可不可见」——那件事必须有它
    */
   sessionScopes: Record<string, boolean>
   /** 改写一条区段记录，`undefined` 表示删掉 */
@@ -530,9 +529,8 @@ function useRegionUiState(): RegionUiState {
   /**
    * 改写一条区段记录
    *
-   * 三种写法（翻转、写到展开、删掉）都归到这一处：它们改的是同一张表，
-   * 分成三个入口只会让「谁有权清哪一格」分散到三个地方
-   * 写入是显式值而不是取反函数：取反要先读出当前值，而那个值可能来自别处的默认
+   * 翻转、写到展开、删掉三种写法都归到这一处：它们改的是同一张表
+   * 收显式值而不是取反函数：取反要先读出当前值，而那个值可能来自别处的默认
    */
   const writeSessionScope = useCallback((key: string, next: boolean | undefined) => {
     setSessionScopes((current) => {
@@ -1538,7 +1536,6 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   /**
    * 会话区段展开态交给子树的那一份
    *
-   * 三个写入口都只碰本层那一条记录：翻转读当刻的值再写回，写到展开已经成立就不写
    * 依赖只有那一条记录与写入口，因此这份 value 在一次渲染里恒同一引用
    */
   const sessionScopes: SessionScopes = useMemo(

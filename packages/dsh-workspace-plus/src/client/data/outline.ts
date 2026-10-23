@@ -1,15 +1,11 @@
 /**
  * 一份扁平的行序列：界面上从上到下每占一行，这里就有一条
  *
- * 今天「谁排在第几行」这件事没有一处拥有完整答案：渲染层靠 `map` 套 `map` 现场展开
- * （根节点的分组段 → 工作区 → 子工作区递归 → 会话分组 → 会话行），拖拽层靠树按节点现算关系。
- * 两条链各自只知道自己那一层，谁也不知道自己在整条序列里排第几。
+ * 容器与行一起进序列：题头行（工作区分组、会话分组、工作区）、会话行、溢出按钮与空态都在其中
+ * 界面上的竖直高度由它们共同构成
  *
- * 这一份就是那个答案。它同时收容器与行：题头行（工作区分组、会话分组、工作区）与会话行都在其中，
- * 因为界面上的竖直高度由它们一起构成——虚拟化要的正是「每行的身份与高度」。
- *
- * 它是布局的下游而不是替代：`layout.ts` 答「哪些分组成员是谁」，这一层答
- * 「此刻界面上从上到下是什么」。后者多要三样：三层折叠态、每段露出额度、以及行的几何。
+ * 它是布局的下游而不是替代：`layout.ts` 答「哪些分组成员是谁」
+ * 这一层答「此刻界面上从上到下是什么」，比布局多要三样：三层折叠态、每段露出额度、行的几何
  *
  * 不碰 React、不碰 DOM：高度按样式表里那几个常量算，样式表仍由它自己决定外观
  */
@@ -22,8 +18,8 @@ import type { RootLayout, SessionRow, WorkspaceLayout } from './types.ts'
 /**
  * 一行的种类
  *
- * `overflow` 是那条「展开其余 n 个会话」的按钮：它占竖直高度，因此也是一行
- * `empty` 是工作区体内一条内容都没有时的空态，同样占高度
+ * `overflow` 是那条「展开其余 n 个会话」的按钮，`empty` 是工作区体内的空态
+ * 两者都占竖直高度，因此与行同样进序列
  */
 export type OutlineRowKind =
   | 'virtualHead'
@@ -56,8 +52,8 @@ export interface OutlineRow {
   /**
    * 此刻是否真的露面
    *
-   * 收起的工作区里那些行仍在文档里（撑开体靠内容常驻才能收回），因此它们在序列里、但为 false
-   * 虚拟化要的正是这一格：不露面的行不占高度
+   * 收起的工作区里那些行仍在文档里（撑开体靠内容常驻才能收回），因此它们留在序列里、但为 false
+   * 不露面的行不占竖直高度，{@link offsetOf} 与 {@link visibleRows} 都按这一格分档
    */
   visible: boolean
   /** 这一行在 DOM 上占的那几格区域键 */
@@ -80,11 +76,7 @@ export interface OutlineRow {
   scopeExpanded: boolean
 }
 
-/**
- * 容器在这一层里的形状
- *
- * 与 `nest` 的 `ContainerNode` 同形，另起一个名字只为让这一层的读者不必回头认嵌套推导的类型
- */
+/** 容器在这一层里的形状，与 `nest` 的 `ContainerNode` 同形 */
 export type ContainerKey =
   | { kind: 'root' }
   | { kind: 'virtual'; groupId: string }
@@ -112,7 +104,7 @@ export const LEAD_BETWEEN_WORKSPACES = 4
 /**
  * 造 outline 要的全部输入
  *
- * 布局由调用方给现成的：这一层不重算「谁在哪个分组里」，只决定「按什么顺序、露不露面、多高」
+ * 布局由调用方给现成的：这一层不重算「谁在哪个分组里」，只决定顺序、露面与高度
  */
 export interface OutlineInput {
   /** 根节点那一层：分组段与其成员 */
@@ -145,7 +137,7 @@ export interface OutlineInput {
   hideStray: boolean
   /** 会话行的排序比较器，与渲染用的是同一个 */
   compareRows: (a: SessionRow, b: SessionRow) => number
-  /** 某段区域键的写法，取自 `protocol.ts` */
+  /** 区域键的写法，由调用方交出：这一层不拼键，只把键记在行上 */
   keys: {
     workspaceHead: (workspaceId: string) => string
     workspaceBody: (workspaceId: string) => string
@@ -163,10 +155,10 @@ export interface OutlineInput {
 // ── 构造 ──
 
 /**
- * 把一份布局收成一条扁平的行序列
+ * 把一份布局收成一条扁平的行序列，顺序即界面上的顺序
  *
- * 顺序即界面上的顺序：根节点的分组段 → 段内工作区 → 工作区体内的子工作区（递归）→ 会话分组 → 未归组会话
- * 「未分组」桶排在全部工作区之后
+ * 根节点的分组段在前，其后是未归组的工作区，末尾「未分组」桶排在全部工作区之后
+ * 一个工作区体内先是子工作区（递归），再是各会话分组，最后是未归组会话
  * @param input - 见 {@link OutlineInput}
  * @returns 从上到下的全部行
  */
@@ -265,9 +257,9 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
    * 一段会话行：折叠后的那些，再加一条溢出按钮
    *
    * 收起的那些不渲染，展开时全部渲染
-   * @param presorted - 传进来的已经就是最终顺序。末尾「未分组」桶是这一档：
-   *   容器交给它的是「置顶提前、其余维持列表原序」之后的结果，
-   *   再套一遍工作区那个按时间排的比较器会把前者抹掉
+   * @param presorted - 传进来的已经就是最终顺序，不必再排
+   *   末尾「未分组」桶是这一档：容器交给它的是「置顶提前、其余维持列表原序」之后的结果
+   *   再套一遍工作区那个按时间排的比较器会把置顶提前抹掉
    */
   function addSessions(
     scope: SessionScopeRef,
@@ -385,11 +377,10 @@ export function visibleRows(rows: readonly OutlineRow[]): OutlineRow[] {
   return rows.filter((row) => row.visible)
 }
 
-
 /**
  * 从序列顶部到某一行的高度合计
  *
- * 虚拟化按它定位滚动偏移；它也顺带说明「露面的行才有高度」这条不变量
+ * 只有露面的行计高：收起的那一段仍留在序列里，但它不占竖直空间
  * @param rows - {@link buildOutline} 的结果
  * @param key - 目标行的 key
  * @returns 目标行之前的合计高度，找不到时为 undefined

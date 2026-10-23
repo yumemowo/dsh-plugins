@@ -1,11 +1,11 @@
 /**
  * 各区段「露出几条」的展开态
  *
- * 与三层折叠态同一套做法：不逐层传 props，由区域根部经 provider 下发，用到的地方自己 `useSessionScopes()` 取
- * 差别在来源：那三层落盘，这一层只活在当前这次会话里（与官方那条溢出按钮同一取舍）
+ * 与三层折叠态同一套做法：不逐层传 props，由区域根部经 provider 下发，用到的地方自己取
+ * 差别在来源：那三层落盘，这一层只活在当前这次页面的内存里（与官方那条溢出按钮同一取舍）
  *
- * 为什么要提到区域根部：outline 要回答「这一行此刻可不可见」，而「露出几条」是其中唯一活在叶子里的那一格
- * 它留在 `SessionList` 里时，那个组件不知道自己属于哪一段，也就说不出自己露了几行
+ * 拿在区域根部是因为这一格原先活在 `SessionList` 里
+ * 那个组件不知道自己属于哪一段，也就说不出自己露了几行
  */
 import { createContext, createElement, useContext, useEffect, useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
@@ -63,8 +63,8 @@ export function useSessionScopes(): SessionScopes {
  */
 export function useResetScopeOnCollapse(ref: SessionScopeRef, open: boolean): void {
   const { clear } = useSessionScopes()
-  // 写入口的身份每写一次都会变（它闭着那一份记录），因此走 ref：
-  // 直接进依赖列会让「写一次 → 身份变 → 再清一次」自激，展开态刚写就被收回去
+  // 写入口的身份每写一次都会变（它闭着那一份记录），直接进依赖列会让
+  // 「写一次 → 身份变 → 再清一次」自激，展开态刚写就被收回去，因此走 ref
   const clearRef = useRef(clear)
   clearRef.current = clear
   // ref 同理：键由它算出来，只盯键

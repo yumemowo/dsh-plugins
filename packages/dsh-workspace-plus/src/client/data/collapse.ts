@@ -30,7 +30,6 @@ export type SessionScopeRef =
  * 把一个展示范围坐标编码成展开记录的键
  *
  * 编码只此一处：它既是界面状态的键，也是 outline 认这一段的方式
- * 会话分组那一支留一个可当前缀用的形态（末尾的分组 id 为空即前缀），收起工作区时按它一次清掉名下各段
  * @param ref - 展示范围坐标
  */
 export function sessionScopeKey(ref: SessionScopeRef): string {
