@@ -411,6 +411,8 @@ export interface OutlineIndex {
   virtualGroupOf: (node: NodeRef) => NodeRef | undefined
   /** 一个工作区名下真实存在的会话分组 id，按界面序 */
   sessionGroupsOf: (node: NodeRef) => readonly string[]
+  /** 一个工作区 id 对应的节点身份，序列里没有它时 undefined */
+  workspaceNodeOf: (workspaceId: string) => NodeRef | undefined
   /** 全部分组节点，数组序即界面序 */
   virtualGroups: readonly NodeRef[]
   /** 全部工作区节点，按界面序 */
@@ -695,6 +697,8 @@ export function indexOutline(
     virtualGroupOf: (entry) => (entry.kind === 'virtual' ? entry : groupNodeOf(entry.id)),
     sessionGroupsOf: (entry) =>
       entry.kind === 'virtual' ? [] : [...(workspaceGroups.get(entry.id) ?? [])],
+    workspaceNodeOf: (workspaceId) =>
+      workspaceContainer.has(workspaceId) ? node('workspace', workspaceId) : undefined,
     virtualGroups: virtualNodes,
     workspaceNodes,
     allNodes: () => [...virtualNodes, ...workspaceNodes],

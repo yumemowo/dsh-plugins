@@ -122,7 +122,8 @@ export function dropRelationsOf(
   const container = index.containerOf(node)
   const membership = index.virtualGroupOf(node)
   const bound = index.bindingOf(node)
-  const selfParent = index.dropAncestorsOf(node)[0]
+  const ancestors = index.dropAncestorsOf(node)
+  const selfParent = ancestors[0]
 
   /**
    * 这个节点能进去的每一片
@@ -130,21 +131,23 @@ export function dropRelationsOf(
    * 与放入关系那几处一一对应：根节点、每个虚拟分组、祖先工作区名下的每个会话分组。
    * 每一片顶层的成员都是它的位次参照——「排到这一片里某一行前后」与「移进这一片」
    * 是同一件事的两半
+   *
+   * 只认来源，与正在比的另一行无关，因此在这里算一次
    */
-  const joinableContainers = (): ContainerNode[] => {
+  const joinableContainers: readonly ContainerNode[] = (() => {
     const list: ContainerNode[] = [index.containers.root]
     for (const virtual of index.virtualGroups) {
       if (virtual.kind !== 'virtual') continue
       const holder = index.containers.virtualOf(virtual.id)
       if (holder !== container) list.push(holder)
     }
-    for (const ancestor of index.dropAncestorsOf(node)) {
+    for (const ancestor of ancestors) {
       for (const groupId of index.sessionGroupsOf(ancestor)) {
         list.push(index.containers.groupOf(ancestor.id, groupId))
       }
     }
     return list
-  }
+  })()
 
   /**
    * 一条位次关系
@@ -182,6 +185,36 @@ export function dropRelationsOf(
     return seam === undefined ? relation : { ...relation, seam }
   }
 
+  /**
+   * 谈位次用的那几份序列
+   *
+   * 两行能谈先后，当且仅当它们在同一条序列上：此刻并排（注册表序同段），
+   * 或者 cwd 上同父（挪过去之后就是同层兄弟）。两条各自用自己的序列换算。
+   *
+   * 能进去的每一片，它顶层的那些成员也是位次参照：「排到这一片里某一行前后」与
+   * 「移进这一片」是同一件事的两半，用户在界面上看到的是「把它放到那一行旁边」，
+   * 不该因为两者此刻不在同一片而少掉那条线。来源此刻所在的那一片除外——
+   * 组内换位由 `siblingsOf` 那条已经给出，再列一遍是同一份序列
+   */
+  const orderSequences: { order: readonly string[]; leavesGroup: boolean }[] = [
+    { order: index.siblingsOf(node).map((entry) => entry.id), leavesGroup: false },
+    { order: index.dropSiblingsOf(node).map((entry) => entry.id), leavesGroup: false },
+  ]
+  for (const holder of joinableContainers) {
+    if (holder === container) continue
+    const sequence = index.rootsOf(holder).map((entry) => entry.id)
+    if (sequence.length === 0) continue
+    // 换片之后落盘的会话分组归属就不成立了；落在 root 那一层还多一件「退出虚拟分组」，
+    // 那一半由根节点那片自己的 inside 关系负责，这里只补归属
+    orderSequences.push({ order: sequence, leavesGroup: bound !== undefined })
+  }
+
+  // 祖先工作区不作位次参照：一个工作区既然已经确认自己要作为子工作区出现在
+  // 某个容器里，它就不再与那个容器的行谈先后——那一行承接的是「放进去」
+  const isAncestorRowOf = (other: NodeRef): boolean =>
+    (selfParent !== undefined && selfParent.id === other.id) ||
+    ancestors.some((entry) => entry.id === other.id)
+
   // 全遍历索引里的节点：任何节点都可能与来源构成某种关系
   //
   // 这一轮同时决定了「一行只有一个身份」：祖先工作区只承接放入、不当位次参照，
@@ -191,34 +224,10 @@ export function dropRelationsOf(
     if (other.id === node.id) continue
 
     // ── 位次关系 ──
-    // 两行能谈先后，当且仅当它们在同一条序列上：此刻并排（注册表序同段），
-    // 或者 cwd 上同父（挪过去之后就是同层兄弟）。两条各自用自己的序列换算
     if (other.kind === 'workspace') {
-      const candidates: { order: readonly string[]; leavesGroup: boolean }[] = [
-        { order: index.siblingsOf(node).map((entry) => entry.id), leavesGroup: false },
-        { order: index.dropSiblingsOf(node).map((entry) => entry.id), leavesGroup: false },
-      ]
-      // 能进去的每一片，它顶层的那些成员都是位次参照：
-      // 「排到这一片里某一行前后」与「移进这一片」是同一件事的两半，
-      // 用户在界面上看到的是「把它放到那一行旁边」，不该因为两者此刻不在同一片而少掉那条线
-      //
-      // 来源此刻所在的那一片除外：组内换位由 siblingsOf 那条已经给出，再列一遍是同一份序列
-      for (const holder of joinableContainers()) {
-        if (holder === container) continue
-        const sequence = index.rootsOf(holder).map((entry) => entry.id)
-        if (sequence.length === 0) continue
-        // 换片之后落盘的会话分组归属就不成立了；落在 root 那一层还多一件「退出虚拟分组」，
-        // 那一半由根节点那片自己的 inside 关系负责，这里只补归属
-        candidates.push({ order: sequence, leavesGroup: bound !== undefined })
-      }
-      // 祖先工作区不作位次参照：一个工作区既然已经确认自己要作为子工作区出现在
-      // 某个容器里，它就不再与那个容器的行谈先后——那一行承接的是「放进去」
-      const isAncestorRow =
-        (selfParent !== undefined && selfParent.id === other.id) ||
-        index.dropAncestorsOf(node).some((entry) => entry.id === other.id)
-      const matched = isAncestorRow
+      const matched = isAncestorRowOf(other)
         ? undefined
-        : candidates.find((entry) => entry.order.includes(other.id))
+        : orderSequences.find((entry) => entry.order.includes(other.id))
       if (matched !== undefined) {
         relations.push(orderRelationOf(matched.order, other.id, matched.leavesGroup))
         continue
@@ -241,8 +250,7 @@ export function dropRelationsOf(
     }
 
     // 祖先工作区：落上去读作「成为它的子工作区」
-    const isAncestor = index.dropAncestorsOf(node).some((entry) => entry.id === other.id)
-    if (isAncestor) {
+    if (isAncestorRowOf(other)) {
       const ancestorZones = zoneKeysOf({ kind: 'workspace', id: other.id })
       const ancestorRegion = regionKeyOf({ kind: 'workspace', id: other.id })
       // 已经住在它体内：落回它这一行读作回到它的直接管辖
@@ -287,7 +295,7 @@ export function dropRelationsOf(
   // 这一段**不按 other 走**：它是「来源能落到哪几个分组里」这一件事，与 allNodes 里
   // 有哪些节点无关。放进上面那个循环里会让它只在某个 other 恰好没命中任何关系时才执行，
   // 一旦别的分支 continue 掉，整段就静默失效
-  for (const ancestor of index.dropAncestorsOf(node)) {
+  for (const ancestor of ancestors) {
     for (const groupId of index.sessionGroupsOf(ancestor)) {
       const holder = index.containers.groupOf(ancestor.id, groupId)
       const zones = zoneKeysOf(holder)

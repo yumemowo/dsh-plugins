@@ -95,14 +95,6 @@ export function maybeDropSearcher(
     if (!byKey.has(key)) byKey.set(key, entry)
   }
 
-  /** 节点 id → 索引里的那个实例：索引是发牌器，同一身份恒同一实例，链上的匹配因此可以按引用比 */
-  const nodes = new Map<string, DropNode>()
-  if (index !== undefined) {
-    for (const entry of index.workspaceNodes) nodes.set('workspace/' + entry.id, entry)
-    for (const entry of index.virtualGroups) nodes.set('virtual/' + entry.id, entry)
-    nodes.set('root/', index.containers.root)
-  }
-
   /**
    * 从指针落着的那个节点往上走的这一条链
    *
@@ -113,9 +105,9 @@ export function maybeDropSearcher(
   const chainOf = (node: DropNode): readonly DropNode[] => {
     if (index === undefined || node.kind === 'row') return [node]
     const chain: DropNode[] = [node]
-    const push = (kind: string, id: string): void => {
-      const found = nodes.get(kind + '/' + id)
-      if (found !== undefined && !chain.includes(found)) chain.push(found)
+    /** 链上还没有它才收：同一个容器可能从两条路问到 */
+    const push = (entry: DropNode): void => {
+      if (!chain.includes(entry)) chain.push(entry)
     }
     /**
      * 一个工作区往外的那一条，近的在前
@@ -128,35 +120,33 @@ export function maybeDropSearcher(
      * 它最近的那一片是那个分组，而祖先排在了前面，于是框套到父工作区上，
      * 与「这一行和谁同层」完全对不上——框和线因此会指着两层
      */
-    const walkWorkspace = (id: string): void => {
-      let current = nodes.get('workspace/' + id)
-      if (current === undefined || current.kind !== 'workspace') return
+    const walkWorkspace = (entry: NodeRef): void => {
+      let current = entry
+      const seen = new Set<string>([entry.id])
       for (;;) {
         const container = index.containerOf(current)
-        if (container !== undefined && container.kind === 'group') chain.push(container)
-        const parent = index.ancestorsOf(current)[0]
+        if (container !== undefined && container.kind === 'group') push(container)
+        const parent = index.parentOf(current)
         if (parent === undefined) {
           // 没有父工作区了：这一层容器就是最外那一片
-          if (container !== undefined && container.kind === 'virtual') push('virtual', container.id)
+          if (container !== undefined && container.kind === 'virtual') push(container)
           break
         }
-        push('workspace', parent.id)
-        const next = nodes.get('workspace/' + parent.id)
-        if (next === undefined || next.kind !== 'workspace') break
-        current = next
+        // 元数据自相矛盾写成环时到此为止：拖拽层不该因为这个挂死
+        if (seen.has(parent.id)) break
+        seen.add(parent.id)
+        push(parent)
+        current = parent
       }
       // 归属分组：进了会话分组的子工作区容器已经不是「归属」，但那一片仍要能用
-      const origin = nodes.get('workspace/' + id)
-      if (origin !== undefined && origin.kind === 'workspace') {
-        const membership = index.virtualGroupOf(origin)
-        if (membership !== undefined) push('virtual', membership.id)
-      }
+      const membership = index.virtualGroupOf(entry)
+      if (membership !== undefined) push(membership)
     }
     if (node.kind === 'root') return [node]
     /** 指针此刻在哪一片的**范围内**：这决定根节点那一片接不接 */
     let atRoot = false
     if (node.kind === 'workspace') {
-      walkWorkspace(node.id)
+      walkWorkspace(node)
       atRoot = index.containerOf(node)?.kind === 'root'
     } else if (node.kind === 'virtual') {
       // 虚拟分组自己就在根节点那一层，但它罩住的那一片才是指针此刻的范围：
@@ -164,11 +154,12 @@ export function maybeDropSearcher(
       atRoot = false
     } else if (node.kind === 'group') {
       // 会话分组挂在某个工作区体内：那一片归它的宿主工作区管
-      chain.push(index.containers.groupOf(node.workspaceId, node.groupId))
-      walkWorkspace(node.workspaceId)
-      const host = nodes.get('workspace/' + node.workspaceId)
-      atRoot =
-        host !== undefined && host.kind === 'workspace' && index.containerOf(host)?.kind === 'root'
+      const host = index.workspaceNodeOf(node.workspaceId)
+      if (host !== undefined) {
+        push(index.containers.groupOf(node.workspaceId, node.groupId))
+        walkWorkspace(host)
+        atRoot = index.containerOf(host)?.kind === 'root'
+      }
     }
     // 根节点那一片只在指针本来就落在它那一层时进链。
     // 无条件兜底会让组内换位、拖回自己那一片都多出一圈「移出分组」的框
