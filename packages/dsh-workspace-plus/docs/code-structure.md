@@ -32,6 +32,7 @@ src/client/
 │   ├── picker.ts               下拉菜单的条目与分区（根节点条目、三个分区、聚焦布局、聚焦解析）
 │   ├── sessions.ts             会话快照 → 渲染行（含可见性过滤、空白行命名、未分组收集）
 │   ├── collapse.ts             一个展示范围内折几条（五步判定、置顶与未空闲行，见 [会话折叠](session-collapse.md)）
+│   ├── outline.ts              一份扁平的行序列（题头行 / 会话行 / 溢出 / 空态的顺序与露面）
 │   └── rows.ts                 会话行的显示事实（状态位与相对时间，两者都只依赖快照与文案）
 ├── utils/                      组件与样式表共用的零散常量
 │   ├── expandMotion.ts         撑开动画节奏常量（只 import React 类型，运行时无依赖）
@@ -43,7 +44,8 @@ src/client/
 │   ├── useHoverCapable.ts      设备是否具备悬停能力（环境读数，置顶区 expand 档的可用前提）
 │   ├── useLocale.ts            区域文案的唯一读取入口（RegionLocaleProvider + useLocale）
 │   ├── useLocalViewOptions.ts  浏览器 store 里展示方式 / 指示器样式的读取入口（同上）
-│   └── useExpansion.ts         浏览器 store 里三层折叠态的读取入口（同上）
+│   ├── useExpansion.ts         浏览器 store 里三层折叠态的读取入口（同上）
+│   └── useSessionScopes.ts     各区段「露出几条」的展开态（同上，不落盘，容器收起时自清）
 └── views/                      渲染层：区域容器、三块渲染区与行组件
     ├── WorkspaceGroupsRegion.tsx   区域容器：数据源、派生布局、交互状态与命令各一 hook，按区域分派渲染
     ├── RegionHeaderArea.tsx        区域顶部（宽栏两行标题 + 入口组 + 两张浮层面板，窄栏入口）
@@ -58,7 +60,7 @@ src/client/
     ├── WorkspaceRow.tsx            工作区标题行（文件夹/箭头、`...`、`+`、悬停卡片）
     ├── VirtualWorkspaceSection.tsx   一个工作区分组（根节点分组头 + 组内工作区）
     ├── GroupSection.tsx            一个会话分组（分组头 + 组内会话）
-    ├── SessionList.tsx             一个展示范围的会话行 + 溢出按钮（折叠后的若干行，展开态在这里）
+    ├── SessionList.tsx             一个展示范围的会话行 + 溢出按钮（折叠后的若干行，展开态在区域根部）
     ├── RowActions.tsx              容器行行尾操作位（`...` 菜单 + 可选 `+`），三类行共用
     ├── SessionRowView.tsx          会话行外壳（状态位列、标题、时间、操作位）
     ├── SessionRowItem.tsx          会话行条目（行 + 两个菜单 + 悬停卡片）

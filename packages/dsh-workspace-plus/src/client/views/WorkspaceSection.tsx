@@ -114,6 +114,7 @@ export function WorkspaceSection({
                 renderChildWorkspace={renderChildWorkspace}
               >
                 <SessionList
+                  scope={{ kind: 'group', workspaceId, groupId: section.id }}
                   rows={[...section.sessions].sort(compareRows)}
                   alwaysVisibleSessionIds={alwaysVisibleSessionIds}
                   now={now}
@@ -129,6 +130,7 @@ export function WorkspaceSection({
           {layout.loose.length === 0 ? null : (
             <div className={styles.sessions}>
               <SessionList
+                scope={{ kind: 'loose', workspaceId }}
                 rows={[...layout.loose].sort(compareRows)}
                 alwaysVisibleSessionIds={alwaysVisibleSessionIds}
                 now={now}

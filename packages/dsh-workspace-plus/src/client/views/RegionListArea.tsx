@@ -225,6 +225,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
                 * 宿主未提供官方服务时菜单会是空的，那时直接渲染无菜单的行，不留点不动的省略号 */}
               <div className={rowsStyles.sessions}>
                 <SessionList
+                  scope={{ kind: 'stray' }}
                   rows={props.stray}
                   alwaysVisibleSessionIds={scope.alwaysVisibleSessionIds}
                   now={scope.session.now}

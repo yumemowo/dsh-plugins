@@ -1,0 +1,337 @@
+/**
+ * 一份扁平的行序列：界面上从上到下每占一行，这里就有一条
+ *
+ * 容器与行一起进序列：题头行（工作区分组、会话分组、工作区）、会话行、溢出按钮与空态都在其中
+ *
+ * 它是布局的下游而不是替代：`layout.ts` 答「哪些分组成员是谁」
+ * 这一层答「此刻界面上从上到下是什么」，比布局多要两样：三层折叠态与每段露出额度
+ *
+ * 不碰 React、不碰 DOM，也不记几何：一行多高由样式表按内容决定，这一层只说顺序与露面
+ */
+import { collapseSessionRows, sessionScopeKey } from './collapse.ts'
+import type { SessionScopeRef } from './collapse.ts'
+import type { RootLayout, SessionRow, WorkspaceLayout } from './types.ts'
+
+// ── 行 ──
+
+/**
+ * 一行的种类
+ *
+ * `overflow` 是那条「展开其余 n 个会话」的按钮，`empty` 是工作区体内的空态
+ * 两者都占竖直高度，因此与行同样进序列
+ */
+export type OutlineRowKind =
+  | 'virtualHead'
+  | 'groupHead'
+  | 'workspaceHead'
+  | 'strayHead'
+  | 'session'
+  | 'overflow'
+  | 'empty'
+
+/** 界面上的一行 */
+export interface OutlineRow {
+  /** 全局唯一，供 React 的 key 与调试日志用 */
+  key: string
+  kind: OutlineRowKind
+  /**
+   * 这一行属于哪一片
+   *
+   * 沿用 `nest` 的容器身份（同一次推导内同一容器恒交回同一实例），因此可以直接当 Map 的键
+   */
+  container: ContainerKey
+  /** 这一行挂在哪个工作区名下；根节点那一层与「未分组」桶为空串 */
+  workspaceId: string
+  /** 缩进层级，与 `nest` 的 `levelOf` 同值 */
+  depth: number
+  /**
+   * 此刻是否真的露面
+   *
+   * 收起的工作区里那些行仍在文档里（撑开体靠内容常驻才能收回），因此它们留在序列里、但为 false
+   * {@link visibleRows} 按这一格分档
+   */
+  visible: boolean
+  /** 这一行在 DOM 上占的那几格区域键 */
+  zoneKeys: readonly string[]
+  /** 落点单位标识，没有独立单位时为 undefined */
+  regionKey: string | undefined
+  /** 会话行与溢出按钮服务的那一段，别的种类为 undefined */
+  scope?: SessionScopeRef | undefined
+  /** 会话行的会话 id，别的种类为 undefined */
+  sessionId?: string | undefined
+  /**
+   * 会话行本身
+   *
+   * 渲染层因此不必再拿 id 回查一遍：序列里已经握着那一行，`sessionId` 只是它的键
+   */
+  row?: SessionRow | undefined
+  /** 溢出按钮代言的条数，除 `overflow` 那一行之外都为 0 */
+  hiddenCount: number
+  /** 这一行所在的那一段此刻是否展开到全部；只有 `overflow` 那一行带这一格 */
+  scopeExpanded: boolean
+}
+
+/** 容器在这一层里的形状，与 `nest` 的 `ContainerNode` 同形 */
+export type ContainerKey =
+  | { kind: 'root' }
+  | { kind: 'virtual'; groupId: string }
+  | { kind: 'group'; workspaceId: string; groupId: string }
+
+// ── 输入 ──
+
+/**
+ * 造 outline 要的全部输入
+ *
+ * 布局由调用方给现成的：这一层不重算「谁在哪个分组里」，只决定顺序、露面与高度
+ */
+export interface OutlineInput {
+  /** 根节点那一层：分组段与其成员 */
+  rootLayout: RootLayout
+  /** 一个工作区体内的分段与子工作区 */
+  workspaceLayoutOf: (workspaceId: string) => WorkspaceLayout
+  /** 一个工作区的缩进层级 */
+  depthOf: (workspaceId: string) => number
+  /** 分支容器身份：与 `nest` 的 `containers` 同一个发牌器 */
+  containers: {
+    readonly root: ContainerKey
+    virtualOf: (groupId: string) => ContainerKey
+    groupOf: (workspaceId: string, groupId: string) => ContainerKey
+  }
+  /** 三层折叠态的生效值 */
+  expansion: {
+    isWorkspaceExpanded: (key: string) => boolean
+    isVirtualWorkspaceExpanded: (key: string) => boolean
+    isGroupExpanded: (workspaceId: string, groupId: string) => boolean
+  }
+  /** 各区段是否展开到全部行 */
+  isScopeExpanded: (ref: SessionScopeRef) => boolean
+  /** 始终展示并占额度的会话 id */
+  alwaysVisibleSessionIds: ReadonlySet<string>
+  /** 折叠判据的基准时刻 */
+  now: number
+  /** 末尾「未分组」桶里的会话行，已按该段的比较器排好 */
+  stray: readonly SessionRow[]
+  /** 真的聚焦在某一片内容上时，「未分组」桶整段隐藏 */
+  hideStray: boolean
+  /** 会话行的排序比较器，与渲染用的是同一个 */
+  compareRows: (a: SessionRow, b: SessionRow) => number
+  /** 区域键的写法，由调用方交出：这一层不拼键，只把键记在行上 */
+  keys: {
+    workspaceHead: (workspaceId: string) => string
+    workspaceBody: (workspaceId: string) => string
+    workspaceRegion: (workspaceId: string) => string
+    sessionGroupHead: (workspaceId: string, groupId: string) => string
+    sessionGroupZone: (workspaceId: string, groupId: string) => string
+    sessionGroupRegion: (workspaceId: string, groupId: string) => string
+    virtualHead: (groupId: string) => string
+    virtualBody: (groupId: string) => string
+    virtualRegion: (groupId: string) => string
+    loose: (workspaceId: string) => string
+  }
+}
+
+// ── 构造 ──
+
+/**
+ * 把一份布局收成一条扁平的行序列，顺序即界面上的顺序
+ *
+ * 根节点的分组段在前，其后是未归组的工作区，末尾「未分组」桶排在全部工作区之后
+ * 一个工作区体内先是子工作区（递归），再是各会话分组，最后是未归组会话
+ * @param input - 见 {@link OutlineInput}
+ * @returns 从上到下的全部行
+ */
+export function buildOutline(input: OutlineInput): OutlineRow[] {
+  const rows: OutlineRow[] = []
+  const { containers, rootLayout } = input
+
+  const push = (
+    row: Omit<OutlineRow, 'hiddenCount' | 'scopeExpanded'> & {
+      hiddenCount?: number
+      scopeExpanded?: boolean
+    },
+  ): void => {
+    const { hiddenCount = 0, scopeExpanded = false, ...rest } = row
+    rows.push({ ...rest, hiddenCount, scopeExpanded })
+  }
+
+  /** 一个工作区区块 */
+  const addWorkspace = (workspaceId: string, container: ContainerKey): void => {
+    const layout = input.workspaceLayoutOf(workspaceId)
+    const depth = input.depthOf(workspaceId)
+    const open = input.expansion.isWorkspaceExpanded(workspaceId)
+    const childIds = layout.children ?? []
+
+    push({
+      key: 'workspace/' + workspaceId,
+      kind: 'workspaceHead',
+      container,
+      workspaceId,
+      depth,
+      visible: true,
+      zoneKeys: [input.keys.workspaceHead(workspaceId), input.keys.workspaceBody(workspaceId)],
+      regionKey: input.keys.workspaceRegion(workspaceId),
+    })
+
+    // 子工作区排在会话分组之前，与分组内部同一顺序
+    for (const childId of childIds) addWorkspace(childId, container)
+
+    for (const section of layout.groups) {
+      const groupOpen = input.expansion.isGroupExpanded(workspaceId, section.id)
+      push({
+        key: 'group/' + workspaceId + '/' + section.id,
+        kind: 'groupHead',
+        container: containers.groupOf(workspaceId, section.id),
+        workspaceId,
+        depth,
+        visible: open,
+        zoneKeys: [
+          input.keys.sessionGroupHead(workspaceId, section.id),
+          input.keys.sessionGroupZone(workspaceId, section.id),
+        ],
+        regionKey: input.keys.sessionGroupRegion(workspaceId, section.id),
+      })
+      addSessions(
+        { kind: 'group', workspaceId, groupId: section.id },
+        section.sessions,
+        open && groupOpen,
+        containers.groupOf(workspaceId, section.id),
+        workspaceId,
+        depth,
+      )
+    }
+
+    addSessions(
+      { kind: 'loose', workspaceId },
+      layout.loose,
+      open,
+      container,
+      workspaceId,
+      depth,
+      input.keys.loose(workspaceId),
+    )
+
+    if (childIds.length === 0 && layout.groups.length === 0 && layout.loose.length === 0) {
+      push({
+        key: 'empty/' + workspaceId,
+        kind: 'empty',
+        container,
+        workspaceId,
+        depth,
+        visible: open,
+        zoneKeys: [],
+        regionKey: undefined,
+      })
+    }
+  }
+
+  /**
+   * 一段会话行：折叠后的那些，再加一条溢出按钮
+   *
+   * 收起的那些不渲染，展开时全部渲染
+   * @param presorted - 传进来的已经就是最终顺序，不必再排
+   *   末尾「未分组」桶是这一档：容器交给它的是「置顶提前、其余维持列表原序」之后的结果
+   *   再套一遍工作区那个按时间排的比较器会把置顶提前抹掉
+   */
+  function addSessions(
+    scope: SessionScopeRef,
+    all: readonly SessionRow[],
+    open: boolean,
+    container: ContainerKey,
+    workspaceId: string,
+    depth: number,
+    zoneKey?: string,
+    presorted = false,
+  ): void {
+    const sorted = presorted ? [...all] : [...all].sort(input.compareRows)
+    const collapsed = collapseSessionRows(sorted, input.alwaysVisibleSessionIds, input.now)
+    const expanded = input.isScopeExpanded(scope)
+    const shown = expanded && collapsed.hiddenCount > 0 ? sorted : collapsed.rows
+    const prefix = workspaceId + '/' + sessionScopeKey(scope) + '/'
+    for (const row of shown) {
+      push({
+        key: prefix + row.id,
+        kind: 'session',
+        container,
+        workspaceId,
+        depth,
+        visible: open,
+        zoneKeys: zoneKey === undefined ? [] : [zoneKey],
+        regionKey: undefined,
+        scope,
+        sessionId: row.id,
+        row,
+      })
+    }
+    if (collapsed.hiddenCount > 0) {
+      push({
+        key: prefix + 'overflow',
+        kind: 'overflow',
+        container,
+        workspaceId,
+        depth,
+        visible: open,
+        zoneKeys: [],
+        regionKey: undefined,
+        scope,
+        hiddenCount: collapsed.hiddenCount,
+        scopeExpanded: expanded,
+      })
+    }
+  }
+
+  // 根节点：先各工作区分组段，再平铺的那些
+  for (const section of rootLayout.groups) {
+    const open = input.expansion.isVirtualWorkspaceExpanded(section.id)
+    push({
+      key: 'virtual/' + section.id,
+      kind: 'virtualHead',
+      container: containers.root,
+      workspaceId: '',
+      depth: 0,
+      visible: true,
+      zoneKeys: [input.keys.virtualHead(section.id), input.keys.virtualBody(section.id)],
+      regionKey: input.keys.virtualRegion(section.id),
+    })
+    const before = rows.length
+    for (const workspaceId of section.roots) {
+      addWorkspace(workspaceId, containers.virtualOf(section.id))
+    }
+    if (!open) hideRange(rows, before)
+  }
+  for (const workspaceId of rootLayout.loose) {
+    addWorkspace(workspaceId, containers.root)
+  }
+
+  if (!input.hideStray && input.stray.length > 0) {
+    push({
+      key: 'stray/head',
+      kind: 'strayHead',
+      container: containers.root,
+      workspaceId: '',
+      depth: 0,
+      visible: true,
+      zoneKeys: [],
+      regionKey: undefined,
+    })
+    // 「未分组」桶的次序在容器那一层已经定好（置顶提前、其余维持列表原序），这里不再重排
+    addSessions({ kind: 'stray' }, input.stray, true, containers.root, '', 0, undefined, true)
+  }
+
+  return rows
+}
+
+/** 把一段行标成不露面：分组收起时它的整个子树都不露面 */
+function hideRange(rows: OutlineRow[], from: number): void {
+  for (let index = from; index < rows.length; index += 1) {
+    const row = rows[index]
+    if (row !== undefined) rows[index] = { ...row, visible: false }
+  }
+}
+
+/**
+ * 此刻露面的那几条，按界面顺序
+ * @param rows - {@link buildOutline} 的结果
+ */
+export function visibleRows(rows: readonly OutlineRow[]): OutlineRow[] {
+  return rows.filter((row) => row.visible)
+}

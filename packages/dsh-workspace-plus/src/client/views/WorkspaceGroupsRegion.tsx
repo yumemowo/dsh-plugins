@@ -64,6 +64,9 @@ import type { SessionGroupRef, ViewModeStoreHandle } from '../store/viewMode.ts'
 import { RegionLocaleProvider } from '../hooks/useLocale.ts'
 import { ExpansionProvider } from '../hooks/useExpansion.ts'
 import type { Expansion } from '../hooks/useExpansion.ts'
+import { SessionScopesProvider } from '../hooks/useSessionScopes.ts'
+import type { SessionScopes } from '../hooks/useSessionScopes.ts'
+import { sessionScopeKey } from '../data/collapse.ts'
 import { LocalViewOptionsProvider } from '../hooks/useLocalViewOptions.ts'
 import type { LocalViewOptions } from '../hooks/useLocalViewOptions.ts'
 import type { RegionLocale } from '../hooks/useLocale.ts'
@@ -169,6 +172,14 @@ interface RegionUiState {
   setRevealSessionId: (next: string | undefined | ((current: string | undefined) => string | undefined)) => void
   /** 被打开的那一行滚进可视区后清掉标记，避免它在后续重新挂载时再滚一次 */
   acknowledgeReveal: (sessionId: string) => void
+  /**
+   * 各区段溢出展开的记录，键由 `sessionScopeKey` 交出
+   *
+   * 与另外三层折叠态不同源：它不落盘（和官方那条溢出按钮同一取舍），因此留在这一层而不是 store
+   */
+  sessionScopes: Record<string, boolean>
+  /** 改写一条区段记录，`undefined` 表示删掉 */
+  writeSessionScope: (key: string, expanded: boolean | undefined) => void
 }
 
 /**
@@ -514,6 +525,25 @@ function useRegionUiState(): RegionUiState {
     setRevealSessionId((current) => (current === sessionId ? undefined : current))
   }, [])
 
+  const [sessionScopes, setSessionScopes] = useState<Record<string, boolean>>({})
+  /**
+   * 改写一条区段记录
+   *
+   * 翻转、写到展开、删掉三种写法都归到这一处：它们改的是同一张表
+   * 收显式值而不是取反函数：取反要先读出当前值，而那个值可能来自别处的默认
+   */
+  const writeSessionScope = useCallback((key: string, next: boolean | undefined) => {
+    setSessionScopes((current) => {
+      if (next === undefined) {
+        if (current[key] === undefined) return current
+        const { [key]: _dropped, ...rest } = current
+        return rest
+      }
+      if (current[key] === next) return current
+      return { ...current, [key]: next }
+    })
+  }, [])
+
   return {
     overlay,
     openOverlay,
@@ -526,6 +556,8 @@ function useRegionUiState(): RegionUiState {
     revealSessionId,
     setRevealSessionId,
     acknowledgeReveal,
+    sessionScopes,
+    writeSessionScope,
   }
 }
 
@@ -1501,6 +1533,24 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     alwaysVisibleSessionIds,
   }
 
+  /**
+   * 会话区段展开态交给子树的那一份
+   *
+   * 依赖只有那一条记录与写入口，因此这份 value 在一次渲染里恒同一引用
+   */
+  const sessionScopes: SessionScopes = useMemo(
+    () => ({
+      isExpanded: (ref) => ui.sessionScopes[sessionScopeKey(ref)] === true,
+      toggle: (ref) => {
+        const key = sessionScopeKey(ref)
+        ui.writeSessionScope(key, ui.sessionScopes[key] !== true)
+      },
+      expand: (ref) => ui.writeSessionScope(sessionScopeKey(ref), true),
+      clear: (ref) => ui.writeSessionScope(sessionScopeKey(ref), undefined),
+    }),
+    [ui.sessionScopes, ui.writeSessionScope],
+  )
+
   const headerOverlays: RegionHeaderOverlays = {
     picker: {
       open: ui.pickerOpen,
@@ -1530,6 +1580,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   return (
     <RegionLocaleProvider value={locale}>
       <LocalViewOptionsProvider value={localViewOptions}>
+        <SessionScopesProvider value={sessionScopes}>
         <ExpansionProvider value={expansion.read}>
         {/* 指示器样式挂在根节点上，列表里每一行读同一个值，不必逐行下发 */}
         <div className={styles.root} ref={flipRef} data-wg-indicator={indicator}>
@@ -1578,6 +1629,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
           />
         </div>
         </ExpansionProvider>
+        </SessionScopesProvider>
       </LocalViewOptionsProvider>
     </RegionLocaleProvider>
   )
