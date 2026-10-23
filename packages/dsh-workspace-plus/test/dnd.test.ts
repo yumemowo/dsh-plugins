@@ -32,8 +32,7 @@ import {
   stretchDragPlan,
   workspaceTreeDragPlan,
 } from '../src/client/data/plan.ts'
-import { deriveNesting } from '../src/client/data/nest.ts'
-import { buildWorkspaceTree } from '../src/client/data/tree.ts'
+import { indexFrom } from './support/outlineFixture.ts'
 
 /** 一个只接整块投放的计划目标 */
 function container(sink: DropAnchor[]): DragPlanTarget {
@@ -523,7 +522,7 @@ describe('building a stretch drag plan', () => {
   })
 })
 
-describe('building a tree driven workspace drag plan', () => {
+describe('building an index driven workspace drag plan', () => {
   /** 四个工作区互不嵌套、同处一层：用来钉「同层兄弟」那几格 */
   const flatTopology = { virtualGroups: [] as { id: string; workspaceIds: string[] }[] }
 
@@ -552,26 +551,9 @@ describe('building a tree driven workspace drag plan', () => {
     const bindings = options.bindings ?? {}
     const groupIds = options.groupIds ?? {}
     const writes = options.writes ?? { moves: [], orders: [], nests: [], unnests: [] }
-    const virtualOf = (id: string): string =>
-      virtualGroups.find((group) => group.workspaceIds.includes(id))?.id ?? ''
-    const nesting = deriveNesting({
-      enabled: true,
-      workspaceIds,
-      pathOf: (id) => paths[id],
-      virtualOf,
-      bindingOf: (id) => bindings[id],
-      groupIdsOf: (id) => new Set(groupIds[id] ?? []),
-    })
-    const tree = buildWorkspaceTree({
-      workspaceIds,
-      virtualGroups,
-      nesting,
-      sessionGroupsOf: (id) => groupIds[id] ?? [],
-      // 拖拽认祖先要看 cwd：那是「可能挪到哪儿」，与渲染那一层的同组要求不是同一个问题
-      pathOf: (id) => paths[id],
-    })
+    const index = indexFrom({ workspaceIds, virtualGroups, paths, bindings, groupIds })
     return workspaceTreeDragPlan({
-      tree,
+      index,
       workspaceId: source,
       moveToGroup: (groupId) => writes.moves.push(groupId),
       reorder: (before) => writes.orders.push(before),

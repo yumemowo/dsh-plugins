@@ -4,13 +4,13 @@
  * 计划是整个拖拽架构里唯一含业务知识的东西：它声明「我是谁、能落到哪些区域、落到之后执行什么」。
  * 手势层与命中层只认计划里的区域键与档次，不认识会话、分组与工作区。
  *
- * 这一层只放**形状**，不放构造：构造在 `plan.ts`，那里才认识树与落点关系。
- * 这样渲染层要取一个区域键时只 import 本模块，不会把计划构造器与整棵树一起拖进产物。
+ * 这一层只放**形状**，不放构造：构造在 `plan.ts`，那里才认识索引与落点关系。
+ * 这样渲染层要取一个区域键时只 import 本模块，不会把计划构造器与整份索引一起拖进产物。
  *
  * 纯逻辑，不碰 React、不碰 DOM
  */
-import { bodyKeyOf, headKeyOf, looseZoneKeyOf, regionKeyOf } from './tree.ts'
-import type { WorkspaceTree } from './tree.ts'
+import { bodyKeyOf, headKeyOf, looseZoneKeyOf, regionKeyOf } from './zones.ts'
+import type { OutlineIndex } from './outline.ts'
 
 // ── 计划 ──
 
@@ -45,7 +45,7 @@ export interface DragPlanTarget {
    * ## 「一行只有一个身份」与框线并存的区别
    *
    * 指针停在一行上时，这一行的语义只有一个：要么承接放入（inside），要么作为位次参照
-   * （order），不会既是又是。这个不变量由 `tree.ts` 的 `dropRelationsOf` 保证——
+   * （order），不会既是又是。这个不变量由 `relations.ts` 的 `dropRelationsOf` 保证——
    * 祖先工作区不当位次参照（`isAncestorRow`），因此同一个工作区不会两样都給。
    *
    * 框与线**同时出现**不等于一行兼两职，两者是不同层次的答案：
@@ -68,7 +68,7 @@ export interface DragPlanTarget {
    * 该分支今天会报错，见那里的注释。
    *
    * 真要启用它，改动集中在中间层三处，渲染与手势一行不用动：
-   * `tree.ts` 让虚拟分组也能当位次参照、`tree.ts` 的 `isAncestorRow` 放宽排他、
+   * `relations.ts` 让虚拟分组也能当位次参照、它的 `isAncestorRow` 放宽排他、
    * `dropSearcher.ts` 的 `checkDrop` 给那一支真实实现。
    */
   mode: 'container' | 'rows'
@@ -105,12 +105,12 @@ export interface DragPlan {
   /** 键与 DOM 标记上的区域键一一对应；不在表里的区域这次拖拽就不接 */
   targets: ReadonlyMap<string, DragPlanTarget>
   /**
-   * 这份计划背后的树
+   * 这份计划背后的索引
    *
-   * 检测器拿它现算「指针这一格归谁」：沿树上往上走，而不是把每个成员逐一列进名单。
-   * 会话行、置顶行这类不在树上的拖拽没有这一项，那时检测只认指针正落着的那一格
+   * 检测器拿它现算「指针这一格归谁」：沿索引往上走，而不是把每个成员逐一列进名单。
+   * 会话行、置顶行这类索引里没有的拖拽没有这一项，那时检测只认指针正落着的那一格
    */
-  tree?: WorkspaceTree
+  index?: OutlineIndex
 }
 
 /**
@@ -203,7 +203,7 @@ export function zoneProps(key: string): Record<string, string> {
  *
  * 与区域键分开：区域键说「这一格是哪儿」，单位标识说「框该套在哪个元素上」。
  * 一片可以占好几格而框只画一个，因此两套标识并不同名
- * @param unit - 由 `tree.ts` 的 `regionOfKey` 算出的单位标识
+ * @param unit - 由 `zones.ts` 的 `regionKeyOf` 算出的单位标识
  */
 export function regionProps(unit: string): Record<string, string> {
   return { [REGION_ATTRIBUTE]: unit }
@@ -238,7 +238,7 @@ export function scopeProps(): Record<string, string> {
 /**
  * 按对象取的一层区域键封装
  *
- * 形状由 `data/tree.ts` 的 `bodyKeyOf` / `headKeyOf` / `regionKeyOf` 一处决定，这里只把
+ * 形状由 `data/zones.ts` 的 `bodyKeyOf` / `headKeyOf` / `regionKeyOf` 一处决定，这里只把
  * 「我在画哪个工作区、哪个分组」翻译成节点身份。分成两个模块是因为渲染层还不认识节点身份，
  * 而拖拽层只按节点身份要键
  */

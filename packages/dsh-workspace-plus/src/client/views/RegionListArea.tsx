@@ -32,7 +32,7 @@ import type { OrderDragging } from '../data/protocol.ts'
 import { orderDragPlan, sessionGroupingPlan, workspaceTreeDragPlan } from '../data/plan.ts'
 import { debugWarn } from '../utils/debug.ts'
 import type { Nesting } from '../data/nest.ts'
-import type { WorkspaceTree } from '../data/tree.ts'
+import type { OutlineIndex } from '../data/outline.ts'
 import { relativeTimeOfRow, statusViewOfRow } from '../data/rows.ts'
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
 import type {
@@ -108,8 +108,6 @@ export interface RegionListLayout {
   /** 未经聚焦裁剪的根节点布局，工作区行的「移动工作区分组」菜单按它的分组段列出候选 */
   rootLayout: RootLayout
   nesting: Nesting
-  /** 工作区与虚拟分组的统一节点树，拖拽计划层按它取容器归属与同层名单 */
-  tree: WorkspaceTree
   workspaceById: ReadonlyMap<string, WorkspaceView>
   /** 真的聚焦在某一片内容上时，「未分组」区段整段隐藏 */
   focused: boolean
@@ -179,6 +177,12 @@ export interface WorkspaceNodeScope {
    * 渲染与拖拽都读它取「这一段有哪几条、谁排第几」，因此它由容器算一次后整份交给递归层
    */
   outline: Outline
+  /**
+   * 序列上的查询表：容器归属、同层兄弟与拖拽认的祖先
+   *
+   * 由上面那条序列扫出来，因此表里的位置与界面上的行是同一批：拖拽的落点范围恒等于渲染范围
+   */
+  index: OutlineIndex
   /**
    * workspaceId → 该工作区体内的分段与子工作区
    *
@@ -410,10 +414,10 @@ function WorkspaceNode({
             sessionId,
             groupId === '' ? 'ungroup' : `group:${groupId}`,
           ),
-        // 检测器沿树往上走：落到组内任何一条成员行上，读出的都是「落在这一片上」
-        tree: scope.layout.tree,
+        // 检测器沿索引往上走：落到组内任何一条成员行上，读出的都是「落在这一片上」
+        index: scope.index,
       }),
-    [workspaceId, commands.selectSessionGroup, scope.layout.tree],
+    [workspaceId, commands.selectSessionGroup, scope.index],
   )
 
   /**
@@ -445,14 +449,14 @@ function WorkspaceNode({
   /**
    * 拖起一条工作区行时的计划
    *
-   * 枚举面与合法性判定都收在树那一层，这里只交出树与四个写入出口
+   * 枚举面与合法性判定都收在 `dropRelationsOf` 那一层，这里只交出索引与四个写入出口
    * 移入 / 移出虚拟分组走 `moveWorkspace`，换位一律走官方 `insertBefore`
    * （注册表序是各层共用的顺序来源），会话分组那一族走 `nestWorkspaces` 与 `unnestWorkspaces`
    */
   const buildWorkspaceDragPlan = useCallback(
     (memberId: string) =>
       workspaceTreeDragPlan({
-        tree: scope.layout.tree,
+        index: scope.index,
         workspaceId: memberId,
         // 四个写入出口是这次投放**真正要做的那件事**。
         // 视觉层交回的是「框在哪一片、线在哪一行」，两者可以各自沿链找；
@@ -475,7 +479,7 @@ function WorkspaceNode({
         },
       }),
     [
-      scope.layout.tree,
+      scope.index,
       commands.moveWorkspaceToGroup,
       commands.moveWorkspaceInOrder,
       commands.nestWorkspaceInto,

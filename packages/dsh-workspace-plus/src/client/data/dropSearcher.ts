@@ -1,13 +1,15 @@
 /**
  * 拖拽落点的唯一检测入口
  *
- * 判定全部在节点上完成，而且检测器**拿着整棵树**：指针落在哪个节点上，由适配层读出来交给它；
- * 那个节点能接什么、它的上位容器是谁、谁罩着它，全部从树现算，不靠调用方预先枚举一份格子清单。
+ * 判定全部在节点上完成，而且检测器**拿着整份索引**：指针落在哪个节点上，由适配层读出来交给它；
+ * 那个节点能接什么、它的上位容器是谁、谁罩着它，全部从索引现算，不靠调用方预先枚举一份格子清单。
  *
  * 唯一的例外是线的上下半：那要量指针正落着的那个元素有多高、顶边在哪，因此
  * {@link DropSearcher.checkDrop} 收两个几何读数。它不收元素——元素只属于调用方那半边。
  */
-import type { TreeContainerRef, TreeNodeRef, WorkspaceTree } from './tree.ts'
+import type { OutlineIndex } from './outline.ts'
+import type { ContainerNode } from './nest.ts'
+import type { NodeRef } from './zones.ts'
 
 /** 一条带的几何读数：只有分上下半要用的那两格 */
 export interface BandRect {
@@ -29,10 +31,10 @@ type DropSide = 'before' | 'after'
 /**
  * 一个落点身份
  *
- * 树上的节点与树上的容器都是对象身份（树对同一身份恒交回同一实例），因此可以直接当 Map 的键；
- * 不属于树的行（会话行、置顶行）用 `row` 表示，同一个 id 在一次拖拽里也恒交回同一实例
+ * 索引里的节点与容器都是对象身份（索引对同一身份恒交回同一实例），因此可以直接当 Map 的键；
+ * 索引里没有的行（会话行、置顶行）用 `row` 表示，同一个 id 在一次拖拽里也恒交回同一实例
  */
-export type DropNode = TreeNodeRef | TreeContainerRef | { kind: 'row'; id: string }
+export type DropNode = NodeRef | ContainerNode | { kind: 'row'; id: string }
 
 /** 一次拖拽可能接住的一个位置 */
 export interface DropTarget {
@@ -73,43 +75,43 @@ export interface DropSearcher {
 }
 
 /**
- * 把一棵树与一份名单收成一个检测器
+ * 把一份索引与一份名单收成一个检测器
  *
  * 名单只回答「这次拖拽允许落到哪些节点上」，**不回答「指针这一点属于谁」**——
- * 后者由树现算：从指针正落着的那个节点出发，沿树往上走，遇到的第一个在名单里的就是答案。
+ * 后者由索引现算：从指针正落着的那个节点出发，沿索引往上走，遇到的第一个在名单里的就是答案。
  * 因此组内任何一条成员行都能让罩着它的那一片响应，不必由调用方把成员逐一列进名单。
  *
- * @param tree - 装配好的树；不属于树的行（会话、置顶行）传 undefined，此时只认节点自己
+ * @param index - {@link indexOutline} 装配的索引；索引里没有的行（会话、置顶行）传 undefined，此时只认节点自己
  * @param targets - 这次拖拽允许落到哪些节点上
  */
 export function maybeDropSearcher(
-  tree: WorkspaceTree | undefined,
+  index: OutlineIndex | undefined,
   targets: readonly DropTarget[],
 ): DropSearcher {
-  /** 名单按「种类 + 节点」索引，一个节点在一类关系里只出现一次 */
-  const index = new Map<string, DropTarget>()
+  /** 名单按「种类 + 节点」收成一张表，一个节点在一类关系里只出现一次 */
+  const byKey = new Map<string, DropTarget>()
   for (const entry of targets) {
     const key = entry.kind + '/' + idOf(entry.node)
-    if (!index.has(key)) index.set(key, entry)
+    if (!byKey.has(key)) byKey.set(key, entry)
   }
 
-  /** 节点 id → 树上的那个实例：树是发牌器，同一身份恒同一实例，链上的匹配因此可以按引用比 */
+  /** 节点 id → 索引里的那个实例：索引是发牌器，同一身份恒同一实例，链上的匹配因此可以按引用比 */
   const nodes = new Map<string, DropNode>()
-  if (tree !== undefined) {
-    for (const entry of tree.workspaceNodes) nodes.set('workspace/' + entry.id, entry)
-    for (const entry of tree.virtualGroups) nodes.set('virtual/' + entry.id, entry)
-    nodes.set('root/', tree.containers.root)
+  if (index !== undefined) {
+    for (const entry of index.workspaceNodes) nodes.set('workspace/' + entry.id, entry)
+    for (const entry of index.virtualGroups) nodes.set('virtual/' + entry.id, entry)
+    nodes.set('root/', index.containers.root)
   }
 
   /**
    * 从指针落着的那个节点往上走的这一条链
    *
    * 最近的在前：它自己、它的祖先工作区、它所在的那一片、再往外直到根节点。
-   * 这条链就是「这一格归谁」。它由树算，不从 DOM 上找——
-   * DOM 上的祖先关系是渲染细节，跨虚拟分组的两个工作区在 DOM 上互为祖先，在树上却不是父子
+   * 这条链就是「这一格归谁」。它由索引算，不从 DOM 上找——
+   * DOM 上的祖先关系是渲染细节，跨虚拟分组的两个工作区在 DOM 上互为祖先，在索引里却不是父子
    */
   const chainOf = (node: DropNode): readonly DropNode[] => {
-    if (tree === undefined || node.kind === 'row') return [node]
+    if (index === undefined || node.kind === 'row') return [node]
     const chain: DropNode[] = [node]
     const push = (kind: string, id: string): void => {
       const found = nodes.get(kind + '/' + id)
@@ -130,9 +132,9 @@ export function maybeDropSearcher(
       let current = nodes.get('workspace/' + id)
       if (current === undefined || current.kind !== 'workspace') return
       for (;;) {
-        const container = tree.containerOf(current)
+        const container = index.containerOf(current)
         if (container !== undefined && container.kind === 'group') chain.push(container)
-        const parent = tree.ancestorsOf(current)[0]
+        const parent = index.ancestorsOf(current)[0]
         if (parent === undefined) {
           // 没有父工作区了：这一层容器就是最外那一片
           if (container !== undefined && container.kind === 'virtual') push('virtual', container.id)
@@ -146,7 +148,7 @@ export function maybeDropSearcher(
       // 归属分组：进了会话分组的子工作区容器已经不是「归属」，但那一片仍要能用
       const origin = nodes.get('workspace/' + id)
       if (origin !== undefined && origin.kind === 'workspace') {
-        const membership = tree.virtualGroupOf(origin)
+        const membership = index.virtualGroupOf(origin)
         if (membership !== undefined) push('virtual', membership.id)
       }
     }
@@ -155,29 +157,29 @@ export function maybeDropSearcher(
     let atRoot = false
     if (node.kind === 'workspace') {
       walkWorkspace(node.id)
-      atRoot = tree.containerOf(node)?.kind === 'root'
+      atRoot = index.containerOf(node)?.kind === 'root'
     } else if (node.kind === 'virtual') {
       // 虚拟分组自己就在根节点那一层，但它罩住的那一片才是指针此刻的范围：
       // 拖回自己所在分组的组头是原地投放，不该被根节点的「移出分组」接住
       atRoot = false
     } else if (node.kind === 'group') {
       // 会话分组挂在某个工作区体内：那一片归它的宿主工作区管
-      chain.push(tree.containers.groupOf(node.workspaceId, node.groupId))
+      chain.push(index.containers.groupOf(node.workspaceId, node.groupId))
       walkWorkspace(node.workspaceId)
       const host = nodes.get('workspace/' + node.workspaceId)
       atRoot =
-        host !== undefined && host.kind === 'workspace' && tree.containerOf(host)?.kind === 'root'
+        host !== undefined && host.kind === 'workspace' && index.containerOf(host)?.kind === 'root'
     }
     // 根节点那一片只在指针本来就落在它那一层时进链。
     // 无条件兜底会让组内换位、拖回自己那一片都多出一圈「移出分组」的框
-    if (atRoot && chain[chain.length - 1] !== tree.containers.root) chain.push(tree.containers.root)
+    if (atRoot && chain[chain.length - 1] !== index.containers.root) chain.push(index.containers.root)
     return chain
   }
 
   /** 链上第一个在名单里的节点 */
   const first = (kind: DropTarget['kind'], chain: readonly DropNode[]): DropTarget | undefined => {
     for (const node of chain) {
-      const found = index.get(kind + '/' + idOf(node))
+      const found = byKey.get(kind + '/' + idOf(node))
       if (found !== undefined) return found
     }
     return undefined
@@ -211,11 +213,11 @@ export function maybeDropSearcher(
       // 留在这一处是因为它同时握着两种答案：框与线各自沿链找、互不知道对方在哪一层，
       // 只有在这里才看得出它们是不是指着同一格。判定放在别处（计划里、绘制里）都拿不到这一对照。
       //
-      // 今天走不到：tree.ts 只给工作区节点算位次关系，虚拟分组根本不进那条分支，
+      // 今天走不到：`dropRelationsOf` 只给工作区节点算位次关系，虚拟分组根本不进那条分支，
       // 因此不可能有同一格既承接放入、又承接同一节点的位次。
       //
       // 真做分组嵌套时，把这里换成按指针在带里的位置分流（上段 before、中段 inside、
-      // 下段 after），并让 tree.ts 同时交出两种读法——那一族的改动都集中在中间层，
+      // 下段 after），并让 `dropRelationsOf` 同时交出两种读法——那一族的改动都集中在中间层，
       // 渲染与手势不用动
       if (
         check.inside !== undefined &&
@@ -233,8 +235,8 @@ export function maybeDropSearcher(
     },
 
     commit(check) {
-      if (check.inside !== undefined) index.get('inside/' + idOf(check.inside))?.commit()
-      if (check.order !== undefined) index.get('order/' + idOf(check.order))?.commit(check.side)
+      if (check.inside !== undefined) byKey.get('inside/' + idOf(check.inside))?.commit()
+      if (check.order !== undefined) byKey.get('order/' + idOf(check.order))?.commit(check.side)
     },
   }
 }

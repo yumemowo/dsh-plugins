@@ -357,7 +357,7 @@ describe('descendantsOf', () => {
 
     expect(nesting.containers.virtualOf('wg-empty')).toEqual({
       kind: 'virtual',
-      groupId: 'wg-empty',
+      id: 'wg-empty',
     })
     expect(nesting.rootsOf(nesting.containers.virtualOf('wg-empty'))).toEqual([])
     expect(nesting.rootsOf(nesting.containers.root)).toEqual([])

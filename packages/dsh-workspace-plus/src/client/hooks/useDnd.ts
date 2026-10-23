@@ -21,7 +21,8 @@ import { rowIdProps, zoneProps } from '../data/protocol.ts'
 import type { DragPlan } from '../data/protocol.ts'
 import { maybeDropSearcher } from '../data/dropSearcher.ts'
 import type { DropCheck, DropSearcher } from '../data/dropSearcher.ts'
-import type { TreeContainerRef, TreeNodeRef } from '../data/tree.ts'
+import type { ContainerNode } from '../data/nest.ts'
+import type { NodeRef } from '../data/zones.ts'
 import { debugLog, debugWarn } from '../utils/debug.ts'
 import { autoScrollStep } from '../data/scroll.ts'
 import {
@@ -167,7 +168,7 @@ export function DndProvider({
   /** 区域键 → 画框 / 画线的元素：检测只交回键，靠它落成像素 */
   const paintRef = useRef<Map<string, () => PaintMark | undefined>>(new Map())
   /** 区域键 → 节点身份：把指针落着的那个元素读成节点，检测层只认节点 */
-  const zoneNodesRef = useRef<ReadonlyMap<string, TreeNodeRef | TreeContainerRef>>(new Map())
+  const zoneNodesRef = useRef<ReadonlyMap<string, NodeRef | ContainerNode>>(new Map())
 
   /**
    * 上一次 `dragover` 算出的落点
@@ -246,8 +247,8 @@ export function DndProvider({
     // 事件目标不在本实例那一片里：这一格不归本实例管，另一个实例的拖拽或页面上的别的拖放
     const scope = region?.current
     const inside = target !== null && (scope === undefined || scope === null || scope.contains(target))
-    // 指针正落着哪个节点：适配层读一次（元素带区域键，经树换成节点身份），
-    // 此后落点判定全在节点上做，检测层沿树往上走
+    // 指针正落着哪个节点：适配层读一次（元素带区域键，经索引换成节点身份），
+    // 此后落点判定全在节点上做，检测层沿索引往上走
     const node = inside ? nodeAt(zoneNodesRef.current, target) : null
     // 捡到这一步才量带宽：检测器只在真的要分上下半时才问它，指针每移动一次都会走一遍这里
     const band = target === null ? null : () => target.getBoundingClientRect()
@@ -402,12 +403,12 @@ export function DndProvider({
       committedRef.current = false
 
       // 名单、检测器与绘制表一场拖拽只建一次，指针移动期间只问它
-      // 绘制表反过来读：元素上的区域键经树换算成节点身份，
+      // 绘制表反过来读：元素上的区域键经索引换算成节点身份，
       // 检测器因此拿到的与交回的都是节点，只有这里那一层 map 需要碰 DOM
       const scope = region?.current ?? document
       const collected = collectDropTargets(scope, plan)
-      zoneNodesRef.current = plan.tree?.nodesByZone() ?? new Map()
-      searcherRef.current = maybeDropSearcher(plan.tree, collected.targets)
+      zoneNodesRef.current = plan.index?.nodesByZone() ?? new Map()
+      searcherRef.current = maybeDropSearcher(plan.index, collected.targets)
       paintRef.current = collected.paint
       // 压淡够不着的那一片：判定与命中层同源，因此不会出现「淡着却能放进去」
       const dimmed = dimmedElements(scope, plan)

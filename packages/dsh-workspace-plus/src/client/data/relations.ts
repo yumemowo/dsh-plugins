@@ -4,15 +4,17 @@
  * 交给调用方的是**关系**，不是身份：它只看到「有几个能放进去的地方、有几个能排前后的行」，
  * 不必知道那一格是虚拟分组、会话分组还是某个工作区——三种来源的差别在这一层里就消掉了。
  *
- * 与 `tree.ts` 的分工：那里答「谁在谁里面」（随 cwd 与落盘归属变，与拖拽规则无关），
+ * 与 `outline.ts` 的分工：那里的索引答「谁在谁里面」（随 cwd 与落盘归属变，与拖拽规则无关），
  * 这里答「能落到哪儿」（随拖拽规则变）。因此这里是唯一该认识拖拽判据的模块，
- * 反过来没有人读它——渲染层只 import 树与区域键。
+ * 反过来没有人读它——渲染层只 import 行序列与区域键。
  *
- * 纯数据变换：输入是一棵装配好的树与几个写入回调，不碰 React、不碰 DOM
+ * 纯数据变换：输入是一份装好的索引与几个写入回调，不碰 React、不碰 DOM
  */
 import { beforeIdOf, placeBefore } from '../../order.ts'
-import { bodyKeyOf, headKeyOf, regionKeyOf, zoneKeysOf } from './tree.ts'
-import type { TreeContainerRef, TreeNodeRef, WorkspaceTree } from './tree.ts'
+import type { OutlineIndex } from './outline.ts'
+import type { ContainerNode } from './nest.ts'
+import { bodyKeyOf, headKeyOf, regionKeyOf, zoneKeysOf } from './zones.ts'
+import type { NodeRef } from './zones.ts'
 
 // ── 落点关系 ──
 
@@ -97,13 +99,13 @@ function seamOfOrder(
  * 一个节点此刻的全部落点关系
  *
  * 顺序即优先级：同层兄弟在前（位次是最近的一层关系），其余在后
- * @param tree - 装配好的树
+ * @param index - {@link indexOutline} 装配的索引
  * @param node - 被拖的节点
  * @param writes - 落到各族写入面时各调哪一个
  */
 export function dropRelationsOf(
-  tree: WorkspaceTree,
-  node: TreeNodeRef,
+  index: OutlineIndex,
+  node: NodeRef,
   writes: {
     /** 移入某个虚拟分组，空串表示移出到根节点 */
     moveToGroup: (groupId: string) => void
@@ -117,10 +119,10 @@ export function dropRelationsOf(
 ): readonly DropRelation[] {
   if (node.kind !== 'workspace') return []
   const relations: DropRelation[] = []
-  const container = tree.containerOf(node)
-  const membership = tree.virtualGroupOf(node)
-  const bound = tree.bindingOf(node)
-  const selfParent = tree.dropAncestorsOf(node)[0]
+  const container = index.containerOf(node)
+  const membership = index.virtualGroupOf(node)
+  const bound = index.bindingOf(node)
+  const selfParent = index.dropAncestorsOf(node)[0]
 
   /**
    * 这个节点能进去的每一片
@@ -129,16 +131,16 @@ export function dropRelationsOf(
    * 每一片顶层的成员都是它的位次参照——「排到这一片里某一行前后」与「移进这一片」
    * 是同一件事的两半
    */
-  const joinableContainers = (): TreeContainerRef[] => {
-    const list: TreeContainerRef[] = [tree.containers.root]
-    for (const virtual of tree.virtualGroups) {
+  const joinableContainers = (): ContainerNode[] => {
+    const list: ContainerNode[] = [index.containers.root]
+    for (const virtual of index.virtualGroups) {
       if (virtual.kind !== 'virtual') continue
-      const holder = tree.containers.virtualOf(virtual.id)
+      const holder = index.containers.virtualOf(virtual.id)
       if (holder !== container) list.push(holder)
     }
-    for (const ancestor of tree.dropAncestorsOf(node)) {
-      for (const groupId of tree.sessionGroupsOf(ancestor)) {
-        list.push(tree.containers.groupOf(ancestor.id, groupId))
+    for (const ancestor of index.dropAncestorsOf(node)) {
+      for (const groupId of index.sessionGroupsOf(ancestor)) {
+        list.push(index.containers.groupOf(ancestor.id, groupId))
       }
     }
     return list
@@ -148,7 +150,7 @@ export function dropRelationsOf(
    * 一条位次关系
    *
    * 只回答「排到这一行前后」。**框不归它管**：框问的是「指针这一点归哪一片」，
-   * 由检测器沿树往上走现算——把它塞进这里就等于拿目标行的祖先去回答指针的问题
+   * 由检测器沿索引往上走现算——把它塞进这里就等于拿目标行的祖先去回答指针的问题
    * @param order - 这次换位要在其上算的那份序列
    * @param targetId - 参照行
    * @param leavesGroup - 这条序列在 root 层，落上去要先把落盘的会话分组归属摘掉
@@ -180,12 +182,12 @@ export function dropRelationsOf(
     return seam === undefined ? relation : { ...relation, seam }
   }
 
-  // 全遍历整棵树：任何节点都可能与来源构成某种关系
+  // 全遍历索引里的节点：任何节点都可能与来源构成某种关系
   //
   // 这一轮同时决定了「一行只有一个身份」：祖先工作区只承接放入、不当位次参照，
   // 两者因此不会落在同一个工作区上。虚拟分组今天只承接放入，没有位次关系可言，
   // 于是也不会有「同一格两种读法」。分组嵌套要做时，这两条是首先要放宽的
-  for (const other of tree.allNodes()) {
+  for (const other of index.allNodes()) {
     if (other.id === node.id) continue
 
     // ── 位次关系 ──
@@ -193,8 +195,8 @@ export function dropRelationsOf(
     // 或者 cwd 上同父（挪过去之后就是同层兄弟）。两条各自用自己的序列换算
     if (other.kind === 'workspace') {
       const candidates: { order: readonly string[]; leavesGroup: boolean }[] = [
-        { order: tree.siblingsOf(node).map((entry) => entry.id), leavesGroup: false },
-        { order: tree.dropSiblingsOf(node).map((entry) => entry.id), leavesGroup: false },
+        { order: index.siblingsOf(node).map((entry) => entry.id), leavesGroup: false },
+        { order: index.dropSiblingsOf(node).map((entry) => entry.id), leavesGroup: false },
       ]
       // 能进去的每一片，它顶层的那些成员都是位次参照：
       // 「排到这一片里某一行前后」与「移进这一片」是同一件事的两半，
@@ -203,7 +205,7 @@ export function dropRelationsOf(
       // 来源此刻所在的那一片除外：组内换位由 siblingsOf 那条已经给出，再列一遍是同一份序列
       for (const holder of joinableContainers()) {
         if (holder === container) continue
-        const sequence = tree.rootsOf(holder).map((entry) => entry.id)
+        const sequence = index.rootsOf(holder).map((entry) => entry.id)
         if (sequence.length === 0) continue
         // 换片之后落盘的会话分组归属就不成立了；落在 root 那一层还多一件「退出虚拟分组」，
         // 那一半由根节点那片自己的 inside 关系负责，这里只补归属
@@ -213,7 +215,7 @@ export function dropRelationsOf(
       // 某个容器里，它就不再与那个容器的行谈先后——那一行承接的是「放进去」
       const isAncestorRow =
         (selfParent !== undefined && selfParent.id === other.id) ||
-        tree.dropAncestorsOf(node).some((entry) => entry.id === other.id)
+        index.dropAncestorsOf(node).some((entry) => entry.id === other.id)
       const matched = isAncestorRow
         ? undefined
         : candidates.find((entry) => entry.order.includes(other.id))
@@ -226,7 +228,7 @@ export function dropRelationsOf(
     // ── 放入关系 ──
     // 虚拟分组是容器；祖先工作区是容器；祖先名下的会话分组是容器
     if (other.kind === 'virtual') {
-      const target = tree.containers.virtualOf(other.id)
+      const target = index.containers.virtualOf(other.id)
       if (target === container) continue
       relations.push({
         kind: 'inside',
@@ -239,7 +241,7 @@ export function dropRelationsOf(
     }
 
     // 祖先工作区：落上去读作「成为它的子工作区」
-    const isAncestor = tree.dropAncestorsOf(node).some((entry) => entry.id === other.id)
+    const isAncestor = index.dropAncestorsOf(node).some((entry) => entry.id === other.id)
     if (isAncestor) {
       const ancestorZones = zoneKeysOf({ kind: 'workspace', id: other.id })
       const ancestorRegion = regionKeyOf({ kind: 'workspace', id: other.id })
@@ -260,12 +262,12 @@ export function dropRelationsOf(
       if (
         selfParent !== undefined &&
         selfParent.id === other.id &&
-        container === tree.containerOf(other)
+        container === index.containerOf(other)
       ) {
         relations.push({ kind: 'inside', zones: ancestorZones, region: ancestorRegion, commit: () => {} })
         continue
       }
-      const target = tree.containerOf(other)
+      const target = index.containerOf(other)
       if (target === undefined) continue
       relations.push({
         kind: 'inside',
@@ -285,9 +287,9 @@ export function dropRelationsOf(
   // 这一段**不按 other 走**：它是「来源能落到哪几个分组里」这一件事，与 allNodes 里
   // 有哪些节点无关。放进上面那个循环里会让它只在某个 other 恰好没命中任何关系时才执行，
   // 一旦别的分支 continue 掉，整段就静默失效
-  for (const ancestor of tree.dropAncestorsOf(node)) {
-    for (const groupId of tree.sessionGroupsOf(ancestor)) {
-      const holder = tree.containers.groupOf(ancestor.id, groupId)
+  for (const ancestor of index.dropAncestorsOf(node)) {
+    for (const groupId of index.sessionGroupsOf(ancestor)) {
+      const holder = index.containers.groupOf(ancestor.id, groupId)
       const zones = zoneKeysOf(holder)
       const region = regionKeyOf({ kind: 'group', workspaceId: ancestor.id, groupId })
       // 已经住在这个分组里：落回它这一片读作原地投放，不写，但这一片必须留在名单里
@@ -308,12 +310,12 @@ export function dropRelationsOf(
   }
 
   // 回到最外层：在分组里时才成立，且只认**整片列表的空白处**（那一片自己的区域键）。
-  // 落在一行上的「移出分组」由检测器沿树往上走得出：那一行归它所在的容器，
+  // 落在一行上的「移出分组」由检测器沿索引往上走得出：那一行归它所在的容器，
   // 容器再往上是根节点，根节点那一片若也接了放入关系，就是这一条
   if (membership !== undefined) {
     relations.push({
       kind: 'inside',
-      zones: [bodyKeyOf(tree.containers.root)],
+      zones: [bodyKeyOf(index.containers.root)],
       commit: () => writes.moveToGroup(''),
     })
   }

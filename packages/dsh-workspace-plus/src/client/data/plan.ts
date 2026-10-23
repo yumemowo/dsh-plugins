@@ -5,7 +5,7 @@
  * 交出一张「区域键 → 落到之后做什么」的表。命中层只查这张表，因此不认识任何一种业务对象。
  *
  * 工作区那一族的业务知识有一半在 `relations.ts`：容器归属、同层名单与落点判定都在那里，
- * 这里只按它交回的关系接线。区域键的形状由 `tree.ts` 一处决定。
+ * 这里只按它交回的关系接线。区域键的形状由 `zones.ts` 一处决定。
  *
  * 纯逻辑，不碰 React、不碰 DOM
  */
@@ -14,7 +14,8 @@ import type { Anchor } from '../../order.ts'
 import { dropRelationsOf } from './relations.ts'
 import type { DragPlan, DragPlanTarget, DragSource, DropAnchor } from './protocol.ts'
 import { sessionGroupRegionKey, sessionGroupZoneKey, groupHeadKey, workspaceRegionKey, workspaceHeadKey, looseKey } from './protocol.ts'
-import type { TreeNodeRef, WorkspaceTree } from './tree.ts'
+import type { OutlineIndex } from './outline.ts'
+import type { NodeRef } from './zones.ts'
 
 // ── 计划构造 ──
 
@@ -41,8 +42,8 @@ export function sessionGroupingPlan(input: {
   sections: readonly { id: string }[]
   /** 只改归属 */
   moveToGroup: (groupId: string) => void
-  /** 本区域的树：检测器沿它往上走，落到组内任何一条成员行上都读作落在这一片上 */
-  tree?: WorkspaceTree
+  /** 本区域的索引：检测器沿它往上走，落到组内任何一条成员行上都读作落在这一片上 */
+  index?: OutlineIndex
 }): DragPlan {
   const { workspaceId, sessionId, currentGroupId, sections } = input
   const targets = new Map<string, DragPlanTarget>()
@@ -74,23 +75,23 @@ export function sessionGroupingPlan(input: {
     targets.set(workspaceHeadKey(workspaceId), toLoose)
   }
 
-  return { source: { kind: 'session', id: sessionId }, targets, ...(input.tree === undefined ? {} : { tree: input.tree }) }
+  return { source: { kind: 'session', id: sessionId }, targets, ...(input.index === undefined ? {} : { index: input.index }) }
 }
 
 /**
- * 一条工作区行拖起时的计划（树驱动）
+ * 一条工作区行拖起时的计划（索引驱动）
  *
- * 只收一棵树：枚举面、容器归属与合法性判定都收在树那一层（`dropRelationsOf`），
+ * 只收一份索引：枚举面、容器归属与合法性判定都收在 `dropRelationsOf` 那一层，
  * 调用方因此不需要传当前分组、平铺名单、同层名单、祖先会话分组四份互有重叠的名单
  *
  * 落点档由关系本身决定，不由区域形状决定：换位是 `rows`（按参照行的前后半算），其余都是 `container`
  * 同一格因此不会既接排序又接放入——这正是「指针读出的语义必须单一」在代码里的形态
  *
  * 换算绑的是构造那一刻的同层名单，折起的成员因此不动
- * @param input - 树、来源，以及四种写入各自落到哪次调用
+ * @param input - 索引、来源，以及四种写入各自落到哪次调用
  */
 export function workspaceTreeDragPlan(input: {
-  tree: WorkspaceTree
+  index: OutlineIndex
   workspaceId: string
   /** 同层换位，`beforeWorkspaceId` 为 undefined 表示挪到末尾 */
   reorder: (beforeWorkspaceId: string | undefined) => void
@@ -101,13 +102,13 @@ export function workspaceTreeDragPlan(input: {
   /** 解除嵌套归属 */
   unnest: () => void
 }): DragPlan {
-  const { tree, workspaceId } = input
-  const source: TreeNodeRef = { kind: 'workspace', id: workspaceId }
+  const { index, workspaceId } = input
+  const source: NodeRef = { kind: 'workspace', id: workspaceId }
   const targets = new Map<string, DragPlanTarget>()
 
-  // 关系由树一次给全：它能落进哪几片、能排到哪几行前后
+  // 关系一次给全：它能落进哪几片、能排到哪几行前后
   // 每条关系自带它占的那几格区域键，这一层因此不必认识虚拟分组、会话分组与工作区行的差别
-  const relations = dropRelationsOf(tree, source, {
+  const relations = dropRelationsOf(index, source, {
     moveToGroup: input.moveToGroup,
     reorder: input.reorder,
     nestInto: input.nestInto,
@@ -161,7 +162,7 @@ export function workspaceTreeDragPlan(input: {
     })
   }
 
-  return { source: { kind: 'workspace', id: workspaceId }, targets, tree }
+  return { source: { kind: 'workspace', id: workspaceId }, targets, index }
 }
 
 /**

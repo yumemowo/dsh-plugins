@@ -1,8 +1,8 @@
 /**
  * 一整片区域的行序列
  *
- * 由容器算一次，向下交给渲染与拖拽两处：它们原本各算各的（渲染靠 `map` 套 `map` 现场展开、
- * 拖拽靠树按节点现算），同一件事算两遍，谁也不知道自己在整条序列里排第几
+ * 由容器算一次，向下交给渲染与拖拽两处：渲染按它画，拖拽按它装配查询索引
+ * 因此两处认的是同一批行，不存在「计划里有、界面上没有」的位置
  *
  * 与 `useRegionLayout` 同一取舍：输入都是快照与偏好，`useMemo` 按输入列，
  * 因此流式期间的重渲染不会重算
@@ -38,16 +38,16 @@ export function useOutline(source: OutlineInput): Outline {
   return useMemo(
     () => outlineOf(source),
     [
-    source.rootLayout,
-    source.workspaceLayoutOf,
-    source.depthOf,
-    source.containers,
-    source.expansion,
-    source.isScopeExpanded,
-    source.alwaysVisibleSessionIds,
-    source.now,
-    source.stray,
-    source.hideStray,
+      source.rootLayout,
+      source.workspaceLayoutOf,
+      source.depthOf,
+      source.containers,
+      source.expansion,
+      source.isScopeExpanded,
+      source.alwaysVisibleSessionIds,
+      source.now,
+      source.stray,
+      source.hideStray,
       source.compareRows,
       source.keys,
     ],

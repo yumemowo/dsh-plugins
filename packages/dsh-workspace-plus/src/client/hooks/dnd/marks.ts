@@ -23,7 +23,8 @@ import {
 import type { DragPlan, DragPlanTarget } from '../../data/protocol.ts'
 import type { DropNode, DropTarget } from '../../data/dropSearcher.ts'
 import type { ScrollBox } from '../../data/scroll.ts'
-import type { TreeContainerRef, TreeNodeRef } from '../../data/tree.ts'
+import type { ContainerNode } from '../../data/nest.ts'
+import type { NodeRef } from '../../data/zones.ts'
 
 /**
  * 一处落点标记：画在哪个元素上、带哪个值
@@ -97,16 +98,16 @@ export function collectDropTargets(
   root: ParentNode,
   plan: DragPlan,
 ): { targets: DropTarget[]; paint: Map<string, () => PaintMark | undefined> } {
-  /** 区域键 → 节点身份：树对全部节点算一遍，这里只查表 */
-  const zoneNodes: ReadonlyMap<string, TreeNodeRef | TreeContainerRef> =
-    plan.tree?.nodesByZone() ?? new Map()
+  /** 区域键 → 节点身份：索引对全部节点算一遍，这里只查表 */
+  const zoneNodes: ReadonlyMap<string, NodeRef | ContainerNode> =
+    plan.index?.nodesByZone() ?? new Map()
   const nodeOf = (key: string, fallback: DropNode): DropNode => zoneNodes.get(key) ?? fallback
 
   /**
    * 一格的落点单位：框与线该画的那个元素
    *
-   * 落点单位由渲染层写在 `data-wg-dnd-region` 上，值是一处单位标识（见 `data/tree.ts` 的
-   * `regionOfKey`）。计划点名了 `regionOf` 就按它查；没点名表示这一格自己就是单位。
+   * 落点单位由渲染层写在 `data-wg-dnd-region` 上，值是一处单位标识（见 `data/zones.ts` 的
+   * `regionKeyOf`）。计划点名了 `regionOf` 就按它查；没点名表示这一格自己就是单位。
    *
    * 两种情形合成一次查询，因此「只有一行的块」与「很多行的块」在这里没有分支：
    * 前者没有那个标记，退回那一格自己的元素；后者由标记直接交出整块
@@ -137,7 +138,7 @@ export function collectDropTargets(
     if (key === null) continue
     const target = plan.targets.get(key)
     if (target === undefined) continue
-    // 不在树上的行（会话、置顶）用行 id 作身份
+    // 索引里没有的行（会话、置顶）用行 id 作身份
     const rowId = element.getAttribute(ROW_ATTRIBUTE) ?? key
     const node = nodeOf(key, { kind: 'row', id: rowId })
 
@@ -213,7 +214,7 @@ export function collectDropTargets(
  * @param node - 落点身份
  */
 function zonesOfNode(
-  zoneNodes: ReadonlyMap<string, TreeNodeRef | TreeContainerRef>,
+  zoneNodes: ReadonlyMap<string, NodeRef | ContainerNode>,
   node: DropNode,
 ): string[] {
   const keys: string[] = []
@@ -258,7 +259,7 @@ export function describeElement(element: Element): string {
 
 /**
  * 一个落点身份的简短称呼，日志里用
- * @param node - 树节点、容器或行
+ * @param node - 索引里的节点、容器或行
  */
 export function describeNode(node: DropNode): string {
   if (node.kind === 'workspace') return 'workspace/' + node.id
@@ -377,15 +378,15 @@ export function boxOf(element: HTMLElement): ScrollBox {
   return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right }
 }
 /**
- * 指针落着的元素是树上哪个节点
+ * 指针落着的元素是索引里哪个节点
  *
- * 这一层里唯一一处「元素 → 节点」的换算：元素上的区域键经树的对照表换成节点身份。
- * 找不到时按行 id 立一个行身份——会话行与置顶行不在树上
+ * 这一层里唯一一处「元素 → 节点」的换算：元素上的区域键经索引的对照表换成节点身份。
+ * 找不到时按行 id 立一个行身份——会话行与置顶行不在索引里
  * @param zoneNodes - 区域键 → 节点身份的对照表
  * @param element - 指针下的元素
  */
 export function nodeAt(
-  zoneNodes: ReadonlyMap<string, TreeNodeRef | TreeContainerRef>,
+  zoneNodes: ReadonlyMap<string, NodeRef | ContainerNode>,
   element: Element,
 ): DropNode {
   const zone = owningZoneKey(element)
@@ -413,7 +414,7 @@ export function nodeAt(
  */
 export function paintFor(
   paint: Map<string, () => PaintMark | undefined>,
-  zoneNodes: ReadonlyMap<string, TreeNodeRef | TreeContainerRef>,
+  zoneNodes: ReadonlyMap<string, NodeRef | ContainerNode>,
   kind: 'inside' | 'order',
   node: DropNode,
   here: string | null,
@@ -430,7 +431,7 @@ export function paintFor(
       if (found !== undefined) return found
     }
   }
-  // 不在树上的行（会话行、置顶行）绘制表按行 id 存：它自己就是那一格
+  // 索引里没有的行（会话行、置顶行）绘制表按行 id 存：它自己就是那一格
   if (zones.length === 0) return node.kind === 'row' ? at(node.id) : undefined
   // 否则取这个节点的任意一格（顺序即区域键的登记顺序）
   for (const zone of zones) {

@@ -30,7 +30,6 @@ import { planWorkspaceMove } from '../data/move.ts'
 import type { WorkspaceMoveTarget } from '../data/move.ts'
 import { descendantsOf, deriveNesting, nearestAncestorForPath } from '../data/nest.ts'
 import type { Nesting } from '../data/nest.ts'
-import type { WorkspaceTree } from '../data/tree.ts'
 import {
   adoptionVisibility,
   focusedLayout,
@@ -67,7 +66,7 @@ import {
 import { useOutline } from '../hooks/useOutline.ts'
 import { stretchDragPlan } from '../data/plan.ts'
 import { debugWarn } from '../utils/debug.ts'
-import { buildWorkspaceTree } from '../data/tree.ts'
+import { indexOutline } from '../data/outline.ts'
 import type { RootLayout, SessionRow, WorkspaceLayout } from '../data/types.ts'
 import type { HostInfo } from '../hostInfo.ts'
 import { regionLabels } from '../labels.ts'
@@ -157,8 +156,6 @@ interface RegionLayout {
   /** workspaceId → 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里 */
   virtualOfWorkspace: (workspaceId: string) => string
   nesting: Nesting
-  /** 工作区与虚拟分组的统一节点树，拖拽计划层按它取容器归属与同层名单 */
-  tree: WorkspaceTree
   rootLayout: RootLayout
   pickerEntries: PickerEntry[]
   picker: ReturnType<typeof pickerSections>
@@ -480,27 +477,6 @@ function useRegionLayout(
   )
 
   /**
-   * 统一节点树
-   *
-   * 与 `rootLayout` 同源：两者都由注册表序、分组定义与嵌套推导装配，只是交出的形状不同
-   * 拖拽计划层按它取容器归属与同层名单，渲染层继续读上面那两份布局
-   */
-  const tree = useMemo(
-    () =>
-      buildWorkspaceTree({
-        workspaceIds,
-        virtualGroups: snapshot.workspaceGroups ?? [],
-        nesting,
-        sessionGroupsOf: (workspaceId: string) =>
-          (snapshot.byWorkspace[workspaceId] ?? []).map((group) => group.id),
-        // 拖拽认祖先要看 cwd：渲染那一层要求同组才算父子，拖拽问的是「可能挪到哪儿」，
-        // 而挪过去之后跨组的 cwd 祖先就成了真正的父子
-        pathOf: (workspaceId: string) => workspaceById.get(workspaceId)?.path,
-      }),
-    [workspaceIds, snapshot.workspaceGroups, nesting, snapshot.byWorkspace, workspaceById],
-  )
-
-  /**
    * 下拉菜单里的条目与三个分区
    *
    * 与列表取自同一次切分，因此「全部」分区的顺序与刚才那一屏逐行对应
@@ -552,7 +528,6 @@ function useRegionLayout(
     pathOfWorkspace,
     virtualOfWorkspace,
     nesting,
-    tree,
     rootLayout,
     pickerEntries,
     picker,
@@ -1815,11 +1790,12 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   /**
    * 整片区域的行序列
    *
-   * 由这一层算一次，渲染与（下一步的）拖拽都读它：它们原本各算各的，同一件事算两遍
-   * 布局是输入而不是被重算——这一层只决定「按什么顺序、露不露面、多高」
+   * 由这一层算一次，渲染与拖拽都读它：前者按行画，后者按行装配查询索引
+   * 布局是输入而不是被重算——这一层只决定「按什么顺序、露不露面」
    */
   const outline = useOutline({
-    rootLayout: layout.rootLayout,
+    // 聚焦已把它裁过：序列与列表因此列的是同一批工作区，拖拽的落点范围也由它界定
+    rootLayout: layout.listLayout,
     workspaceLayoutOf: (workspaceId) =>
       layoutByWorkspace.get(workspaceId) ?? { groups: [], loose: [], children: [] },
     depthOf: (workspaceId) => layout.nesting.levelOf(workspaceId),
@@ -1853,6 +1829,20 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
       loose: looseKey,
     },
   })
+
+  /**
+   * 序列上的查询表：容器归属、同层兄弟与拖拽认的祖先
+   *
+   * 它不引入任何新位置：每一项都能在行上直接读到，因此拖拽的落点范围恒等于渲染范围
+   * cwd 只在「可能挪到哪儿」那一步用到，那是路径事实，不在这条序列上
+   */
+  const index = useMemo(
+    () =>
+      indexOutline(outline.rows, {
+        pathOf: (workspaceId: string) => layout.workspaceById.get(workspaceId)?.path,
+      }),
+    [outline.rows, layout.workspaceById],
+  )
   const session: SessionRowScope = {
     currentSessionId,
     official,
@@ -1895,6 +1885,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     rowsByWorkspace,
     layoutByWorkspace,
     outline,
+    index,
     currentSessionId,
     home,
     session,

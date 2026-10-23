@@ -33,7 +33,7 @@ export interface NestingBinding {
  */
 export type ContainerNode =
   | { kind: 'root' }
-  | { kind: 'virtual'; groupId: string }
+  | { kind: 'virtual'; id: string }
   | { kind: 'group'; workspaceId: string; groupId: string }
 
 /** 推导的输入 */
@@ -276,7 +276,7 @@ export function deriveNesting(input: NestingInput): Nesting {
     virtualOf: (groupId: string): ContainerNode => {
       const cached = virtualNodes.get(groupId)
       if (cached !== undefined) return cached
-      const node: ContainerNode = { kind: 'virtual', groupId }
+      const node: ContainerNode = { kind: 'virtual', id: groupId }
       virtualNodes.set(groupId, node)
       return node
     },
