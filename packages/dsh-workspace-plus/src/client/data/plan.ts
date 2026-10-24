@@ -14,7 +14,7 @@ import type { Anchor } from '../../order.ts'
 import { dropRelationsOf } from './relations.ts'
 import type { DragPlan, DragPlanTarget, DragSource, DropAnchor } from './protocol.ts'
 import { sessionGroupRegionKey, sessionGroupZoneKey, groupHeadKey, workspaceRegionKey, workspaceHeadKey, looseKey } from './protocol.ts'
-import type { OutlineIndex } from './outline.ts'
+import type { OutlineIndex } from './outlineIndex.ts'
 import type { NodeRef } from './zones.ts'
 
 // ── 计划构造 ──

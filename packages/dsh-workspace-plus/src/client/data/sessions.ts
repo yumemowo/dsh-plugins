@@ -312,3 +312,19 @@ export function straySessions(
   }
   return rows
 }
+
+/**
+ * 一个会话当前所属的分组 id
+ *
+ * 读的是落盘的元数据而不是会话行：会话行上没有归属这一格
+ * @returns 所属分组 id，不在任何分组里时为空串
+ */
+export function groupIdOfSession(
+  groups: readonly { id: string; sessionIds: readonly string[] }[],
+  sessionId: string,
+): string {
+  for (const group of groups) {
+    if (group.sessionIds.includes(sessionId)) return group.id
+  }
+  return ''
+}

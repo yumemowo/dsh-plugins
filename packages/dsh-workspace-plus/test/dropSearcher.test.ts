@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { maybeDropSearcher } from '../src/client/data/dropSearcher.ts'
 import type { DropNode, DropTarget } from '../src/client/data/dropSearcher.ts'
 import { dropRelationsOf } from '../src/client/data/relations.ts'
-import type { OutlineIndex } from '../src/client/data/outline.ts'
+import type { OutlineIndex } from '../src/client/data/outlineIndex.ts'
 import { indexFrom } from './support/outlineFixture.ts'
 
 /**

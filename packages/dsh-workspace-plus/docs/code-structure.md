@@ -28,8 +28,7 @@ src/
     ├── menus.module.css        菜单条目样式（文字 + 行尾箭头）
     ├── css-modules.d.ts        `.module.css` 的类名声明（由 scripts/gen-css-types.mjs 生成）
     ├── data/                   推导：快照与设置 → 布局 / 落点 / 写入名单，无 React、无 DOM
-    │   ├── types.ts            SessionRow / GroupSection / WorkspaceLayout / RootLayout / 草稿类型
-    │   ├── layout.ts           分组元数据 → 渲染布局（会话那一层与根节点那一层）
+    │   ├── types.ts            SessionRow 与三类草稿、展示方式与指示器样式
     │   ├── nest.ts             子工作区嵌套推导（路径祖先关系、容器归属、段内森林）
     │   ├── zones.ts            区域键与落点单位的命名规则（行与容器在 DOM 上占哪几格）
     │   ├── relations.ts        一个节点此刻能落到哪儿（放入与位次两类关系，只有拖拽会读）
@@ -38,12 +37,13 @@ src/
     │   ├── status.ts           会话状态位推导（待交互 / 运行 / 完成）
     │   ├── search.ts           按标题搜索（查询净化、匹配、排序与截断）
     │   ├── pinned.ts           置顶集合的投影与合成（pinnedEntries、reconcilePinned、pinRanks、置顶段键）
-    │   ├── picker.ts           下拉菜单的条目与分区（根节点条目、三个分区、聚焦布局、聚焦解析）
+    │   ├── picker.ts           下拉菜单的条目与分区（根节点条目、三个分区、聚焦裁剪与解析）
     │   ├── sessions.ts         会话快照 → 渲染行（含可见性过滤、空白行命名、未分组收集）
     │   ├── collapse.ts         一个展示范围内折几条（五步判定、置顶与未空闲行，见 [会话折叠](session-collapse.md)）
     │   ├── plan.ts             五类来源各自的计划构造（会话归组、三种排序、工作区换位）
     │   ├── protocol.ts         拖拽计划的形状、DOM 标记属性与区域键封装（见 [行拖拽](row-drag.md)）
-    │   ├── outline.ts          一份扁平的行序列（题头行 / 会话行 / 溢出 / 空态的顺序、归属与题头文案），渲染按它逐层展开，拖拽按它装配索引
+    │   ├── outline.ts          分组元数据 → 行序列：根节点与工作区体内两层的切分、聚焦裁剪、顺序与归属；渲染按它逐层展开
+    │   ├── outlineIndex.ts     行序列上的查询表（容器归属、同层兄弟、拖拽认的祖先与区域键对照），只有拖拽会读
     │   └── rows.ts             会话行的显示事实（状态位与相对时间，两者都只依赖快照与文案）
     ├── utils/                  组件与样式表共用的零散常量、单点小工具与诊断出口
     │   ├── debug.ts            浏览器控制台的诊断出口（两级、常开与开关，见 [行拖拽](row-drag.md#诊断日志)）

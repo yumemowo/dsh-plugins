@@ -10,7 +10,7 @@
  * 纯逻辑，不碰 React、不碰 DOM
  */
 import { bodyKeyOf, headKeyOf, looseZoneKeyOf, regionKeyOf } from './zones.ts'
-import type { OutlineIndex } from './outline.ts'
+import type { OutlineIndex } from './outlineIndex.ts'
 
 // ── 计划 ──
 

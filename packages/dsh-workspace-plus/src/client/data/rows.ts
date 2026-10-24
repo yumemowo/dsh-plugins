@@ -60,3 +60,16 @@ export function relativeTimeOfRow(
   if (row.blank || format === undefined) return undefined
   return format(row.updatedAt, now)
 }
+
+/**
+ * 判定一组会话行里是否有当前选中的那条
+ *
+ * 官方用它决定展开状态下的工作区文件夹是否染成强调色
+ */
+export function containsSession(
+  rows: readonly SessionRow[],
+  currentSessionId: string | undefined,
+): boolean {
+  if (currentSessionId === undefined) return false
+  return rows.some((row) => row.id === currentSessionId)
+}

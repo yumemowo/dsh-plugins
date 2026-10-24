@@ -25,14 +25,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement, RefObject } from 'react'
 import { EMPTY_PICKER_STATE } from '../../pickerState.ts'
 import type { AddWorkspaceActions, OfficialSessionActions, RegionActions, RegionDataHooks } from '../actions.ts'
-import { buildLayout, buildRootLayout, virtualWorkspaceIdOf } from '../data/layout.ts'
+import { focusListing, listRoot } from '../data/outline.ts'
 import { planWorkspaceMove } from '../data/move.ts'
 import type { WorkspaceMoveTarget } from '../data/move.ts'
 import { descendantsOf, deriveNesting, nearestAncestorForPath } from '../data/nest.ts'
 import type { Nesting } from '../data/nest.ts'
 import {
   adoptionVisibility,
-  focusedLayout,
   focusedWorkspaceIds,
   pickerSections,
   resolveFocus,
@@ -66,8 +65,9 @@ import {
 import { useOutline } from '../hooks/useOutline.ts'
 import { stretchDragPlan } from '../data/plan.ts'
 import { debugWarn } from '../utils/debug.ts'
-import { indexOutline } from '../data/outline.ts'
-import type { RootLayout, SessionRow, WorkspaceLayout } from '../data/types.ts'
+import { indexOutline } from '../data/outlineIndex.ts'
+import type { RootListing } from '../data/outline.ts'
+import type { SessionRow } from '../data/types.ts'
 import type { HostInfo } from '../hostInfo.ts'
 import { regionLabels } from '../labels.ts'
 import type { RegionLabels } from '../labels.ts'
@@ -156,13 +156,15 @@ interface RegionLayout {
   /** workspaceId → 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里 */
   virtualOfWorkspace: (workspaceId: string) => string
   nesting: Nesting
-  rootLayout: RootLayout
+  listing: RootListing
   pickerEntries: PickerEntry[]
   picker: ReturnType<typeof pickerSections>
   /** 第二行显示的文案，没有聚焦时是「全部工作区」 */
   currentFocus: string
-  /** 聚焦生效后的根节点布局 */
-  listLayout: RootLayout
+  /** 解析过的聚焦条目；解析不到时为 undefined，表示「全部工作区」 */
+  resolvedFocus: PickerEntry | undefined
+  /** 聚焦生效后的切分 */
+  focusedListing: RootListing
   /** 真的聚焦在某一片内容上时，「未分组」区段整段隐藏 */
   focused: boolean
   /** 会被解除嵌套的子工作区显示名，工作区已被删掉时退回 id，名单因此不会出现空行 */
@@ -471,8 +473,8 @@ function useRegionLayout(
    * 开启嵌套时每一段只列该容器里的顶层工作区，被嵌套的那些在父工作区体内渲染
    * 关掉时每个工作区都散回自己那个虚拟分组（或根节点），与没有这个特性时逐行一致
    */
-  const rootLayout = useMemo(
-    () => buildRootLayout(workspaceIds, snapshot.workspaceGroups, nesting),
+  const listing = useMemo(
+    () => listRoot({ workspaceIds, virtualGroups: snapshot.workspaceGroups ?? [], nesting }),
     [workspaceIds, snapshot.workspaceGroups, nesting],
   )
 
@@ -483,8 +485,8 @@ function useRegionLayout(
    * 开启嵌套时子工作区也列出并按层级缩进，它们可能已被置顶，不列出来那些记录就成了指向不存在条目的死条目
    */
   const pickerEntries = useMemo(
-    () => rootPickerEntries(rootLayout, workspaceById, snapshot.nested ? nesting : undefined),
-    [rootLayout, workspaceById, nesting, snapshot.nested],
+    () => rootPickerEntries(listing, workspaceById, snapshot.nested ? nesting : undefined),
+    [listing, workspaceById, nesting, snapshot.nested],
   )
   const picker = useMemo(
     () => pickerSections(pickerEntries, snapshot.picker),
@@ -502,9 +504,9 @@ function useRegionLayout(
    *
    * 聚焦一个工作区分组时列表里不再重复渲染组头（第二行已经写着组名），因此这一层只交出组内工作区
    */
-  const listLayout = useMemo(
-    () => focusedLayout(rootLayout, pickerEntries, snapshot.picker.focused),
-    [rootLayout, pickerEntries, snapshot.picker.focused],
+  const focusedListing = useMemo(
+    () => focusListing(listing, resolvedFocus?.address ?? ALL_ENTRIES),
+    [listing, resolvedFocus],
   )
   const focused = resolvedFocus !== undefined
 
@@ -528,11 +530,12 @@ function useRegionLayout(
     pathOfWorkspace,
     virtualOfWorkspace,
     nesting,
-    rootLayout,
+    listing,
     pickerEntries,
     picker,
     currentFocus,
-    listLayout,
+    resolvedFocus,
+    focusedListing,
     focused,
     groupedChildLabels,
   }
@@ -774,7 +777,7 @@ function useSearchResults(
       expansion.expandWorkspace(UNGROUPED_KEY)
     } else {
       // 工作区本身可能还躺在一个收起的工作区分组里，与外层两层一样要先展开，否则揭示的那一行落在看不见的地方
-      const rootGroupId = virtualWorkspaceIdOf(layout.rootLayout.groups, workspaceId)
+      const rootGroupId = layout.listing.groupOf.get(workspaceId) ?? ''
       if (rootGroupId !== '') expansion.expandVirtualWorkspace(rootGroupId)
       // 工作区自己可能是嵌在父工作区体内的子工作区，从根节点那一层起逐层展开它所有的祖先
       // 只展开它自己会让那一行落在收起的父工作区撑开体里，用户看不到它
@@ -1552,30 +1555,6 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     statusSnapshot,
   )
 
-  /**
-   * workspaceId → 该工作区体内的分段与子工作区
-   *
-   * 原先由 WorkspaceNode 在递归层各自算一遍；outline 要按同一份布局排行，两处就都得算
-   * 同一件事算两遍正是要消灭的东西，因此上提到这一层：渲染与序列读同一个 Map
-   *
-   * 依赖只留那三格：会话行、分组元数据、嵌套推导都是稳定引用，因此它不会在每次流式重渲染时重建
-   */
-  const layoutByWorkspace = useMemo(() => {
-    const built = new Map<string, WorkspaceLayout>()
-    for (const [workspaceId, rows] of rowsByWorkspace) {
-      built.set(
-        workspaceId,
-        buildLayout(
-          rows,
-          snapshot.byWorkspace[workspaceId] ?? [],
-          // 组内子工作区，放进这个分组、且父工作区是当前工作区的那些
-          (groupId) => layout.nesting.groupedChildIdsOf(workspaceId, groupId),
-          layout.nesting.looseChildIdsOf(workspaceId),
-        ),
-      )
-    }
-    return built
-  }, [rowsByWorkspace, snapshot.byWorkspace, layout.nesting])
   // 不属于任何工作区的会话，只有存在时才渲染末尾的「未分组」区段
   // 聚焦时整段不出现（`focusedLayout` 只交出被聚焦的那一片），因此这里也不必为它留位
   // 就地置顶在下面按名次表处理，这里先取列表原序
@@ -1784,7 +1763,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
       : flatRowsInFocus(
           flatSessionRows(sessions, archivedSessionIds, statusSnapshot),
           workspaceOfSession,
-          focusedWorkspaceIds(layout.rootLayout, layout.pickerEntries, snapshot.picker.focused),
+          focusedWorkspaceIds(layout.listing, layout.resolvedFocus?.address ?? ALL_ENTRIES),
         ).sort((a, b) => compareSessionRowsWithPins(pinRanksByScope, a, b))
 
   /**
@@ -1794,21 +1773,18 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    * 布局是输入而不是被重算——这一层只决定「按什么顺序、露不露面」
    */
   const outline = useOutline({
-    // 聚焦已把它裁过：序列与列表因此列的是同一批工作区，拖拽的落点范围也由它界定
-    rootLayout: layout.listLayout,
-    workspaceLayoutOf: (workspaceId) =>
-      layoutByWorkspace.get(workspaceId) ?? { groups: [], loose: [], children: [] },
-    depthOf: (workspaceId) => layout.nesting.levelOf(workspaceId),
-    containers: {
-      root: layout.nesting.containers.root,
-      virtualOf: layout.nesting.containers.virtualOf,
-      groupOf: layout.nesting.containers.groupOf,
-    },
+    // 聚焦已由这一层裁过：序列与列表因此列的是同一批工作区，拖拽的落点范围也由它界定
+    workspaceIds: layout.workspaceIds,
+    virtualGroups: snapshot.workspaceGroups ?? [],
+    rowsOf: (workspaceId) => rowsByWorkspace.get(workspaceId) ?? [],
+    groupsOf: (workspaceId) => snapshot.byWorkspace[workspaceId] ?? [],
+    nesting: layout.nesting,
+    // 解析过的地址：记录比列表活得久，指向已消失对象时当作没有聚焦
+    focused: layout.resolvedFocus?.address ?? ALL_ENTRIES,
     isScopeExpanded: (ref) => ui.sessionScopes[sessionScopeKey(ref)] === true,
     alwaysVisibleSessionIds,
     now,
     stray,
-    hideStray: layout.focused,
     compareRows: (a, b) => compareSessionRowsWithPins(pinRanksByScope, a, b),
     keys: {
       workspaceHead: workspaceHeadKey,
@@ -1877,7 +1853,6 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     edits,
     commands,
     rowsByWorkspace,
-    layoutByWorkspace,
     outline,
     index,
     currentSessionId,

@@ -24,7 +24,7 @@ import type { ReactNode } from 'react'
 import type { MenuActionItem, MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconVirtualWorkspace16 } from './icons.tsx'
 import type { OfficialSessionLabels } from './official.ts'
-import type { GroupSection, VirtualWorkspaceSection } from './data/types.ts'
+
 import styles from './menus.module.css'
 
 /**
@@ -49,10 +49,34 @@ function submenuParentLabel(label: string, entries: readonly MenuActionItem[]): 
   )
 }
 
+/** 菜单里一个分组只需要身份与名字 */
+export interface MenuGroup {
+  id: string
+  label: string
+}
+
+/**
+ * 比较两份分组名单是否表示同一件事
+ *
+ * 供行级 memo 的比较器使用：菜单只消费 id 与名字，会话数变了不影响菜单
+ */
+export function sameMenuGroups(
+  a: readonly MenuGroup[] | undefined,
+  b: readonly MenuGroup[] | undefined,
+): boolean {
+  if (a === b) return true
+  if (a === undefined || b === undefined) return false
+  if (a.length !== b.length) return false
+  return a.every((group, index) => {
+    const other = b[index]
+    return other !== undefined && group.id === other.id && group.label === other.label
+  })
+}
+
 /** 会话「更多操作」菜单里分组项的选项集 */
 export interface GroupMenuInput {
-  /** 按工作区视图顺序排列的全部分组（未过滤） */
-  sections: readonly GroupSection[]
+  /** 按视图顺序排列的全部分组（未过滤） */
+  sections: readonly MenuGroup[]
   /** 目标会话当前所属分组 id，空串表示未归组 */
   currentGroupId: string
   /** 「移动到…」一级项文案，省略号表示点下去还要选一个目标 */
@@ -341,7 +365,7 @@ export function buildParentGroupMenuItem(input: ParentGroupMenuInput): MenuActio
  */
 export interface VirtualWorkspaceMenuInput {
   /** 根节点上的全部分组，按创建顺序 */
-  sections: readonly VirtualWorkspaceSection[]
+  sections: readonly MenuGroup[]
   /** 该工作区当前所属的工作区分组 id，空串表示未归组 */
   currentGroupId: string
   /**

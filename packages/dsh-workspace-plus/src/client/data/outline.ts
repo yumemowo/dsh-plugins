@@ -3,18 +3,19 @@
  *
  * 容器与行一起进序列：题头行（工作区分组、会话分组、工作区）、会话行、溢出按钮与空态都在其中
  *
- * 它是布局的下游而不是替代：`layout.ts` 答「哪些分组成员是谁」
- * 这一层答「此刻界面上从上到下是什么」，比布局多要两样：三层折叠态与每段露出额度
+ * 这一层做两件事：把元数据切成「谁在哪个分组里」，再把切出来的结果摊成界面顺序。
+ * 两件事必须一起做——分开就会变成两条推导，各算一遍同一件事
  *
- * 不碰 React、不碰 DOM，也不记几何：一行多高由样式表按内容决定，这一层只说顺序与露面
+ * 不碰 React、不碰 DOM，也不记几何：一行多高由样式表按内容决定，这一层只说顺序
  */
 import { collapseSessionRows, sessionScopeKey } from './collapse.ts'
 import type { SessionScopeRef } from './collapse.ts'
-import { nearestAncestorAnyScope } from './nest.ts'
 import type { ContainerNode } from './nest.ts'
-import { looseZoneKeyOf, zoneKeysOf } from './zones.ts'
-import type { NodeRef } from './zones.ts'
-import type { RootLayout, SessionRow, WorkspaceLayout } from './types.ts'
+import type { Group, VirtualWorkspace } from '../remote.ts'
+import type { Nesting } from './nest.ts'
+import { ALL_ENTRIES } from '../../rootEntry.ts'
+import type { RootEntryAddress } from '../../rootEntry.ts'
+import type { SessionRow } from './types.ts'
 
 // ── 行 ──
 
@@ -54,13 +55,6 @@ export interface OutlineRow {
   ownerKey: string
   /** 这一行挂在哪个工作区名下；根节点那一层与「未分组」桶为空串 */
   workspaceId: string
-  /**
-   * 工作区行嵌在哪个工作区体内；顶层工作区与别的种类为空串
-   *
-   * 容器回答不了这件事：父工作区与子工作区同处一个容器（子工作区渲染在父工作区体内，
-   * 但那一片属于同一个容器），因此嵌在谁里面要单独记一格
-   */
-  parentId?: string | undefined
   /** 缩进层级，与 `nest` 的 `levelOf` 同值 */
   depth: number
   /** 这一行在 DOM 上占的那几格区域键 */
@@ -115,21 +109,25 @@ export interface OutlineRow {
 /**
  * 造 outline 要的全部输入
  *
- * 布局由调用方给现成的：这一层不重算「谁在哪个分组里」，只决定顺序、露面与高度
+ * 分组切分在这一层做：调用方交出元数据与推导结果，这一层决定「谁在哪个分组里、按什么顺序」
  */
 export interface OutlineInput {
-  /** 根节点那一层：分组段与其成员 */
-  rootLayout: RootLayout
-  /** 一个工作区体内的分段与子工作区 */
-  workspaceLayoutOf: (workspaceId: string) => WorkspaceLayout
-  /** 一个工作区的缩进层级 */
-  depthOf: (workspaceId: string) => number
-  /** 分支容器身份：与 `nest` 的 `containers` 同一个发牌器 */
-  containers: {
-    readonly root: ContainerNode
-    virtualOf: (groupId: string) => ContainerNode
-    groupOf: (workspaceId: string, groupId: string) => ContainerNode
-  }
+  /** 全部工作区 id，按宿主给的顺序 */
+  workspaceIds: readonly string[]
+  /** 工作区分组定义，按创建顺序 */
+  virtualGroups: readonly VirtualWorkspace[]
+  /** 一个工作区的全部会话行 */
+  rowsOf: (workspaceId: string) => readonly SessionRow[]
+  /** 一个工作区名下的会话分组，按创建顺序；含空分组 */
+  groupsOf: (workspaceId: string) => readonly Group[]
+  /** 层级推导：容器归属、父工作区、缩进层级都从它读 */
+  nesting: Nesting
+  /**
+   * 当前聚焦的条目，缺省表示「全部工作区」
+   *
+   * 聚焦只改「谁进这一屏」，不改归属：聚焦一个分组时那一片的工作区整片进序列，但不重复列出组头
+   */
+  focused?: RootEntryAddress | undefined
   /** 各区段是否展开到全部行 */
   isScopeExpanded: (ref: SessionScopeRef) => boolean
   /** 始终展示并占额度的会话 id */
@@ -138,8 +136,6 @@ export interface OutlineInput {
   now: number
   /** 末尾「未分组」桶里的会话行，已按该段的比较器排好 */
   stray: readonly SessionRow[]
-  /** 真的聚焦在某一片内容上时，「未分组」桶整段隐藏 */
-  hideStray: boolean
   /** 会话行的排序比较器，与渲染用的是同一个 */
   compareRows: (a: SessionRow, b: SessionRow) => number
   /** 区域键的写法，由调用方交出：这一层不拼键，只把键记在行上 */
@@ -157,19 +153,176 @@ export interface OutlineInput {
   }
 }
 
+// ── 根节点这一层 ──
+
+/**
+ * 一个工作区分组，以及它名下要列出来的那些工作区
+ *
+ * `members` 是归属，含被嵌套的那些；`roots` 是这一层真正画出来的那些
+ * 两者开启嵌套时不同：`/repo` 与 `/repo/pkg` 都归属这个分组，但只有 `/repo` 在这一层
+ */
+export interface RootGroup {
+  id: string
+  label: string
+  members: readonly string[]
+  roots: readonly string[]
+}
+
+/**
+ * 根节点这一层长什么样：有哪些分组、每段哪些工作区、哪些没有归组
+ */
+export interface RootListing {
+  groups: readonly RootGroup[]
+  /** 没有归入任何分组的工作区，只留最外层 */
+  loose: readonly string[]
+  /** 每个工作区归属哪个分组，不在任何分组里时为空串 */
+  groupOf: ReadonlyMap<string, string>
+}
+
+/** 造一份根节点清单要的输入 */
+export interface RootListingInput {
+  /** 全部工作区 id，按宿主给的顺序 */
+  workspaceIds: readonly string[]
+  /** 工作区分组定义，按创建顺序 */
+  virtualGroups: readonly VirtualWorkspace[]
+  /** 层级推导：容器归属、父工作区、缩进层级都从它读 */
+  nesting: Nesting
+}
+
+/**
+ * 按工作区分组把工作区列表收成根节点这一层
+ *
+ * 分组定义里的 `workspaceIds` 只当归属集合用：组内的先后由注册表序决定，与那个数组的书写序无关
+ * 这样顶层成员与子工作区共用同一个顺序来源，换位写入在各层读到的都是同一份序
+ *
+ * 元数据里存在、而列表里已经没有的工作区静默跳过；一个工作区被两个分组同时记录时以先出现的为准
+ * @param allowed - 只留这些工作区，缺省表示全部
+ */
+export function listRoot(input: RootListingInput, allowed?: ReadonlySet<string> | undefined): RootListing {
+  const known = new Set(input.workspaceIds)
+  const groupOf = new Map<string, string>()
+  for (const group of input.virtualGroups) {
+    for (const id of group.workspaceIds) {
+      if (!known.has(id) || groupOf.has(id)) continue
+      groupOf.set(id, group.id)
+    }
+  }
+
+  /** 一个容器里的顶层成员，按注册表序 */
+  const topsOf = (container: ContainerNode, members: readonly string[]): string[] => {
+    const roots = new Set(input.nesting.rootsOf(container))
+    return members.filter((id) => roots.has(id))
+  }
+
+  const membersByGroup = new Map<string, string[]>()
+  const looseMembers: string[] = []
+  for (const id of input.workspaceIds) {
+    if (allowed !== undefined && !allowed.has(id)) continue
+    const groupId = groupOf.get(id)
+    if (groupId === undefined) {
+      looseMembers.push(id)
+      continue
+    }
+    const list = membersByGroup.get(groupId)
+    if (list === undefined) membersByGroup.set(groupId, [id])
+    else list.push(id)
+  }
+
+  const groups: RootGroup[] = []
+  for (const group of input.virtualGroups) {
+    // 空分组照样列：它自己也占一行，组体里还有一句占位文案
+    const members = membersByGroup.get(group.id) ?? []
+    groups.push({
+      id: group.id,
+      label: group.name,
+      members,
+      roots: topsOf(input.nesting.containers.virtualOf(group.id), members),
+    })
+  }
+  return {
+    groups,
+    loose: topsOf(input.nesting.containers.root, looseMembers),
+    groupOf,
+  }
+}
+
+/**
+ * 聚焦之后这一层还剩什么
+ *
+ * - 聚焦一个工作区分组：那一组整片进来，但不再单列组头——第二行已经写着组名，再出现一次就是同一个名字并排两次
+ * - 聚焦一个工作区：只有它自己
+ * 调用方交来的 `focused` 必须是已经解析过的：记录比列表活得久，指向已消失对象的地址由调用方先换成 `all`
+ * @param whole - 未聚焦时这一层的样子
+ * @param focused - 当前生效的聚焦地址
+ */
+export function focusListing(whole: RootListing, focused: RootEntryAddress): RootListing {
+  if (focused.kind === 'all') return whole
+  if (focused.kind === 'workspace') {
+    // 子工作区可能嵌在父工作区体内，因此不能靠这一层的名单判断它还在不在：那是上游解析过的事
+    return { groups: [], loose: [focused.id], groupOf: whole.groupOf }
+  }
+  const group = whole.groups.find((each) => each.id === focused.id)
+  // 解析不到就退回整片内容：记录比列表活得久，指向已消失的对象时不能把列表切成空的一片
+  if (group === undefined) return whole
+  // 组内整片进来，但这一层不再列出组头：它的成员直接平铺在最外层
+  return { groups: [], loose: group.roots, groupOf: whole.groupOf }
+}
+
+/**
+ * 一个工作区体内的会话切分
+ *
+ * `groups` 里每段只收它认领、且此刻还在列表里的那些行；`loose` 是没人认领的
+ * 元数据里写着、而列表里已经没有的会话静默跳过；一条会话被两个分组同时记录时只归先出现的那个
+ */
+export interface WorkspaceRows {
+  groups: readonly { id: string; label: string; rows: readonly SessionRow[] }[]
+  loose: readonly SessionRow[]
+}
+
+/**
+ * 把会话行按分组元数据切成「分组段 + 未归组」
+ * @param rows - 本工作区的全部会话行
+ * @param groups - 本工作区的分组定义，按创建顺序
+ */
+export function layoutWorkspaceRows(
+  rows: readonly SessionRow[],
+  groups: readonly Group[],
+): WorkspaceRows {
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  const claimed = new Set<string>()
+  const sections: { id: string; label: string; rows: readonly SessionRow[] }[] = []
+  for (const group of groups) {
+    const owned: SessionRow[] = []
+    for (const sessionId of group.sessionIds) {
+      const row = byId.get(sessionId)
+      if (row === undefined || claimed.has(sessionId)) continue
+      claimed.add(sessionId)
+      owned.push(row)
+    }
+    // 空分组照样列：它自己也占一行，组体里还有一句占位文案
+    sections.push({ id: group.id, label: group.name, rows: owned })
+  }
+  return { groups: sections, loose: rows.filter((row) => !claimed.has(row.id)) }
+}
+
 // ── 构造 ──
 
 /**
- * 把一份布局收成一条扁平的行序列，顺序即界面上的顺序
+ * 把元数据与推导摊成一条扁平的行序列，顺序即界面上的顺序
  *
  * 根节点的分组段在前，其后是未归组的工作区，末尾「未分组」桶排在全部工作区之后
- * 一个工作区体内先是子工作区（递归），再是各会话分组，最后是未归组会话
+ * 一个工作区体内先是子工作区（先未归组那一段、再各会话分组），最后是未归组会话
  * @param input - 见 {@link OutlineInput}
  * @returns 从上到下的全部行
  */
 export function buildOutline(input: OutlineInput): OutlineRow[] {
   const rows: OutlineRow[] = []
-  const { containers, rootLayout } = input
+  const { nesting } = input
+  const containers = nesting.containers
+  const listing = focusListing(
+    listRoot(input),
+    input.focused ?? ALL_ENTRIES,
+  )
 
   const push = (
     row: Omit<OutlineRow, 'hiddenCount' | 'scopeExpanded'> & {
@@ -185,12 +338,14 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
   let owner = ''
 
   /** 一个工作区区块 */
-  const addWorkspace = (workspaceId: string, container: ContainerNode, parentId = ''): void => {
-    const layout = input.workspaceLayoutOf(workspaceId)
-    const depth = input.depthOf(workspaceId)
-    const childIds = layout.children ?? []
+  const addWorkspace = (workspaceId: string, container: ContainerNode): void => {
+    const rowsOfWorkspace = input.rowsOf(workspaceId)
+    const split = layoutWorkspaceRows(rowsOfWorkspace, input.groupsOf(workspaceId))
+    const looseChildren = nesting.looseChildIdsOf(workspaceId)
+    const depth = nesting.levelOf(workspaceId)
     const headKey = 'workspace/' + workspaceId
     const outer = owner
+    let hasBody = false
 
     push({
       key: headKey,
@@ -198,62 +353,59 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       ownerKey: outer,
       container,
       workspaceId,
-      parentId,
       depth,
       zoneKeys: [input.keys.workspaceHead(workspaceId), input.keys.workspaceBody(workspaceId)],
       regionKey: input.keys.workspaceRegion(workspaceId),
-      total: layout.loose.length,
+      total: split.loose.length,
     })
     owner = headKey
 
     // 子工作区排在会话分组之前，与分组内部同一顺序
-    for (const childId of childIds) addWorkspace(childId, container, workspaceId)
+    for (const childId of looseChildren) {
+      hasBody = true
+      addWorkspace(childId, container)
+    }
 
-    for (const section of layout.groups) {
-      const groupHeadKey = 'group/' + workspaceId + '/' + section.id
+    for (const group of split.groups) {
+      const groupHeadKey = 'group/' + workspaceId + '/' + group.id
+      const groupContainer = containers.groupOf(workspaceId, group.id)
+      const inGroup = nesting.groupedChildIdsOf(workspaceId, group.id)
       const inner = owner
+      hasBody = true
       push({
         key: groupHeadKey,
         kind: 'groupHead',
         ownerKey: inner,
-        container: containers.groupOf(workspaceId, section.id),
+        container: groupContainer,
         workspaceId,
         depth,
         zoneKeys: [
-          input.keys.sessionGroupHead(workspaceId, section.id),
-          input.keys.sessionGroupZone(workspaceId, section.id),
+          input.keys.sessionGroupHead(workspaceId, group.id),
+          input.keys.sessionGroupZone(workspaceId, group.id),
         ],
-        regionKey: input.keys.sessionGroupRegion(workspaceId, section.id),
-        groupId: section.id,
-        label: section.label,
-        count: section.sessions.length,
-        total: section.sessions.length,
+        regionKey: input.keys.sessionGroupRegion(workspaceId, group.id),
+        groupId: group.id,
+        label: group.label,
+        count: group.rows.length,
       })
       owner = groupHeadKey
       // 被放进这个分组的子工作区排在该组的会话之前，与组内的绘制顺序一致
-      for (const childId of section.children ?? []) {
-        addWorkspace(childId, containers.groupOf(workspaceId, section.id), workspaceId)
-      }
-      addSessions(
-        { kind: 'group', workspaceId, groupId: section.id },
-        section.sessions,
-        containers.groupOf(workspaceId, section.id),
-        workspaceId,
-        depth,
-      )
+      for (const childId of inGroup) addWorkspace(childId, groupContainer)
+      addSessions({ kind: 'group', workspaceId, groupId: group.id }, group.rows, groupContainer, workspaceId, depth)
       owner = inner
     }
 
+    if (split.loose.length > 0) hasBody = true
     addSessions(
       { kind: 'loose', workspaceId },
-      layout.loose,
+      split.loose,
       container,
       workspaceId,
       depth,
       input.keys.loose(workspaceId),
     )
 
-    if (childIds.length === 0 && layout.groups.length === 0 && layout.loose.length === 0) {
+    if (!hasBody) {
       push({
         key: 'empty/' + workspaceId,
         kind: 'empty',
@@ -271,7 +423,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
   /**
    * 一段会话行：折叠后的那些，再加一条溢出按钮
    *
-   * 收起的那些不渲染，展开时全部渲染
    * @param presorted - 传进来的已经就是最终顺序，不必再排
    *   末尾「未分组」桶是这一档：容器交给它的是「置顶提前、其余维持列表原序」之后的结果
    *   再套一遍工作区那个按时间排的比较器会把置顶提前抹掉
@@ -323,7 +474,7 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
   }
 
   // 根节点：先各工作区分组段，再平铺的那些
-  for (const section of rootLayout.groups) {
+  for (const section of listing.groups) {
     const virtualHeadKey = 'virtual/' + section.id
     push({
       key: virtualHeadKey,
@@ -336,8 +487,8 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       regionKey: input.keys.virtualRegion(section.id),
       groupId: section.id,
       label: section.label,
-      count: section.workspaceIds.length,
-      members: section.workspaceIds,
+      count: section.members.length,
+      members: section.members,
     })
     owner = virtualHeadKey
     for (const workspaceId of section.roots) {
@@ -345,11 +496,12 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
     }
     owner = ''
   }
-  for (const workspaceId of rootLayout.loose) {
+  for (const workspaceId of listing.loose) {
     addWorkspace(workspaceId, containers.root)
   }
 
-  if (!input.hideStray && input.stray.length > 0) {
+  // 「未分组」桶不属于任何一片，聚焦到某一处时它整段不进序列
+  if (input.stray.length > 0 && (input.focused ?? ALL_ENTRIES).kind === 'all') {
     push({
       key: 'stray/head',
       kind: 'strayHead',
@@ -361,372 +513,11 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       regionKey: undefined,
       total: input.stray.length,
     })
-    // 「未分组」桶的次序在容器那一层已经定好（置顶提前、其余维持列表原序），这里不再重排
     owner = 'stray/head'
+    // 「未分组」桶的次序在容器那一层已经定好（置顶提前、其余维持列表原序），这里不再重排
     addSessions({ kind: 'stray' }, input.stray, containers.root, '', 0, undefined, true)
     owner = ''
   }
 
   return rows
-}
-
-// ── 索引 ──
-
-/**
- * 一行一个身份之后的查询表
- *
- * 拖拽要问的都不是「第几行」，而是「这个工作区在哪一片、它上面是谁、同层还有谁」，
- * 因此把行序列扫一遍装成几份索引。它不引入新事实：每一项都能在行上直接读到
- */
-export interface OutlineIndex {
-  /** 容器发牌器：交回的就是行上带着的那个实例，因此可以直接当 Map 的键 */
-  containers: {
-    readonly root: ContainerNode
-    virtualOf: (groupId: string) => ContainerNode
-    groupOf: (workspaceId: string, groupId: string) => ContainerNode
-  }
-  /** 节点落进的那一片，节点不在序列里时为 undefined */
-  containerOf: (node: NodeRef) => ContainerNode | undefined
-  /** 一个容器里的全部成员，按界面顺序 */
-  membersOf: (container: ContainerNode) => readonly NodeRef[]
-  /** 一个容器里的顶层成员：嵌进同容器内另一个成员的那些不在其中 */
-  rootsOf: (container: ContainerNode) => readonly NodeRef[]
-  /** 节点所在的那一段兄弟，按界面顺序 */
-  siblingsOf: (node: NodeRef) => readonly NodeRef[]
-  /** 工作区节点的父节点，虚拟分组节点没有父节点 */
-  parentOf: (node: NodeRef) => NodeRef | undefined
-  /** 工作区节点的祖先链，从近到远 */
-  ancestorsOf: (node: NodeRef) => readonly NodeRef[]
-  /**
-   * 拖拽认的父节点：渲染归属与 cwd 路径上的祖先收成同一条边
-   *
-   * 拖拽只关心「它在谁里面」，不关心那条边是用户放的还是路径推出来的
-   */
-  dropParentOf: (node: NodeRef) => NodeRef | undefined
-  /** 拖拽认的祖先链，从近到远 */
-  dropAncestorsOf: (node: NodeRef) => readonly NodeRef[]
-  /** 拖拽认的同层兄弟，按同一条边认 */
-  dropSiblingsOf: (node: NodeRef) => readonly NodeRef[]
-  /** 工作区落盘的会话分组归属，没有时 undefined */
-  bindingOf: (node: NodeRef) => { parentId: string; groupId: string } | undefined
-  /**
-   * 节点归属哪个虚拟分组，不在任何分组里时为 undefined
-   *
-   * 这是**归属**不是容器：被放进会话分组的子工作区容器已经变成那个分组，但它仍属于原来那个工作区分组
-   */
-  virtualGroupOf: (node: NodeRef) => NodeRef | undefined
-  /** 一个工作区名下真实存在的会话分组 id，按界面序 */
-  sessionGroupsOf: (node: NodeRef) => readonly string[]
-  /** 一个工作区 id 对应的节点身份，序列里没有它时 undefined */
-  workspaceNodeOf: (workspaceId: string) => NodeRef | undefined
-  /** 全部分组节点，数组序即界面序 */
-  virtualGroups: readonly NodeRef[]
-  /** 全部工作区节点，按界面序 */
-  workspaceNodes: readonly NodeRef[]
-  /**
-   * 区域键 → 节点身份的对照表
-   *
-   * 适配层用它把 DOM 元素（带区域键）映射回节点身份，检测层因此只认节点
-   */
-  nodesByZone: () => ReadonlyMap<string, NodeRef | ContainerNode>
-  /** 序列里出现的全部节点，分组在前、工作区在后 */
-  allNodes: () => readonly NodeRef[]
-}
-
-/**
- * 把行序列扫成查询表
- *
- * 容器归属、父节点与层级全部写在行上，因此这里只是分桶与建表，不重算任何一件事：
- * 序列里没有的位置，索引里也不会有
- *
- * 容器实例直接取行上带着的那一个（它们是调用方交进来的同一批发牌），因此这里不另造容器：
- * 另造一个同形状的对象按引用查不到任何东西
- * @param rows - {@link buildOutline} 的结果
- */
-export function indexOutline(
-  rows: readonly OutlineRow[],
-  options: { pathOf?: (workspaceId: string) => string | undefined } = {},
-): OutlineIndex {
-  const { pathOf = () => undefined } = options
-  /**
-   * 节点发牌器
-   *
-   * 同一身份恒交回同一实例：拖拽层按引用比较节点（「链上第一个在名单里的」），
-   * 现造一个内容相同的对象会让比较恒不成立
-   */
-  const nodes = new Map<string, NodeRef>()
-  const node = (kind: 'workspace' | 'virtual', id: string): NodeRef => {
-    const key = kind + '/' + id
-    const cached = nodes.get(key)
-    if (cached !== undefined) return cached
-    const entry: NodeRef = { kind, id }
-    nodes.set(key, entry)
-    return entry
-  }
-
-  /** 容器 → 按序列先后登记的成员 */
-  const members = new Map<ContainerNode, NodeRef[]>()
-  const pushMember = (container: ContainerNode, entry: NodeRef): void => {
-    const list = members.get(container)
-    if (list === undefined) members.set(container, [entry])
-    else list.push(entry)
-  }
-
-  const workspaceNodes: NodeRef[] = []
-  const workspaceContainer = new Map<string, ContainerNode>()
-  const workspaceParent = new Map<string, string>()
-  const virtualNodes: NodeRef[] = []
-  const virtualMembers = new Map<string, readonly string[]>()
-  const virtualContainers = new Map<string, ContainerNode>()
-  const groupContainers = new Map<string, Map<string, ContainerNode>>()
-  const workspaceGroups = new Map<string, string[]>()
-  const boundGroupOf = new Map<string, { parentId: string; groupId: string }>()
-  /** 顶层那一片：序列里任取一条根节点容器，没有时现造一个 */
-  let rootContainer: ContainerNode | undefined
-
-  /** 记下这份序列用到的容器实例，此后按 id 交回同一个 */
-  const rememberContainer = (container: ContainerNode): void => {
-    switch (container.kind) {
-      case 'root':
-        rootContainer ??= container
-        return
-      case 'virtual':
-        virtualContainers.set(container.id, container)
-        return
-      case 'group': {
-        const byGroup = groupContainers.get(container.workspaceId)
-        if (byGroup === undefined) {
-          groupContainers.set(container.workspaceId, new Map([[container.groupId, container]]))
-        } else byGroup.set(container.groupId, container)
-      }
-    }
-  }
-
-  /**
-   * 沿序列走一遍
-   *
-   * 会话行与溢出按钮不产生节点：它们的落点身份是行自己，由命中层按行 id 认
-   */
-  for (const row of rows) {
-    rememberContainer(row.container)
-    if (row.kind === 'virtualHead') {
-      const groupId = row.groupId ?? ''
-      const entry = node('virtual', groupId)
-      virtualNodes.push(entry)
-      virtualMembers.set(groupId, row.members ?? [])
-      pushMember(row.container, entry)
-      continue
-    }
-    if (row.kind === 'workspaceHead') {
-      const entry = node('workspace', row.workspaceId)
-      workspaceNodes.push(entry)
-      workspaceContainer.set(row.workspaceId, row.container)
-      if (row.parentId !== undefined && row.parentId !== '') {
-        workspaceParent.set(row.workspaceId, row.parentId)
-        // 容器是会话分组时那一笔归属才成立；未归组那一段与父工作区同容器，只有父节点关系
-        if (row.container.kind === 'group') {
-          boundGroupOf.set(row.workspaceId, {
-            parentId: row.parentId,
-            groupId: row.container.groupId,
-          })
-        }
-      }
-      pushMember(row.container, entry)
-      continue
-    }
-    if (row.kind === 'groupHead') {
-      const groupId = row.groupId ?? ''
-      const holder = workspaceGroups.get(row.workspaceId)
-      if (holder === undefined) workspaceGroups.set(row.workspaceId, [groupId])
-      else holder.push(groupId)
-    }
-  }
-
-  const containers = {
-    root: rootContainer ?? ({ kind: 'root' } as ContainerNode),
-    /** 没见过那个分组时也交回一个稳定实例：它的格子从来没有出现在序列里，因此不会被查回来 */
-    virtualOf: (groupId: string): ContainerNode => {
-      const cached = virtualContainers.get(groupId)
-      if (cached !== undefined) return cached
-      const container: ContainerNode = { kind: 'virtual', id: groupId }
-      virtualContainers.set(groupId, container)
-      return container
-    },
-    groupOf: (workspaceId: string, groupId: string): ContainerNode => {
-      const byGroup = groupContainers.get(workspaceId)
-      const cached = byGroup?.get(groupId)
-      if (cached !== undefined) return cached
-      const container: ContainerNode = { kind: 'group', workspaceId, groupId }
-      if (byGroup === undefined) {
-        groupContainers.set(workspaceId, new Map([[groupId, container]]))
-      } else byGroup.set(groupId, container)
-      return container
-    },
-  }
-
-  const containerOf = (entry: NodeRef): ContainerNode | undefined => {
-    if (entry.kind === 'virtual') return virtualMembers.has(entry.id) ? containers.root : undefined
-    return workspaceContainer.get(entry.id)
-  }
-
-  const membersOf = (container: ContainerNode): readonly NodeRef[] => members.get(container) ?? []
-
-  const parentOf = (entry: NodeRef): NodeRef | undefined => {
-    if (entry.kind === 'virtual') return undefined
-    const parent = workspaceParent.get(entry.id)
-    return parent === undefined ? undefined : node('workspace', parent)
-  }
-
-  const rootsCache = new Map<ContainerNode, NodeRef[]>()
-  const rootsOf = (container: ContainerNode): readonly NodeRef[] => {
-    const cached = rootsCache.get(container)
-    if (cached !== undefined) return cached
-    const top: NodeRef[] = []
-    for (const entry of membersOf(container)) {
-      // 父节点落在同一容器里的那些渲染在父节点体内，不是这一层的顶层
-      const parent = parentOf(entry)
-      const parentContainer = parent === undefined ? undefined : containerOf(parent)
-      if (parentContainer === undefined || parentContainer !== container) top.push(entry)
-    }
-    rootsCache.set(container, top)
-    return top
-  }
-
-  /** 父工作区 id → 它名下的直接子工作区，按界面顺序 */
-  const childrenByParent = new Map<string, string[]>()
-  for (const entry of workspaceNodes) {
-    const parent = workspaceParent.get(entry.id)
-    if (parent === undefined) continue
-    const list = childrenByParent.get(parent)
-    if (list === undefined) childrenByParent.set(parent, [entry.id])
-    else list.push(entry.id)
-  }
-
-  /**
-   * 同层兄弟
-   *
-   * 有父节点时与父节点名下其余子工作区并列，没有父节点时取所在容器的顶层。
-   * 放进会话分组不改变这条名单——它改变的是渲染位置，不是界面上的先后
-   */
-  const siblingsOf = (entry: NodeRef): readonly NodeRef[] => {
-    if (entry.kind === 'virtual') return virtualNodes
-    const container = workspaceContainer.get(entry.id)
-    if (container === undefined) return []
-    const parent = workspaceParent.get(entry.id)
-    const ids =
-      parent === undefined
-        ? rootsOf(container)
-            .filter((each) => each.kind === 'workspace')
-            .map((each) => each.id)
-        : (childrenByParent.get(parent) ?? [])
-    return ids.map((id) => node('workspace', id))
-  }
-
-  const ancestorsOf = (entry: NodeRef): readonly NodeRef[] => {
-    if (entry.kind === 'virtual') return []
-    const chain: NodeRef[] = []
-    const seen = new Set<string>([entry.id])
-    let current = workspaceParent.get(entry.id)
-    while (current !== undefined && !seen.has(current)) {
-      seen.add(current)
-      chain.push(node('workspace', current))
-      current = workspaceParent.get(current)
-    }
-    return chain
-  }
-
-  /**
-   * 拖拽认的父节点
-   *
-   * 渲染归属优先：它已经落盘，是用户明确指定过的。没有归属时才退回 cwd 路径上的最近祖先——
-   * 后者答的是「可能挪到哪儿」，挪过去之后那个路径祖先才成为真正的父工作区
-   */
-  const dropParentOf = (entry: NodeRef): NodeRef | undefined => {
-    if (entry.kind === 'virtual') return undefined
-    const bound = workspaceParent.get(entry.id)
-    if (bound !== undefined) return node('workspace', bound)
-    const ancestor = nearestAncestorAnyScope(workspaceIds(), pathOf, entry.id)
-    return ancestor === undefined ? undefined : node('workspace', ancestor)
-  }
-
-  const dropAncestorsOf = (entry: NodeRef): readonly NodeRef[] => {
-    const chain: NodeRef[] = []
-    const seen = new Set<string>([entry.id])
-    let current = dropParentOf(entry)
-    while (current !== undefined && !seen.has(current.id)) {
-      seen.add(current.id)
-      chain.push(current)
-      current = dropParentOf(current)
-    }
-    return chain
-  }
-
-  /**
-   * 与这个节点同父的那些兄弟，按同一条边认
-   *
-   * 父节点相同就是同层：渲染归属与 cwd 父工作区都算，因为拖拽时它们本来就是一条边
-   */
-  const dropSiblingsOf = (entry: NodeRef): readonly NodeRef[] => {
-    if (entry.kind === 'virtual') return []
-    const parent = dropParentOf(entry)
-    const parentId = parent?.id ?? ''
-    return workspaceNodes
-      .filter((each) => (dropParentOf(each)?.id ?? '') === parentId)
-      .map((each) => each)
-  }
-
-  const workspaceIds = (): string[] => workspaceNodes.map((entry) => entry.id)
-
-  /** 一个工作区归属哪个虚拟分组：那一组自己记着成员名单 */
-  const groupNodeOf = (id: string): NodeRef | undefined => {
-    for (const [groupId, list] of virtualMembers) {
-      if (list.includes(id)) return node('virtual', groupId)
-    }
-    return undefined
-  }
-
-  /** 区域键 → 节点，第一次问到时算一次 */
-  let zoneIndex: Map<string, NodeRef | ContainerNode> | undefined
-
-  return {
-    containers,
-    containerOf,
-    membersOf,
-    rootsOf,
-    siblingsOf,
-    parentOf,
-    ancestorsOf,
-    dropParentOf,
-    dropAncestorsOf,
-    dropSiblingsOf,
-    bindingOf: (entry) => (entry.kind === 'virtual' ? undefined : boundGroupOf.get(entry.id)),
-    virtualGroupOf: (entry) => (entry.kind === 'virtual' ? entry : groupNodeOf(entry.id)),
-    sessionGroupsOf: (entry) =>
-      entry.kind === 'virtual' ? [] : [...(workspaceGroups.get(entry.id) ?? [])],
-    workspaceNodeOf: (workspaceId) =>
-      workspaceContainer.has(workspaceId) ? node('workspace', workspaceId) : undefined,
-    virtualGroups: virtualNodes,
-    workspaceNodes,
-    allNodes: () => [...virtualNodes, ...workspaceNodes],
-    nodesByZone: () => {
-      if (zoneIndex !== undefined) return zoneIndex
-      const built = new Map<string, NodeRef | ContainerNode>()
-      const add = (entry: NodeRef | ContainerNode): void => {
-        for (const key of zoneKeysOf(entry)) built.set(key, entry)
-      }
-      add(containers.root)
-      for (const entry of virtualNodes) add(entry)
-      for (const entry of workspaceNodes) {
-        add(entry)
-        // 未归组那一段不是独立的一块（它是工作区体内的一截），但它归那个工作区管：
-        // 指针停在上面时读出的身份因此是宿主工作区
-        built.set(looseZoneKeyOf(entry.id), entry)
-        for (const groupId of workspaceGroups.get(entry.id) ?? []) {
-          add(containers.groupOf(entry.id, groupId))
-        }
-      }
-      zoneIndex = built
-      return built
-    },
-  }
 }

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { buildOutline } from '../src/client/data/outline.ts'
 import type { OutlineInput } from '../src/client/data/outline.ts'
-import { buildRootLayout, buildLayout } from '../src/client/data/layout.ts'
 import { deriveNesting } from '../src/client/data/nest.ts'
 import type { SessionRow } from '../src/client/data/types.ts'
+import { virtualAddress } from '../src/rootEntry.ts'
 
 /**
  * 扁平行序列
@@ -57,34 +57,16 @@ function fixture(overrides: Partial<OutlineInput> = {}): OutlineInput {
   const groupsOf: Record<string, { id: string; name: string; sessionIds: string[] }[]> = {
     'ws-1': [{ id: 'g1', name: '分组甲', sessionIds: ['s1'] }],
   }
-  const layouts = new Map<string, ReturnType<typeof buildLayout>>()
-  const layoutOf = (workspaceId: string): ReturnType<typeof buildLayout> => {
-    const cached = layouts.get(workspaceId)
-    if (cached !== undefined) return cached
-    const built = buildLayout(
-      rows[workspaceId] ?? [],
-      groupsOf[workspaceId] ?? [],
-      () => [],
-      nesting.looseChildIdsOf(workspaceId),
-    )
-    layouts.set(workspaceId, built)
-    return built
-  }
-
   return {
-    rootLayout: buildRootLayout(WORKSPACE_IDS, VIRTUAL_GROUPS, nesting),
-    workspaceLayoutOf: layoutOf,
-    depthOf: (id) => nesting.levelOf(id),
-    containers: {
-      root: nesting.containers.root,
-      virtualOf: nesting.containers.virtualOf,
-      groupOf: nesting.containers.groupOf,
-    },
+    workspaceIds: WORKSPACE_IDS,
+    virtualGroups: VIRTUAL_GROUPS,
+    rowsOf: (workspaceId) => rows[workspaceId] ?? [],
+    groupsOf: (workspaceId) => groupsOf[workspaceId] ?? [],
+    nesting,
     isScopeExpanded: () => false,
     alwaysVisibleSessionIds: new Set<string>(),
     now: NOW,
     stray: [],
-    hideStray: false,
     compareRows: (a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id),
     keys: {
       workspaceHead: (id) => 'workspaceHead/' + id,
@@ -149,8 +131,8 @@ describe('buildOutline', () => {
     const base = fixture()
     const collapsed = buildOutline({
       ...base,
-      workspaceLayoutOf: (id) =>
-        id === 'ws-1' ? { groups: [], loose: rowsOf, children: [] } : base.workspaceLayoutOf(id),
+      rowsOf: (id) => (id === 'ws-1' ? rowsOf : base.rowsOf(id)),
+      groupsOf: (id) => (id === 'ws-1' ? [] : base.groupsOf(id)),
     })
 
     const overflow = collapsed.filter(
@@ -170,8 +152,8 @@ describe('buildOutline', () => {
     const expanded = buildOutline({
       ...base,
       isScopeExpanded: (ref) => ref.kind === 'loose' && ref.workspaceId === 'ws-1',
-      workspaceLayoutOf: (id) =>
-        id === 'ws-1' ? { groups: [], loose: rowsOf, children: [] } : base.workspaceLayoutOf(id),
+      rowsOf: (id) => (id === 'ws-1' ? rowsOf : base.rowsOf(id)),
+      groupsOf: (id) => (id === 'ws-1' ? [] : base.groupsOf(id)),
     })
 
     const shown = expanded.filter(
@@ -191,10 +173,13 @@ describe('buildOutline', () => {
     expect(shape(rows).slice(-2)).toEqual(['strayHead', 'session:u1'])
   })
 
-  it('drops the ungrouped bucket while focused', () => {
-    const rows = buildOutline(fixture({ stray: [row('u1')], hideStray: true }))
+  it('keeps the ungrouped bucket out of a focused screen', () => {
+    // 聚焦时那一片内容之外的东西整段不进序列，「未分组」桶正是其中之一
+    const rows = buildOutline(fixture({ stray: [row('u1')], focused: virtualAddress('vg-1') }))
 
     expect(rows.some((row) => row.kind === 'strayHead')).toBe(false)
+    // 守一手：这份夹具在有未分组会话时会列出那一段，否则上面那条在「本来就没有」时假通过
+    expect(buildOutline(fixture({ stray: [row('u1')] })).some((row) => row.kind === 'strayHead')).toBe(true)
   })
 
   it('gives every row a unique key', () => {

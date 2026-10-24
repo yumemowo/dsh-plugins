@@ -7,13 +7,11 @@ import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import { buildOutline } from '../src/client/data/outline.ts'
 import type { OutlineRow } from '../src/client/data/outline.ts'
-import { buildLayout, buildRootLayout } from '../src/client/data/layout.ts'
-import { focusedLayout, rootPickerEntries } from '../src/client/data/picker.ts'
 import { ALL_ENTRIES, virtualAddress } from '../src/rootEntry.ts'
 import type { RootEntryAddress } from '../src/rootEntry.ts'
 import { deriveNesting } from '../src/client/data/nest.ts'
 import { compareSessionRows } from '../src/client/data/sessions.ts'
-import type { SessionRow, WorkspaceLayout } from '../src/client/data/types.ts'
+import type { SessionRow } from '../src/client/data/types.ts'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
@@ -253,39 +251,15 @@ function outlineRows(focused: RootEntryAddress = ALL_ENTRIES): OutlineRow[] {
     groupIdsOf: (workspaceId) => new Set(workspaceId === 'ws-1' ? [GROUP_ID] : []),
   })
 
-  const layouts = new Map<string, WorkspaceLayout>()
-  const layoutOf = (workspaceId: string): WorkspaceLayout => {
-    const cached = layouts.get(workspaceId)
-    if (cached !== undefined) return cached
-    const built = buildLayout(
-      rowsOf(workspaceId),
-      workspaceId === 'ws-1' ? [{ id: GROUP_ID, name: '分组甲', sessionIds: ['a0'] }] : [],
-      (groupId) => nesting.groupedChildIdsOf(workspaceId, groupId),
-      nesting.looseChildIdsOf(workspaceId),
-    )
-    layouts.set(workspaceId, built)
-    return built
-  }
-
-  const rootLayout = buildRootLayout(WORKSPACE_IDS, groups, nesting)
-  const workspaceById = new Map(
-    WORKSPACE_IDS.map((workspaceId) => [
-      workspaceId,
-      { workspaceId, path: PATHS[workspaceId], title: workspaceId, createdAt: CREATED },
-    ]),
-  )
-  const entries = rootPickerEntries(rootLayout, workspaceById as never, nesting)
-
   return buildOutline({
-    // 与区域组件同一处裁剪：聚焦后序列与列表列的是同一批工作区
-    rootLayout: focusedLayout(rootLayout, entries, focused),
-    workspaceLayoutOf: layoutOf,
-    depthOf: (workspaceId) => nesting.levelOf(workspaceId),
-    containers: {
-      root: nesting.containers.root,
-      virtualOf: nesting.containers.virtualOf,
-      groupOf: nesting.containers.groupOf,
-    },
+    workspaceIds: WORKSPACE_IDS,
+    virtualGroups: groups,
+    rowsOf,
+    groupsOf: (workspaceId) =>
+      workspaceId === 'ws-1' ? [{ id: GROUP_ID, name: '分组甲', sessionIds: ['a0'] }] : [],
+    nesting,
+    // 与区域组件同一条链：先把地址解析成菜单条目，解析不到当作没有聚焦
+    focused,
     isScopeExpanded: () => false,
     alwaysVisibleSessionIds: new Set<string>(),
     now: NOW,
@@ -298,8 +272,6 @@ function outlineRows(focused: RootEntryAddress = ALL_ENTRIES): OutlineRow[] {
       completed: false,
       updatedAt: (SUMMARIES[id] as { updatedAt: number }).updatedAt,
     })),
-    // 聚焦在某一片上时「未分组」桶整段隐藏，与区域组件同一判据
-    hideStray: focused.kind !== 'all',
     compareRows: compareSessionRows,
     keys: {
       workspaceHead: (id) => 'workspaceHead/' + id,

@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildLayout,
-  buildRootLayout,
-  containsSession,
-  groupIdOfSession,
-  sameGroupSections,
-  virtualWorkspaceIdOf,
-} from '../src/client/data/layout.ts'
-import { deriveNesting } from '../src/client/data/nest.ts'
+import { containsSession } from '../src/client/data/rows.ts'
 import { sameSessionStatus } from '../src/client/data/status.ts'
 import {
   compareSessionRows,
@@ -46,104 +38,6 @@ function row(id: string, title = id): SessionRow {
     updatedAt: 0,
   }
 }
-
-/** 造一个分组定义 */
-function group(id: string, name: string, sessionIds: string[]) {
-  return { id, name, sessionIds }
-}
-
-describe('buildLayout', () => {
-  it('keeps sessions inside their group in metadata order', () => {
-    const layout = buildLayout([row('a'), row('b'), row('c')], [group('g1', '前端', ['c', 'a'])])
-
-    expect(layout.groups.map((section) => section.label)).toEqual(['前端'])
-    expect(layout.groups[0]?.sessions.map((s) => s.id)).toEqual(['c', 'a'])
-    expect(layout.loose.map((s) => s.id)).toEqual(['b'])
-  })
-
-  it('creates no group at all when the user has created none', () => {
-    const layout = buildLayout([row('a'), row('b')], [])
-
-    // 没有用户分组时不应凭空出现分组结构，会话直接平铺
-    expect(layout.groups).toEqual([])
-    expect(layout.loose.map((s) => s.id)).toEqual(['a', 'b'])
-  })
-
-  it('leaves ungrouped sessions loose rather than inventing a bucket group', () => {
-    const layout = buildLayout([row('a'), row('b')], [group('g1', '前端', ['a'])])
-
-    expect(layout.groups.map((section) => section.id)).toEqual(['g1'])
-    expect(layout.loose.map((s) => s.id)).toEqual(['b'])
-  })
-
-  it('reports no loose rows when every session is grouped', () => {
-    const layout = buildLayout([row('a')], [group('g1', '前端', ['a'])])
-
-    expect(layout.loose).toEqual([])
-  })
-
-  it('skips metadata entries whose session is no longer listed', () => {
-    const layout = buildLayout([row('a')], [group('g1', '前端', ['a', 'gone'])])
-
-    expect(layout.groups).toHaveLength(1)
-    expect(layout.groups[0]?.sessions.map((s) => s.id)).toEqual(['a'])
-  })
-
-  it('treats a session listed in two groups as belonging to the first only', () => {
-    const layout = buildLayout(
-      [row('a')],
-      [group('g1', '第一', ['a']), group('g2', '第二', ['a'])],
-    )
-
-    expect(layout.groups[0]?.sessions.map((s) => s.id)).toEqual(['a'])
-    expect(layout.groups[1]?.sessions).toEqual([])
-    // 被分组认领过的会话不会再出现在平铺区，避免重复渲染
-    expect(layout.loose).toEqual([])
-  })
-
-  it('renders an empty group rather than dropping it', () => {
-    const layout = buildLayout([], [group('g1', '空组', [])])
-
-    expect(layout.groups).toHaveLength(1)
-    expect(layout.groups[0]?.sessions).toEqual([])
-  })
-
-  it('keeps group identity stable across rebuilds', () => {
-    const groups = [group('g1', '前端', ['a']), group('g2', '后端', [])]
-    const first = buildLayout([row('a')], groups)
-    const second = buildLayout([row('a')], groups)
-
-    // 分组 id 必须逐次一致，否则展开折叠状态会每次都重置
-    expect(first.groups.map((s) => s.id)).toEqual(second.groups.map((s) => s.id))
-  })
-})
-
-describe('groupIdOfSession', () => {
-  it('reports the group that holds the session', () => {
-    const layout = buildLayout([row('a'), row('b')], [group('g1', '前端', ['a'])])
-
-    expect(groupIdOfSession(layout.groups, 'a')).toBe('g1')
-  })
-
-  it('reports an empty id for a session outside every group', () => {
-    const layout = buildLayout([row('a'), row('b')], [group('g1', '前端', ['a'])])
-
-    // 空串对应选择器里的「未分组」选项
-    expect(groupIdOfSession(layout.groups, 'b')).toBe('')
-  })
-
-  it('reports an empty id for an unknown session', () => {
-    const layout = buildLayout([row('a')], [group('g1', '前端', ['a'])])
-
-    expect(groupIdOfSession(layout.groups, 'ghost')).toBe('')
-  })
-
-  it('reports an empty id when no groups exist', () => {
-    const layout = buildLayout([row('a')], [])
-
-    expect(groupIdOfSession(layout.groups, 'a')).toBe('')
-  })
-})
 
 describe('containsSession', () => {
   it('reports whether the current session is among the rows', () => {
@@ -546,7 +440,7 @@ describe('buildWorkspaceMenuItems with a parent-group entry', () => {
       ...labels,
       parentGrouping: grouping(),
       virtualWorkspaceGrouping: {
-        sections: [{ id: 'wg1', label: '前端仓库', workspaceIds: [], roots: [] }],
+        sections: [{ id: 'wg1', label: '前端仓库' }],
         currentGroupId: '',
         newLabel: '新建工作区分组…',
         moveToLabel: '移动到…',
@@ -1314,38 +1208,6 @@ describe('session row identity', () => {
  *
  * 分组段每次渲染都是新的数组与对象，若按引用比对，整片列表的行级 memo 都会失效
  */
-describe('sameGroupSections', () => {
-  it('treats rebuilt sections with the same ids and names as equal', () => {
-    const a = [{ id: 'g1', label: '前端', sessions: [] }]
-    const b = [{ id: 'g1', label: '前端', sessions: [] }]
-
-    expect(sameGroupSections(a, b)).toBe(true)
-  })
-
-  it('reports a renamed group as changed', () => {
-    expect(
-      sameGroupSections(
-        [{ id: 'g1', label: '前端', sessions: [] }],
-        [{ id: 'g1', label: '后端', sessions: [] }],
-      ),
-    ).toBe(false)
-  })
-
-  it('reports an added group as changed', () => {
-    expect(
-      sameGroupSections([{ id: 'g1', label: '前端', sessions: [] }], [
-        { id: 'g1', label: '前端', sessions: [] },
-        { id: 'g2', label: '后端', sessions: [] },
-      ]),
-    ).toBe(false)
-  })
-
-  it('treats a missing grouping as different from any list', () => {
-    expect(sameGroupSections(undefined, [])).toBe(false)
-    expect(sameGroupSections(undefined, undefined)).toBe(true)
-  })
-})
-
 /**
  * 状态位的比对
  *
@@ -1372,127 +1234,6 @@ describe('sameSessionStatus', () => {
  *
  * 与会话那一层同一套取舍，只是输入换成工作区列表与工作区分组定义
  */
-describe('buildRootLayout', () => {
-  /** 造一个工作区分组定义 */
-  function wgroup(id: string, name: string, workspaceIds: string[]) {
-    return { id, name, workspaceIds }
-  }
-
-  it('orders group members by registry order rather than metadata array order', () => {
-    const layout = buildRootLayout(
-      ['w1', 'w2', 'w3'],
-      [wgroup('g1', '前端', ['w3', 'w1'])],
-    )
-
-    expect(layout.groups.map((section) => section.label)).toEqual(['前端'])
-    // 成员数组只当归属集合用，顺序按传入的注册表序
-    expect(layout.groups[0]?.workspaceIds).toEqual(['w1', 'w3'])
-    expect(layout.loose).toEqual(['w2'])
-  })
-
-  it('leaves every workspace loose when the user has created no group', () => {
-    const layout = buildRootLayout(['w1', 'w2'], [])
-
-    // 没有用户分组时这一层不改变任何行的位置：界面与没有这个功能时一致
-    expect(layout.groups).toEqual([])
-    expect(layout.loose).toEqual(['w1', 'w2'])
-  })
-
-  it('invents no ungrouped bucket of its own', () => {
-    const layout = buildRootLayout(['w1', 'w2'], [wgroup('g1', '前端', ['w1'])])
-
-    // 未归组的工作区平铺在分组之后，不占一个显式的区段
-    expect(layout.groups.map((section) => section.id)).toEqual(['g1'])
-    expect(layout.loose).toEqual(['w2'])
-  })
-
-  it('skips metadata entries whose workspace no longer exists', () => {
-    const layout = buildRootLayout(['w1'], [wgroup('g1', '前端', ['w1', 'gone'])])
-
-    expect(layout.groups[0]?.workspaceIds).toEqual(['w1'])
-  })
-
-  it('treats a workspace listed in two groups as belonging to the first only', () => {
-    const layout = buildRootLayout(
-      ['w1'],
-      [wgroup('g1', '第一', ['w1']), wgroup('g2', '第二', ['w1'])],
-    )
-
-    expect(layout.groups[0]?.workspaceIds).toEqual(['w1'])
-    expect(layout.groups[1]?.workspaceIds).toEqual([])
-    // 被分组认领过的工作区不会再出现在平铺区，避免重复渲染
-    expect(layout.loose).toEqual([])
-  })
-
-  it('renders an empty group rather than dropping it', () => {
-    const layout = buildRootLayout([], [wgroup('g1', '空组', [])])
-
-    // 空分组是「刚建完还没移入工作区」的通常状态，不能悄悄消失
-    expect(layout.groups).toHaveLength(1)
-    expect(layout.groups[0]?.workspaceIds).toEqual([])
-  })
-
-  it('keeps a nested workspace in its group membership while rendering only the top', () => {
-    // 一个项目下的工作区收进同一个虚拟分组之后，它们之间的层级照样渲染
-    // 归组这件事不因内嵌而消失，菜单据此判断「它已经在这个分组里了」，不给它再列一次
-    const paths: Record<string, string> = {
-      repo: '/src/dsh_plugins',
-      pkg: '/src/dsh_plugins/packages/dsh-workspace-plus',
-    }
-    const nesting = deriveNesting({
-      enabled: true,
-      workspaceIds: ['repo', 'pkg'],
-      pathOf: (id) => paths[id],
-      virtualOf: () => 'vg1',
-      bindingOf: () => undefined,
-      groupIdsOf: () => new Set<string>(),
-    })
-    const layout = buildRootLayout(
-      ['repo', 'pkg'],
-      [wgroup('vg1', 'dsh plugins', ['repo', 'pkg'])],
-      nesting,
-    )
-
-    // 归属保住全量，渲染只列这一层的顶层
-    expect(layout.groups[0]?.workspaceIds).toEqual(['repo', 'pkg'])
-    expect(layout.groups[0]?.roots).toEqual(['repo'])
-    // 归属查询读得到，菜单因此不会再列出它自己所在的那个分组
-    expect(virtualWorkspaceIdOf(layout.groups, 'pkg')).toBe('vg1')
-  })
-
-  it('keeps group identity stable across rebuilds', () => {
-    const groups = [wgroup('g1', '前端', ['w1']), wgroup('g2', '后端', [])]
-    const first = buildRootLayout(['w1'], groups)
-    const second = buildRootLayout(['w1'], groups)
-
-    // 分组 id 必须逐次一致，否则展开折叠状态会每次都重置
-    expect(first.groups.map((s) => s.id)).toEqual(second.groups.map((s) => s.id))
-  })
-})
-
-describe('virtualWorkspaceIdOf', () => {
-  it('reports the group that holds the workspace', () => {
-    const sections = buildRootLayout(['w1', 'w2'], [
-      { id: 'g1', name: '前端', workspaceIds: ['w1'] },
-    ]).groups
-
-    expect(virtualWorkspaceIdOf(sections, 'w1')).toBe('g1')
-  })
-
-  it('reports an empty id for a workspace outside every group', () => {
-    const sections = buildRootLayout(['w1', 'w2'], [
-      { id: 'g1', name: '前端', workspaceIds: ['w1'] },
-    ]).groups
-
-    // 空串对应菜单里的「不在任何工作区分组」这一事实
-    expect(virtualWorkspaceIdOf(sections, 'w2')).toBe('')
-  })
-
-  it('reports an empty id when no group exists', () => {
-    expect(virtualWorkspaceIdOf([], 'w1')).toBe('')
-  })
-})
-
 /**
  * 两端版本错位
  *
@@ -1520,19 +1261,5 @@ describe('normalizeSnapshot', () => {
     // 字段在但形状不对时同样不能交给遍历
     expect(normalizeSnapshot({ workspaceGroups: null }).workspaceGroups).toEqual([])
     expect(normalizeSnapshot(undefined).workspaceGroups).toEqual([])
-  })
-})
-
-describe('buildRootLayout with a pre-upgrade snapshot', () => {
-  it('treats a missing grouping field as no workspace group', () => {
-    // 旧宿主半边回的只有 byWorkspace 那一格
-    const layout = buildRootLayout(['w1', 'w2'], undefined)
-
-    expect(layout.groups).toEqual([])
-    expect(layout.loose).toEqual(['w1', 'w2'])
-  })
-
-  it('keeps every workspace loose rather than throwing', () => {
-    expect(() => buildRootLayout(['w1'], undefined)).not.toThrow()
   })
 })

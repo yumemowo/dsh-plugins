@@ -1,9 +1,9 @@
-import { buildLayout, buildRootLayout } from '../../src/client/data/layout.ts'
 import { deriveNesting } from '../../src/client/data/nest.ts'
 import type { NestingBinding } from '../../src/client/data/nest.ts'
-import { buildOutline, indexOutline } from '../../src/client/data/outline.ts'
-import type { OutlineIndex, OutlineRow } from '../../src/client/data/outline.ts'
-import { focusedLayout, rootPickerEntries } from '../../src/client/data/picker.ts'
+import { buildOutline } from '../../src/client/data/outline.ts'
+import type { OutlineRow } from '../../src/client/data/outline.ts'
+import { indexOutline } from '../../src/client/data/outlineIndex.ts'
+import type { OutlineIndex } from '../../src/client/data/outlineIndex.ts'
 import { ALL_ENTRIES } from '../../src/rootEntry.ts'
 import type { RootEntryAddress } from '../../src/rootEntry.ts'
 import {
@@ -22,8 +22,8 @@ import {
 /**
  * 按生产那条链装配一份索引
  *
- * 索引本身只吃行序列，因此夹具也照渲染那条链走一遍：嵌套推导 → 根节点布局与各工作区布局 → 行序列 → 索引
- * 直接手搓一份 rows 会让夹具与真实形状脱节，那正是这一层要避免的事
+ * 索引只吃行序列，序列只吃元数据与推导，因此夹具也照生产那条链走一遍：嵌套推导 → 行序列 → 索引
+ * 直接手搓一份 rows 会让夹具与真实形状脱节，那正是这一层要避免的
  */
 export interface OutlineFixture {
   /** 全部工作区 id，按注册表顺序 */
@@ -84,48 +84,23 @@ export function outlineRowsFrom(input: OutlineFixture): OutlineRow[] {
     groupIdsOf: (id) => new Set(groupIds[id] ?? []),
   })
 
-  // 分组名与索引的判定无关，夹具按 id 兼作名字
-  const sections = virtualGroups.map((group) => ({
-    id: group.id,
-    name: group.id,
-    workspaceIds: [...group.workspaceIds],
-  }))
-  const built = buildRootLayout(workspaceIds, sections, nesting)
-  const entries = rootPickerEntries(
-    built,
-    new Map(
-      workspaceIds.map((id) => [id, { workspaceId: id, path: paths[id], title: id, createdAt: '' }]),
-    ) as never,
-    nesting,
-  )
-  const layouts = new Map<string, ReturnType<typeof buildLayout>>()
-  const layoutOf = (workspaceId: string): ReturnType<typeof buildLayout> => {
-    const cached = layouts.get(workspaceId)
-    if (cached !== undefined) return cached
-    const built = buildLayout(
-      [],
-      (groupIds[workspaceId] ?? []).map((id) => ({ id, name: id, sessionIds: [] })),
-      (groupId) => nesting.groupedChildIdsOf(workspaceId, groupId),
-      nesting.looseChildIdsOf(workspaceId),
-    )
-    layouts.set(workspaceId, built)
-    return built
-  }
-
   return buildOutline({
-    rootLayout: focusedLayout(built, entries, focused),
-    workspaceLayoutOf: layoutOf,
-    depthOf: (workspaceId) => nesting.levelOf(workspaceId),
-    containers: {
-      root: nesting.containers.root,
-      virtualOf: nesting.containers.virtualOf,
-      groupOf: nesting.containers.groupOf,
-    },
+    workspaceIds,
+    // 分组名与切分的判定无关，夹具按 id 兼作名字
+    virtualGroups: virtualGroups.map((group) => ({
+      id: group.id,
+      name: group.id,
+      workspaceIds: [...group.workspaceIds],
+    })),
+    rowsOf: () => [],
+    groupsOf: (workspaceId) =>
+      (groupIds[workspaceId] ?? []).map((id) => ({ id, name: id, sessionIds: [] })),
+    nesting,
+    focused,
     isScopeExpanded: () => false,
     alwaysVisibleSessionIds: new Set<string>(),
     now: 0,
     stray: [],
-    hideStray: false,
     compareRows: () => 0,
     keys: {
       workspaceHead: workspaceHeadKey,

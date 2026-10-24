@@ -7,7 +7,7 @@
  * 唯一的例外是线的上下半：那要量指针正落着的那个元素有多高、顶边在哪，因此
  * {@link DropSearcher.checkDrop} 收两个几何读数。它不收元素——元素只属于调用方那半边。
  */
-import type { OutlineIndex } from './outline.ts'
+import type { OutlineIndex } from './outlineIndex.ts'
 import type { ContainerNode } from './nest.ts'
 import type { NodeRef } from './zones.ts'
 

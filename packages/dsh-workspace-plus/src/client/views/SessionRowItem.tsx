@@ -21,7 +21,7 @@ import type { ReactElement } from 'react'
 import { HoverCard, IconEllipsisOutlineRegular, Menu } from '../runtime.ts'
 import { buildSessionMenuItems } from '../menus.tsx'
 import type { SessionPinMenuInput } from '../menus.tsx'
-import { sameGroupSections } from '../data/layout.ts'
+import { sameMenuGroups } from '../menus.tsx'
 import { sameSessionStatus, sameSessionStatuses } from '../data/status.ts'
 import { SessionRowView } from './SessionRowView.tsx'
 import type { SessionRowViewProps } from './SessionRowView.tsx'
@@ -35,7 +35,8 @@ import { rowIdProps } from '../data/protocol.ts'
 import type { DragPlan } from '../data/protocol.ts'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { SessionStatus } from '../data/status.ts'
-import type { GroupSection, SessionRow } from '../data/types.ts'
+import type { MenuGroup } from '../menus.tsx'
+import type { SessionRow } from '../data/types.ts'
 import rowsStyles from './components/rows.module.css'
 import menusStyles from '../menus.module.css'
 
@@ -48,7 +49,7 @@ export interface SessionGroupingContext {
   /** 该会话所在的工作区，归组动作要用它定位 */
   workspaceId: string
   /** 该会话所在工作区的全部分组 */
-  sections: readonly GroupSection[]
+  sections: readonly MenuGroup[]
   /** 目标会话当前所属分组 id，空串表示未归组 */
   currentGroupId: string
   /**
@@ -145,7 +146,7 @@ function sameGrouping(
   ) {
     return false
   }
-  return sameGroupSections(a.sections, b.sections)
+  return sameMenuGroups(a.sections, b.sections)
 }
 
 /**

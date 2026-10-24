@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NestingBinding } from '../src/client/data/nest.ts'
 import { dropRelationsOf } from '../src/client/data/relations.ts'
-import type { OutlineIndex } from '../src/client/data/outline.ts'
+import type { OutlineIndex } from '../src/client/data/outlineIndex.ts'
 import type { NodeRef } from '../src/client/data/zones.ts'
 import { indexFrom, outlineRowsFrom } from './support/outlineFixture.ts'
 import { virtualAddress, workspaceAddress } from '../src/rootEntry.ts'
