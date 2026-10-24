@@ -286,12 +286,6 @@ function outlineRows(focused: RootEntryAddress = ALL_ENTRIES): OutlineRow[] {
       virtualOf: nesting.containers.virtualOf,
       groupOf: nesting.containers.groupOf,
     },
-    expansion: {
-      // 工作区层的默认按结构分层：没有父工作区的展开，子工作区折叠
-      isWorkspaceExpanded: (key) => nesting.ancestorsOf(key).length === 0,
-      isVirtualWorkspaceExpanded: () => true,
-      isGroupExpanded: () => false,
-    },
     isScopeExpanded: () => false,
     alwaysVisibleSessionIds: new Set<string>(),
     now: NOW,

@@ -44,6 +44,14 @@ export interface OutlineRow {
    * 沿用 `nest` 的容器身份（同一次推导内同一容器恒交回同一实例），因此可以直接当 Map 的键
    */
   container: ContainerNode
+  /**
+   * 这一行挂在哪个题头行之下
+   *
+   * 空串表示它在最外层（工作区分组的题头、平铺的工作区、「未分组」桶的题头）。
+   * 序列是深度优先的，因此这一格也是「谁的子树从这里开始」的唯一凭据：
+   * 渲染按它分组即可，不必再从布局递归一遍
+   */
+  ownerKey: string
   /** 这一行挂在哪个工作区名下；根节点那一层与「未分组」桶为空串 */
   workspaceId: string
   /**
@@ -55,13 +63,6 @@ export interface OutlineRow {
   parentId?: string | undefined
   /** 缩进层级，与 `nest` 的 `levelOf` 同值 */
   depth: number
-  /**
-   * 此刻是否真的露面
-   *
-   * 收起的工作区里那些行仍在文档里（撑开体靠内容常驻才能收回），因此它们留在序列里、但为 false
-   * {@link visibleRows} 按这一格分档
-   */
-  visible: boolean
   /** 这一行在 DOM 上占的那几格区域键 */
   zoneKeys: readonly string[]
   /** 落点单位标识，没有独立单位时为 undefined */
@@ -76,6 +77,21 @@ export interface OutlineRow {
    * `virtualHead` 是工作区分组，`groupHead` 是会话分组；别的种类为 undefined
    */
   groupId?: string | undefined
+  /** 题头行上的名字：工作区分组名或会话分组名，别的种类为 undefined */
+  label?: string | undefined
+  /**
+   * 题头行行尾那个数
+   *
+   * 工作区分组数名下全部工作区（含被嵌套的），会话分组数组内会话。别的种类为 undefined
+   */
+  count?: number | undefined
+  /**
+   * 这一行代言的那一段一共几条会话
+   *
+   * 只给会话分组的题头行与工作区行（它代言未归组那一段）带这一格。
+   * 序列只交出露出来的那几条，判断「待揭示的那条是不是被收起了」要这个总数
+   */
+  total?: number | undefined
   /**
    * `virtualHead` 那一组名下的全部工作区 id，含被嵌套的那些
    *
@@ -113,12 +129,6 @@ export interface OutlineInput {
     readonly root: ContainerNode
     virtualOf: (groupId: string) => ContainerNode
     groupOf: (workspaceId: string, groupId: string) => ContainerNode
-  }
-  /** 三层折叠态的生效值 */
-  expansion: {
-    isWorkspaceExpanded: (key: string) => boolean
-    isVirtualWorkspaceExpanded: (key: string) => boolean
-    isGroupExpanded: (workspaceId: string, groupId: string) => boolean
   }
   /** 各区段是否展开到全部行 */
   isScopeExpanded: (ref: SessionScopeRef) => boolean
@@ -171,65 +181,72 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
     rows.push({ ...rest, hiddenCount, scopeExpanded })
   }
 
+  /** 下一个题头行的归属：子树里的行都记它，空串表示最外层 */
+  let owner = ''
+
   /** 一个工作区区块 */
   const addWorkspace = (workspaceId: string, container: ContainerNode, parentId = ''): void => {
     const layout = input.workspaceLayoutOf(workspaceId)
     const depth = input.depthOf(workspaceId)
-    const open = input.expansion.isWorkspaceExpanded(workspaceId)
     const childIds = layout.children ?? []
+    const headKey = 'workspace/' + workspaceId
+    const outer = owner
 
     push({
-      key: 'workspace/' + workspaceId,
+      key: headKey,
       kind: 'workspaceHead',
+      ownerKey: outer,
       container,
       workspaceId,
       parentId,
       depth,
-      visible: true,
       zoneKeys: [input.keys.workspaceHead(workspaceId), input.keys.workspaceBody(workspaceId)],
       regionKey: input.keys.workspaceRegion(workspaceId),
+      total: layout.loose.length,
     })
+    owner = headKey
 
     // 子工作区排在会话分组之前，与分组内部同一顺序
     for (const childId of childIds) addWorkspace(childId, container, workspaceId)
 
     for (const section of layout.groups) {
-      const groupOpen = input.expansion.isGroupExpanded(workspaceId, section.id)
+      const groupHeadKey = 'group/' + workspaceId + '/' + section.id
+      const inner = owner
       push({
-        key: 'group/' + workspaceId + '/' + section.id,
+        key: groupHeadKey,
         kind: 'groupHead',
+        ownerKey: inner,
         container: containers.groupOf(workspaceId, section.id),
         workspaceId,
         depth,
-        visible: open,
         zoneKeys: [
           input.keys.sessionGroupHead(workspaceId, section.id),
           input.keys.sessionGroupZone(workspaceId, section.id),
         ],
         regionKey: input.keys.sessionGroupRegion(workspaceId, section.id),
         groupId: section.id,
+        label: section.label,
+        count: section.sessions.length,
+        total: section.sessions.length,
       })
+      owner = groupHeadKey
       // 被放进这个分组的子工作区排在该组的会话之前，与组内的绘制顺序一致
-      // 它们整段住在组体里，因此组收起时不露面
-      const bodyFrom = rows.length
       for (const childId of section.children ?? []) {
         addWorkspace(childId, containers.groupOf(workspaceId, section.id), workspaceId)
       }
       addSessions(
         { kind: 'group', workspaceId, groupId: section.id },
         section.sessions,
-        open && groupOpen,
         containers.groupOf(workspaceId, section.id),
         workspaceId,
         depth,
       )
-      if (!groupOpen) hideRange(rows, bodyFrom)
+      owner = inner
     }
 
     addSessions(
       { kind: 'loose', workspaceId },
       layout.loose,
-      open,
       container,
       workspaceId,
       depth,
@@ -240,14 +257,15 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       push({
         key: 'empty/' + workspaceId,
         kind: 'empty',
+        ownerKey: owner,
         container,
         workspaceId,
         depth,
-        visible: open,
         zoneKeys: [],
         regionKey: undefined,
       })
     }
+    owner = outer
   }
 
   /**
@@ -261,7 +279,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
   function addSessions(
     scope: SessionScopeRef,
     all: readonly SessionRow[],
-    open: boolean,
     container: ContainerNode,
     workspaceId: string,
     depth: number,
@@ -277,10 +294,10 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       push({
         key: prefix + row.id,
         kind: 'session',
+        ownerKey: owner,
         container,
         workspaceId,
         depth,
-        visible: open,
         zoneKeys: zoneKey === undefined ? [] : [zoneKey],
         regionKey: undefined,
         scope,
@@ -292,10 +309,10 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       push({
         key: prefix + 'overflow',
         kind: 'overflow',
+        ownerKey: owner,
         container,
         workspaceId,
         depth,
-        visible: open,
         zoneKeys: [],
         regionKey: undefined,
         scope,
@@ -307,24 +324,26 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
 
   // 根节点：先各工作区分组段，再平铺的那些
   for (const section of rootLayout.groups) {
-    const open = input.expansion.isVirtualWorkspaceExpanded(section.id)
+    const virtualHeadKey = 'virtual/' + section.id
     push({
-      key: 'virtual/' + section.id,
+      key: virtualHeadKey,
       kind: 'virtualHead',
+      ownerKey: '',
       container: containers.root,
       workspaceId: '',
       depth: 0,
-      visible: true,
       zoneKeys: [input.keys.virtualHead(section.id), input.keys.virtualBody(section.id)],
       regionKey: input.keys.virtualRegion(section.id),
       groupId: section.id,
+      label: section.label,
+      count: section.workspaceIds.length,
       members: section.workspaceIds,
     })
-    const before = rows.length
+    owner = virtualHeadKey
     for (const workspaceId of section.roots) {
       addWorkspace(workspaceId, containers.virtualOf(section.id))
     }
-    if (!open) hideRange(rows, before)
+    owner = ''
   }
   for (const workspaceId of rootLayout.loose) {
     addWorkspace(workspaceId, containers.root)
@@ -334,34 +353,21 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
     push({
       key: 'stray/head',
       kind: 'strayHead',
+      ownerKey: '',
       container: containers.root,
       workspaceId: '',
       depth: 0,
-      visible: true,
       zoneKeys: [],
       regionKey: undefined,
+      total: input.stray.length,
     })
     // 「未分组」桶的次序在容器那一层已经定好（置顶提前、其余维持列表原序），这里不再重排
-    addSessions({ kind: 'stray' }, input.stray, true, containers.root, '', 0, undefined, true)
+    owner = 'stray/head'
+    addSessions({ kind: 'stray' }, input.stray, containers.root, '', 0, undefined, true)
+    owner = ''
   }
 
   return rows
-}
-
-/** 把一段行标成不露面：分组收起时它的整个子树都不露面 */
-function hideRange(rows: OutlineRow[], from: number): void {
-  for (let index = from; index < rows.length; index += 1) {
-    const row = rows[index]
-    if (row !== undefined) rows[index] = { ...row, visible: false }
-  }
-}
-
-/**
- * 此刻露面的那几条，按界面顺序
- * @param rows - {@link buildOutline} 的结果
- */
-export function visibleRows(rows: readonly OutlineRow[]): OutlineRow[] {
-  return rows.filter((row) => row.visible)
 }
 
 // ── 索引 ──

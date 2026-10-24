@@ -121,12 +121,6 @@ export function outlineRowsFrom(input: OutlineFixture): OutlineRow[] {
       virtualOf: nesting.containers.virtualOf,
       groupOf: nesting.containers.groupOf,
     },
-    // 夹具一律全展开：索引只关心节点与容器，露面与否是渲染那一层的事
-    expansion: {
-      isWorkspaceExpanded: () => true,
-      isVirtualWorkspaceExpanded: () => true,
-      isGroupExpanded: () => true,
-    },
     isScopeExpanded: () => false,
     alwaysVisibleSessionIds: new Set<string>(),
     now: 0,

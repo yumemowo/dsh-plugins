@@ -22,15 +22,18 @@ import {
   sessionGroupRegionKey,
   sessionGroupZoneKey,
 } from '../data/protocol.ts'
-import type { GroupSection as GroupSectionData } from '../data/types.ts'
+import type { OutlineRow } from '../data/outline.ts'
 import type { OrderDragging } from '../data/protocol.ts'
 import styles from './components/rows.module.css'
 import clsx from 'clsx'
 
 export interface GroupSectionProps {
-  section: GroupSectionData
+  /** 本分组的题头行：分组 id、名字与会话数都写在它身上 */
+  head: OutlineRow
   /** 本分组所在的工作区，区域键要按它定位 */
   workspaceId: string
+  /** 组体内有没有东西（会话或子工作区），都没有时整块撑开体不渲染 */
+  hasBody: boolean
   expanded: boolean
   onToggle: () => void
   onRename: () => void
@@ -43,15 +46,14 @@ export interface GroupSectionProps {
    * 缺省表示这一片不参与分组排序，分组头因此只接会话归组的落点、不可拖起
    */
   orderDragging?: OrderDragging | undefined
-  /** 已渲染好的组内会话行 */
+  /** 已渲染好的组内行：子工作区在前，其后是会话 */
   children: ReactNode
-  /** 把一个子工作区渲染成一个完整的工作区块 */
-  renderChildWorkspace: (workspaceId: string) => ReactNode
 }
 
 export function GroupSection({
-  section,
+  head,
   workspaceId,
+  hasBody,
   expanded,
   onToggle,
   onRename,
@@ -59,11 +61,13 @@ export function GroupSection({
   onCreateSession,
   orderDragging,
   children,
-  renderChildWorkspace,
 }: GroupSectionProps): ReactElement {
   const { labels } = useLocale()
   const { dndZoneProps } = useDnd()
   const [menuOpen, setMenuOpen] = useState(false)
+  const groupId = head.groupId ?? ''
+  const label = head.label ?? ''
+  const count = head.count ?? 0
 
   /**
    * 分组头的拖拽接线
@@ -74,10 +78,10 @@ export function GroupSection({
    * 这个 hook 无条件调用，没有排序接线时它只交回区域属性、不给出拖拽属性
    */
   const order = useOrderRow(
-    groupHeadKey(workspaceId, section.id),
-    section.id,
+    groupHeadKey(workspaceId, groupId),
+    groupId,
     // 每次渲染新建的闭包，取最新那份计划这件事由 hook 内部按引用兜住
-    orderDragging === undefined ? undefined : () => orderDragging.buildDragPlan(section.id),
+    orderDragging === undefined ? undefined : () => orderDragging.buildDragPlan(groupId),
   )
 
   /**
@@ -86,7 +90,6 @@ export function GroupSection({
    * 行内 `...` 菜单与右键菜单共用它，右键多一项「新建会话」
    * 但 id 相同者必须落到同一件事上
    */
-  const childIds = section.children ?? []
   const select = (id: string): void => {
     setMenuOpen(false)
     if (id === ROW_MENU.newSession) onCreateSession?.()
@@ -111,8 +114,8 @@ export function GroupSection({
   return (
     <div
       className={styles.group}
-      {...dndZoneProps(sessionGroupZoneKey(workspaceId, section.id))}
-      {...regionProps(sessionGroupRegionKey(workspaceId, section.id))}
+      {...dndZoneProps(sessionGroupZoneKey(workspaceId, groupId))}
+      {...regionProps(sessionGroupRegionKey(workspaceId, groupId))}
     >
       <RowHeadShell
         className={styles.groupHead}
@@ -130,12 +133,10 @@ export function GroupSection({
           <span className={styles.slot}>
             <IconTriangleRightFillRegular className={clsx(styles.arrow, expanded && styles.arrowOpen)} />
           </span>
-          <span className={styles.groupLabel}>{section.label}</span>
+          <span className={styles.groupLabel}>{label}</span>
           {/* 会话数自己成格贴在行右，与 session 行的 time 同格同形，空分组不显示
               只算会话，放进来的子工作区另用层级表达，混进同一个数会看不出组里是什么 */}
-          {section.sessions.length <= 0 ? null : (
-            <span className={styles.groupCount}>{section.sessions.length}</span>
-          )}
+          {count <= 0 ? null : <span className={styles.groupCount}>{count}</span>}
           {/* 操作位收进 session 行同一套可收放槽位，静止时不占宽，上面的会话数因此贴到行右，悬停/菜单展开/键盘聚焦时槽位展开，会话数隐去 */}
           <span className={styles.rowActionSlot}>
             <RowActions
@@ -143,29 +144,21 @@ export function GroupSection({
               onMenuOpen={setMenuOpen}
               onMenuSelect={select}
               menuItems={menuItems}
-              actionsLabel={labels.groupActions(section.label)}
+              actionsLabel={labels.groupActions(label)}
               create={
-                onCreateSession && { label: labels.newSessionInGroup(section.label), onCreate: onCreateSession }
+                onCreateSession && { label: labels.newSessionInGroup(label), onCreate: onCreateSession }
               }
             />
           </span>
         </span>
       </RowHeadShell>
       {/* 空分组既没有会话也没有子工作区，整块撑开体都不渲染 */}
-      {section.sessions.length <= 0 && childIds.length <= 0 ? null : (
+      {hasBody ? (
         // 组内同样是「子工作区 → 会话」，先文件夹后文件，与父工作区体内同一顺序
         <ExpandableBody open={expanded}>
-          <div className={styles.groupBody}>
-            {childIds.length === 0 ? null : (
-              <div className={styles.nest}>{childIds.map(renderChildWorkspace)}</div>
-            )}
-            {section.sessions.length <= 0 ? null : (
-              // 组内会话行不带区域键：整块分组那一格接得住归组，落在行上会一路走到它
-              <div className={styles.sessions}>{children}</div>
-            )}
-          </div>
+          <div className={styles.groupBody}>{children}</div>
         </ExpandableBody>
-      )}
+      ) : null}
     </div>
   )
 }

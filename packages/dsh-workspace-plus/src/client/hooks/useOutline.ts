@@ -1,7 +1,7 @@
 /**
  * 一整片区域的行序列
  *
- * 由容器算一次，向下交给渲染与拖拽两处：渲染按它画，拖拽按它装配查询索引
+ * 由容器算一次，向下交给渲染与拖拽两处：渲染按它逐层展开，拖拽按它装配查询索引
  * 因此两处认的是同一批行，不存在「计划里有、界面上没有」的位置
  *
  * 与 `useRegionLayout` 同一取舍：输入都是快照与偏好，`useMemo` 按输入列，
@@ -10,24 +10,22 @@
 import { useMemo } from 'react'
 import { buildOutline } from '../data/outline.ts'
 import type { OutlineInput, OutlineRow } from '../data/outline.ts'
-import { sessionScopeKey } from '../data/collapse.ts'
-import type { SessionScopeRef } from '../data/collapse.ts'
 
-/** 算出来的那一份：整条序列，以及按展示范围切好的索引 */
+/** 算出来的那一份：整条序列，以及按归属切好的索引 */
 export interface Outline {
   /** 从上到下的全部行 */
   rows: readonly OutlineRow[]
   /**
-   * 展示范围键 → 该段的那几行，按界面顺序
+   * 题头行的键 → 挂在它下面的那几行，按界面顺序
    *
-   * 渲染逐个段取自己那几条时用它。索引在算序列的同一次遍历里建好，
-   * 各消费方因此不必各自再滤一遍整条序列
+   * 只收直接下层：一个工作区题头下面是它的子工作区题头、会话分组题头与它体内那几段。
+   * 渲染按它逐层展开，因此不必再对着布局递归一遍
    */
-  scopes: ReadonlyMap<string, readonly OutlineRow[]>
+  owners: ReadonlyMap<string, readonly OutlineRow[]>
 }
 
 /** 空序列：缺少输入时给一个稳定引用，免得每次渲染都新建一份 */
-const EMPTY: Outline = { rows: [], scopes: new Map() }
+const EMPTY: Outline = { rows: [], owners: new Map() }
 
 /**
  * 算一次行序列
@@ -42,7 +40,6 @@ export function useOutline(source: OutlineInput): Outline {
       source.workspaceLayoutOf,
       source.depthOf,
       source.containers,
-      source.expansion,
       source.isScopeExpanded,
       source.alwaysVisibleSessionIds,
       source.now,
@@ -63,23 +60,21 @@ export function useOutline(source: OutlineInput): Outline {
  */
 export function outlineOf(source: OutlineInput): Outline {
   const rows = buildOutline(source)
-  const scopes = new Map<string, OutlineRow[]>()
+  const owners = new Map<string, OutlineRow[]>()
   for (const row of rows) {
-    if (row.scope === undefined) continue
-    const key = sessionScopeKey(row.scope)
-    const bucket = scopes.get(key)
-    if (bucket === undefined) scopes.set(key, [row])
+    const bucket = owners.get(row.ownerKey)
+    if (bucket === undefined) owners.set(row.ownerKey, [row])
     else bucket.push(row)
   }
-  return { rows, scopes }
+  return { rows, owners }
 }
 
 /**
- * 一段会话区段在序列里的那几行
+ * 挂在某个题头行下面的那几行
  * @param outline - {@link useOutline} 的结果
- * @param ref - 哪一段
- * @returns 该段的行，按界面顺序；没有这一段时为空表
+ * @param key - 题头行的键，空串表示最外层
+ * @returns 直接下层那几行，按界面顺序；没有时为空表
  */
-export function rowsOfScope(outline: Outline, ref: SessionScopeRef): readonly OutlineRow[] {
-  return outline.scopes.get(sessionScopeKey(ref)) ?? EMPTY.rows
+export function rowsUnder(outline: Outline, key: string): readonly OutlineRow[] {
+  return outline.owners.get(key) ?? EMPTY.rows
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildOutline, visibleRows } from '../src/client/data/outline.ts'
+import { buildOutline } from '../src/client/data/outline.ts'
 import type { OutlineInput } from '../src/client/data/outline.ts'
 import { buildRootLayout, buildLayout } from '../src/client/data/layout.ts'
 import { deriveNesting } from '../src/client/data/nest.ts'
@@ -80,11 +80,6 @@ function fixture(overrides: Partial<OutlineInput> = {}): OutlineInput {
       virtualOf: nesting.containers.virtualOf,
       groupOf: nesting.containers.groupOf,
     },
-    expansion: {
-      isWorkspaceExpanded: () => true,
-      isVirtualWorkspaceExpanded: () => true,
-      isGroupExpanded: () => true,
-    },
     isScopeExpanded: () => false,
     alwaysVisibleSessionIds: new Set<string>(),
     now: NOW,
@@ -148,58 +143,6 @@ describe('buildOutline', () => {
     )
   })
 
-  it('marks the whole section as hidden while its virtual group is collapsed', () => {
-    const rows = buildOutline(
-      fixture({
-        expansion: {
-          isWorkspaceExpanded: () => true,
-          isVirtualWorkspaceExpanded: () => false,
-          isGroupExpanded: () => true,
-        },
-      }),
-    )
-
-    // 段头自己仍露面（它要能被点开），段内一行都不露面
-    expect(rows.find((row) => row.key === 'virtual/vg-1')?.visible).toBe(true)
-    expect(rows.find((row) => row.key === 'workspace/ws-1')?.visible).toBe(false)
-    // 不在任何分组里的 ws-4 不受影响
-    expect(rows.find((row) => row.key === 'workspace/ws-4')?.visible).toBe(true)
-  })
-
-  it('marks the body as hidden while its workspace is collapsed', () => {
-    const rows = buildOutline(
-      fixture({
-        expansion: {
-          isWorkspaceExpanded: (key) => key !== 'ws-1',
-          isVirtualWorkspaceExpanded: () => true,
-          isGroupExpanded: () => true,
-        },
-      }),
-    )
-
-    expect(rows.find((row) => row.key === 'workspace/ws-1')?.visible).toBe(true)
-    expect(rows.find((row) => row.kind === 'groupHead')?.visible).toBe(false)
-  })
-
-  it('hides the sessions of a collapsed group but keeps its head', () => {
-    const rows = buildOutline(
-      fixture({
-        expansion: {
-          isWorkspaceExpanded: () => true,
-          isVirtualWorkspaceExpanded: () => true,
-          isGroupExpanded: () => false,
-        },
-      }),
-    )
-
-    expect(rows.find((row) => row.kind === 'groupHead')?.visible).toBe(true)
-    const inGroup = rows.find((row) => row.kind === 'session' && row.scope?.kind === 'group')
-    expect(inGroup?.visible).toBe(false)
-    // 未归组那一段与分组无关，仍在
-    const loose = rows.find((row) => row.kind === 'session' && row.scope?.kind === 'loose')
-    expect(loose?.visible).toBe(true)
-  })
-
   it('adds an overflow row only while a section hides something', () => {
     const many = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
     const rowsOf = many.map((id) => row(id, NOW - (many.indexOf(id) + 1) * 60_000))
@@ -240,7 +183,6 @@ describe('buildOutline', () => {
       (row) => row.kind === 'overflow' && row.workspaceId === 'ws-1' && row.scope?.kind === 'loose',
     )
     expect(overflow).toHaveLength(1)
-    expect(overflow[0]?.visible).toBe(true)
   })
 
   it('keeps the ungrouped bucket after every workspace', () => {
@@ -262,22 +204,50 @@ describe('buildOutline', () => {
     expect(new Set(keys).size).toBe(keys.length)
   })
 
-  it('hands back only the rows that are showing', () => {
-    const rows = buildOutline(
-      fixture({
-        expansion: {
-          isWorkspaceExpanded: (key) => key !== 'ws-1',
-          isVirtualWorkspaceExpanded: () => true,
-          isGroupExpanded: () => true,
-        },
-      }),
-    )
+  it('keeps the same rows no matter which containers are collapsed', () => {
+    // 折叠态不在这条序列上：收起走的是撑开体的轨道高度，内容始终留在文档里
+    // 序列因此只答「有哪些行、按什么顺序」，答不出「此刻看得见几条」
+    const rows = buildOutline(fixture())
 
-    const shown = visibleRows(rows)
-    expect(shown.length).toBeGreaterThan(0)
-    expect(shown.every((row) => row.visible)).toBe(true)
-    // 收起的工作区那条仍在序列里，只是不在这一份里
-    expect(rows.some((row) => !row.visible)).toBe(true)
+    expect(shape(rows)).toEqual([
+      'virtual:vg-1',
+      'workspace:ws-1',
+      'workspace:ws-2',
+      'session:s3',
+      'group:ws-1/g1',
+      'session:s1',
+      'session:s2',
+      'virtual:vg-2',
+      'workspace:ws-3',
+      'empty',
+      'workspace:ws-4',
+      'empty',
+    ])
   })
 
+  it('keeps every row under a header that exists, depth first', () => {
+    // 渲染按 ownerKey 逐层展开，因此这一格必须自洽：
+    // 每行的归属要么是最外层，要么是一条真实存在的题头行，且题头在序列里按深度优先收口
+    const rows = buildOutline(fixture({ stray: [row('u1')] }))
+    const stack: string[] = []
+
+    for (const each of rows) {
+      // 回到这行该在的那一层：一路弹出已经收口的题头
+      while (stack.length > 0 && stack[stack.length - 1] !== each.ownerKey) stack.pop()
+      expect(
+        stack.length > 0 || each.ownerKey === '',
+        'owner "' + each.ownerKey + '" is not open at row "' + each.key + '"',
+      ).toBe(true)
+      // 题头自己收得下东西，子工作区与分组都要能被逐层展开
+      const opens =
+        each.kind === 'workspaceHead' ||
+        each.kind === 'groupHead' ||
+        each.kind === 'virtualHead' ||
+        each.kind === 'strayHead'
+      if (opens) stack.push(each.key)
+    }
+
+    // 守一手：这份夹具确实有嵌套，否则上面那条在平铺序列上恒真
+    expect(rows.filter((each) => each.ownerKey !== '').length).toBeGreaterThan(0)
+  })
 })

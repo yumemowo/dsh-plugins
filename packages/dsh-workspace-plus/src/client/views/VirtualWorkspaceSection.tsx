@@ -25,12 +25,15 @@ import { useLocale } from '../hooks/useLocale.ts'
 import { useOrderRow } from '../hooks/useDnd.ts'
 import { regionProps, virtualRegionKey, virtualWorkspaceHeadKey } from '../data/protocol.ts'
 import type { OrderDragging } from '../data/protocol.ts'
-import type { VirtualWorkspaceSection as VirtualWorkspaceSectionData } from '../data/types.ts'
+import type { OutlineRow } from '../data/outline.ts'
 import styles from './components/rows.module.css'
 import clsx from 'clsx'
 
 export interface VirtualWorkspaceSectionProps {
-  section: VirtualWorkspaceSectionData
+  /** 本分组的题头行：分组 id、名字与工作区数都写在它身上 */
+  head: OutlineRow
+  /** 本分组名下还有没有工作区，空分组要在撑开体里露占位文案 */
+  hasMembers: boolean
   expanded: boolean
   onToggle: () => void
   onRename: () => void
@@ -54,7 +57,8 @@ export interface VirtualWorkspaceSectionProps {
 }
 
 export function VirtualWorkspaceSection({
-  section,
+  head,
+  hasMembers,
   expanded,
   onToggle,
   onRename,
@@ -65,6 +69,8 @@ export function VirtualWorkspaceSection({
 }: VirtualWorkspaceSectionProps): ReactElement {
   const { labels } = useLocale()
   const [menuOpen, setMenuOpen] = useState(false)
+  const groupId = head.groupId ?? ''
+  const label = head.label ?? ''
 
   /**
    * 分组头的拖拽接线
@@ -73,10 +79,10 @@ export function VirtualWorkspaceSection({
    * 这个 hook 无条件调用，没有排序接线时它只交回区域属性
    */
   const order = useOrderRow(
-    virtualWorkspaceHeadKey(section.id),
-    section.id,
+    virtualWorkspaceHeadKey(groupId),
+    groupId,
     // 每次渲染新建的闭包，取最新那份计划这件事由 hook 内部按引用兜住
-    orderDragging === undefined ? undefined : () => orderDragging.buildDragPlan(section.id),
+    orderDragging === undefined ? undefined : () => orderDragging.buildDragPlan(groupId),
   )
 
   /**
@@ -106,7 +112,7 @@ export function VirtualWorkspaceSection({
     // 这一块是分组的整体：组头与组体各占一格区域，指针落在任何一格上框都该套住这里
     <div
       className={styles.virtualWorkspace}
-      {...regionProps(virtualRegionKey(section.id))}
+      {...regionProps(virtualRegionKey(groupId))}
     >
       <RowHeadShell
         className={clsx(styles.groupHead, styles.virtualWorkspaceHead)}
@@ -131,12 +137,10 @@ export function VirtualWorkspaceSection({
           <span className={clsx(styles.slot, styles.chevron)}>
             <IconTriangleRightFillRegular className={clsx(styles.arrow, expanded && styles.arrowOpen)} />
           </span>
-          <span className={styles.virtualWorkspaceLabel}>{section.label}</span>
+          <span className={styles.virtualWorkspaceLabel}>{label}</span>
           {/* 工作区数自己成格贴在行右，与会话分组的会话数、session 行的时间同格同形
               空分组不显示 */}
-          {section.workspaceIds.length > 0 && (
-            <span className={styles.groupCount}>{section.workspaceIds.length}</span>
-          )}
+          {(head.count ?? 0) > 0 && <span className={styles.groupCount}>{head.count}</span>}
           {/* 操作位收进 session 行同一套可收放槽位：静止时不占宽，上面的工作区数因此贴到行右，悬停/菜单展开/键盘聚焦时槽位展开，工作区数隐去 */}
           <span className={styles.rowActionSlot}>
             <RowActions
@@ -144,7 +148,7 @@ export function VirtualWorkspaceSection({
               onMenuOpen={setMenuOpen}
               onMenuSelect={select}
               menuItems={menuItems}
-              actionsLabel={labels.virtualWorkspaceActions(section.label)}
+              actionsLabel={labels.virtualWorkspaceActions(label)}
             />
           </span>
         </span>
@@ -153,12 +157,12 @@ export function VirtualWorkspaceSection({
           工作区」时用户看得到它，而不是一个点下去什么都没发生的分组头 */}
       <ExpandableBody open={expanded}>
         <div className={styles.virtualWorkspaceBody} {...bodyZone}>
-          {section.workspaceIds.length <= 0 ? (
+          {hasMembers ? (
+            children
+          ) : (
             <div className={styles.empty} data-wg-stagger="">
               {labels.virtualWorkspaceEmpty}
             </div>
-          ) : (
-            children
           )}
         </div>
       </ExpandableBody>

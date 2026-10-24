@@ -1804,12 +1804,6 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
       virtualOf: layout.nesting.containers.virtualOf,
       groupOf: layout.nesting.containers.groupOf,
     },
-    expansion: {
-      isWorkspaceExpanded: expansion.read.isWorkspaceExpanded,
-      isVirtualWorkspaceExpanded: expansion.read.isVirtualWorkspaceExpanded,
-      isGroupExpanded: (workspaceId, groupId) =>
-        expansion.read.isGroupExpanded({ workspaceId, groupId }),
-    },
     isScopeExpanded: (ref) => ui.sessionScopes[sessionScopeKey(ref)] === true,
     alwaysVisibleSessionIds,
     now,

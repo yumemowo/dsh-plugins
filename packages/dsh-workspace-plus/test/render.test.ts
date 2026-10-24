@@ -8,23 +8,7 @@ import type { WorkspaceSectionProps } from '../src/client/views/WorkspaceSection
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
-import { compareSessionRows } from '../src/client/data/sessions.ts'
-import { outlineOf } from '../src/client/hooks/useOutline.ts'
-import type { Outline } from '../src/client/hooks/useOutline.ts'
-import { deriveNesting } from '../src/client/data/nest.ts'
-import type { WorkspaceLayout } from '../src/client/data/types.ts'
-import {
-  groupHeadKey,
-  looseKey,
-  sessionGroupRegionKey,
-  sessionGroupZoneKey,
-  virtualRegionKey,
-  virtualWorkspaceBodyKey,
-  virtualWorkspaceHeadKey,
-  workspaceBodyKey,
-  workspaceHeadKey,
-  workspaceRegionKey,
-} from '../src/client/data/protocol.ts'
+import type { OutlineRow } from '../src/client/data/outline.ts'
 import { RegionLocaleProvider } from '../src/client/hooks/useLocale.ts'
 import { DndProvider } from '../src/client/hooks/useDnd.ts'
 import { regionLabels } from '../src/client/labels.ts'
@@ -582,17 +566,37 @@ function sessionRowNode(options: {
   }))
 }
 
+/** 一个会话分组的题头行，测试按它渲染分组 */
+function groupHeadRow(count = 0, key = 'group/w1/g1'): OutlineRow {
+  return {
+    key,
+    kind: 'groupHead',
+    ownerKey: 'workspace/w1',
+    container: { kind: 'group', workspaceId: 'w1', groupId: 'g1' },
+    workspaceId: 'w1',
+    depth: 1,
+    zoneKeys: [],
+    regionKey: undefined,
+    groupId: 'g1',
+    label: '前端',
+    count,
+    total: count,
+    hiddenCount: 0,
+    scopeExpanded: false,
+  }
+}
+
 /** 一个分组行的元素，供右键测试直接渲染一行 */
 function groupRowNode(onCreateSession?: () => void): unknown {
   return withLocale(React.createElement(GroupSection, {
-    section: { id: 'g1', label: '前端', sessions: [] },
+    head: groupHeadRow(),
     workspaceId: 'w1',
+    hasBody: false,
     expanded: false,
     onToggle: () => {},
     onRename: () => {},
     onDelete: () => {},
     ...(onCreateSession === undefined ? {} : { onCreateSession }),
-    renderChildWorkspace: () => null,
     children: null,
   }))
 }
@@ -634,26 +638,14 @@ function renderGroupRow(
   render(
     withLocale(
       React.createElement(GroupSection, {
-        section: {
-          id: 'g1',
-          label: '前端',
-          sessions: Array.from({ length: sessionCount }, (_, index) => ({
-            id: `s${index}`,
-            title: `会话 ${index}`,
-            blank: false,
-            running: false,
-            runningSubagentCount: 0,
-            completed: false,
-            updatedAt: 0,
-          })),
-        },
+        head: groupHeadRow(sessionCount),
         workspaceId: 'w1',
+        hasBody: sessionCount > 0,
         expanded,
         onToggle: () => {},
         onRename: () => {},
         onDelete: () => {},
         ...(onCreateSession === undefined ? {} : { onCreateSession }),
-        renderChildWorkspace: () => null,
         children: null,
       }),
     ),
@@ -662,55 +654,6 @@ function renderGroupRow(
   return out
 }
 
-/**
- * 一个工作区区块的行序列
- *
- * 区块读序列取「本段露哪几条」，因此测试也要有一份；名次为空表时比较器与 `compareSessionRows` 同序
- * 空名单意味着一条始终展示的行也没有，折叠额度按普通行算
- */
-function sectionOutline(
-  workspaceId: string,
-  layout: WorkspaceLayout,
-  expanded: boolean,
-): Outline {
-  const containers = deriveNesting({
-    enabled: false,
-    workspaceIds: [workspaceId],
-    pathOf: () => undefined,
-    virtualOf: () => '',
-    bindingOf: () => undefined,
-    groupIdsOf: () => new Set<string>(),
-  }).containers
-  return outlineOf({
-    rootLayout: { groups: [], loose: [workspaceId], entries: [] },
-    workspaceLayoutOf: () => layout,
-    depthOf: () => 0,
-    containers: { root: containers.root, virtualOf: containers.virtualOf, groupOf: containers.groupOf },
-    expansion: {
-      isWorkspaceExpanded: () => expanded,
-      isVirtualWorkspaceExpanded: () => true,
-      isGroupExpanded: () => false,
-    },
-    isScopeExpanded: () => false,
-    alwaysVisibleSessionIds: new Set<string>(),
-    now: 0,
-    stray: [],
-    hideStray: true,
-    compareRows: compareSessionRows,
-    keys: {
-      workspaceHead: workspaceHeadKey,
-      workspaceBody: workspaceBodyKey,
-      workspaceRegion: workspaceRegionKey,
-      sessionGroupHead: groupHeadKey,
-      sessionGroupZone: sessionGroupZoneKey,
-      sessionGroupRegion: sessionGroupRegionKey,
-      virtualHead: virtualWorkspaceHeadKey,
-      virtualBody: virtualWorkspaceBodyKey,
-      virtualRegion: virtualRegionKey,
-      loose: looseKey,
-    },
-  })
-}
 
 /** 渲染一个工作区区块并返回可断言的撑开结构 */
 function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
@@ -744,17 +687,15 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
       onRename: () => {},
       onDelete: () => {},
     },
-    layout: { groups: [], loose, children: [] },
-    outline: sectionOutline('w1', { groups: [], loose, children: [] }, expanded),
-    depth: 0,
-    revealSessionId: undefined,
-    groupActions: {
-      onRename: () => {},
-      onDelete: () => {},
-      onCreateSession: () => {},
-    },
-    renderSession: (row) => React.createElement('span', { key: row.id, className: 'row' }, row.title),
-    renderChildWorkspace: () => null,
+    head: workspaceHeadRow(loose.length),
+    hasBody: loose.length > 0,
+    children:
+      loose.length === 0
+        ? null
+        : [
+            React.createElement('div', { key: 'sessions', className: 'sessions' },
+              loose.map((row) => React.createElement('span', { key: row.id, className: 'row' }, row.title))),
+          ],
   }
   const out = {
     menus: [] as unknown[],
@@ -779,6 +720,23 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
     out,
   )
   return out
+}
+
+/** 一个工作区题头行，测试按它渲染区块 */
+function workspaceHeadRow(looseCount = 0): OutlineRow {
+  return {
+    key: 'workspace/w1',
+    kind: 'workspaceHead',
+    ownerKey: '',
+    container: { kind: 'root' },
+    workspaceId: 'w1',
+    depth: 0,
+    zoneKeys: [],
+    regionKey: undefined,
+    total: looseCount,
+    hiddenCount: 0,
+    scopeExpanded: false,
+  }
 }
 
 /** 撑开体的展开态：类名里带 expandOpen 即为展开 */
