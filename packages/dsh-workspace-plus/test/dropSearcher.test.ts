@@ -1,311 +1,247 @@
 import { describe, expect, it } from 'vitest'
 import { maybeDropSearcher } from '../src/client/data/dropSearcher.ts'
-import type { DropNode, DropTarget } from '../src/client/data/dropSearcher.ts'
-import { dropRelationsOf } from '../src/client/data/relations.ts'
-import type { OutlineIndex } from '../src/client/data/outlineIndex.ts'
-import { indexFrom } from './support/outlineFixture.ts'
+import type { DropArea, DropUnit } from '../src/client/data/protocol.ts'
 
 /**
  * 检测器的行为
  *
- * 一次检测最多交回两个节点：一个画框、一个画线。落在哪个节点上由检测结果直接给出，
- * 调用方不再自己沿祖先链找区域，也不再把几格合并成一圈。
+ * 输入只有 DOM 已经给出的两样东西：指针那一点落在哪几格上、压着哪一行。
+ * 输出至多两处落点：一个画框、一个画线。
  *
- * 判定全在节点上做：指针落在哪个节点由适配层读出，此后沿树往上走，不碰 DOM。
+ * 判定不碰元素也不认识索引——片区自己声明占哪几格，因此检测就是「沿这一串格子往上，
+ * 找第一个接这种读法的片区」。
  */
-
-/**
- * 一份最小的树
- *
- * 注册表序 ws-1 ws-2 ws-3，ws-1 与 ws-2 在 vg-1 组内，ws-3 平铺在根节点；
- * ws-c1 按 cwd 挂在 ws-1 之下
- */
-function fixture(): OutlineIndex {
-  return indexFrom({
-    workspaceIds: ['ws-1', 'ws-2', 'ws-3', 'ws-c1'],
-    virtualGroups: [{ id: 'vg-1', workspaceIds: ['ws-1', 'ws-2'] }],
-    paths: {
-      'ws-1': '/repo',
-      'ws-2': '/other',
-      'ws-3': '/third',
-      'ws-c1': '/repo/pkg',
-    },
-  })
-}
-
-const ws = (id: string) => ({ kind: 'workspace', id }) as const
 
 /** 一块的读数：检测器拿它分线的上下半 */
 function measure(rect: { top: number; height: number }): () => { top: number; height: number } {
   return () => rect
 }
 
-/** 一条默认的落点单位读数：高 10、上缘在 0，指针落在它上半 */
+/** 一条默认的单位读数：高 10、上缘在 0，指针落在它上半 */
 const TALL = measure({ top: 0, height: 10 })
 
 const at = (y: number) => ({ x: 0, y })
 
 /**
- * 名单里的一条落点
- * @param kind - 整块放入还是排序
- * @param node - 落点身份
- * @param commit - 放开时执行
- * @param rect - 排序时量哪一块，缺省 {@link TALL}
+ * 一片只接「放进去」的片区
+ * @param zones - 它占的那几格
  */
-function targetOf(
-  kind: 'inside',
-  node: DropNode,
-  commit?: () => void,
-): DropTarget
-function targetOf(
-  kind: 'order',
-  node: DropNode,
-  commit?: (side: 'before' | 'after') => void,
-  rect?: () => { top: number; height: number },
-): DropTarget
-function targetOf(
-  kind: 'inside' | 'order',
-  node: DropNode,
-  commit?: ((side: 'before' | 'after') => void) | (() => void),
-  rect?: () => { top: number; height: number },
-): DropTarget {
-  if (kind === 'inside') return { kind, node, commit: (commit as (() => void) | undefined) ?? (() => {}) }
+function insideArea(zones: readonly string[]): DropArea {
+  return { zones, units: [{ region: undefined, row: undefined }], accepts: 'inside', commit: () => {} }
+}
+
+/**
+ * 一片接位次的片区
+ * @param zones - 它占的那几格
+ * @param unit - 它的读数单位
+ */
+function orderArea(zones: readonly string[], unit?: Partial<DropUnit>): DropArea {
   return {
-    kind,
-    node,
-    measure: rect ?? TALL,
-    commit: (commit as ((side: 'before' | 'after') => void) | undefined) ?? (() => {}),
+    zones,
+    units: [{ region: undefined, row: zones[0], ...unit }],
+    accepts: 'order',
+    commit: () => {},
   }
 }
 
+/** 交一份「量哪一块」的口子：整个检测用一个读数 */
+const measuring = (rect: { top: number; height: number }) => () => measure(rect)
+const TALL_OF = () => measuring({ top: 0, height: 10 })
+
 describe('maybeDropSearcher', () => {
-  it('returns nothing when the pointer node is on no target', () => {
-    const index = fixture()
-    const searcher = maybeDropSearcher(index, [targetOf('order', ws('ws-2'))])
+  it('returns nothing when the pointer is on no area', () => {
+    const searcher = maybeDropSearcher([orderArea(['workspaceHead/ws-2'])])
 
-    expect(searcher.checkDrop(at(0), ws('ws-3'))).toBeNull()
+    expect(searcher.checkDrop(['workspaceHead/ws-3'], undefined, at(0), TALL_OF())).toBeNull()
   })
 
-  it('returns one node for an inside target', () => {
-    const index = fixture()
-    const searcher = maybeDropSearcher(index, [targetOf('inside', index.containers.virtualOf('vg-1'))])
+  it('returns the area the pointer sits in', () => {
+    const searcher = maybeDropSearcher([insideArea(['virtualWorkspaceHead/vg-1', 'virtualWorkspaceBody/vg-1'])])
 
-    // 指针落在组内一条成员行上：它自己不是落点，但它所在的那一片是
-    const check = searcher.checkDrop(at(0), ws('ws-1'))
+    // 指针落在组体里：那一片声明了这两格，因此读出的就是它
+    const hit = searcher.checkDrop(['virtualWorkspaceBody/vg-1'], undefined, at(0), TALL_OF())
 
-    expect(check?.inside).toEqual({ kind: 'virtual', id: 'vg-1' })
-    expect(check?.order).toBeUndefined()
+    expect(hit?.inside?.area.zones).toEqual(['virtualWorkspaceHead/vg-1', 'virtualWorkspaceBody/vg-1'])
+    expect(hit?.order).toBeUndefined()
   })
 
-  it('lets a member row answer for the container that encloses it', () => {
-    // 组内任何一条成员行都能让罩着它的那一片响应：链是树算的，不必把成员逐一列进名单
-    const index = fixture()
-    const searcher = maybeDropSearcher(index, [targetOf('inside', index.containers.virtualOf('vg-1'))])
-
-    const check = searcher.checkDrop(at(0), ws('ws-1'))
-
-    expect(check?.inside).toEqual({ kind: 'virtual', id: 'vg-1' })
-  })
-
-  it('returns a box and a line at the same time from two different nodes', () => {
-    // 框说「放进这一片」，线说「排在这一条之前 / 之后」，两件事可以同时成立
-    const index = fixture()
-    const searcher = maybeDropSearcher(index, [
-      targetOf('order', ws('ws-2')),
-      targetOf('inside', index.containers.virtualOf('vg-1')),
+  it('reads the nearest area that accepts the drop', () => {
+    // 一串格子由近到远：内部那一片先接，外面那一圈因此轮不到
+    const searcher = maybeDropSearcher([
+      insideArea(['sessionGroup/ws-1/group-a']),
+      insideArea(['workspaceBody/ws-1']),
     ])
 
-    const check = searcher.checkDrop(at(0), ws('ws-2'))
-
-    expect(check?.order).toEqual({ kind: 'workspace', id: 'ws-2' })
-    expect(check?.inside).toEqual({ kind: 'virtual', id: 'vg-1' })
-  })
-
-  it('refuses a drop that lands both readings on one node', () => {
-    // 同一格两种读法都成立是分组嵌套的性质，那件事尚未实现。
-    // 判定点守在检测层：框与线各自沿链找、互不知道对方在哪一层，
-    // 只有在这里才看得出它们是不是指着同一格
-    const index = fixture()
-    const searcher = maybeDropSearcher(index, [
-      targetOf('order', ws('ws-2')),
-      targetOf('inside', ws('ws-2')),
-    ])
-
-    expect(() => searcher.checkDrop(at(0), ws('ws-2'))).toThrow(
-      /banded/,
+    const hit = searcher.checkDrop(
+      ['sessionGroup/ws-1/group-a', 'workspaceBody/ws-1'],
+      undefined,
+      at(0),
+      TALL_OF(),
     )
+
+    expect(hit?.inside?.area.zones).toEqual(['sessionGroup/ws-1/group-a'])
   })
 
-  it('draws no box for a line that names none', () => {
-    // 线只回答「排到这一行前后」，框问的是「指针这一点归哪一片」——
-    // 那条链上没有能放进去的东西时，就只剩一条线
-    const index = fixture()
-    const searcher = maybeDropSearcher(index, [targetOf('order', ws('ws-3'))])
-
-    const check = searcher.checkDrop(at(0), ws('ws-3'))
-
-    expect(check?.order).toEqual({ kind: 'workspace', id: 'ws-3' })
-    expect(check?.inside).toBeUndefined()
-  })
-
-  it('takes the box from the chain rather than from the line', () => {
-    // 指针落在根节点那一层的行上：框归根节点那一片，线归这一行，两条同源而不相干
-    const index = fixture()
-    const searcher = maybeDropSearcher(index, [
-      targetOf('order', ws('ws-3')),
-      targetOf('inside', index.containers.root),
+  it('returns a box and a line at the same time from two areas', () => {
+    // 框说「放进这一片」，线说「排在这一条之前 / 之后」，两件事可以同时成立
+    const searcher = maybeDropSearcher([
+      insideArea(['virtualWorkspaceBody/vg-1']),
+      orderArea(['workspaceHead/ws-2']),
     ])
 
-    const check = searcher.checkDrop(at(0), ws('ws-3'))
+    const hit = searcher.checkDrop(['workspaceHead/ws-2', 'virtualWorkspaceBody/vg-1'], undefined, at(0), TALL_OF())
 
-    expect(check?.inside).toEqual({ kind: 'root' })
-    expect(check?.order).toEqual({ kind: 'workspace', id: 'ws-3' })
+    expect(hit?.inside?.area.zones).toEqual(['virtualWorkspaceBody/vg-1'])
+    expect(hit?.order?.area.zones).toEqual(['workspaceHead/ws-2'])
   })
 
-  it('reads the upper half of a row as before and the lower half as after', () => {
-    const index = fixture()
-    const searcher = maybeDropSearcher(index, [
-      targetOf('order', ws('ws-2'), undefined, measure({ top: 100, height: 20 })),
-    ])
+  it('draws no box when only a line is offered', () => {
+    const searcher = maybeDropSearcher([orderArea(['workspaceHead/ws-3'])])
 
-    expect(searcher.checkDrop(at(105), ws('ws-2'))?.side).toBe('before')
-    expect(searcher.checkDrop(at(115), ws('ws-2'))?.side).toBe('after')
+    const hit = searcher.checkDrop(['workspaceHead/ws-3'], undefined, at(0), TALL_OF())
+
+    expect(hit?.order?.area.zones).toEqual(['workspaceHead/ws-3'])
+    expect(hit?.inside).toBeUndefined()
   })
 
-  it('reads a zero-height row as before', () => {
-    // jsdom 恒零矩形，尚未布局的节点也如此：那时分不出上下，
+  it('reads the upper half as before and the lower half as after', () => {
+    const searcher = maybeDropSearcher([orderArea(['workspaceHead/ws-2'])])
+    const measureOf = measuring({ top: 100, height: 20 })
+
+    expect(searcher.checkDrop(['workspaceHead/ws-2'], undefined, at(105), measureOf)?.order?.side).toBe('before')
+    expect(searcher.checkDrop(['workspaceHead/ws-2'], undefined, at(115), measureOf)?.order?.side).toBe('after')
+  })
+
+  it('reads a zero height unit as before', () => {
+    // jsdom 恒零矩形，尚未布局的元素也如此：那时分不出上下，
     // 读作「之前」让线落在这块自己身上，与指针到底指着哪一处无关
-    const index = fixture()
-    const searcher = maybeDropSearcher(index, [
-      targetOf('order', ws('ws-2'), undefined, measure({ top: 100, height: 0 })),
+    const searcher = maybeDropSearcher([orderArea(['workspaceHead/ws-2'])])
+
+    expect(
+      searcher.checkDrop(['workspaceHead/ws-2'], undefined, at(100), measuring({ top: 100, height: 0 }))?.order
+        ?.side,
+    ).toBe('before')
+  })
+
+  it('skips an area whose unit cannot be measured', () => {
+    // 那一块还没渲染出来：这一片这次接不住，继续往外找
+    const searcher = maybeDropSearcher([
+      orderArea(['workspaceHead/ws-2']),
+      orderArea(['virtualWorkspaceBody/vg-1']),
     ])
 
-    expect(searcher.checkDrop(at(100), ws('ws-2'))?.side).toBe('before')
+    const hit = searcher.checkDrop(
+      ['workspaceHead/ws-2', 'virtualWorkspaceBody/vg-1'],
+      undefined,
+      at(0),
+      (area) => (area.zones[0] === 'workspaceHead/ws-2' ? undefined : TALL),
+    )
+
+    expect(hit?.order?.area.zones).toEqual(['virtualWorkspaceBody/vg-1'])
   })
 
-  it('walks the node chain rather than the document', () => {
-    // 跨虚拟分组的两个工作区在 DOM 上互为祖先，在树上却不是父子：
-    // ws-3 平铺在根节点，链上不到 ws-1 所在的那一片
-    const index = fixture()
-    const searcher = maybeDropSearcher(index, [targetOf('inside', ws('ws-1'))])
+  it('picks the unit the pointer row points at', () => {
+    // 一格装多行：那一片声明了好几处单位，指针压着哪一行就是哪一处
+    const area: DropArea = {
+      zones: ['pinned'],
+      units: [
+        { region: undefined, row: 'session-1' },
+        { region: undefined, row: 'session-2' },
+      ],
+      accepts: 'order',
+      commit: () => {},
+    }
+    const searcher = maybeDropSearcher([area])
 
-    expect(searcher.checkDrop(at(0), ws('ws-3'))).toBeNull()
+    expect(searcher.checkDrop(['pinned'], 'session-2', at(0), TALL_OF())?.order?.unit.row).toBe('session-2')
   })
 
-  it('commits the box and the line as two separate writes', () => {
-    const index = fixture()
+  it('answers for a single unit area whatever row the pointer is on', () => {
+    // 一处单位的片区是一个整体：指针压着它体内的任何一行，说的都是这一片。
+    // 只有「一格装多行」那种才按行分单位
+    const searcher = maybeDropSearcher([orderArea(['workspaceHead/ws-1'], { row: 'ws-1' })])
+
+    expect(searcher.checkDrop(['workspaceHead/ws-1'], 'session-9', at(0), TALL_OF())?.order?.unit.row).toBe('ws-1')
+  })
+
+  it('turns a drop after one unit into the seam the next unit owns', () => {
+    // 一处缝从上面看是前一条的下半、从下面看是后一条的上半：屏幕上同一处空白，
+    // 因此「之后」在检测层就换成下一条的「之前」，画出来只有一条线
+    const area: DropArea = {
+      zones: ['pinned'],
+      units: [
+        { region: undefined, row: 'session-1', seam: 'session-2' },
+        { region: undefined, row: 'session-2' },
+      ],
+      accepts: 'order',
+      commit: () => {},
+    }
+    const searcher = maybeDropSearcher([area])
+    const measureOf = measuring({ top: 0, height: 20 })
+
+    const hit = searcher.checkDrop(['pinned'], 'session-1', at(18), measureOf)
+
+    expect(hit?.order?.side).toBe('after')
+    expect(hit?.order?.seam?.unit.row).toBe('session-2')
+  })
+
+  it('resolves a seam that lives in another area', () => {
+    // 每个成员各占一片时，下一条是另一片：两处都要在这张名单里找得到。
+    // 成员 id 与会话分组那种情况一致——组的成员 id 就是分组 id
+    const searcher = maybeDropSearcher([
+      orderArea(['groupHead/ws-1/group-a'], { row: 'group-a', seam: 'group-b' }),
+      orderArea(['groupHead/ws-1/group-b'], { row: 'group-b' }),
+    ])
+
+    const hit = searcher.checkDrop(['groupHead/ws-1/group-a'], undefined, at(18), measuring({ top: 0, height: 20 }))
+
+    expect(hit?.order?.side).toBe('after')
+    expect(hit?.order?.seam?.area.zones).toEqual(['groupHead/ws-1/group-b'])
+  })
+
+  it('lets only the nearest area stand when one declares its own level', () => {
+    // 罩住整片列表的那一片裹着所有成员：指针停在成员身上时不该由它接住，
+    // 否则「移出分组」会抢在成员自己那一片之前
+    const root: DropArea = {
+      zones: ['root'],
+      units: [{ region: undefined, row: undefined }],
+      accepts: 'inside',
+      hitArea: 'ownLevel',
+      commit: () => {},
+    }
+    const searcher = maybeDropSearcher([insideArea(['workspaceBody/ws-1']), root])
+
+    // 指针在体内那一格上：前面出现过容器体内，根节点那一片因此不算
+    const nested = searcher.checkDrop(['workspaceBody/ws-1', 'root'], undefined, at(0), TALL_OF())
+    expect(nested?.inside?.area.zones).toEqual(['workspaceBody/ws-1'])
+
+    // 指针直接落在根节点那一格上：这时才是它
+    const direct = searcher.checkDrop(['root'], undefined, at(0), TALL_OF())
+    expect(direct?.inside?.area.zones).toEqual(['root'])
+  })
+
+  it('commits whichever areas the hit names', () => {
     const calls: string[] = []
-    const searcher = maybeDropSearcher(index, [
-      targetOf('order', ws('ws-2'), (side) => calls.push('order:' + side)),
-      targetOf('inside', index.containers.virtualOf('vg-1'), () => calls.push('inside')),
+    const searcher = maybeDropSearcher([
+      { ...insideArea(['virtualWorkspaceBody/vg-1']), commit: () => calls.push('inside') },
+      { ...orderArea(['workspaceHead/ws-2']), commit: (anchor) => calls.push('order:' + anchor.kind) },
     ])
 
-    // 指针在参照行的上缘，因此是「插到它之前」；框与线是两次独立的写入
-    searcher.commit(searcher.checkDrop(at(0), ws('ws-2'))!)
+    const hit = searcher.checkDrop(['workspaceHead/ws-2', 'virtualWorkspaceBody/vg-1'], undefined, at(0), TALL_OF())
+
+    hit?.inside?.area.commit({ kind: 'inside' })
+    if (hit?.order !== undefined) hit.order.area.commit({ kind: hit.order.side, rowId: hit.order.unit.row ?? '' })
 
     expect(calls).toEqual(['inside', 'order:before'])
   })
 
-  it('commits nothing for an empty result', () => {
-    const index = fixture()
-    const calls: string[] = []
-    const searcher = maybeDropSearcher(index, [targetOf('inside', ws('ws-1'), () => calls.push('a'))])
+  it('lets the first area win when two claim the same zone', () => {
+    // 一格只归一片：同一个人不会既承接放入又承接位次
+    const searcher = maybeDropSearcher([insideArea(['workspaceHead/ws-1']), orderArea(['workspaceHead/ws-1'])])
 
-    searcher.commit({})
+    const hit = searcher.checkDrop(['workspaceHead/ws-1'], undefined, at(0), TALL_OF())
 
-    expect(calls).toEqual([])
-  })
-
-  it('reads a row that is not in the index by its own identity', () => {
-    // 会话行与置顶行不在树上：它们以行身份直接当节点，链上只有它自己
-    const index = fixture()
-    const searcher = maybeDropSearcher(index, [targetOf('order', { kind: 'row', id: 'session-1' })])
-
-    const check = searcher.checkDrop(at(0), { kind: 'row', id: 'session-1' })
-
-    expect(check?.order).toEqual({ kind: 'row', id: 'session-1' })
-  })
-
-  it('reads the session group a child sits in as nearer than its parent workspace', () => {
-    // 一个按 cwd 挂在父工作区之下的子工作区，被放进了父工作区的会话分组：
-    // 它渲染在组体里，因此「它所在的那一片」是那个会话分组，而不是父工作区。
-    //
-    // 链上若把祖先排在容器之前，框会套到父工作区上，而线仍画在这一行上——
-    // 用户读到的是一条线在组里、框在组外，两个落点互相矛盾
-    const workspaceIds = ['ws-1', 'ws-c1', 'ws-4']
-    const paths: Record<string, string> = {
-      'ws-1': '/repo',
-      'ws-c1': '/repo/pkg',
-      'ws-4': '/elsewhere',
-    }
-    const index = indexFrom({
-      workspaceIds,
-      paths,
-      bindings: { 'ws-c1': { workspaceId: 'ws-1', groupId: 'group-a' } },
-      groupIds: { 'ws-1': ['group-a'] },
-    })
-    const group = index.containers.groupOf('ws-1', 'group-a')
-    const searcher = maybeDropSearcher(index, [
-      targetOf('order', ws('ws-c1')),
-      targetOf('inside', group),
-      targetOf('inside', ws('ws-1')),
-    ])
-
-    // 指针落在 ws-c1 那一行上
-    const check = searcher.checkDrop(at(0), ws('ws-c1'))
-
-    // 框与线必须说同一层：框落在那个会话分组上，而不是父工作区
-    expect(check?.inside).toEqual(group)
-    expect(check?.order).toEqual({ kind: 'workspace', id: 'ws-c1' })
-  })
-
-  it('keeps the pointer in the group a child already sits in', () => {
-    // 子工作区已经住进父工作区的会话分组：拖到那个分组的组头上读作原地投放。
-    //
-    // 这一片必须留在名单里。整条跳过它时指针一落到组头就没人接，链继续往上走到外层的
-    // 虚拟分组——框因此套在整个虚拟分组上，而这一行明明就在这个分组体内
-    const workspaceIds = ['ws-p', 'ws-c', 'ws-x']
-    const paths: Record<string, string> = {
-      'ws-p': '/repo',
-      'ws-c': '/repo/pkg',
-      'ws-x': '/repo/other',
-    }
-    const index = indexFrom({
-      workspaceIds,
-      virtualGroups: [{ id: 'vg-1', workspaceIds }],
-      paths,
-      bindings: { 'ws-c': { workspaceId: 'ws-p', groupId: 'g-111' } },
-      groupIds: { 'ws-p': ['g-111'] },
-    })
-    const node = index.workspaceNodes.find((entry) => entry.id === 'ws-c')
-    if (node === undefined) throw new Error('fixture 少了 ws-c')
-    const writes: string[] = []
-    const relations = dropRelationsOf(index, node, {
-      moveToGroup: (groupId) => writes.push('moveToGroup:' + groupId),
-      reorder: () => writes.push('reorder'),
-      nestInto: () => writes.push('nestInto'),
-      unnest: () => writes.push('unnest'),
-    })
-    const searcher = maybeDropSearcher(
-      index,
-      relations.map((relation) => {
-        const node = index.nodesByZone().get(relation.zones[0] ?? '') ?? index.containers.root
-        return relation.kind === 'inside'
-          ? { kind: 'inside' as const, node, commit: () => relation.commit() }
-          : {
-              kind: 'order' as const,
-              node,
-              measure: TALL,
-              commit: () => relation.place('before'),
-            }
-      }),
-    )
-    const group = index.containers.groupOf('ws-p', 'g-111')
-
-    const check = searcher.checkDrop(at(0), group)
-
-    expect(check?.inside).toEqual(group)
-    if (check !== null) searcher.commit(check)
-    expect(writes).toEqual([])
+    expect(hit?.inside?.area.accepts).toBe('inside')
+    expect(hit?.order).toBeUndefined()
   })
 })

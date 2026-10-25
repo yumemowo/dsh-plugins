@@ -20,9 +20,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { rowIdProps, zoneProps } from '../data/protocol.ts'
 import type { DragPlan } from '../data/protocol.ts'
 import { maybeDropSearcher } from '../data/dropSearcher.ts'
-import type { DropCheck, DropSearcher } from '../data/dropSearcher.ts'
-import type { ContainerNode } from '../data/nest.ts'
-import type { NodeRef } from '../data/zones.ts'
+import type { DropHit, DropSearcher } from '../data/dropSearcher.ts'
 import { debugLog, debugWarn } from '../utils/debug.ts'
 import { autoScrollStep } from '../data/scroll.ts'
 import {
@@ -31,16 +29,15 @@ import {
   boxOf,
   clearDimmed,
   clearMarkers,
-  collectDropTargets,
   describeElement,
-  describeNode,
   dimmedElements,
-  nodeAt,
-  owningZoneKey,
-  paintFor,
+  lineOf,
+  measureOf,
+  paintBox,
+  rowIdAt,
   scrollContainers,
+  zoneKeysAt,
 } from './dnd/marks.ts'
-import type { PaintMark } from './dnd/marks.ts'
 
 /**
  * 拖拽载荷的前缀
@@ -62,7 +59,7 @@ let currentPlan: DragPlan | null = null
  * 计划构造器在拖起当刻可能已经被摘掉（那一行在拖拽期间卸载），那时没有来源可交
  * 交空表让命中层一路查不到，比抛错或延续上一次的落点都更接近事实
  */
-const EMPTY_PLAN: DragPlan = { source: { kind: 'session', id: '' }, targets: new Map() }
+const EMPTY_PLAN: DragPlan = { source: { kind: 'session', id: '' }, areas: [] }
 
 /**
  * 把 `beginDrag` 与两个属性助手交给子树
@@ -165,10 +162,16 @@ export function DndProvider({
   const dimmedRef = useRef<Element[]>([])
   /** 这一场拖拽的落点检测器，dragstart 时建一次，指针移动期间只查它 */
   const searcherRef = useRef<DropSearcher | null>(null)
-  /** 区域键 → 画框 / 画线的元素：检测只交回键，靠它落成像素 */
-  const paintRef = useRef<Map<string, () => PaintMark | undefined>>(new Map())
-  /** 区域键 → 节点身份：把指针落着的那个元素读成节点，检测层只认节点 */
-  const zoneNodesRef = useRef<ReadonlyMap<string, NodeRef | ContainerNode>>(new Map())
+  /**
+   * 查元素的那一片根节点，dragstart 时定下
+   *
+   * 检测交回「哪一片、哪一处单位」，把这两样换成像素要在这棵树里找一次。
+   * 放在这里而不是每帧传下去：一场拖拽里它不变
+   *
+   * 初值不给 `document`：宿主半边不跑浏览器（服务端渲染与纯逻辑测试里没有它），
+   * 起拖时一定会写这一格，因此空着是安全的
+   */
+  const scopeRef = useRef<ParentNode | null>(null)
 
   /**
    * 上一次 `dragover` 算出的落点
@@ -177,7 +180,7 @@ export function DndProvider({
    * 指针在两格之间可能已经越过中线，那时提交的会是与用户看到的标记不同的一件事
    */
   /** 上一次检测的结果，放开时提交的就是它 */
-  const checkRef = useRef<DropCheck | null>(null)
+  const checkRef = useRef<DropHit | null>(null)
   /** 本次拖拽是否已经提交过，提交只发生一次 */
   const committedRef = useRef(false)
   /**
@@ -227,7 +230,6 @@ export function DndProvider({
     clearDimmed(dimmedRef.current)
     dimmedRef.current = []
     searcherRef.current = null
-    paintRef.current = new Map()
     checkRef.current = null
     lastMarkKeyRef.current = ''
     currentPlan = null
@@ -247,29 +249,25 @@ export function DndProvider({
     // 事件目标不在本实例那一片里：这一格不归本实例管，另一个实例的拖拽或页面上的别的拖放
     const scope = region?.current
     const inside = target !== null && (scope === undefined || scope === null || scope.contains(target))
-    // 指针正落着哪个节点：适配层读一次（元素带区域键，经索引换成节点身份），
-    // 此后落点判定全在节点上做，检测层沿索引往上走
-    const node = inside ? nodeAt(zoneNodesRef.current, target) : null
-    // 量哪一块由检测器自己决定：线要分上下半时才去问名单里那一条落点的量法
-    const check = inside && node !== null ? searcher.checkDrop(point, node) : null
+    // 指针那一点落在哪几格、压着哪一行：DOM 已经给出的两样东西，检测层只要这两样
+    const zones = inside && target !== null ? zoneKeysAt(target) : []
+    const rowId = inside && target !== null ? rowIdAt(target) : undefined
+    // 起拖前一定写过这一格；万一没有，就没有可查的那棵树，这一格跳过
+    const root = scopeRef.current
+    if (root === null) return
+    const check =
+      inside && target !== null
+        ? searcher.checkDrop(zones, rowId, point, (area, unit) => measureOf(root, area, unit))
+        : null
     checkRef.current = check
 
-    // 一次最多两个节点：一个画框、一个画线。
-    // 先按**指针落着的那一格**查绘制表，再退回节点身份——
-    // 同一个节点可以有好几格（标题、体内、未归组段），用户指着哪一格就该画在哪一格
+    // 一次最多两个标记：一个画框、一个画线，各自由自己那一片算出来
     const drawn = new Map<Element, string>()
-    const here = node === null ? null : owningZoneKey(target as Element)
     const box =
-      check?.inside === undefined
-        ? undefined
-        : paintFor(paintRef.current, zoneNodesRef.current, 'inside', check.inside, here)
-    const line =
-      check?.order === undefined
-        ? undefined
-        : paintFor(paintRef.current, zoneNodesRef.current, 'order', check.order, here, check.side)
+      check?.inside === undefined ? undefined : paintBox(root, check.inside.area, check.inside.unit)
+    const line = check?.order === undefined ? undefined : lineOf(root, check.order)
     if (box !== undefined) drawn.set(box.element, box.mark)
     if (line !== undefined) drawn.set(line.element, line.mark)
-
     markedRef.current = applyDropMarks(markedRef.current, drawn)
 
     // 只在落点**变了**的时候打：指针每移动一像素都会重算，逐帧打会把日志刷满
@@ -278,15 +276,15 @@ export function DndProvider({
       lastMarkKeyRef.current = key
       debugLog('hit', {
         pointer: point,
-        pointerZone: here,
-        node: node === null ? null : describeNode(node),
+        pointerZones: zones,
+        row: rowId,
         check:
           check === null
             ? null
             : {
-                inside: check.inside === undefined ? undefined : describeNode(check.inside),
-                order: check.order === undefined ? undefined : describeNode(check.order),
-                side: check.side,
+                inside: check.inside === undefined ? undefined : (check.inside.unit.region ?? check.inside.unit.row),
+                order: check.order === undefined ? undefined : (check.order.unit.region ?? check.order.unit.row),
+                side: check.order?.side,
               },
         marks: key === '' ? '(none)' : key,
       })
@@ -386,11 +384,16 @@ export function DndProvider({
     }
     committedRef.current = true
     debugWarn('commit', {
-      inside: check.inside === undefined ? undefined : describeNode(check.inside),
-      order: check.order === undefined ? undefined : describeNode(check.order),
-      side: check.side,
+      inside: check.inside === undefined ? undefined : (check.inside.unit.region ?? check.inside.unit.row),
+      order: check.order === undefined ? undefined : (check.order.unit.region ?? check.order.unit.row),
+      side: check.order?.side,
     })
-    searcher.commit(check)
+    // 两笔各自执行：框说「放进这一片」，线说「排到这一行前后」，它们是两件事。
+    // 拖一条工作区进分组时两者同时成立，因此两笔都写
+    check.inside?.area.commit({ kind: 'inside' })
+    if (check.order !== undefined) {
+      check.order.area.commit({ kind: check.order.side, rowId: check.order.unit.row ?? '' })
+    }
     teardown('commit')
   }, [teardown])
 
@@ -401,21 +404,16 @@ export function DndProvider({
       currentPlan = plan
       committedRef.current = false
 
-      // 名单、检测器与绘制表一场拖拽只建一次，指针移动期间只问它
-      // 绘制表反过来读：元素上的区域键经索引换算成节点身份，
-      // 检测器因此拿到的与交回的都是节点，只有这里那一层 map 需要碰 DOM
+      // 名单与检测器一场拖拽只建一次，指针移动期间只问它
       const scope = region?.current ?? document
-      const collected = collectDropTargets(scope, plan)
-      zoneNodesRef.current = plan.index?.nodesByZone() ?? new Map()
-      searcherRef.current = maybeDropSearcher(plan.index, collected.targets)
-      paintRef.current = collected.paint
+      scopeRef.current = scope
+      searcherRef.current = maybeDropSearcher(plan.areas)
       // 压淡够不着的那一片：判定与命中层同源，因此不会出现「淡着却能放进去」
       const dimmed = dimmedElements(scope, plan)
       debugWarn('drag begin', {
         source: plan.source,
-        targets: [...plan.targets.keys()],
-        // 计划里有多少格真的在 DOM 上找到了元素：对不上就是「界面有格、计划没有」或反过来
-        painted: collected.paint.size,
+        // 这次能落到哪几格：与界面上的格子对不上，就是「有格没计划」或反过来
+        zones: plan.areas.flatMap((area) => area.zones),
         dimmed: dimmed.length,
       })
       applyDimmed(dimmed)

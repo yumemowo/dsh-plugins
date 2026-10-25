@@ -25,15 +25,17 @@ import { fire } from './support/dndDom.ts'
 /** 收到提交时记一笔，用来验证滚动之后提交的是滚之后那一格 */
 const commits: string[] = []
 
-/** 造一份计划：一个整块档的落点区域 */
+/** 造一份计划：每一格一片，落到哪一片就记下它的键 */
 function planOf(zoneKeys: readonly string[]): DragPlan {
-  const targets = new Map(
-    zoneKeys.map((key) => [
-      key,
-      { mode: 'container' as const, commit: () => commits.push(key) },
-    ]),
-  )
-  return { source: { kind: 'session', id: 'row-1' }, targets }
+  return {
+    source: { kind: 'session', id: 'row-1' },
+    areas: zoneKeys.map((key) => ({
+      zones: [key],
+      units: [{ region: undefined, row: undefined }],
+      accepts: 'inside' as const,
+      commit: () => commits.push(key),
+    })),
+  }
 }
 
 /**

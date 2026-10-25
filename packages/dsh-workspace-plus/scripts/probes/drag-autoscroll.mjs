@@ -66,7 +66,14 @@ function Tree() {
   const plan = React.useMemo(
     () => ({
       source: { kind: 'session', id: 'row-1' },
-      targets: new Map([['zone', { mode: 'container', commit: () => { window.__commits.push('zone') } }]]),
+      areas: [
+        {
+          zones: ['zone'],
+          units: [{ region: undefined, row: undefined }],
+          accepts: 'inside',
+          commit: () => { window.__commits.push('zone') },
+        },
+      ],
     }),
     [],
   )

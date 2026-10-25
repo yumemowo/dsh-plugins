@@ -2,20 +2,22 @@
  * 拖拽计划的构造
  *
  * 五类来源（会话、置顶会话、会话分组、工作区、虚拟分组）各有自己的构造器，它们的共同点只有一件事：
- * 交出一张「区域键 → 落到之后做什么」的表。命中层只查这张表，因此不认识任何一种业务对象。
+ * 交出一份**片区名单**——这次拖拽能落到哪几片、每片接哪种读法、落下之后做什么。
+ * 命中层只查这份名单，因此不认识任何一种业务对象。
  *
  * 工作区那一族的业务知识有一半在 `relations.ts`：容器归属、同层名单与落点判定都在那里，
- * 这里只按它交回的关系接线。区域键的形状由 `zones.ts` 一处决定。
+ * 这里只把它交回的片区接过来。片区的形状由 `zones.ts` 一处决定。
  *
  * 纯逻辑，不碰 React、不碰 DOM
  */
 import { beforeIdOf, placeBefore } from '../../order.ts'
 import type { Anchor } from '../../order.ts'
-import { dropRelationsOf } from './relations.ts'
-import type { DragPlan, DragPlanTarget, DragSource, DropAnchor } from './protocol.ts'
-import { sessionGroupRegionKey, sessionGroupZoneKey, groupHeadKey, workspaceRegionKey, workspaceHeadKey, looseKey } from './protocol.ts'
+import { dropAreasOf } from './relations.ts'
+import type { DragPlan, DragSource, DropAnchor, DropArea, DropUnit } from './protocol.ts'
+import { workspaceHeadKey } from './protocol.ts'
 import type { OutlineIndex } from './outlineIndex.ts'
-import type { NodeRef } from './zones.ts'
+import { areaShapeOf, looseZoneKeyOf, unitOf } from './zones.ts'
+import type { AreaShape, NodeRef } from './zones.ts'
 
 // ── 计划构造 ──
 
@@ -25,11 +27,11 @@ import type { NodeRef } from './zones.ts'
  * 落点全走整块档：落到哪个容器上就归入哪个容器，位次由渲染侧的默认序决定，计划不带位次
  *
  * 三类落点都是「换一个容器」这件事的不同入口
- * - 别的分组：块与头两格共用同一个提交，拖到分组上任何位置都读作归入该分组
+ * - 别的分组：组头与组体同属一片，拖到分组上任何位置都读作归入该分组
  * - 未归组那一段：移出分组
  * - 本条会话所属工作区的标题行：同一个「移出分组」，标题行也是目录性质的落点
  *
- * 来源当前所在的那一个容器一律不进表，拖回原位因此是构造期缺席
+ * 来源当前所在的那一个容器一律不进名单，拖回原位因此是构造期缺席
  * 这一条不能靠提交期判等代替：归属没有变化时宿主仍会写一次盘
  * @param input - 来源、它当前所在的分组，以及落点落到哪次写入
  */
@@ -42,52 +44,62 @@ export function sessionGroupingPlan(input: {
   sections: readonly { id: string }[]
   /** 只改归属 */
   moveToGroup: (groupId: string) => void
-  /** 本区域的索引：检测器沿它往上走，落到组内任何一条成员行上都读作落在这一片上 */
-  index?: OutlineIndex
 }): DragPlan {
   const { workspaceId, sessionId, currentGroupId, sections } = input
-  const targets = new Map<string, DragPlanTarget>()
+  const areas: DropArea[] = []
+
+  /**
+   * 一片只接「放进去」的片区
+   * @param shape - 这一片的形状
+   * @param move - 落进去时执行的那次写入
+   */
+  const intoArea = (shape: AreaShape, move: () => void): DropArea => ({
+    zones: shape.zones,
+    units: [unitOf(shape)],
+    accepts: 'inside',
+    commit: (anchor) => {
+      if (anchor.kind === 'inside') move()
+    },
+  })
 
   for (const section of sections) {
     if (section.id === currentGroupId) continue
-    // 分组头自己另占一格，因此这里也得收一格：拖到头上会先命中那一格，它不在计划里就读成「这一段不接」
-    // 两格同属一整块：框与线都该套住整个分组，挂在头上会只描住那一行
-    const toGroup: DragPlanTarget = {
-      mode: 'container',
-      regionOf: sessionGroupRegionKey(workspaceId, section.id),
-      commit: () => input.moveToGroup(section.id),
-    }
-    targets.set(sessionGroupZoneKey(workspaceId, section.id), toGroup)
-    targets.set(groupHeadKey(workspaceId, section.id), toGroup)
+    // 分组头与组体同属一整块：框该套住整个分组，挂在头上会只描住那一行
+    areas.push(
+      intoArea(
+        areaShapeOf({ kind: 'group', workspaceId, groupId: section.id }),
+        () => input.moveToGroup(section.id),
+      ),
+    )
   }
 
-  // 来源已在未归组段时，拖回那一段是原地投放，两格因此都不进表
+  // 来源已在未归组段时，拖回那一段是原地投放，两格因此都不进名单
   if (currentGroupId !== '') {
     // 落到未归组段读作「回到这个工作区」：那一段只是工作区体内的一截，
     // 自己不是容器，能放进去的是它所在的那一个工作区——框因此套住整块工作区。
-    // 标题行那一格共用这一份提交，单位自然也是同一块
-    const toLoose: DragPlanTarget = {
-      mode: 'container',
-      regionOf: workspaceRegionKey(workspaceId),
-      commit: () => input.moveToGroup(''),
-    }
-    targets.set(looseKey(workspaceId), toLoose)
-    targets.set(workspaceHeadKey(workspaceId), toLoose)
+    // 标题行那一格共用这一份写入，单位自然也是同一块
+    const shape = areaShapeOf({ kind: 'workspace', id: workspaceId })
+    areas.push({
+      // **只收标题行与未归组段**，不收工作区体内那一格：体内坐着各个会话分组，
+      // 把它们也收进来会让「拖回自己所在的分组」读成「移出分组」——而那是原地投放
+      zones: [workspaceHeadKey(workspaceId), looseZoneKeyOf(workspaceId)],
+      units: [unitOf(shape)],
+      accepts: 'inside',
+      commit: (anchor) => {
+        if (anchor.kind === 'inside') input.moveToGroup('')
+      },
+    })
   }
 
-  return { source: { kind: 'session', id: sessionId }, targets, ...(input.index === undefined ? {} : { index: input.index }) }
+  return { source: { kind: 'session', id: sessionId }, areas }
 }
 
 /**
- * 一条工作区行拖起时的计划（索引驱动）
+ * 一条工作区行拖起时的计划
  *
- * 只收一份索引：枚举面、容器归属与合法性判定都收在 `dropRelationsOf` 那一层，
+ * 只收一份索引：枚举面、容器归属与合法性判定都收在 `dropAreasOf` 那一层，
  * 调用方因此不需要传当前分组、平铺名单、同层名单、祖先会话分组四份互有重叠的名单
  *
- * 落点档由关系本身决定，不由区域形状决定：换位是 `rows`（按参照行的前后半算），其余都是 `container`
- * 同一格因此不会既接排序又接放入——这正是「指针读出的语义必须单一」在代码里的形态
- *
- * 换算绑的是构造那一刻的同层名单，折起的成员因此不动
  * @param input - 索引、来源，以及四种写入各自落到哪次调用
  */
 export function workspaceTreeDragPlan(input: {
@@ -102,153 +114,94 @@ export function workspaceTreeDragPlan(input: {
   /** 解除嵌套归属 */
   unnest: () => void
 }): DragPlan {
-  const { index, workspaceId } = input
-  const source: NodeRef = { kind: 'workspace', id: workspaceId }
-  const targets = new Map<string, DragPlanTarget>()
-
-  // 关系一次给全：它能落进哪几片、能排到哪几行前后
-  // 每条关系自带它占的那几格区域键，这一层因此不必认识虚拟分组、会话分组与工作区行的差别
-  const relations = dropRelationsOf(index, source, {
+  const source: NodeRef = { kind: 'workspace', id: input.workspaceId }
+  const areas = dropAreasOf(input.index, source, {
     moveToGroup: input.moveToGroup,
     reorder: input.reorder,
     nestInto: input.nestInto,
     unnest: input.unnest,
   })
-
-  // 一格只给一档：给框的那一格与给线的那一格是两格，各自独立登记。
-  // 同一格两档并存的读法服务分组嵌套，尚未实现，判定点在 dropSearcher 的 checkDrop
-  interface Slot {
-    inside?: () => void
-    order?: (side: 'before' | 'after') => void
-    /** 这一片的落点单位由哪一格代言，见 {@link DragPlanTarget.regionOf} */
-    regionOf?: string
-    /** 这一片之后那处缝由哪一格代言，见 {@link DragPlanTarget.seamKey} */
-    seamKey?: string
-  }
-  const byZone = new Map<string, Slot>()
-  for (const relation of relations) {
-    for (const key of relation.zones) {
-      const slot = byZone.get(key) ?? {}
-      if (relation.kind === 'inside') {
-        slot.inside = () => relation.commit()
-      } else {
-        slot.order = (side) => relation.place(side)
-        if (relation.seam !== undefined) slot.seamKey = relation.seam
-      }
-      if (relation.region !== undefined) slot.regionOf = relation.region
-      byZone.set(key, slot)
-    }
-  }
-  for (const [key, slot] of byZone) {
-    // 一格两档都成立时不能静默取其中一档：那正是分组嵌套要用的读法，
-    // 而网关层（dropSearcher 的 checkDrop）已经在同一格两档并存的落点上拦了一道。
-    // 这里**不抛错**也是有意的：计划是纯函数，抛错会让一次页面渲染失败；
-    // 真正的守门放在检测层，那里才有「指针落在这一格上」这个事实
-    if (slot.inside !== undefined) {
-      const inside = slot.inside
-      targets.set(key, {
-        mode: 'container',
-        ...(slot.regionOf === undefined ? {} : { regionOf: slot.regionOf }),
-        commit: () => inside(),
-      })
-      continue
-    }
-    const order = slot.order
-    targets.set(key, {
-      mode: 'rows',
-      ...(slot.regionOf === undefined ? {} : { regionOf: slot.regionOf }),
-      ...(slot.seamKey === undefined ? {} : { seamKey: slot.seamKey }),
-      commit: (anchor) => order?.(anchor.kind === 'before' ? 'before' : 'after'),
-    })
-  }
-
-  return { source: { kind: 'workspace', id: workspaceId }, targets, index }
+  return { source, areas }
 }
 
 /**
- * 一条成员「之后」那处缝由哪一格代言
+ * 「排到这一条之后」那处缝由哪一条代言
  *
  * 相邻两条之间只有一处空白。指针停在上面那一条的下半时读作「排到它之后」，
  * 停在下一条的上半时读作「排到它之前」——两种读法换算出的新顺序完全一样，
- * 屏幕上也是同一处，因此只能画出一条线。这里把「之后」交给下一条的上缘：
- * 命中层拿着这个键去取那一条自己的「之前」那一条线。
+ * 屏幕上也是同一处，因此只能画出一条线。这里把「之后」交给下一条的上缘。
  *
  * 本段最后一条没有下一条，段尾照常画在它自己的下缘
- * 下一条正是被拖走的那一条时不代言：那一处是原地投放，线画上去会跟着它一起淡掉
- *
- * 交给的是**下一条那一格的键**，不是一个「是的，我来认领」的开关：命中层拿它去查
- * 「下一条的之前」，那一格画在哪个元素上由它自己决定，这里因此不必认识块与行
+ * 下一条正是被拖走的那一条时不当位：那一处是原地投放，线画上去会跟着它一起淡掉
  * @param order - 这一段的全量成员顺序
  * @param memberId - 这一条的成员 id
  * @param movingId - 被拖走的成员
- * @param keyOf - 成员的绘制键
- * @returns 下一条的绘制键，无下一条时 undefined
+ * @returns 下一条的成员 id，无下一条时 undefined
  */
-function seamKeyOf(
+function seamOf(
   order: readonly string[],
   memberId: string,
   movingId: string,
-  keyOf: (memberId: string) => string,
-): { seamKey?: string } {
+): string | undefined {
   const next = order[order.indexOf(memberId) + 1]
-  // 本段最后一条没有下一条；下一条正是被拖走的那一条时那处是原地投放，也不认领
-  if (next === undefined || next === movingId) return {}
-  return { seamKey: keyOf(next) }
+  if (next === undefined || next === movingId) return undefined
+  return next
 }
 
 /**
- * 一段可排序成员里某个成员的落点区域键，以及这个计划要落到哪件事上
+ * 一段可排序成员的计划
  *
- * 来源那一个成员不进 `targets`，拖到它自己头上因此连命中都没有
- * @param input - 来源、段落键、全量顺序、被拖的成员，以及换算结果要落到哪次写入
+ * 来源那一个成员不进名单，拖到它自己头上因此连命中都没有
+ * @param input - 来源、成员的形状、全量顺序、被拖的成员，以及换算结果要落到哪次写入
  */
 export function orderDragPlan(input: {
   source: DragSource
-  /** 这段成员各自的落点区域键 */
-  keyOf: (memberId: string) => string
   /**
-   * 一个成员的落点单位
+   * 一个成员那一片的形状
    *
-   * 缺省表示它自己就是单位（「只有一行的块」）。分组头不是：它与组体同属一整块，
-   * 线要跨整块画，因此由调用方交出那一块的标识
+   * 交出整份形状而不是单个区域键：一个成员可能占好几格（分组的组头与组体、
+   * 工作区的标题行与体内那一格），而指针停在体内时读出的仍是「排到这一整块之前 / 之后」——
+   * 那一格与标题格是同一件事。只登记标题一格会让体内成为死区，用户把指针移进组里线就整个消失
    */
-  regionKeyOf?: (memberId: string) => string
+  shapeOf: (memberId: string) => AreaShape
   /** 这一段的全量成员顺序，在 dragstart 那一刻绑定 */
   order: readonly string[]
   movingId: string
   /** 换算出的新位次落成一次写入，`undefined` 表示挪到末尾 */
   commit: (beforeId: string | undefined) => void
 }): DragPlan {
-  const targets = new Map<string, DragPlanTarget>()
-  const { order, movingId, keyOf, regionKeyOf } = input
+  const { order, movingId, shapeOf } = input
+  const areas: DropArea[] = []
   for (const memberId of order) {
     if (memberId === movingId) continue
-    const region = regionKeyOf?.(memberId)
-    targets.set(keyOf(memberId), {
-      mode: 'rows',
-      ...(region === undefined ? {} : { regionOf: region }),
-      // 两行之间只有一处缝：它由下一条的上缘代言，紧挨着的两条不会各画一条
-      ...seamKeyOf(order, memberId, movingId, keyOf),
-      // 换算用的是构造期绑定的那一份全量顺序，不是露出的那些行，折起的成员因此不动
-      // 相邻位与「锚点已不是本段成员」两种落点都在换算里返回 undefined，那时不写
+    const shape = shapeOf(memberId)
+    const seam = seamOf(order, memberId, movingId)
+    areas.push({
+      zones: shape.zones,
+      // 这一片当位次参照时说的是这个成员自己的行：几格里只有标题那一格带行标记，
+      // 组体与体内那几格由这里点名，否则会把一串区域键当成行 id
+      units: [unitOf(shape, seam)],
+      accepts: 'order',
       commit: (anchor) => {
-        const next = placeBefore(input.order, input.movingId, anchorOf(anchor))
+        if (anchor.kind === 'inside') return
+        // 换算用的是构造期绑定的那一份全量顺序，不是露出的那些行，折起的成员因此不动
+        // 相邻位与「锚点已不是本段成员」两种落点都在换算里返回 undefined，那时不写
+        const next = placeBefore(input.order, input.movingId, { kind: anchor.kind, id: memberId })
         if (next === undefined) return
         input.commit(beforeIdOf(next, input.movingId))
       },
     })
   }
-  return { source: input.source, targets }
+  return { source: input.source, areas }
 }
 
 /**
- * 一段共用一格落点区域的成员排序计划
+ * 一段共用同一格的成员排序计划
  *
- * 与 {@link orderDragPlan} 的分工按区域形状划开
- * 那里每个成员各占一格区域，这里整段共用一个区域键、成员行自己带参照行标记
- * 落点因此由离指针最近的那一行算前后半，与段容器本身无关
+ * 与 {@link orderDragPlan} 的差别只在片上：那里每个成员各占一片，这里整段共一片、
+ * 成员行自己带参照行标记。落点因此由指针压着的那一行选单位，与段容器本身无关
  *
- * 来源自己那一行仍在计划里：一格区域罩着多行，行与区域分不开
+ * 来源自己那一行仍在名单里：一格区域罩着多行，行与区域分不开
  * 拖回原位的落点由换位换算判成无变化，因此不写盘
  *
  * 换算绑的是构造那一刻的顺序，不是成员名单的原始序
@@ -257,7 +210,7 @@ export function orderDragPlan(input: {
  */
 export function stretchDragPlan(input: {
   source: DragSource
-  /** 整段共用的落点区域键 */
+  /** 整段共用的区域键 */
   zoneKey: string
   /** 这一段的全量成员顺序，在 dragstart 那一刻绑定 */
   order: readonly string[]
@@ -265,20 +218,27 @@ export function stretchDragPlan(input: {
   /** 换算出的新顺序整份落成一次写入，换算判出无变化时不被调用 */
   commit: (order: readonly string[]) => void
 }): DragPlan {
-  const targets = new Map<string, DragPlanTarget>()
   const { order, movingId } = input
-  targets.set(input.zoneKey, {
-    mode: 'rows',
-    // 一处缝只有一条线：一格装好几行时下一条就在同一格里，命中层按行 id 自己接过去，
-    // 这里因此不必点名（`seamKey` 缺省），段尾那一条照常画在它自己的下缘
-    // 相邻位与「锚点就是来源自己」两种落点都在换算里返回 undefined，那时不写
+  // 一条行一处单位：这一格里装了好几行，指针压着哪一行就是哪一行。
+  // 每一处之后的缝交给下一条代言——同一处空白只能画一条线，见 {@link seamOf}
+  const units: DropUnit[] = order.map((id) => ({
+    region: undefined,
+    row: id,
+    seam: seamOf(order, id, movingId),
+  }))
+  const area: DropArea = {
+    zones: [input.zoneKey],
+    units,
+    accepts: 'order',
+    // 相邻位与「锚点就是来源自己」两种落点都在换算里返回 undefined，那时不写。
+    // 「落到整段上」读作追加到末尾，那一半由 {@link anchorOf} 换算
     commit: (anchor) => {
       const next = placeBefore(order, movingId, anchorOf(anchor))
       if (next === undefined) return
       input.commit(next)
     },
-  })
-  return { source: input.source, targets }
+  }
+  return { source: input.source, areas: [area] }
 }
 
 /**

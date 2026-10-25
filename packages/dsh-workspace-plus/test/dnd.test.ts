@@ -25,23 +25,31 @@ import {
   workspaceHeadKey,
   workspaceRegionKey,
 } from '../src/client/data/protocol.ts'
-import type { DragPlan, DragPlanTarget, DropAnchor } from '../src/client/data/protocol.ts'
+import type { DragPlan, DropAnchor, DropArea } from '../src/client/data/protocol.ts'
 import {
   orderDragPlan,
   sessionGroupingPlan,
   stretchDragPlan,
   workspaceTreeDragPlan,
 } from '../src/client/data/plan.ts'
+import { areaShapeOf } from '../src/client/data/zones.ts'
 import { indexFrom } from './support/outlineFixture.ts'
 
-/** 一个只接整块投放的计划目标 */
-function container(sink: DropAnchor[]): DragPlanTarget {
-  return { mode: 'container', commit: (anchor) => sink.push(anchor) }
+/**
+ * 名单里占着这一格的那一片
+ * @param plan - 一次拖拽的计划
+ * @param zone - 区域键
+ */
+function areaAt(plan: DragPlan, zone: string): DropArea | undefined {
+  return plan.areas.find((area) => area.zones.includes(zone))
 }
 
-/** 一张计划表，键即区域键 */
-function plan(targets: Record<string, DragPlanTarget>): DragPlan {
-  return { source: { kind: 'session', id: 'session-1' }, targets: new Map(Object.entries(targets)) }
+/**
+ * 名单里每一片各占哪几格
+ * @param plan - 一次拖拽的计划
+ */
+function zonesOf(plan: DragPlan): string[][] {
+  return plan.areas.map((area) => [...area.zones])
 }
 
 describe('zone keys', () => {
@@ -53,40 +61,6 @@ describe('zone keys', () => {
     expect(looseKey('ws-1')).toBe('loose/ws-1')
   })
 
-})
-
-describe('a plan that leaves the origin out', () => {
-  it('carries no target for the stretch the dragged session already sits in', () => {
-    // 原地投放从运行期判据变成构造期缺席：拖回自己那一段时查不到目标，
-    // 命中层因此既不标记也不提交
-    const p = plan({
-      'sessionGroup/ws-1/group-b': container([]),
-      'loose/ws-2': container([]),
-    })
-
-    expect(p.targets.get('sessionGroup/ws-1/group-a')).toBeUndefined()
-    expect(p.targets.get('loose/ws-1')).toBeUndefined()
-  })
-
-  it('still carries every other stretch of the same workspace', () => {
-    const p = plan({
-      'sessionGroup/ws-1/group-b': container([]),
-      'loose/ws-1': container([]),
-    })
-
-    expect([...p.targets.keys()]).toEqual(['sessionGroup/ws-1/group-b', 'loose/ws-1'])
-  })
-
-  it('keeps the dragged session in the source rather than in the target table', () => {
-    // 来源是一格独立的事实，不在目标表里：目标表回答「能落到哪」，来源回答「拖的是谁」
-    const p: DragPlan = {
-      source: { kind: 'session', id: 'session-1' },
-      targets: new Map([['loose/ws-1', container([])]]),
-    }
-
-    expect(p.source).toEqual({ kind: 'session', id: 'session-1' })
-    expect([...p.targets.keys()].some((key) => key.includes('session-1'))).toBe(false)
-  })
 })
 
 describe('turning a drop anchor into a new order', () => {
@@ -156,11 +130,6 @@ describe('building a session grouping plan', () => {
   /** 本工作区的会话分组 */
   const SECTIONS = [{ id: 'group-a' }, { id: 'group-b' }]
 
-  /** 记下一次计划里各格的档位 */
-  function modes(plan: DragPlan): [string, string][] {
-    return [...plan.targets.entries()].map(([key, target]) => [key, target.mode])
-  }
-
   /**
    * 造一个只收归属变更的计划
    *
@@ -181,32 +150,31 @@ describe('building a session grouping plan', () => {
     return { plan, moved }
   }
 
-  /** 提交某一格，交出它收到的落点 */
+  /** 提交某一格所在的那一片，交出它收到的落点 */
   function commitAt(plan: DragPlan, key: string, anchor: DropAnchor): void {
-    plan.targets.get(key)?.commit(anchor)
+    areaAt(plan, key)?.commit(anchor)
   }
 
-  it('collects the block and the head of every other group as whole-block landings', () => {
-    // 两块都读作「归到这个分组」：头自己另占一格，不收它则拖到头上命中就到此为止
+  it('collects the head and the body of every other group as one place each', () => {
+    // 组头与组体同属一整块：拖到头上、拖到组体里的空白上，读的都是「归到这个分组」。
+    // 两格都要在，拖着会话把指针移进组里时线才不会整个消失
     const { plan } = groupingPlan('group-a')
 
-    expect(modes(plan)).toEqual([
-      ['sessionGroup/ws-1/group-b', 'container'],
-      ['groupHead/ws-1/group-b', 'container'],
-      ['loose/ws-1', 'container'],
-      ['workspaceHead/ws-1', 'container'],
+    expect(zonesOf(plan)).toEqual([
+      ['groupHead/ws-1/group-b', 'sessionGroup/ws-1/group-b'],
+      ['workspaceHead/ws-1', 'loose/ws-1'],
     ])
   })
 
-  it('leaves the source group block out of its own target table', () => {
+  it('leaves the source group out of the plan', () => {
     // 原地投放是构造期缺席：那个分组的两格都不为自己注册
     const { plan } = groupingPlan('group-a')
 
-    expect([...plan.targets.keys()]).not.toContain('sessionGroup/ws-1/group-a')
-    expect([...plan.targets.keys()]).not.toContain('groupHead/ws-1/group-a')
+    expect(areaAt(plan, 'sessionGroup/ws-1/group-a')).toBeUndefined()
+    expect(areaAt(plan, 'groupHead/ws-1/group-a')).toBeUndefined()
   })
 
-  it('joins the group whose block was hit', () => {
+  it('joins the group whose body was hit', () => {
     const { plan, moved } = groupingPlan('group-a')
     commitAt(plan, 'sessionGroup/ws-1/group-b', { kind: 'inside' })
 
@@ -214,7 +182,7 @@ describe('building a session grouping plan', () => {
   })
 
   it('joins the group whose head was hit', () => {
-    // 头与块共用同一个提交：拖到分组头上也是归组
+    // 头与体是同一片、同一个提交：拖到分组头上也是归组
     const { plan, moved } = groupingPlan('group-a')
     commitAt(plan, 'groupHead/ws-1/group-b', { kind: 'inside' })
 
@@ -228,21 +196,29 @@ describe('building a session grouping plan', () => {
     expect(moved).toEqual([''])
   })
 
-  it('names the workspace as the unit the loose stretch lands in', () => {
+  it('names the whole workspace block as the unit the loose stretch lands in', () => {
     // 未归组那一段只是工作区体内的一截，它自己不是容器：能放进去的是它所在的工作区，
     // 框因此套住整块工作区，而不是缩成那一段
     const { plan } = groupingPlan('group-a')
 
-    expect(plan.targets.get('loose/ws-1')?.regionOf).toBe(workspaceRegionKey('ws-1'))
-    // 标题行是同一份提交、同一个落点单位：拖到那一行上也是回到这个工作区
-    expect(plan.targets.get('workspaceHead/ws-1')?.regionOf).toBe(workspaceRegionKey('ws-1'))
+    expect(areaAt(plan, 'loose/ws-1')?.units[0]?.region).toBe(workspaceRegionKey('ws-1'))
+    // 标题行是同一片、同一个单位：拖到那一行上也是回到这个工作区
+    expect(areaAt(plan, 'workspaceHead/ws-1')?.units[0]?.region).toBe(workspaceRegionKey('ws-1'))
   })
 
-  it('names no unit for a group, so its own block stands for it', () => {
+  it('keeps the workspace body out of the plan, so a drop into the source group stays put', () => {
+    // 工作区体内坐着各个会话分组。把那一格也收进「移出分组」会让拖回自己所在的分组
+    // 读成移出——而那是一次原地投放，宿主却会真的写一次盘
+    const { plan } = groupingPlan('group-a')
+
+    expect(areaAt(plan, 'workspaceBody/ws-1')).toBeUndefined()
+  })
+
+  it('names the group block as the unit a group place lands in', () => {
     // 分组块本身就是整块（组头与组体同属那一块），它自己就是单位
     const { plan } = groupingPlan('group-a')
 
-    expect(plan.targets.get('sessionGroup/ws-1/group-b')?.regionOf).toBe(
+    expect(areaAt(plan, 'sessionGroup/ws-1/group-b')?.units[0]?.region).toBe(
       sessionGroupRegionKey('ws-1', 'group-b'),
     )
   })
@@ -256,23 +232,21 @@ describe('building a session grouping plan', () => {
   })
 
   it('leaves the source stretch out when the session is already ungrouped', () => {
-    // 已在未归组段时拖回那一段是原地投放，两格都不进表
+    // 已在未归组段时拖回那一段是原地投放，那一片因此不进名单
     // 这一条不能靠提交期判等代替：归属没变时宿主仍会写一次盘
     const { plan } = groupingPlan('')
 
-    expect(modes(plan)).toEqual([
-      ['sessionGroup/ws-1/group-a', 'container'],
-      ['groupHead/ws-1/group-a', 'container'],
-      ['sessionGroup/ws-1/group-b', 'container'],
-      ['groupHead/ws-1/group-b', 'container'],
+    expect(zonesOf(plan)).toEqual([
+      ['groupHead/ws-1/group-a', 'sessionGroup/ws-1/group-a'],
+      ['groupHead/ws-1/group-b', 'sessionGroup/ws-1/group-b'],
     ])
   })
 
   it('collects every group when the source comes from the loose stretch', () => {
     const { plan } = groupingPlan('')
 
-    expect([...plan.targets.keys()]).toContain('sessionGroup/ws-1/group-a')
-    expect([...plan.targets.keys()]).toContain('groupHead/ws-1/group-b')
+    expect(areaAt(plan, 'sessionGroup/ws-1/group-a')).toBeDefined()
+    expect(areaAt(plan, 'groupHead/ws-1/group-b')).toBeDefined()
   })
 
   it('carries the dragged session as the source', () => {
@@ -284,44 +258,53 @@ describe('building a session grouping plan', () => {
 })
 
 describe('building an ordering drag plan', () => {
-  it('collects every other member of the stretch as a rows target', () => {
+  /** 一个虚拟分组那一片的形状 */
+  const virtualShape = (memberId: string) => areaShapeOf({ kind: 'virtual', id: memberId })
+
+  /** 一个会话分组那一片的形状 */
+  const groupShape = (memberId: string) => areaShapeOf({ kind: 'group', workspaceId: 'ws-1', groupId: memberId })
+
+  it('collects every other member of the stretch as one place each', () => {
     const p = orderDragPlan({
       source: { kind: 'virtualWorkspace', groupId: 'wg-1' },
-      keyOf: virtualWorkspaceHeadKey,
+      shapeOf: virtualShape,
       order: ['wg-1', 'wg-2'],
       movingId: 'wg-1',
       commit: () => {},
     })
 
-    expect([...p.targets.keys()]).toEqual([virtualWorkspaceHeadKey('wg-2')])
-    expect(p.targets.get(virtualWorkspaceHeadKey('wg-2'))?.mode).toBe('rows')
+    // 组头与组体同属一片：拖着别的成员进到这一组的体里，线仍在
+    expect(zonesOf(p)).toEqual([
+      ['virtualWorkspaceHead/wg-2', 'virtualWorkspaceBody/wg-2'],
+    ])
+    expect(p.areas[0]?.accepts).toBe('order')
   })
 
-  it('leaves the source member out of its own target table', () => {
+  it('leaves the source member out of the plan', () => {
     // 原地投放是构造期缺席：拖回自己那一格时命中层查不到，既不标记也不提交
     const p = orderDragPlan({
       source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-a' },
-      keyOf: (memberId) => groupHeadKey('ws-1', memberId),
+      shapeOf: groupShape,
       order: ['group-a', 'group-b'],
       movingId: 'group-a',
       commit: () => {},
     })
 
-    expect(p.targets.has(groupHeadKey('ws-1', 'group-a'))).toBe(false)
-    expect(p.targets.has(groupHeadKey('ws-1', 'group-b'))).toBe(true)
+    expect(areaAt(p, 'groupHead/ws-1/group-a')).toBeUndefined()
+    expect(areaAt(p, 'groupHead/ws-1/group-b')).toBeDefined()
   })
 
   it('commits the anchor of the converted order', () => {
     const seen: (string | undefined)[] = []
     const p = orderDragPlan({
       source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-c' },
-      keyOf: (memberId) => groupHeadKey('ws-1', memberId),
+      shapeOf: groupShape,
       order: ['group-a', 'group-b', 'group-c'],
       movingId: 'group-c',
       commit: (beforeId) => seen.push(beforeId),
     })
 
-    p.targets.get(groupHeadKey('ws-1', 'group-a'))?.commit({ kind: 'before', rowId: 'group-a' })
+    areaAt(p, 'groupHead/ws-1/group-a')?.commit({ kind: 'before', rowId: 'group-a' })
     expect(seen).toEqual(['group-a'])
   })
 
@@ -329,13 +312,13 @@ describe('building an ordering drag plan', () => {
     const seen: (string | undefined)[] = []
     const p = orderDragPlan({
       source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-a' },
-      keyOf: (memberId) => groupHeadKey('ws-1', memberId),
+      shapeOf: groupShape,
       order: ['group-a', 'group-b'],
       movingId: 'group-a',
       commit: (beforeId) => seen.push(beforeId),
     })
 
-    p.targets.get(groupHeadKey('ws-1', 'group-b'))?.commit({ kind: 'before', rowId: 'group-b' })
+    areaAt(p, 'groupHead/ws-1/group-b')?.commit({ kind: 'before', rowId: 'group-b' })
     expect(seen).toEqual([])
   })
 
@@ -343,13 +326,13 @@ describe('building an ordering drag plan', () => {
     const seen: (string | undefined)[] = []
     const p = orderDragPlan({
       source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-a' },
-      keyOf: (memberId) => groupHeadKey('ws-1', memberId),
+      shapeOf: groupShape,
       order: ['group-a', 'group-b', 'group-c'],
       movingId: 'group-a',
       commit: (beforeId) => seen.push(beforeId),
     })
 
-    p.targets.get(groupHeadKey('ws-1', 'group-c'))?.commit({ kind: 'after', rowId: 'group-c' })
+    areaAt(p, 'groupHead/ws-1/group-c')?.commit({ kind: 'after', rowId: 'group-c' })
     expect(seen).toEqual([undefined])
   })
 
@@ -358,58 +341,56 @@ describe('building an ordering drag plan', () => {
     // 前者因此点名下一条，两条路径画出同一条线
     const p = orderDragPlan({
       source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-a' },
-      keyOf: (memberId) => groupHeadKey('ws-1', memberId),
+      shapeOf: groupShape,
       order: ['group-a', 'group-b', 'group-c'],
       movingId: 'group-a',
       commit: () => {},
     })
 
-    expect(p.targets.get(groupHeadKey('ws-1', 'group-b'))?.seamKey).toBe(
-      groupHeadKey('ws-1', 'group-c'),
-    )
+    expect(areaAt(p, 'groupHead/ws-1/group-b')?.units[0]?.seam).toBe('group-c')
   })
 
   it('names no seam when the next member is the one being dragged', () => {
     // 下一条正是被拖走的那一条：那一处是原地投放，线画上去只会跟着那一行一起淡掉
     const p = orderDragPlan({
       source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-b' },
-      keyOf: (memberId) => groupHeadKey('ws-1', memberId),
+      shapeOf: groupShape,
       order: ['group-a', 'group-b'],
       movingId: 'group-b',
       commit: () => {},
     })
 
-    expect(p.targets.get(groupHeadKey('ws-1', 'group-a'))?.seamKey).toBeUndefined()
+    expect(areaAt(p, 'groupHead/ws-1/group-a')?.units[0]?.seam).toBeUndefined()
   })
 
   it('names no seam after the last member of a stretch', () => {
     const p = orderDragPlan({
       source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-z' },
-      keyOf: (memberId) => groupHeadKey('ws-1', memberId),
+      shapeOf: groupShape,
       order: ['group-a', 'group-b', 'group-z'],
       movingId: 'group-z',
       commit: () => {},
     })
 
-    expect(p.targets.get(groupHeadKey('ws-1', 'group-b'))?.seamKey).toBeUndefined()
+    expect(areaAt(p, 'groupHead/ws-1/group-b')?.units[0]?.seam).toBeUndefined()
   })
 
-  it('keeps the plan target table empty for a stretch of one', () => {
+  it('keeps the plan empty for a stretch of one', () => {
     const p = orderDragPlan({
       source: { kind: 'virtualWorkspace', groupId: 'wg-1' },
-      keyOf: virtualWorkspaceHeadKey,
+      shapeOf: virtualShape,
       order: ['wg-1'],
       movingId: 'wg-1',
       commit: () => {},
     })
 
-    expect(p.targets.size).toBe(0)
+    expect(p.areas).toEqual([])
   })
 })
 
 describe('building a stretch drag plan', () => {
-  it('collects the whole stretch as one rows target', () => {
-    // 一个区域罩着多行：整段共用一格区域键，落点由最近的那一行算前后半
+  it('collects the whole stretch as one place with a unit per row', () => {
+    // 一个区域罩着多行：整段共用一格区域键，落点由指针压着的那一行选单位
     const p = stretchDragPlan({
       source: { kind: 'session', id: 's-2' },
       zoneKey: 'pinned',
@@ -418,8 +399,8 @@ describe('building a stretch drag plan', () => {
       commit: () => {},
     })
 
-    expect([...p.targets.keys()]).toEqual(['pinned'])
-    expect(p.targets.get('pinned')?.mode).toBe('rows')
+    expect(zonesOf(p)).toEqual([['pinned']])
+    expect(p.areas[0]?.units.map((unit) => unit.row)).toEqual(['s-1', 's-2', 's-3'])
   })
 
   it('commits the whole converted order rather than a single anchor', () => {
@@ -434,7 +415,7 @@ describe('building a stretch drag plan', () => {
       commit: (order) => seen.push(order),
     })
 
-    p.targets.get('pinned')?.commit({ kind: 'before', rowId: 's-1' })
+    areaAt(p, 'pinned')?.commit({ kind: 'before', rowId: 's-1' })
 
     expect(seen).toEqual([['s-3', 's-1', 's-2']])
   })
@@ -450,7 +431,7 @@ describe('building a stretch drag plan', () => {
       commit: (order) => seen.push(order),
     })
 
-    p.targets.get('pinned')?.commit({ kind: 'before', rowId: 's-2' })
+    areaAt(p, 'pinned')?.commit({ kind: 'before', rowId: 's-2' })
 
     expect(seen).toEqual([])
   })
@@ -467,7 +448,7 @@ describe('building a stretch drag plan', () => {
       commit: (order) => seen.push(order),
     })
 
-    p.targets.get('pinned')?.commit({ kind: 'before', rowId: 's-2' })
+    areaAt(p, 'pinned')?.commit({ kind: 'before', rowId: 's-2' })
 
     expect(seen).toEqual([])
   })
@@ -484,7 +465,7 @@ describe('building a stretch drag plan', () => {
       commit: (order) => seen.push(order),
     })
 
-    p.targets.get('pinned')?.commit({ kind: 'before', rowId: 's-2' })
+    areaAt(p, 'pinned')?.commit({ kind: 'before', rowId: 's-2' })
 
     // s-4 插到 s-2 之前，被裁在可见高度之外的 s-3 仍在原位
     expect(seen).toEqual([['s-1', 's-4', 's-2', 's-3']])
@@ -501,7 +482,7 @@ describe('building a stretch drag plan', () => {
       commit: (order) => seen.push(order),
     })
 
-    p.targets.get('pinned')?.commit({ kind: 'inside' })
+    areaAt(p, 'pinned')?.commit({ kind: 'inside' })
 
     expect(seen).toEqual([['s-2', 's-3', 's-1']])
   })
@@ -516,7 +497,7 @@ describe('building a stretch drag plan', () => {
       commit: () => {},
     })
 
-    p.targets.get('pinned')?.commit({ kind: 'before', rowId: 's-2' })
+    areaAt(p, 'pinned')?.commit({ kind: 'before', rowId: 's-2' })
 
     expect(order).toEqual(['s-1', 's-2'])
   })
@@ -563,42 +544,44 @@ describe('building an index driven workspace drag plan', () => {
   }
 
   it('collects the head and the body of every group the source is not in', () => {
-    // 组头与组体同一档：拖到组头的标题上、或者拖到组体里那一片空白上，都读作移入这个分组
-    // 两格都要在，指针停在组头上时命中层先撞上它，那一次落点就到此为止
+    // 组头与组体同属一片：拖到组头的标题上、或者拖到组体里那一片空白上，都读作移入这个分组。
+    // 两格都要在，指针移进组里时线才不会整个消失
     const p = planFor('ws-p1', { writes: { moves: [], orders: [], nests: [], unnests: [] } })
 
-    expect(p.targets.get(virtualWorkspaceHeadKey("wg-2"))?.mode).toBe('container')
-    expect(p.targets.get(virtualWorkspaceBodyKey("wg-2"))?.mode).toBe('container')
-    // 来源已在的那个分组整块不进表，拖回自己那一片是构造期缺席
-    expect(p.targets.has(virtualWorkspaceHeadKey("wg-1"))).toBe(false)
-    expect(p.targets.has(virtualWorkspaceBodyKey("wg-1"))).toBe(false)
+    expect(areaAt(p, virtualWorkspaceHeadKey('wg-2'))?.zones).toEqual([
+      'virtualWorkspaceHead/wg-2',
+      'virtualWorkspaceBody/wg-2',
+    ])
+    // 来源已在的那个分组整片不进名单，拖回自己那一片是构造期缺席
+    expect(areaAt(p, virtualWorkspaceHeadKey('wg-1'))).toBeUndefined()
+    expect(areaAt(p, virtualWorkspaceBodyKey('wg-1'))).toBeUndefined()
   })
 
-  it('collects the loose row stretch of the root list as a way out of the group', () => {
-    // 来源已在某个分组里时，平铺在根节点上的工作区行与整片根节点都读作「移出虚拟工作区分组」
+  it('collects the root place as a way out of the group', () => {
+    // 来源已在某个分组里时，整片根节点读作「移出虚拟工作区分组」
     const writes = { moves: [] as string[], orders: [] as (string | undefined)[], nests: [] as string[], unnests: [] as string[] }
     const p = planFor('ws-p1', { virtualGroups: [{ id: 'wg-1', workspaceIds: ['ws-p1'] }], writes })
 
-    expect(p.targets.get(ROOT_KEY)?.mode).toBe('container')
-    p.targets.get(ROOT_KEY)?.commit({ kind: 'inside' })
+    expect(areaAt(p, ROOT_KEY)?.accepts).toBe('inside')
+    areaAt(p, ROOT_KEY)?.commit({ kind: 'inside' })
     expect(writes.moves).toEqual([''])
   })
 
-  it('keeps the root stretch out of the plan while the source is already there', () => {
+  it('keeps the root place out of the plan while the source is already there', () => {
     const p = planFor('ws-p2', {
       virtualGroups: [],
       writes: { moves: [], orders: [], nests: [], unnests: [] },
     })
 
-    expect(p.targets.has(ROOT_KEY)).toBe(false)
+    expect(areaAt(p, ROOT_KEY)).toBeUndefined()
   })
 
-  it('collects the sibling rows of the source group as rows targets', () => {
+  it('collects the sibling rows of the source as order places', () => {
     const writes = { moves: [] as string[], orders: [] as (string | undefined)[], nests: [] as string[], unnests: [] as string[] }
     const p = planFor('ws-p2', { ...flatTopology, writes })
 
-    expect(p.targets.get(workspaceHeadKey('ws-p1'))?.mode).toBe('rows')
-    p.targets.get(workspaceHeadKey('ws-p1'))?.commit({ kind: 'before', rowId: 'ws-p1' })
+    expect(areaAt(p, workspaceHeadKey('ws-p1'))?.accepts).toBe('order')
+    areaAt(p, workspaceHeadKey('ws-p1'))?.commit({ kind: 'before', rowId: 'ws-p1' })
     expect(writes.orders).toEqual(['ws-p1'])
   })
 
@@ -608,23 +591,23 @@ describe('building an index driven workspace drag plan', () => {
     const p = planFor('ws-c1', { ...flatTopology, writes })
 
     // 来源 ws-c1 与 ws-c2 同层，落到 ws-c2 之前得到的顺序与现状逐位相同
-    p.targets.get(workspaceHeadKey('ws-c2'))?.commit({ kind: 'before', rowId: 'ws-c2' })
+    areaAt(p, workspaceHeadKey('ws-c2'))?.commit({ kind: 'before', rowId: 'ws-c2' })
     expect(writes.orders).toEqual([])
   })
 
-  it('collects the session groups of the source ancestors as nesting targets', () => {
+  it('collects the session groups of the source ancestors as nesting places', () => {
     const writes = { moves: [] as string[], orders: [] as (string | undefined)[], nests: [] as string[], unnests: [] as string[] }
     const p = planFor('ws-c1', { groupIds: { 'ws-p1': ['group-a', 'group-b'] }, writes })
 
-    expect(p.targets.get(groupHeadKey("ws-p1", "group-a"))?.mode).toBe('container')
-    p.targets.get(groupHeadKey("ws-p1", "group-a"))?.commit({ kind: 'inside' })
+    expect(areaAt(p, groupHeadKey('ws-p1', 'group-a'))?.accepts).toBe('inside')
+    areaAt(p, groupHeadKey('ws-p1', 'group-a'))?.commit({ kind: 'inside' })
     expect(writes.nests).toEqual(['ws-p1/group-a'])
   })
 
   it('writes nothing when the source is dropped on the group it already belongs to', () => {
     // 已经归属的那一组落上去是原地投放：归属与位次都没有变化，因此一笔都不写。
     //
-    // 那一格必须仍在表里：整条跳过它时指针一落到组头就没人接，检测层沿链继续往上走，
+    // 那一片必须仍在名单里：整片跳过时指针一落到组头就没人接，检测层沿格继续往外找，
     // 框于是套到外层的虚拟分组上——而这一行明明就在这个分组体内
     const writes = { moves: [] as string[], orders: [] as (string | undefined)[], nests: [] as string[], unnests: [] as string[] }
     const p = planFor('ws-c1', {
@@ -633,10 +616,10 @@ describe('building an index driven workspace drag plan', () => {
       writes,
     })
 
-    expect(p.targets.get(groupHeadKey("ws-p1", "group-a"))?.mode).toBe('container')
-    expect(p.targets.get(groupHeadKey("ws-p1", "group-b"))?.mode).toBe('container')
+    expect(areaAt(p, groupHeadKey('ws-p1', 'group-a'))?.accepts).toBe('inside')
+    expect(areaAt(p, groupHeadKey('ws-p1', 'group-b'))?.accepts).toBe('inside')
 
-    p.targets.get(groupHeadKey("ws-p1", "group-a"))?.commit({ kind: 'inside' })
+    areaAt(p, groupHeadKey('ws-p1', 'group-a'))?.commit({ kind: 'inside' })
     expect(writes).toEqual({ moves: [], orders: [], nests: [], unnests: [] })
   })
 
@@ -648,17 +631,17 @@ describe('building an index driven workspace drag plan', () => {
       writes,
     })
 
-    expect(p.targets.get(workspaceHeadKey("ws-p1"))?.mode).toBe('container')
-    p.targets.get(workspaceHeadKey("ws-p1"))?.commit({ kind: 'inside' })
+    expect(areaAt(p, workspaceHeadKey('ws-p1'))?.accepts).toBe('inside')
+    areaAt(p, workspaceHeadKey('ws-p1'))?.commit({ kind: 'inside' })
     expect(writes.unnests).toEqual(['ws-c1'])
   })
 
-  it('leaves the source row out of its own target table', () => {
+  it('leaves the source row out of its own place', () => {
     const p = planFor('ws-p1', {
       writes: { moves: [], orders: [], nests: [], unnests: [] },
     })
 
-    expect(p.targets.has(workspaceHeadKey("ws-p1"))).toBe(false)
+    expect(areaAt(p, workspaceHeadKey('ws-p1'))).toBeUndefined()
   })
 
   it('reports the dragged workspace as the source', () => {

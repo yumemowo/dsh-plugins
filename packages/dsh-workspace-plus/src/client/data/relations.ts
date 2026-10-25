@@ -1,8 +1,8 @@
 /**
- * 一个工作区节点此刻能落到哪些地方
+ * 一个工作区节点能落到哪些片区
  *
- * 交给调用方的是**关系**，不是身份：它只看到「有几个能放进去的地方、有几个能排前后的行」，
- * 不必知道那一格是虚拟分组、会话分组还是某个工作区——三种来源的差别在这一层里就消掉了。
+ * 交给调用方的是**片区**，不是身份：它只看到「有几片能放进去、有几片能排前后」，
+ * 不必知道那一片是虚拟分组、会话分组还是某个工作区——三种来源的差别在这一层里就消掉了。
  *
  * 与 `outline.ts` 的分工：那里的索引答「谁在谁里面」（随 cwd 与落盘归属变，与拖拽规则无关），
  * 这里答「能落到哪儿」（随拖拽规则变）。因此这里是唯一该认识拖拽判据的模块，
@@ -13,65 +13,14 @@
 import { beforeIdOf, placeBefore } from '../../order.ts'
 import type { OutlineIndex } from './outlineIndex.ts'
 import type { ContainerNode } from './nest.ts'
-import { bodyKeyOf, headKeyOf, regionKeyOf, zoneKeysOf } from './zones.ts'
+import type { DropArea } from './protocol.ts'
+import { areaShapeOf, unitOf } from './zones.ts'
 import type { NodeRef } from './zones.ts'
 
-// ── 落点关系 ──
+// ── 片区 ──
 
 /**
- * 一条行能落到哪儿
- *
- * 两类关系分开列，因为它们在界面上是两件事：
- * - `inside` 落到这一片上画框
- * - `order` 落到那一行上画线，且这一手同时会把它移出当前所在的那一片（换一片才谈得上新位次）
- */
-type DropRelation =
-  | {
-      kind: 'inside'
-      /** 这一片在界面上占的那几格 */
-      zones: readonly string[]
-      /**
-       * 这一片的落点单位由哪一格代言
-       *
-       * 一片可以占好几格（一个工作区的标题行与它体内那一格），而框只画在一处。
-       * 给出这一项时以它为准；缺省表示落到哪一格就画在那一格自己的落点单位上
-       */
-      region?: string
-      /** 落到这一片时执行的那次写入 */
-      commit: () => void
-    }
-  | {
-      kind: 'order'
-      /**
-       * 这一行在界面上占的那几格
-       *
-       * 与它谈先后意味着「排在这整片之前或之后」，因此默认是这一片的全部格子，
-       * 不只是标题那一行：指针停在它体内的会话上时，指的仍然是「排在这个工作区前 / 后」
-       */
-      zones: readonly string[]
-      /**
-       * 线跨哪一格所在的落点单位
-       *
-       * 给出这一项时线跨整个元素画在它的上下缘，而不是贴着标题那一行画一条短边。
-       * 缺省表示落到哪一格就画在那一格自己的落点单位上（「只有一行的块」）
-       */
-      region?: string
-      /**
-       * 这一行**之后**那处缝由那一行那一格代言
-       *
-       * 「排到这一行之后」与「排到下一行之前」是同一处空白，只能画一条线。
-       * 给出时命中层把「之后」改读作那一格的「之前」，位置、标记、写入因此是同一件事
-       *
-       * 缺省表示没有下一条可代言：它是这条序列的最后一条，或者下一条正被拖走
-       * （那一处是原地投放，交给一个画淡的元素只会让线跟着淡下去）
-       */
-      seam?: string
-      /** 排到这一行之前 / 之后 */
-      place: (side: 'before' | 'after') => void
-    }
-
-/**
- * 「排到这一行之后」那处缝该由哪一格代言
+ * 「排到某一行之后」那处缝由哪一条代言
  *
  * 那一处空白同时是「下一条之前」，因此交给下一条的上缘画，屏幕上就只剩一条线。
  * 下一条是此刻并排的那一行，不是「把被拖的抽走之后」的那一行：后者会让线跳到更远的
@@ -79,7 +28,7 @@ type DropRelation =
  * @param order - 这次换位要在其上算的那份序列
  * @param movingId - 被拖的成员
  * @param targetId - 参照行
- * @returns 下一条的标题格键，无下一条时 undefined
+ * @returns 下一条的成员 id，无下一条时 undefined
  */
 function seamOfOrder(
   order: readonly string[],
@@ -92,18 +41,18 @@ function seamOfOrder(
   const next = order[at + 1]
   // 段尾没有下一条；下一条正是被拖走的那一条时那处是原地投放，线交给它只会跟着一起淡掉
   if (next === undefined || next === movingId) return undefined
-  return headKeyOf({ kind: 'workspace', id: next })
+  return next
 }
 
 /**
- * 一个节点此刻的全部落点关系
+ * 一个工作区节点此刻的全部落点片区
  *
  * 顺序即优先级：同层兄弟在前（位次是最近的一层关系），其余在后
  * @param index - {@link indexOutline} 装配的索引
  * @param node - 被拖的节点
  * @param writes - 落到各族写入面时各调哪一个
  */
-export function dropRelationsOf(
+export function dropAreasOf(
   index: OutlineIndex,
   node: NodeRef,
   writes: {
@@ -116,9 +65,9 @@ export function dropRelationsOf(
     /** 解除会话分组归属 */
     unnest: () => void
   },
-): readonly DropRelation[] {
+): readonly DropArea[] {
   if (node.kind !== 'workspace') return []
-  const relations: DropRelation[] = []
+  const areas: DropArea[] = []
   const container = index.containerOf(node)
   const membership = index.virtualGroupOf(node)
   const bound = index.bindingOf(node)
@@ -126,9 +75,64 @@ export function dropRelationsOf(
   const selfParent = ancestors[0]
 
   /**
+   * 一片能整块放进去的片区
+   *
+   * 框只回答「落在哪一片」，因此没有位次、没有缝——那三样都是谈先后才需要的
+   * @param target - 那一片的节点或容器
+   * @param commit - 落进去时执行的那次写入
+   */
+  const insideAreaOf = (target: NodeRef | ContainerNode, commit: () => void): DropArea => {
+    const shape = areaShapeOf(target)
+    return {
+      zones: shape.zones,
+      units: [unitOf(shape)],
+      accepts: 'inside',
+      commit: (anchor) => {
+        if (anchor.kind === 'inside') commit()
+      },
+    }
+  }
+
+  /**
+   * 一片谈先后的片区
+   *
+   * 只回答「排到这一行前后」。**框不归它管**：框问的是「指针这一点归哪一片」，
+   * 由检测层逐格查名单现算——把框塞进这里就等于拿目标行的祖先去回答指针的问题
+   * @param order - 这次换位要在其上算的那份序列
+   * @param targetId - 参照行
+   * @param leavesGroup - 这条序列在 root 层，落上去要先把落盘的会话分组归属摘掉
+   */
+  const orderAreaOf = (
+    order: readonly string[],
+    targetId: string,
+    leavesGroup = false,
+  ): DropArea => {
+    const shape = areaShapeOf({ kind: 'workspace', id: targetId })
+    const seam = seamOfOrder(order, node.id, targetId)
+    return {
+      // 整片都算这一行的检测范围：标题行与它体内的那一格。指针停在体内的会话上时，
+      // 读出的仍然是「排在这个工作区之前 / 之后」——那一格属于这一片，与标题行是同一件事
+      zones: shape.zones,
+      // 线跨整块工作区画：贴着标题那一行画会在体内有内容时显得只有半截。
+      // 参照行由 shape 点名，几格里只有标题那一格带行标记
+      units: [unitOf(shape, seam)],
+      accepts: 'order',
+      commit: (anchor) => {
+        if (anchor.kind === 'inside') return
+        // 位次没变（拖到自己的相邻位）与锚点对不上都在换算里判掉，那时不写
+        const next = placeBefore(order, node.id, { kind: anchor.kind, id: targetId })
+        if (next === undefined) return
+        // 落盘的会话分组归属不在这条序列上，单独补一笔
+        if (leavesGroup && bound !== undefined) writes.unnest()
+        writes.reorder(beforeIdOf(next, node.id))
+      },
+    }
+  }
+
+  /**
    * 这个节点能进去的每一片
    *
-   * 与放入关系那几处一一对应：根节点、每个虚拟分组、祖先工作区名下的每个会话分组。
+   * 与放入片区那几处一一对应：根节点、每个虚拟分组、祖先工作区名下的每个会话分组。
    * 每一片顶层的成员都是它的位次参照——「排到这一片里某一行前后」与「移进这一片」
    * 是同一件事的两半
    *
@@ -150,42 +154,6 @@ export function dropRelationsOf(
   })()
 
   /**
-   * 一条位次关系
-   *
-   * 只回答「排到这一行前后」。**框不归它管**：框问的是「指针这一点归哪一片」，
-   * 由检测器沿索引往上走现算——把它塞进这里就等于拿目标行的祖先去回答指针的问题
-   * @param order - 这次换位要在其上算的那份序列
-   * @param targetId - 参照行
-   * @param leavesGroup - 这条序列在 root 层，落上去要先把落盘的会话分组归属摘掉
-   */
-  const orderRelationOf = (
-    order: readonly string[],
-    targetId: string,
-    leavesGroup = false,
-  ): DropRelation => {
-    const relation: DropRelation = {
-      kind: 'order',
-      // 整片都算这一行的检测范围：标题行与它体内的那一格。指针停在体内的会话上时，
-      // 读出的仍然是「排在这个工作区之前 / 之后」——那一格属于这一片，与标题行是同一件事
-      zones: zoneKeysOf({ kind: 'workspace', id: targetId }),
-      // 线跨整块工作区画：贴着标题那一行画会在体内有内容时显得只有半截
-      region: regionKeyOf({ kind: 'workspace', id: targetId }),
-      place: (side) => {
-        // 位次没变（拖到自己的相邻位）与锚点对不上都在换算里判掉，那时不写
-        const next = placeBefore(order, node.id, { kind: side, id: targetId })
-        if (next === undefined) return
-        // 落盘的会话分组归属不在这条序列上，单独补一笔
-        if (leavesGroup && bound !== undefined) writes.unnest()
-        writes.reorder(beforeIdOf(next, node.id))
-      },
-    }
-    // 这一处缝交给下一条：标题那一格得说出「下一条」是哪一格
-    // 序列不同时下一条也不同，因此在这里按本次换算用的那份序列算
-    const seam = seamOfOrder(order, node.id, targetId)
-    return seam === undefined ? relation : { ...relation, seam }
-  }
-
-  /**
    * 谈位次用的那几份序列
    *
    * 两行能谈先后，当且仅当它们在同一条序列上：此刻并排（注册表序同段），
@@ -205,7 +173,7 @@ export function dropRelationsOf(
     const sequence = index.rootsOf(holder).map((entry) => entry.id)
     if (sequence.length === 0) continue
     // 换片之后落盘的会话分组归属就不成立了；落在 root 那一层还多一件「退出虚拟分组」，
-    // 那一半由根节点那片自己的 inside 关系负责，这里只补归属
+    // 那一半由根节点那片自己的 inside 片区负责，这里只补归属
     orderSequences.push({ order: sequence, leavesGroup: bound !== undefined })
   }
 
@@ -223,44 +191,32 @@ export function dropRelationsOf(
   for (const other of index.allNodes()) {
     if (other.id === node.id) continue
 
-    // ── 位次关系 ──
+    // ── 位次片区 ──
     if (other.kind === 'workspace') {
       const matched = isAncestorRowOf(other)
         ? undefined
         : orderSequences.find((entry) => entry.order.includes(other.id))
       if (matched !== undefined) {
-        relations.push(orderRelationOf(matched.order, other.id, matched.leavesGroup))
+        areas.push(orderAreaOf(matched.order, other.id, matched.leavesGroup))
         continue
       }
     }
 
-    // ── 放入关系 ──
+    // ── 放入片区 ──
     // 虚拟分组是容器；祖先工作区是容器；祖先名下的会话分组是容器
     if (other.kind === 'virtual') {
       const target = index.containers.virtualOf(other.id)
       if (target === container) continue
-      relations.push({
-        kind: 'inside',
-        zones: zoneKeysOf(target),
-        // 组头与组体是两格、同一片：框与线都该套住整块分组，单位因此挂在整块容器上
-        region: regionKeyOf({ kind: 'virtual', id: other.id }),
-        commit: () => writes.moveToGroup(other.id),
-      })
+      // 组头与组体是两格、同一片：框该套住整块分组，单位因此挂在整块容器上
+      areas.push(insideAreaOf(target, () => writes.moveToGroup(other.id)))
       continue
     }
 
     // 祖先工作区：落上去读作「成为它的子工作区」
     if (isAncestorRowOf(other)) {
-      const ancestorZones = zoneKeysOf({ kind: 'workspace', id: other.id })
-      const ancestorRegion = regionKeyOf({ kind: 'workspace', id: other.id })
       // 已经住在它体内：落回它这一行读作回到它的直接管辖
       if (bound !== undefined && bound.parentId === other.id) {
-        relations.push({
-          kind: 'inside',
-          zones: ancestorZones,
-          region: ancestorRegion,
-          commit: () => writes.unnest(),
-        })
+        areas.push(insideAreaOf(other, () => writes.unnest()))
         continue
       }
       // 按 cwd 本来就是它的子工作区，且此刻已经嵌在它体内：原地投放，不写
@@ -272,20 +228,17 @@ export function dropRelationsOf(
         selfParent.id === other.id &&
         container === index.containerOf(other)
       ) {
-        relations.push({ kind: 'inside', zones: ancestorZones, region: ancestorRegion, commit: () => {} })
+        areas.push(insideAreaOf(other, () => {}))
         continue
       }
       const target = index.containerOf(other)
       if (target === undefined) continue
-      relations.push({
-        kind: 'inside',
-        zones: ancestorZones,
-        region: ancestorRegion,
-        commit: () => {
+      areas.push(
+        insideAreaOf(other, () => {
           if (target.kind === 'group') writes.nestInto(target.workspaceId, target.groupId)
           else writes.moveToGroup(target.kind === 'root' ? '' : target.id)
-        },
-      })
+        }),
+      )
       continue
     }
   }
@@ -298,35 +251,26 @@ export function dropRelationsOf(
   for (const ancestor of ancestors) {
     for (const groupId of index.sessionGroupsOf(ancestor)) {
       const holder = index.containers.groupOf(ancestor.id, groupId)
-      const zones = zoneKeysOf(holder)
-      const region = regionKeyOf({ kind: 'group', workspaceId: ancestor.id, groupId })
       // 已经住在这个分组里：落回它这一片读作原地投放，不写，但这一片必须留在名单里
       //
-      // 直接跳过整条关系会让指针落在组头时读不到这一片，链于是继续往上走到外层的
+      // 直接跳过整条片区会让指针落在组头时读不到这一片，逐格查到的那一格于是继续往上走到外层的
       // 虚拟分组——框套在整个虚拟分组上，而这一行明明就在这个分组体内
-      if (bound !== undefined && bound.parentId === ancestor.id && bound.groupId === groupId) {
-        relations.push({ kind: 'inside', zones, region, commit: () => {} })
-        continue
-      }
-      relations.push({
-        kind: 'inside',
-        zones,
-        region,
-        commit: () => writes.nestInto(ancestor.id, groupId),
-      })
+      const still = bound !== undefined && bound.parentId === ancestor.id && bound.groupId === groupId
+      areas.push(insideAreaOf(holder, still ? () => {} : () => writes.nestInto(ancestor.id, groupId)))
     }
   }
 
   // 回到最外层：在分组里时才成立，且只认**整片列表的空白处**（那一片自己的区域键）。
-  // 落在一行上的「移出分组」由检测器沿索引往上走得出：那一行归它所在的容器，
-  // 容器再往上是根节点，根节点那一片若也接了放入关系，就是这一条
+  // 落在一行上的「移出分组」由检测层逐格查到得出：那一行归它所在的片区，
+  // 再往上走到根节点，根节点那一片若也接了放入关系，就是这一条
   if (membership !== undefined) {
-    relations.push({
-      kind: 'inside',
-      zones: [bodyKeyOf(index.containers.root)],
-      commit: () => writes.moveToGroup(''),
+    areas.push({
+      ...insideAreaOf(index.containers.root, () => writes.moveToGroup('')),
+      // 它裹住整片列表：只有指针直接落在它自己的空白上才算「退到最外层」。
+      // 落在某个成员身上时那是成员那一片的事，而移出分组那一半已经由那条位次关系补上
+      hitArea: 'ownLevel',
     })
   }
 
-  return relations
+  return areas
 }

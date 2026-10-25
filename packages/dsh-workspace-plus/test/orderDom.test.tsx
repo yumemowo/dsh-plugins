@@ -263,16 +263,24 @@ describe('dragging a session group head', () => {
     await act(async () => root.unmount())
   })
 
-  it('keeps the session-group container out of the ordering plan', async () => {
-    // 会话分组容器那一格罩住整块分组，它不在分组排序计划里，命中到此为止
+  it('reads a drop on the group body as ordering that whole group', async () => {
+    // 组体与组头是同一个成员的两个入口：指针移进组里（空组体那一大片、组内某条会话）
+    // 读出的仍是「排到这一整个分组之前 / 之后」。只认组头会让组体成为死区，
+    // 用户把指针从组头往下一移，线就整个消失
     const { container, root, orders } = await mount()
-    const target = zone(container, 'sessionGroup/ws-1/group-b')
+    const body = zone(container, 'sessionGroup/ws-1/group-c')
+    band(block(body), 20)
 
     fire(row(container, 'group-a'), 'dragstart')
-    fire(target, 'dragover', 0)
+    fire(body, 'dragover', 0)
 
-    expect(target.getAttribute('data-wg-drop')).toBeNull()
-    expect(orders).toEqual([])
+    // 线画在整块分组上：体那一格自己不带标记，标记落在它所在的那一块
+    expect(block(body).getAttribute('data-wg-drop')).toBe('before')
+
+    fire(body, 'drop', 0)
+    await flush()
+    // 落点换算成「排到 group-c 之前」，参照行是组头那一行
+    expect(orders).toEqual([['group', 'ws-1', 'group-a', 'group-c']])
     await act(async () => root.unmount())
   })
 
@@ -361,6 +369,25 @@ describe('dragging a workspace group head', () => {
 
     expect(own.getAttribute('data-wg-drop')).toBeNull()
     expect(orders).toEqual([])
+    await act(async () => root.unmount())
+  })
+
+  it('reads a drop on the group body as ordering that whole workspace group', async () => {
+    // 组体与组头是同一个成员的两个入口，与「拖会话分组头」那一处同理：
+    // 只认组头会让组体成为死区，指针从组头往下一移，线就整个消失
+    const { container, root, orders } = await mount()
+    const body = zone(container, 'virtualWorkspaceBody/wg-3')
+    band(block(body), 20)
+
+    fire(row(container, 'wg-1'), 'dragstart')
+    fire(body, 'dragover', 0)
+
+    expect(block(body).getAttribute('data-wg-drop')).toBe('before')
+
+    fire(body, 'drop', 0)
+    await flush()
+    // 参照行是 wg-3 的组头那一行
+    expect(orders).toEqual([['virtual', 'wg-1', 'wg-3']])
     await act(async () => root.unmount())
   })
 

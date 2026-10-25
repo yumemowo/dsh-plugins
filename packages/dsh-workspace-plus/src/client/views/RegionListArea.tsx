@@ -20,16 +20,8 @@ import { containsSession } from '../data/rows.ts'
 import { groupIdOfSession } from '../data/sessions.ts'
 import type { Outline } from '../hooks/useOutline.ts'
 import { rowsUnder } from '../hooks/useOutline.ts'
-import {
-  ROOT_KEY,
-  scrollProps,
-  groupHeadKey,
-  sessionGroupRegionKey,
-  virtualRegionKey,
-  virtualWorkspaceBodyKey,
-  virtualWorkspaceHeadKey,
-  looseKey,
-} from '../data/protocol.ts'
+import { ROOT_KEY, scrollProps, virtualWorkspaceBodyKey, looseKey } from '../data/protocol.ts'
+import { areaShapeOf } from '../data/zones.ts'
 import type { DragPlan, OrderDragging } from '../data/protocol.ts'
 import { orderDragPlan, sessionGroupingPlan, workspaceTreeDragPlan } from '../data/plan.ts'
 import { debugWarn } from '../utils/debug.ts'
@@ -241,8 +233,9 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
     (groupId: string) =>
       orderDragPlan({
         source: { kind: 'virtualWorkspace', groupId },
-        keyOf: virtualWorkspaceHeadKey,
-        regionKeyOf: virtualRegionKey,
+        // 组头与组体同属一片：指针停在组体里（任何一条工作区行、空组体那一大片）
+        // 读出的仍是「排到这一整个分组之前 / 之后」
+        shapeOf: (memberId) => areaShapeOf({ kind: 'virtual', id: memberId }),
         // 根节点那一层还平铺着未归组的工作区，它们不参与排序，因此这一段只收分组自己的顺序
         order: dragOrderGroups.current.map((section) => section.id),
         movingId: groupId,
@@ -415,8 +408,6 @@ function WorkspaceNode({
             sessionId,
             groupId === '' ? 'ungroup' : `group:${groupId}`,
           ),
-        // 检测器沿索引往上走：落到组内任何一条成员行上，读出的都是「落在这一片上」
-        index: scope.index,
       }),
     [workspaceId, commands.selectSessionGroup, scope.index],
   )
@@ -431,8 +422,8 @@ function WorkspaceNode({
     (groupId: string) =>
       orderDragPlan({
         source: { kind: 'sessionGroup', workspaceId, groupId },
-        keyOf: (memberId) => groupHeadKey(workspaceId, memberId),
-        regionKeyOf: (memberId) => sessionGroupRegionKey(workspaceId, memberId),
+        // 同上一处：组头与组体是同一件事的两个入口
+        shapeOf: (memberId) => areaShapeOf({ kind: 'group', workspaceId, groupId: memberId }),
         // 只收分组自己的顺序，会话行不在这段里，因此拖到组内会话上也读不出落点
         order: dragBuilt.current.map((group) => group.id),
         movingId: groupId,
@@ -450,7 +441,7 @@ function WorkspaceNode({
   /**
    * 拖起一条工作区行时的计划
    *
-   * 枚举面与合法性判定都收在 `dropRelationsOf` 那一层，这里只交出索引与四个写入出口
+   * 枚举面与合法性判定都收在 `dropAreasOf` 那一层，这里只交出索引与四个写入出口
    * 移入 / 移出虚拟分组走 `moveWorkspace`，换位一律走官方 `insertBefore`
    * （注册表序是各层共用的顺序来源），会话分组那一族走 `nestWorkspaces` 与 `unnestWorkspaces`
    */

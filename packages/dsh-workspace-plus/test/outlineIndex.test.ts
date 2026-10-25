@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NestingBinding } from '../src/client/data/nest.ts'
-import { dropRelationsOf } from '../src/client/data/relations.ts'
+import { dropAreasOf } from '../src/client/data/relations.ts'
 import type { OutlineIndex } from '../src/client/data/outlineIndex.ts'
 import type { NodeRef } from '../src/client/data/zones.ts'
 import { indexFrom, outlineRowsFrom } from './support/outlineFixture.ts'
@@ -300,8 +300,8 @@ describe('drop relations', () => {
     // 同层按 cwd 父工作区认：ws-1 名下有 ws-c1（路径上挂在它里面），因此 ws-c1 是它的子工作区而非兄弟
     // 真正的同层兄弟是 ws-2，另有根节点那层的平铺行 ws-3
     const index = fixture(base)
-    const relations = dropRelationsOf(index, ws('ws-1'), writes())
-    const order = relations.filter((entry) => entry.kind === 'order').map((entry) => entry.zones[0])
+    const areas = dropAreasOf(index, ws('ws-1'), writes())
+    const order = areas.filter((entry) => entry.accepts === 'order').map((entry) => entry.zones[0])
 
     expect(order).toContain('workspaceHead/ws-2')
     // ws-3 平铺在根节点那一层。来源在虚拟分组里，两者既不并排也不同父，
@@ -315,13 +315,13 @@ describe('drop relations', () => {
     // 落到 root 层那一行前后，位置要真的变：位次只是一半，另一半是「退出此刻所在的分组」。
     // 后者由根节点那一片自己的 inside 关系给出——它罩着整片列表，落到任何一行上都成立
     const index = fixture(base)
-    const relations = dropRelationsOf(index, ws('ws-1'), writes())
+    const areas = dropAreasOf(index, ws('ws-1'), writes())
 
-    const rootInside = relations.find(
-      (entry) => entry.kind === 'inside' && entry.zones.includes('root'),
+    const rootInside = areas.find(
+      (entry) => entry.accepts === 'inside' && entry.zones.includes('root'),
     )
-    const rootOrder = relations.find(
-      (entry) => entry.kind === 'order' && entry.zones[0] === 'workspaceHead/ws-3',
+    const rootOrder = areas.find(
+      (entry) => entry.accepts === 'order' && entry.zones[0] === 'workspaceHead/ws-3',
     )
 
     expect(rootInside).toBeDefined()
@@ -348,12 +348,12 @@ describe('drop relations', () => {
     // 一行不能同时承接两种关系：能谈先后就不再承接放入，
     // 那时它的直接父工作区承接 inside
     const index = fixture(base)
-    const relations = dropRelationsOf(index, ws('ws-1'), writes())
+    const areas = dropAreasOf(index, ws('ws-1'), writes())
     const orderZones = new Set(
-      relations.filter((entry) => entry.kind === 'order').flatMap((entry) => entry.zones),
+      areas.filter((entry) => entry.accepts === 'order').flatMap((entry) => entry.zones),
     )
-    const clashing = relations
-      .filter((entry) => entry.kind === 'inside')
+    const clashing = areas
+      .filter((entry) => entry.accepts === 'inside')
       .filter((entry) => entry.zones.some((key) => orderZones.has(key)))
 
     expect(clashing).toEqual([])
@@ -363,15 +363,15 @@ describe('drop relations', () => {
     // 用户拖一个在分组里的工作区到根节点那层的平铺行上时，那是 order 关系
     // 两者的 cwd 没有祖先关系，来源进不了那一行体内，因此不该画框
     const index = fixture(base)
-    const relations = dropRelationsOf(index, ws('ws-1'), writes())
+    const areas = dropAreasOf(index, ws('ws-1'), writes())
 
-    expect(relations.some((entry) => entry.kind === 'inside' && entry.zones.includes('workspaceHead/ws-3'))).toBe(false)
+    expect(areas.some((entry) => entry.accepts === 'inside' && entry.zones.includes('workspaceHead/ws-3'))).toBe(false)
   })
 
   it('offers an inside place for every other virtual group', () => {
     const index = fixture(base)
-    const relations = dropRelationsOf(index, ws('ws-1'), writes())
-    const inside = relations.filter((entry) => entry.kind === 'inside')
+    const areas = dropAreasOf(index, ws('ws-1'), writes())
+    const inside = areas.filter((entry) => entry.accepts === 'inside')
 
     // 别的分组两格（组头 + 组体）；自己所在的那个分组不在其中
     expect(inside.some((entry) => entry.zones.includes('virtualWorkspaceHead/vg-2'))).toBe(true)
@@ -380,26 +380,26 @@ describe('drop relations', () => {
 
   it('offers the root list once when the source sits in a group', () => {
     const index = fixture(base)
-    const relations = dropRelationsOf(index, ws('ws-1'), writes())
+    const areas = dropAreasOf(index, ws('ws-1'), writes())
 
-    expect(relations.some((entry) => entry.kind === 'inside' && entry.zones.includes('root'))).toBe(true)
+    expect(areas.some((entry) => entry.accepts === 'inside' && entry.zones.includes('root'))).toBe(true)
   })
 
   it('offers no root place while the source already sits at the root', () => {
     const index = fixture({ workspaceIds: ['ws-1', 'ws-2'], paths: { 'ws-1': '/a', 'ws-2': '/b' } })
-    const relations = dropRelationsOf(index, ws('ws-1'), writes())
+    const areas = dropAreasOf(index, ws('ws-1'), writes())
 
-    expect(relations.some((entry) => entry.zones.includes('root'))).toBe(false)
+    expect(areas.some((entry) => entry.zones.includes('root'))).toBe(false)
   })
 
   it('commits the write each relation was built for', () => {
     const index = fixture(base)
     const io = writes()
-    const relations = dropRelationsOf(index, ws('ws-1'), io)
-    const toGroup = relations.find(
-      (entry) => entry.kind === 'inside' && entry.zones.includes('virtualWorkspaceHead/vg-2'),
+    const areas = dropAreasOf(index, ws('ws-1'), io)
+    const toGroup = areas.find(
+      (entry) => entry.accepts === 'inside' && entry.zones.includes('virtualWorkspaceHead/vg-2'),
     )
-    toGroup?.kind === 'inside' && toGroup.commit()
+    toGroup?.commit({ kind: 'inside' })
 
     expect(io.calls).toEqual(['move:vg-2'])
   })
@@ -414,9 +414,9 @@ describe('drop relations', () => {
       ],
       paths: { 'ws-a': '/a', 'ws-b': '/b', 'ws-c': '/c' },
     })
-    const relations = dropRelationsOf(index, ws('ws-a'), writes())
+    const areas = dropAreasOf(index, ws('ws-a'), writes())
 
     // 那一行最多作为位次参照，绝不能变成「放进它体内」
-    expect(relations.some((entry) => entry.kind === 'inside' && entry.zones.includes('workspaceHead/ws-b'))).toBe(false)
+    expect(areas.some((entry) => entry.accepts === 'inside' && entry.zones.includes('workspaceHead/ws-b'))).toBe(false)
   })
 })

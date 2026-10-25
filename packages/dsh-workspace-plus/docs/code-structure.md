@@ -31,8 +31,8 @@ src/
     │   ├── types.ts            SessionRow 与三类草稿、展示方式与指示器样式
     │   ├── nest.ts             子工作区嵌套推导（路径祖先关系、容器归属、段内森林）
     │   ├── zones.ts            区域键与落点单位的命名规则（行与容器在 DOM 上占哪几格）
-    │   ├── relations.ts        一个节点此刻能落到哪儿（放入与位次两类关系，只有拖拽会读）
-    │   ├── dropSearcher.ts     拖拽落点的唯一检测入口（拿整份索引，沿链现算，交回节点）
+    │   ├── relations.ts        一个节点此刻能落到哪几片（每片占哪几格、按什么读、落下写什么，只有拖拽会读）
+    │   ├── dropSearcher.ts     拖拽落点的唯一检测入口（拿片区名单，沿指针压着的那串格子找）
     │   ├── move.ts             一次移动要写哪几笔（虚拟分组归属、会话分组归属、跟随的后代）
     │   ├── status.ts           会话状态位推导（待交互 / 运行 / 完成）
     │   ├── search.ts           按标题搜索（查询净化、匹配、排序与截断）
@@ -54,7 +54,7 @@ src/
     │   └── viewMode.ts         展示方式 / 指示器 / 三层折叠态的存储（官方 defineStore + localStorage，插槽 store 座位的句柄）
     ├── hooks/                  与具体业务无关的通用 hook
     │   ├── useDnd.ts           行拖拽机制层（DndProvider、beginDrag、监听、自动滚动与提交，见 [行拖拽](row-drag.md)）
-    │   ├── dnd/marks.ts        拖拽的 DOM 胶水（元素 ↔ 节点 ↔ 像素：绘制表、压淡范围、可滚容器）
+    │   ├── dnd/marks.ts        拖拽的 DOM 胶水（元素 ↔ 区域键 ↔ 像素：绘制表、压淡范围、可滚容器）
     │   ├── useHoverCapable.ts  设备是否具备悬停能力（环境读数，置顶区 expand 档的可用前提）
     │   ├── useLocale.ts        区域文案的唯一读取入口（RegionLocaleProvider + useLocale）
     │   ├── useLocalViewOptions.ts  浏览器 store 里展示方式 / 指示器样式的读取入口（同上）

@@ -559,7 +559,7 @@ function sessionRowNode(options: {
             sections: options.groupSections ?? [],
             currentGroupId: '',
             onSelectGroup: () => {},
-            buildDragPlan: (): DragPlan => ({ source: { kind: 'session', id: 's1' }, targets: new Map() }),
+            buildDragPlan: (): DragPlan => ({ source: { kind: 'session', id: 's1' }, areas: [] }),
           },
         }
       : {}),
