@@ -4,29 +4,29 @@
  * 判定全部在节点上完成，而且检测器**拿着整份索引**：指针落在哪个节点上，由适配层读出来交给它；
  * 那个节点能接什么、它的上位容器是谁、谁罩着它，全部从索引现算，不靠调用方预先枚举一份格子清单。
  *
- * 唯一的例外是线的上下半：那要量指针正落着的那个元素有多高、顶边在哪，因此
- * {@link DropSearcher.checkDrop} 收两个几何读数。它不收元素——元素只属于调用方那半边。
+ * 唯一的例外是线的上下半：那要量一量有多高、顶边在哪。量的是**落点自己那一块**而不是指针下
+ * 那个小元素，因此量法随名单一起交进来（见 {@link OrderTarget.measure}），检测器仍然不碰元素。
  */
 import type { OutlineIndex } from './outlineIndex.ts'
 import type { ContainerNode } from './nest.ts'
 import type { NodeRef } from './zones.ts'
 
-/** 一条带的几何读数：只有分上下半要用的那两格 */
-export interface BandRect {
+/** 一块落点单位的几何读数：只有分上下半要用的那两格 */
+export interface BlockRect {
   top: number
   height: number
 }
 
 /**
- * 量一条带的口子
+ * 量一块落点单位的口子
  *
- * 交给检测器的是这个函数而不是读数本身：线的上下半只在真的对上参照行时才要量，
+ * 交给检测器的是这个函数而不是读数本身：线的上下半只在真的对上落点时才会量，
  * 而指针每移动一次都会走一遍检测。传读数会让调用方每帧量一次，传这个口子只在需要时量
  */
-export type BandMeasure = () => BandRect
+export type BlockMeasure = () => BlockRect
 
-/** 线画在参照行的哪一侧 */
-type DropSide = 'before' | 'after'
+/** 线画在落点的哪一侧 */
+export type DropSide = 'before' | 'after'
 
 /**
  * 一个落点身份
@@ -36,14 +36,39 @@ type DropSide = 'before' | 'after'
  */
 export type DropNode = NodeRef | ContainerNode | { kind: 'row'; id: string }
 
-/** 一次拖拽可能接住的一个位置 */
-export interface DropTarget {
-  /** 整块放进去，还是与这一行排序 */
-  kind: 'inside' | 'order'
+/**
+ * 一次拖拽可能接住的一个位置
+ *
+ * 两类落点是两件事，因此交回的东西也不同：框没有几何可言，线要分上下半。
+ * 拆成两个形状而不是给同一个形状挂可选的几何格，是为了让「线一定量得出、框一定用不上」
+ * 由类型承担——否则漏给一次几何就是一条永远画在落点上缘的线，而那不会报错
+ */
+export type DropTarget = InsideTarget | OrderTarget
+
+/** 整块落进某一片 */
+export interface InsideTarget {
+  kind: 'inside'
   /** 这一条落在哪个节点上 */
   node: DropNode
   /** 放开时执行 */
-  commit: (side?: DropSide) => void
+  commit: () => void
+}
+
+/** 与某一片里的成员行谈先后 */
+export interface OrderTarget {
+  kind: 'order'
+  /** 这一条落在哪个节点上 */
+  node: DropNode
+  /**
+   * 量这一块的口子
+   *
+   * 量的是**落点自己那一块**，不是指针正压着的那个小元素：指针停在容器体内的任何一行上，
+   * 读出的都是「排到这一整块之前 / 之后」，上下半因此要按这一整块分。
+   * 量法随名单一起交进来，检测器因此仍然不碰元素
+   */
+  measure: BlockMeasure
+  /** 放开时执行，参数是线画在哪一侧 */
+  commit: (side: DropSide) => void
 }
 
 /** 一次检测的结果：两个节点，最多再带一个方向 */
@@ -60,16 +85,11 @@ export interface DropCheck {
 export interface DropSearcher {
   /**
    * 指针此刻落在名单里的哪些位置上
-   * @param band - 量指针正落着的那一条带的口子，只用来分线的上下半；指针不在任何一条带上时为 null
    * @param point - 指针坐标
    * @param node - 指针正落着的那个节点，由适配层读出来
    * @returns 最多一个画框的节点与一个画线的节点；都不接时为 null
    */
-  checkDrop(
-    band: BandMeasure | null,
-    point: { x: number; y: number },
-    node: DropNode,
-  ): DropCheck | null
+  checkDrop(point: { x: number; y: number }, node: DropNode): DropCheck | null
   /** 放开时执行 {@link checkDrop} 交回的那次写入 */
   commit(check: DropCheck): void
 }
@@ -88,11 +108,21 @@ export function maybeDropSearcher(
   index: OutlineIndex | undefined,
   targets: readonly DropTarget[],
 ): DropSearcher {
-  /** 名单按「种类 + 节点」收成一张表，一个节点在一类关系里只出现一次 */
-  const byKey = new Map<string, DropTarget>()
+  /**
+   * 名单按种类收成两张表，一个节点在一类关系里只出现一次
+   *
+   * 分两张而不是一张带种类的表：两种落点连形状都不同，「查回来再收窄种类」
+   * 会逼出一串断言，而那是这里唯一会写错的地方。分表之后查什么得到什么，由表自己承担
+   */
+  const insideByNode = new Map<string, InsideTarget>()
+  const orderByNode = new Map<string, OrderTarget>()
   for (const entry of targets) {
-    const key = entry.kind + '/' + idOf(entry.node)
-    if (!byKey.has(key)) byKey.set(key, entry)
+    const key = idOf(entry.node)
+    if (entry.kind === 'inside') {
+      if (!insideByNode.has(key)) insideByNode.set(key, entry)
+    } else if (!orderByNode.has(key)) {
+      orderByNode.set(key, entry)
+    }
   }
 
   /**
@@ -167,26 +197,33 @@ export function maybeDropSearcher(
     return chain
   }
 
-  /** 链上第一个在名单里的节点 */
-  const first = (kind: DropTarget['kind'], chain: readonly DropNode[]): DropTarget | undefined => {
+  /**
+   * 链上第一个满足条件的节点
+   *
+   * 链上任何一格都可能不在名单里（那一片这次不接），因此逐格查、取第一个命中的
+   * @param chain - 从指针落着的那个节点往外的那一条
+   * @param table - 按节点身份查的表
+   */
+  const firstOn = <T>(chain: readonly DropNode[], table: ReadonlyMap<string, T>): T | undefined => {
     for (const node of chain) {
-      const found = byKey.get(kind + '/' + idOf(node))
+      const found = table.get(idOf(node))
       if (found !== undefined) return found
     }
     return undefined
   }
 
   return {
-    checkDrop(band, point, node) {
-      if (band === null) return null
+    checkDrop(point, node) {
       const chain = chainOf(node)
       const check: DropCheck = {}
 
-      // 线：链上第一条件次参照
-      const order = first('order', chain)
+      // 线：链上第一条件次参照。上下半按**那一条落点自己那一块**量，
+      // 不按指针正压着的元素量：指针停在容器体内的任意一行上时，
+      // 读出的都是「排到这一整块之前 / 之后」，按那一行量会得到与线的位置无关的读数
+      const order = firstOn(chain, orderByNode)
       if (order !== undefined) {
         check.order = order.node
-        check.side = sideOf(band(), point)
+        check.side = sideOf(order.measure(), point)
       }
 
       // 框：链上第一个能放进去的节点。
@@ -195,10 +232,10 @@ export function maybeDropSearcher(
       // 线是这一行本身能否谈先后，框是它上面那一片能不能进去。
       // 框**不从线上取**：那一行有自己的 cwd 父工作区、而那个父工作区与来源毫无关系时，
       // 拿它的祖先当框会把一块毫不相干的区域高亮起来
-      const holder = first('inside', chain)
+      const holder = firstOn(chain, insideByNode)
       if (holder !== undefined) check.inside = holder.node
 
-      // 框与线落在**同一格**上时，这一格两种读法都成立：按指针落在带里的哪一段分流。
+      // 框与线落在**同一格**上时，这一格两种读法都成立：按指针落在块里的哪一段分流。
       // 这一档服务「分组能嵌套分组」，那件事尚未实现，因此这里不该被走到。
       //
       // 留在这一处是因为它同时握着两种答案：框与线各自沿链找、互不知道对方在哪一层，
@@ -207,9 +244,9 @@ export function maybeDropSearcher(
       // 今天走不到：`dropRelationsOf` 只给工作区节点算位次关系，虚拟分组根本不进那条分支，
       // 因此不可能有同一格既承接放入、又承接同一节点的位次。
       //
-      // 真做分组嵌套时，把这里换成按指针在带里的位置分流（上段 before、中段 inside、
+      // 真做分组嵌套时，把这里换成按指针在块里的位置分流（上段 before、中段 inside、
       // 下段 after），并让 `dropRelationsOf` 同时交出两种读法——那一族的改动都集中在中间层，
-      // 渲染与手势不用动
+      // 渲染与手势不用动。这一档的几何现在就在手边（`order.measure()`），因此不用另找量法
       if (
         check.inside !== undefined &&
         check.order !== undefined &&
@@ -226,8 +263,11 @@ export function maybeDropSearcher(
     },
 
     commit(check) {
-      if (check.inside !== undefined) byKey.get('inside/' + idOf(check.inside))?.commit()
-      if (check.order !== undefined) byKey.get('order/' + idOf(check.order))?.commit(check.side)
+      if (check.inside !== undefined) insideByNode.get(idOf(check.inside))?.commit()
+      // 线一定有方向：`checkDrop` 给出 `order` 时同时给出 `side`，那一格只是类型上的兜底
+      if (check.order !== undefined) {
+        orderByNode.get(idOf(check.order))?.commit(check.side ?? 'before')
+      }
     },
   }
 }
@@ -247,15 +287,15 @@ function idOf(node: DropNode): string {
 }
 
 /**
- * 指针落在一条带的上半还是下半
+ * 指针落在这一块的上半还是下半
  *
- * 只问指针正落着的那一条带的矩形——落点本身是节点，没有矩形可言。
- * 量不出高度时读作「之前」：尚未布局的节点与 jsdom 都是这种情形，那时分不出上下，
- * 而「之前」那处缝落在这一条自己身上，读出来仍是指着它的一条线
- * @param rect - 指针正落着的那一条带的矩形
+ * 量的那一块由名单给出（见 {@link OrderTarget.measure}）：落点本身是节点，没有矩形可言。
+ * 量不出高度时读作「之前」：尚未布局的元素与 jsdom 都是这种情形，那时分不出上下，
+ * 而「之前」那处缝落在这一块自己身上，读出来仍是指着它的一条线
+ * @param rect - 落点那一块的矩形
  * @param point - 指针坐标
  */
-function sideOf(rect: { top: number; height: number }, point: { x: number; y: number }): DropSide {
+function sideOf(rect: BlockRect, point: { x: number; y: number }): DropSide {
   if (rect.height <= 0) return 'before'
   return point.y - rect.top < rect.height / 2 ? 'before' : 'after'
 }

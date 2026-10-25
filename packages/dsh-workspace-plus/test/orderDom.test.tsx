@@ -129,6 +129,18 @@ async function mount(
   return { container, root, orders, moves }
 }
 
+/**
+ * 一个区域所在的落点单位
+ *
+ * 框与线的上下半都按这一整块分，因此替身矩形带要替在它身上
+ * @param target - 区域元素
+ */
+function block(target: Element): HTMLElement {
+  const found = target.closest<HTMLElement>('[data-wg-dnd-region]')
+  if (found === null) throw new Error('no drop unit around "' + (target.getAttribute('data-wg-dnd') ?? '') + '"')
+  return found
+}
+
 afterEach(() => {
   document.body.replaceChildren()
 })
@@ -155,8 +167,10 @@ describe('dragging a session group head', () => {
     const { container, root } = await mount()
     const above = zone(container, 'groupHead/ws-1/group-a')
     const below = zone(container, 'groupHead/ws-1/group-b')
-    band(above, -20)
-    band(below, 20)
+    // 上下半按**落点那一整块**分，不按组头那一行：落点覆盖全块，指针停在块里任何一处
+    // 读出的都是同一件事，因此量的也是全块
+    band(block(above), -20)
+    band(block(below), 20)
 
     fire(row(container, 'group-c'), 'dragstart')
 
@@ -194,7 +208,7 @@ describe('dragging a session group head', () => {
   it('commits no anchor when it lands at the end of the stretch', async () => {
     const { container, root, orders } = await mount()
     const target = zone(container, 'groupHead/ws-1/group-c')
-    band(target, -20)
+    band(block(target), -20)
 
     fire(row(container, 'group-a'), 'dragstart')
     fire(target, 'dragover', 0)
@@ -310,7 +324,7 @@ describe('dragging a workspace group head', () => {
   it('commits no anchor when it lands after the last workspace group', async () => {
     const { container, root, orders } = await mount()
     const target = zone(container, 'virtualWorkspaceHead/wg-3')
-    band(target, -20)
+    band(block(target), -20)
 
     fire(row(container, 'wg-2'), 'dragstart')
     fire(target, 'dragover', 0)

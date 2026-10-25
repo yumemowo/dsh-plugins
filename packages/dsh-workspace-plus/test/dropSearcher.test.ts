@@ -35,19 +35,47 @@ function fixture(): OutlineIndex {
 
 const ws = (id: string) => ({ kind: 'workspace', id }) as const
 
-/** 量一条带的读数：检测器只拿它分线的上下半 */
-function band(rect: { top: number; height: number }): () => { top: number; height: number } {
+/** 一块的读数：检测器拿它分线的上下半 */
+function measure(rect: { top: number; height: number }): () => { top: number; height: number } {
   return () => rect
 }
 
+/** 一条默认的落点单位读数：高 10、上缘在 0，指针落在它上半 */
+const TALL = measure({ top: 0, height: 10 })
+
 const at = (y: number) => ({ x: 0, y })
 
+/**
+ * 名单里的一条落点
+ * @param kind - 整块放入还是排序
+ * @param node - 落点身份
+ * @param commit - 放开时执行
+ * @param rect - 排序时量哪一块，缺省 {@link TALL}
+ */
+function targetOf(
+  kind: 'inside',
+  node: DropNode,
+  commit?: () => void,
+): DropTarget
+function targetOf(
+  kind: 'order',
+  node: DropNode,
+  commit?: (side: 'before' | 'after') => void,
+  rect?: () => { top: number; height: number },
+): DropTarget
 function targetOf(
   kind: 'inside' | 'order',
   node: DropNode,
-  commit: (side?: 'before' | 'after') => void = () => {},
+  commit?: ((side: 'before' | 'after') => void) | (() => void),
+  rect?: () => { top: number; height: number },
 ): DropTarget {
-  return { kind, node, commit }
+  if (kind === 'inside') return { kind, node, commit: (commit as (() => void) | undefined) ?? (() => {}) }
+  return {
+    kind,
+    node,
+    measure: rect ?? TALL,
+    commit: (commit as ((side: 'before' | 'after') => void) | undefined) ?? (() => {}),
+  }
 }
 
 describe('maybeDropSearcher', () => {
@@ -55,7 +83,7 @@ describe('maybeDropSearcher', () => {
     const index = fixture()
     const searcher = maybeDropSearcher(index, [targetOf('order', ws('ws-2'))])
 
-    expect(searcher.checkDrop(band({ top: 0, height: 10 }), at(0), ws('ws-3'))).toBeNull()
+    expect(searcher.checkDrop(at(0), ws('ws-3'))).toBeNull()
   })
 
   it('returns one node for an inside target', () => {
@@ -63,7 +91,7 @@ describe('maybeDropSearcher', () => {
     const searcher = maybeDropSearcher(index, [targetOf('inside', index.containers.virtualOf('vg-1'))])
 
     // 指针落在组内一条成员行上：它自己不是落点，但它所在的那一片是
-    const check = searcher.checkDrop(band({ top: 0, height: 10 }), at(0), ws('ws-1'))
+    const check = searcher.checkDrop(at(0), ws('ws-1'))
 
     expect(check?.inside).toEqual({ kind: 'virtual', id: 'vg-1' })
     expect(check?.order).toBeUndefined()
@@ -74,7 +102,7 @@ describe('maybeDropSearcher', () => {
     const index = fixture()
     const searcher = maybeDropSearcher(index, [targetOf('inside', index.containers.virtualOf('vg-1'))])
 
-    const check = searcher.checkDrop(band({ top: 0, height: 10 }), at(0), ws('ws-1'))
+    const check = searcher.checkDrop(at(0), ws('ws-1'))
 
     expect(check?.inside).toEqual({ kind: 'virtual', id: 'vg-1' })
   })
@@ -87,7 +115,7 @@ describe('maybeDropSearcher', () => {
       targetOf('inside', index.containers.virtualOf('vg-1')),
     ])
 
-    const check = searcher.checkDrop(band({ top: 0, height: 10 }), at(0), ws('ws-2'))
+    const check = searcher.checkDrop(at(0), ws('ws-2'))
 
     expect(check?.order).toEqual({ kind: 'workspace', id: 'ws-2' })
     expect(check?.inside).toEqual({ kind: 'virtual', id: 'vg-1' })
@@ -103,7 +131,7 @@ describe('maybeDropSearcher', () => {
       targetOf('inside', ws('ws-2')),
     ])
 
-    expect(() => searcher.checkDrop(band({ top: 0, height: 10 }), at(0), ws('ws-2'))).toThrow(
+    expect(() => searcher.checkDrop(at(0), ws('ws-2'))).toThrow(
       /banded/,
     )
   })
@@ -114,7 +142,7 @@ describe('maybeDropSearcher', () => {
     const index = fixture()
     const searcher = maybeDropSearcher(index, [targetOf('order', ws('ws-3'))])
 
-    const check = searcher.checkDrop(band({ top: 0, height: 10 }), at(0), ws('ws-3'))
+    const check = searcher.checkDrop(at(0), ws('ws-3'))
 
     expect(check?.order).toEqual({ kind: 'workspace', id: 'ws-3' })
     expect(check?.inside).toBeUndefined()
@@ -128,7 +156,7 @@ describe('maybeDropSearcher', () => {
       targetOf('inside', index.containers.root),
     ])
 
-    const check = searcher.checkDrop(band({ top: 0, height: 10 }), at(0), ws('ws-3'))
+    const check = searcher.checkDrop(at(0), ws('ws-3'))
 
     expect(check?.inside).toEqual({ kind: 'root' })
     expect(check?.order).toEqual({ kind: 'workspace', id: 'ws-3' })
@@ -136,20 +164,23 @@ describe('maybeDropSearcher', () => {
 
   it('reads the upper half of a row as before and the lower half as after', () => {
     const index = fixture()
-    const searcher = maybeDropSearcher(index, [targetOf('order', ws('ws-2'))])
-    const row = band({ top: 100, height: 20 })
+    const searcher = maybeDropSearcher(index, [
+      targetOf('order', ws('ws-2'), undefined, measure({ top: 100, height: 20 })),
+    ])
 
-    expect(searcher.checkDrop(row, at(105), ws('ws-2'))?.side).toBe('before')
-    expect(searcher.checkDrop(row, at(115), ws('ws-2'))?.side).toBe('after')
+    expect(searcher.checkDrop(at(105), ws('ws-2'))?.side).toBe('before')
+    expect(searcher.checkDrop(at(115), ws('ws-2'))?.side).toBe('after')
   })
 
   it('reads a zero-height row as before', () => {
     // jsdom 恒零矩形，尚未布局的节点也如此：那时分不出上下，
-    // 读作「之前」让线落在这条行自己身上，与指针到底指着哪一条无关
+    // 读作「之前」让线落在这块自己身上，与指针到底指着哪一处无关
     const index = fixture()
-    const searcher = maybeDropSearcher(index, [targetOf('order', ws('ws-2'))])
+    const searcher = maybeDropSearcher(index, [
+      targetOf('order', ws('ws-2'), undefined, measure({ top: 100, height: 0 })),
+    ])
 
-    expect(searcher.checkDrop(band({ top: 100, height: 0 }), at(100), ws('ws-2'))?.side).toBe('before')
+    expect(searcher.checkDrop(at(100), ws('ws-2'))?.side).toBe('before')
   })
 
   it('walks the node chain rather than the document', () => {
@@ -158,7 +189,7 @@ describe('maybeDropSearcher', () => {
     const index = fixture()
     const searcher = maybeDropSearcher(index, [targetOf('inside', ws('ws-1'))])
 
-    expect(searcher.checkDrop(band({ top: 0, height: 10 }), at(0), ws('ws-3'))).toBeNull()
+    expect(searcher.checkDrop(at(0), ws('ws-3'))).toBeNull()
   })
 
   it('commits the box and the line as two separate writes', () => {
@@ -170,7 +201,7 @@ describe('maybeDropSearcher', () => {
     ])
 
     // 指针在参照行的上缘，因此是「插到它之前」；框与线是两次独立的写入
-    searcher.commit(searcher.checkDrop(band({ top: 0, height: 10 }), at(0), ws('ws-2'))!)
+    searcher.commit(searcher.checkDrop(at(0), ws('ws-2'))!)
 
     expect(calls).toEqual(['inside', 'order:before'])
   })
@@ -190,7 +221,7 @@ describe('maybeDropSearcher', () => {
     const index = fixture()
     const searcher = maybeDropSearcher(index, [targetOf('order', { kind: 'row', id: 'session-1' })])
 
-    const check = searcher.checkDrop(band({ top: 0, height: 10 }), at(0), { kind: 'row', id: 'session-1' })
+    const check = searcher.checkDrop(at(0), { kind: 'row', id: 'session-1' })
 
     expect(check?.order).toEqual({ kind: 'row', id: 'session-1' })
   })
@@ -221,7 +252,7 @@ describe('maybeDropSearcher', () => {
     ])
 
     // 指针落在 ws-c1 那一行上
-    const check = searcher.checkDrop(band({ top: 0, height: 10 }), at(0), ws('ws-c1'))
+    const check = searcher.checkDrop(at(0), ws('ws-c1'))
 
     // 框与线必须说同一层：框落在那个会话分组上，而不是父工作区
     expect(check?.inside).toEqual(group)
@@ -257,15 +288,21 @@ describe('maybeDropSearcher', () => {
     })
     const searcher = maybeDropSearcher(
       index,
-      relations.map((relation) => ({
-        kind: relation.kind,
-        node: index.nodesByZone().get(relation.zones[0] ?? '') ?? index.containers.root,
-        commit: () => (relation.kind === 'inside' ? relation.commit() : relation.place('before')),
-      })),
+      relations.map((relation) => {
+        const node = index.nodesByZone().get(relation.zones[0] ?? '') ?? index.containers.root
+        return relation.kind === 'inside'
+          ? { kind: 'inside' as const, node, commit: () => relation.commit() }
+          : {
+              kind: 'order' as const,
+              node,
+              measure: TALL,
+              commit: () => relation.place('before'),
+            }
+      }),
     )
     const group = index.containers.groupOf('ws-p', 'g-111')
 
-    const check = searcher.checkDrop(band({ top: 0, height: 10 }), at(0), group)
+    const check = searcher.checkDrop(at(0), group)
 
     expect(check?.inside).toEqual(group)
     if (check !== null) searcher.commit(check)

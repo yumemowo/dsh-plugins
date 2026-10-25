@@ -536,8 +536,9 @@ describe('a root level source beside an unrelated root level sibling', () => {
     // 而且它必须画在**整块**上——贴着标题那一行画会让线只有半行宽，
     // 读起来像「落点只覆盖那一行」
     const { container, root } = await mount({ workspaceGroups: [] })
-    band(workspaceRow(container, 'ws-1'), 0)
-    band(workspaceRow(container, 'ws-2'), 20)
+    // 上下半按**整块**量：落点覆盖整块，指针停在块里任何一处读出的都是同一件事
+    band(workspaceBlock(container, 'ws-1'), 0)
+    band(workspaceBlock(container, 'ws-2'), 20)
 
     fire(workspaceRow(container, MUN_ID), 'dragstart')
 
@@ -569,8 +570,8 @@ describe('a root level source beside an unrelated root level sibling', () => {
     // 相邻两条带因此严丝合缝。指针停在带的上内边距里，命中的就是这一条带本身，
     // 而那段读作「排到它之前」——同一处缝从上面还是从下面靠近都是同一个读数
     const { container, root } = await mount({ workspaceGroups: [] })
-    band(workspaceRow(container, 'ws-1'), 0, 38)
-    band(workspaceRow(container, 'ws-2'), 38, 38)
+    band(workspaceBlock(container, 'ws-1'), 0, 38)
+    band(workspaceBlock(container, 'ws-2'), 38, 38)
 
     fire(workspaceRow(container, MUN_ID), 'dragstart')
 
@@ -587,8 +588,8 @@ describe('a root level source beside an unrelated root level sibling', () => {
     // 段首那一行带着自己那段间距，指针落在里面仍读作「排到第一条之前」：
     // 上面没有哪一条能替它画，这一档因此由它自己给出
     const { container, root } = await mount({ workspaceGroups: [] })
-    band(workspaceRow(container, 'ws-1'), 20, 38)
-    band(workspaceRow(container, 'ws-2'), 58, 38)
+    band(workspaceBlock(container, 'ws-1'), 20, 38)
+    band(workspaceBlock(container, 'ws-2'), 58, 38)
 
     fire(workspaceRow(container, MUN_ID), 'dragstart')
     fire(workspaceRow(container, 'ws-1'), 'dragover', 21)
@@ -605,8 +606,8 @@ describe('a root level source beside an unrelated root level sibling', () => {
     // 线画上去会跟着一起淡下去，用户看到的是「这条线颜色不对」而不是「这里能放」。
     // 同一处缝因此留在前一条的下缘——位置一样，仍然是同一条线
     const { container, root } = await mount({ workspaceGroups: [] })
-    band(workspaceRow(container, 'ws-1'), 0)
-    band(workspaceRow(container, 'ws-2'), 20)
+    band(workspaceBlock(container, 'ws-1'), 0)
+    band(workspaceBlock(container, 'ws-2'), 20)
 
     fire(workspaceRow(container, 'ws-2'), 'dragstart')
     fire(workspaceRow(container, 'ws-1'), 'dragover', 8)

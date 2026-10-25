@@ -160,19 +160,25 @@ export function collectDropTargets(
 
     if (target.mode === 'rows') {
       /**
-       * 单位里可供排序的行
+       * 这一片里的落点单位，以及各自由哪一行代言
        *
-       * 一格即一条时（虚拟分组、会话分组、工作区标题格）就是这一格自己，线跨它的单位；
-       * 一格装多行时（置顶区）是单位里的每一条行，线画在那一行身上——它们是同段里的
-       * 并列成员，各自就是一处单位。两种只是行数不同，这里交出同一个形状
+       * 两种形状，由计划是否点名落点单位分开：
        *
-       * `paintKey` 与 `rowId` 分开：绘制表按**查得到的键**存，一格即一条时是区域键
-       * （绘制查询按区域键走），一格装多行时是行 id（那时按行 id 查）；
-       * 而提交要的是参照行的 id，两者不是同一个东西
+       * - **点名了**：这一整块就是一个单位，块里所有像素读作同一件事。节点占几格
+       *   （工作区的标题行与体内那一格、分组的组头与组体）只是入口不同，因此每格都登记
+       *   同一条线，参照行是节点自己。指针停在体内任何一处——空白的组体、组内某一条会话、
+       *   某个子工作区——读出的都是「排到这一整块之前 / 之后」，上下半也按这一整块分。
+       *   这正是「指着容器里任何一个像素，说的都是这个容器」的形态
+       * - **没点名**：一格装多行（置顶区），单位里的每一条行各自是一处单位，线画在那一行上
+       *
+       * `paintKey` 与 `rowId` 分开：绘制表按**查得到的键**存，前者是区域键（一派一格时）
+       * 或行 id（一格装多行时），而提交要的是参照行的 id
        */
-      const ownRow = element.getAttribute(ROW_ATTRIBUTE)
+      // 参照行：标题那一格自己带行 id；整块里没有行的那几格（组体、工作区体内空白）
+      // 由节点身份代言——它们说的本来就是「这一整块」，块头就是它的行
+      const ownRow = element.getAttribute(ROW_ATTRIBUTE) ?? rowIdOf(node)
       const lines: { rowId: string; paintKey: string; identity: DropNode; carrier: Element }[] =
-        ownRow !== null
+        target.regionOf !== undefined
           ? [{ rowId: ownRow, paintKey: key, identity: node, carrier: region }]
           : rowsIn(region).flatMap((row) => {
               const id = row.getAttribute(ROW_ATTRIBUTE)
@@ -198,6 +204,10 @@ export function collectDropTargets(
         targets.push({
           kind: 'order',
           node: line.identity,
+          // 上下半按这一条的**落点单位**量，不按指针正压着的那个元素量。
+          // 指针落进容器体内时，压着的是里面某一小行，而读出的落点是「排到这一整块之前 / 之后」——
+          // 按那一小行量会让线在块里跟着指针上下跳，与它画在整块上的位置毫无关系
+          measure: () => line.carrier.getBoundingClientRect(),
           commit: (side) =>
             target.commit(
               side === 'before' ? { kind: 'before', rowId: line.rowId } : { kind: 'after', rowId: line.rowId },
@@ -208,6 +218,21 @@ export function collectDropTargets(
   }
   return { targets, paint }
 }
+/**
+ * 一个节点当参照行时用的那个 id
+ *
+ * 只有索引里没有的行（会话、置顶行）在这里落空：它们自带行 id，读的就是自己。
+ * 节点则以自己的身份代言——「排到这一整块之前」说的就是这一块，块头是它的行
+ * @param node - 落点身份
+ */
+function rowIdOf(node: DropNode): string {
+  return node.kind === 'group'
+    ? node.groupId
+    : node.kind === 'root'
+      ? ''
+      : node.id
+}
+
 /**
  * 一个节点在区域键表里占了哪几格
  * @param zoneNodes - 区域键 → 节点身份的对照表

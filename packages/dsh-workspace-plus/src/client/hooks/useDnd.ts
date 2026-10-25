@@ -250,9 +250,8 @@ export function DndProvider({
     // 指针正落着哪个节点：适配层读一次（元素带区域键，经索引换成节点身份），
     // 此后落点判定全在节点上做，检测层沿索引往上走
     const node = inside ? nodeAt(zoneNodesRef.current, target) : null
-    // 捡到这一步才量带宽：检测器只在真的要分上下半时才问它，指针每移动一次都会走一遍这里
-    const band = target === null ? null : () => target.getBoundingClientRect()
-    const check = inside && node !== null && band !== null ? searcher.checkDrop(band, point, node) : null
+    // 量哪一块由检测器自己决定：线要分上下半时才去问名单里那一条落点的量法
+    const check = inside && node !== null ? searcher.checkDrop(point, node) : null
     checkRef.current = check
 
     // 一次最多两个节点：一个画框、一个画线。

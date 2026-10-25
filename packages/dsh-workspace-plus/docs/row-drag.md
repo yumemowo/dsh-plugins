@@ -85,7 +85,7 @@ export interface DragPlan {
 ### 一次拖拽的生命周期
 
 1. 行上的 `dragstart`：行业务侧构造计划，调 `beginDrag(plan)`。计划被写入模块级单例 `currentPlan`，手势层往 `document` 挂 `dragover` / `drop` 接管，同时按计划给够不着的那几片写上 `data-wg-dnd-dim`，并起一轮边缘自动滚动。
-2. `dragover`：适配层把事件目标换成**节点身份**（`nodeAt`），检测器沿索引往上走出那条链，取链上第一个在名单里的节点。区域目标是 `rows` 档时按指针正落着的那条带算前后半（量不出高度时读 `before`）。检测结果交回的是两个节点，再由绘制表映射回元素、写落点标记（`data-wg-drop="before|after|inside"`，移走时删掉）。指针位置同时被记下，供自动滚动那一帧使用。
+2. `dragover`：适配层把事件目标换成**节点身份**（`nodeAt`），检测器沿索引往上走出那条链，取链上第一个在名单里的节点。区域目标是 `rows` 档时按**落点自己那一块**算前后半（量法随名单交进来，量不出高度时读 `before`）——不是按指针正压着的那个小元素算。检测结果交回的是两个节点，再由绘制表映射回元素、写落点标记（`data-wg-drop="before|after|inside"`，移走时删掉）。指针位置同时被记下，供自动滚动那一帧使用。
 3. `drop`：取当前命中，查计划拿到 `commit`，执行。提交只发生一次。
 4. `dragend`：若这一场拖拽还没提交过、且 `dropEffect` 仍是 `move`，先补交一次；然后清标记与压淡、停自动滚动、摘监听、清单例。
 
@@ -167,11 +167,13 @@ export interface DragPlan {
 `data/dropSearcher.ts` 是检测当前落点的唯一 API。它**拿整份索引**，一次拖拽的名单由 `collectDropTargets` 从计划算出来（都是节点身份），收进 `maybeDropSearcher(index, targets)`；此后检测只剩 `checkDrop` 一个调用：
 
 ```ts
-// 三个入参都不是 DOM 元素：节点是身份，带只交一个「量多高、顶边在哪」的口子
-const check = searcher.checkDrop(() => target.getBoundingClientRect(), point, pointerNode)
+// 两个入参都不是 DOM 元素：节点是身份，几何在名单里各条自己带着
+const check = searcher.checkDrop(point, pointerNode)
 if (check.inside !== undefined) 在它那一格画一圈
 if (check.order !== undefined) 在它那一格画一条线，side 给出上侧还是下侧
 ```
+
+**量哪一块由名单决定，不由指针决定。** 名单里画线的那一条自己带 `measure`（`OrderTarget.measure`）：量的是**落点那一整块**，而不是指针正压着的小元素。指针停在容器体内的任何一行上——空白的组体、组内某一条会话、某个子工作区——读出的落点都是「排到这一整块之前 / 之后」，上下半因此也要按这一整块分；按那一小行量会让线在块里跟着指针上下跳，与它画在整块上的位置毫无关系。
 
 一次检测最多交回两个**节点**：一个画框、一个画线。落在哪个节点上由结果直接给出——调用方不再自己沿祖先链找区域，也不再把几格合并成一圈。
 
