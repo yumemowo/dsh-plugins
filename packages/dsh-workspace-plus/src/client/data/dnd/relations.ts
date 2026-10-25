@@ -10,9 +10,9 @@
  *
  * 纯数据变换：输入是一份装好的索引与几个写入回调，不碰 React、不碰 DOM
  */
-import { beforeIdOf, placeBefore } from '../../order.ts'
+import { beforeIdOf, placeBefore } from '../../../order.ts'
 import type { OutlineIndex } from './outlineIndex.ts'
-import type { ContainerNode } from './nest.ts'
+import type { ContainerNode } from '../nest.ts'
 import type { DropArea } from './protocol.ts'
 import { areaShapeOf, unitOf } from './zones.ts'
 import type { NodeRef } from './zones.ts'

@@ -7,7 +7,7 @@
  *
  * 这里只答「叫什么」，不答「有哪些」：谁占哪几格由行自己带着，见 `data/outline.ts` 的 `OutlineRow`
  */
-import type { ContainerNode } from './nest.ts'
+import type { ContainerNode } from '../nest.ts'
 import type { DropUnit } from './protocol.ts'
 
 /** 拖拽层认的一个节点身份：真实工作区或工作区分组 */

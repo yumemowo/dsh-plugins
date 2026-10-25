@@ -4,8 +4,8 @@ import * as React from 'react'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { DndProvider, useDnd } from '../src/client/hooks/useDnd.ts'
-import { SCROLL_ATTRIBUTE } from '../src/client/data/protocol.ts'
-import type { DragPlan } from '../src/client/data/protocol.ts'
+import { SCROLL_ATTRIBUTE } from '../src/client/data/dnd/protocol.ts'
+import type { DragPlan } from '../src/client/data/dnd/protocol.ts'
 import { fire } from './support/dndDom.ts'
 
 /**

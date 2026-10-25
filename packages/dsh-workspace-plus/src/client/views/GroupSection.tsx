@@ -21,9 +21,9 @@ import {
   regionProps,
   sessionGroupRegionKey,
   sessionGroupZoneKey,
-} from '../data/protocol.ts'
+} from '../data/dnd/protocol.ts'
 import type { OutlineRow } from '../data/outline.ts'
-import type { OrderDragging } from '../data/protocol.ts'
+import type { OrderDragging } from '../data/dnd/protocol.ts'
 import styles from './components/rows.module.css'
 import clsx from 'clsx'
 

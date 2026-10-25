@@ -17,12 +17,12 @@
  */
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
-import { rowIdProps, zoneProps } from '../data/protocol.ts'
-import type { DragPlan } from '../data/protocol.ts'
-import { maybeDropSearcher } from '../data/dropSearcher.ts'
-import type { DropHit, DropSearcher } from '../data/dropSearcher.ts'
+import { rowIdProps, zoneProps } from '../data/dnd/protocol.ts'
+import type { DragPlan } from '../data/dnd/protocol.ts'
+import { maybeDropSearcher } from '../data/dnd/dropSearcher.ts'
+import type { DropHit, DropSearcher } from '../data/dnd/dropSearcher.ts'
 import { debugLog, debugWarn } from '../utils/debug.ts'
-import { autoScrollStep } from '../data/scroll.ts'
+import { autoScrollStep } from '../data/dnd/scroll.ts'
 import {
   applyDimmed,
   applyDropMarks,

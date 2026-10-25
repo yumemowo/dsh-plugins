@@ -61,11 +61,11 @@ import {
   workspaceBodyKey,
   workspaceHeadKey,
   workspaceRegionKey,
-} from '../data/protocol.ts'
+} from '../data/dnd/protocol.ts'
 import { useOutline } from '../hooks/useOutline.ts'
-import { stretchDragPlan } from '../data/plan.ts'
+import { stretchDragPlan } from '../data/dnd/plan.ts'
 import { debugWarn } from '../utils/debug.ts'
-import { indexOutline } from '../data/outlineIndex.ts'
+import { indexOutline } from '../data/dnd/outlineIndex.ts'
 import type { RootListing } from '../data/outline.ts'
 import type { SessionRow } from '../data/types.ts'
 import type { HostInfo } from '../hostInfo.ts'

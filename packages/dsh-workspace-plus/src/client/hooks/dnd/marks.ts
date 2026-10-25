@@ -19,10 +19,10 @@ import {
   SCOPE_ATTRIBUTE,
   SCROLL_ATTRIBUTE,
   ZONE_ATTRIBUTE,
-} from '../../data/protocol.ts'
-import type { DragPlan, DropArea, DropUnit } from '../../data/protocol.ts'
-import type { OrderHit, DropTarget } from '../../data/dropSearcher.ts'
-import type { ScrollBox } from '../../data/scroll.ts'
+} from '../../data/dnd/protocol.ts'
+import type { DragPlan, DropArea, DropUnit } from '../../data/dnd/protocol.ts'
+import type { OrderHit, DropTarget } from '../../data/dnd/dropSearcher.ts'
+import type { ScrollBox } from '../../data/dnd/scroll.ts'
 
 /**
  * 一处落点标记：画在哪个元素上、带哪个值

@@ -10,8 +10,8 @@
  *
  * 纯逻辑，不碰 React、不碰 DOM
  */
-import { beforeIdOf, placeBefore } from '../../order.ts'
-import type { Anchor } from '../../order.ts'
+import { beforeIdOf, placeBefore } from '../../../order.ts'
+import type { Anchor } from '../../../order.ts'
 import { dropAreasOf } from './relations.ts'
 import type { DragPlan, DragSource, DropAnchor, DropArea, DropUnit } from './protocol.ts'
 import { workspaceHeadKey } from './protocol.ts'

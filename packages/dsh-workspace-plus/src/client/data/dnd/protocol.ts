@@ -237,7 +237,7 @@ export function scopeProps(): Record<string, string> {
 /**
  * 按对象取的一层区域键封装
  *
- * 形状由 `data/zones.ts` 的 `bodyKeyOf` / `headKeyOf` / `regionKeyOf` 一处决定，这里只把
+ * 形状由 `data/dnd/zones.ts` 的 `bodyKeyOf` / `headKeyOf` / `regionKeyOf` 一处决定，这里只把
  * 「我在画哪个工作区、哪个分组」翻译成节点身份。分成两个模块是因为渲染层还不认识节点身份，
  * 而拖拽层只按节点身份要键
  */

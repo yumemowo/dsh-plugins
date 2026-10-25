@@ -2,8 +2,8 @@ import { deriveNesting } from '../../src/client/data/nest.ts'
 import type { NestingBinding } from '../../src/client/data/nest.ts'
 import { buildOutline } from '../../src/client/data/outline.ts'
 import type { OutlineRow } from '../../src/client/data/outline.ts'
-import { indexOutline } from '../../src/client/data/outlineIndex.ts'
-import type { OutlineIndex } from '../../src/client/data/outlineIndex.ts'
+import { indexOutline } from '../../src/client/data/dnd/outlineIndex.ts'
+import type { OutlineIndex } from '../../src/client/data/dnd/outlineIndex.ts'
 import { ALL_ENTRIES } from '../../src/rootEntry.ts'
 import type { RootEntryAddress } from '../../src/rootEntry.ts'
 import {
@@ -17,7 +17,7 @@ import {
   workspaceBodyKey,
   workspaceHeadKey,
   workspaceRegionKey,
-} from '../../src/client/data/protocol.ts'
+} from '../../src/client/data/dnd/protocol.ts'
 
 /**
  * 按生产那条链装配一份索引

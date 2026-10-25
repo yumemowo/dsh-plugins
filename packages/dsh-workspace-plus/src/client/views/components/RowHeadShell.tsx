@@ -12,7 +12,7 @@
 import clsx from 'clsx'
 import type { ReactElement, ReactNode, Ref } from 'react'
 import { handleRowKeyDown } from './rowKeyboard.ts'
-import { draggingProps } from '../../data/protocol.ts'
+import { draggingProps } from '../../data/dnd/protocol.ts'
 import type { RowContextMenuEvent } from './RowContextMenu.tsx'
 import type { DragStartEvent } from '../../hooks/useDnd.ts'
 import styles from './rows.module.css'

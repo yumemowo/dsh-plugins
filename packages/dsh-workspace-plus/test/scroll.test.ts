@@ -8,8 +8,8 @@
  * 全是不碰 DOM 的算术，容器矩形与指针位置都直接给数
  */
 import { describe, expect, it } from 'vitest'
-import { SCROLL_MAX_SPEED, SCROLL_REACH, autoScrollStep } from '../src/client/data/scroll.ts'
-import type { ScrollBox } from '../src/client/data/scroll.ts'
+import { SCROLL_MAX_SPEED, SCROLL_REACH, autoScrollStep } from '../src/client/data/dnd/scroll.ts'
+import type { ScrollBox } from '../src/client/data/dnd/scroll.ts'
 
 /** 一个上下都够长的容器 */
 function box(top: number, bottom: number, left = 0, right = 300): ScrollBox {

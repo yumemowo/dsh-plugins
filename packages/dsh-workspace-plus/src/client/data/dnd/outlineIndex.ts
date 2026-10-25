@@ -4,9 +4,9 @@
  * 拖拽要问的都不是「第几行」，而是「这个工作区在哪一片、它上面是谁、同层还有谁」，
  * 因此把序列扫一遍装成几份索引。它不引入新事实：每一项都能在行上直接读到
  */
-import { nearestAncestorAnyScope } from './nest.ts'
-import type { ContainerNode } from './nest.ts'
-import type { OutlineRow } from './outline.ts'
+import { nearestAncestorAnyScope } from '../nest.ts'
+import type { ContainerNode } from '../nest.ts'
+import type { OutlineRow } from '../outline.ts'
 import { looseZoneKeyOf, zoneKeysOf } from './zones.ts'
 import type { NodeRef } from './zones.ts'
 

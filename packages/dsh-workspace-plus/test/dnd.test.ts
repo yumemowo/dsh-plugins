@@ -24,15 +24,15 @@ import {
   virtualWorkspaceHeadKey,
   workspaceHeadKey,
   workspaceRegionKey,
-} from '../src/client/data/protocol.ts'
-import type { DragPlan, DropAnchor, DropArea } from '../src/client/data/protocol.ts'
+} from '../src/client/data/dnd/protocol.ts'
+import type { DragPlan, DropAnchor, DropArea } from '../src/client/data/dnd/protocol.ts'
 import {
   orderDragPlan,
   sessionGroupingPlan,
   stretchDragPlan,
   workspaceTreeDragPlan,
-} from '../src/client/data/plan.ts'
-import { areaShapeOf } from '../src/client/data/zones.ts'
+} from '../src/client/data/dnd/plan.ts'
+import { areaShapeOf } from '../src/client/data/dnd/zones.ts'
 import { indexFrom } from './support/outlineFixture.ts'
 
 /**

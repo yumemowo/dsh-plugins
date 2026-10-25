@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { maybeDropSearcher } from '../src/client/data/dropSearcher.ts'
-import type { DropArea, DropUnit } from '../src/client/data/protocol.ts'
+import { maybeDropSearcher } from '../src/client/data/dnd/dropSearcher.ts'
+import type { DropArea, DropUnit } from '../src/client/data/dnd/protocol.ts'
 
 /**
  * 检测器的行为

@@ -5,8 +5,8 @@ import {
   looseZoneKeyOf,
   regionKeyOf,
   zoneKeysOf,
-} from '../src/client/data/zones.ts'
-import type { NodeRef } from '../src/client/data/zones.ts'
+} from '../src/client/data/dnd/zones.ts'
+import type { NodeRef } from '../src/client/data/dnd/zones.ts'
 
 /**
  * 区域键与落点单位的写法
