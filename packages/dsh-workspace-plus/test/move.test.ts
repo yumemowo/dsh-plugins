@@ -115,6 +115,44 @@ describe('planWorkspaceMove', () => {
     expect(plan.unnested).toEqual([])
   })
 
+  it('keeps a binding whose parent workspace moves into the same scope', () => {
+    // 父工作区也在这次移动的名单里（它跟着一起换片），挪完之后两者仍同处一片
+    // 这条归属照样成立——判据看的是「挪完之后在哪」，不是挪之前那一份快照
+    const plan = planWorkspaceMove({
+      workspaceId: 'ws-1',
+      target: { scope: 'wg-2' },
+      followers: ['ws-2'],
+      ...state(
+        { 'ws-1': 'wg-1', 'ws-2': 'wg-1' },
+        { 'ws-2': { workspaceId: 'ws-1', groupId: 'group-a' } },
+      ),
+    })
+
+    expect(plan.reslotted).toEqual([
+      { workspaceId: 'ws-1', scope: 'wg-2' },
+      { workspaceId: 'ws-2', scope: 'wg-2' },
+    ])
+    expect(plan.unnested).toEqual([])
+  })
+
+  it('keeps a binding whose parent workspace follows a follower', () => {
+    // 跟随者自己也是下一层的父工作区：整条链一起换片，每一条归属都照样成立
+    const plan = planWorkspaceMove({
+      workspaceId: 'ws-1',
+      target: { scope: 'wg-2' },
+      followers: ['ws-2', 'ws-3'],
+      ...state(
+        { 'ws-1': 'wg-1', 'ws-2': 'wg-1', 'ws-3': 'wg-1' },
+        {
+          'ws-2': { workspaceId: 'ws-1', groupId: 'group-a' },
+          'ws-3': { workspaceId: 'ws-2', groupId: 'group-b' },
+        },
+      ),
+    })
+
+    expect(plan.unnested).toEqual([])
+  })
+
   it('writes nothing for a workspace with no binding and no scope change', () => {
     const plan = planWorkspaceMove({
       workspaceId: 'ws-1',

@@ -3,15 +3,18 @@
  *
  * 用户拖一行时只说了一件事：「这一行到那一片去」。但那一片可能同时意味着三份落盘数据：
  * 虚拟工作区分组归属、会话分组归属、以及跟随它的那几个后代。三者该不该写，
- * 由**来源与目的地的差异**决定，不是由调用方各写一遍——同一个动作在拖拽、菜单、
+ * 由来源与目的地的差异决定，不是由调用方各写一遍——同一个动作在拖拽、菜单、
  * 以及将来的其它入口上都只有这一份判断。
  *
  * 三个判据：
  * - 虚拟分组归属只在「此刻不在目的地那一片」时写
  * - 会话分组归属只在目的地指名了一个分组时写（写它天然覆盖原来那一份）
- * - 没有指名分组、而原来那份归属的父工作区**不在目的地那一片**时，清掉它——
+ * - 没有指名分组、而原来那份归属的父工作区挪完之后不在目的地那一片时，清掉它——
  *   这条归属已经不可能生效（见 `deriveNesting` 的同片判定），留着只是死数据，
  *   而且工作区将来被挪回那一片时会毫无征兆地复活
+ *
+ * 第三条问的是「挪完之后」：跟随者名单里的工作区自己也在这一批要挪的里面，
+ * 一份归属还成不成立要看父工作区挪完之后在哪，不能读挪之前那份快照
  */
 
 /** 一个工作区此刻的会话分组归属 */
@@ -75,11 +78,17 @@ export function planWorkspaceMove(input: WorkspaceMoveInput): WorkspaceMoveWrite
     return { reslotted, nested: moving, unnested: [] }
   }
 
-  // 3. 没有指名分组：原来那份归属的父工作区若不在目的地这一片，它已经不可能生效
+  // 3. 没有指名分组：归属的父工作区挪完之后若不在目的地这一片，它已经不可能生效
+  //
+  // 父工作区自己也在这份 `moving` 名单里时，它跟着一起换片，归属照样成立
+  // 读挪之前那份快照会把它顺手清掉，子工作区因此跟着换片、自己的会话分组归属却没了
+  const scopeAfter = (id: string): string =>
+    moving.includes(id) ? target.scope : scopeOf(id)
+
   const unnested = moving.filter((id) => {
     const binding = bindingOf(id)
     if (binding === undefined) return false
-    return scopeOf(binding.workspaceId) !== target.scope
+    return scopeAfter(binding.workspaceId) !== target.scope
   })
 
   return { reslotted, nested: [], unnested }
