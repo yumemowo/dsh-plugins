@@ -657,7 +657,7 @@ describe('building an index driven workspace drag plan', () => {
 
 
 
-describe('the two markers the mechanism owns', () => {
+describe('the attribute names the mechanism owns', () => {
   it('keeps the zone and row markers on separate attributes', () => {
     // 同一个元素上两种标记各说一件事：区域键回答「这是哪一段」，行 id 回答「这是哪一行」
     // 合成一个属性会让一个既接整块投放又可作参照行的元素只说得出一件事

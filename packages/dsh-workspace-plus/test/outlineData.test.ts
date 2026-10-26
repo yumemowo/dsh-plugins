@@ -46,7 +46,7 @@ function listOf(
   return listRoot({ workspaceIds, virtualGroups: groups, nesting })
 }
 
-describe('buildLayout', () => {
+describe('layoutWorkspaceRows', () => {
   it('keeps sessions inside their group in metadata order', () => {
     const layout = rowsOf([row('a'), row('b'), row('c')], [group('g1', '前端', ['c', 'a'])])
 
@@ -229,7 +229,7 @@ describe('listRoot', () => {
   })
 })
 
-describe('归属反查', () => {
+describe('the group a workspace belongs to', () => {
   it('reports the group that holds the workspace', () => {
     const sections = listOf(['w1', 'w2'], [wgroup('g1', '前端', ['w1'])]).groups
 

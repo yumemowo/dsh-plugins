@@ -185,7 +185,7 @@ describe('resolveFocus', () => {
   })
 })
 
-describe('focusedLayout', () => {
+describe('focusListing', () => {
   const entries = rootPickerEntries(LAYOUT, VIEWS)
   /**
    * 解析之后再裁剪，与容器那条链一致
