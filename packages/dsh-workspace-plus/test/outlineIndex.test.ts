@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { NestingBinding } from '../src/client/data/nest.ts'
+import type { OutlineRow } from '../src/client/data/outline.ts'
+import type { ContainerNode } from '../src/client/data/nest.ts'
 import { dropAreasOf } from '../src/client/data/dnd/relations.ts'
 import type { OutlineIndex } from '../src/client/data/dnd/outlineIndex.ts'
+import { zoneKeysOf } from '../src/client/data/dnd/zones.ts'
 import type { NodeRef } from '../src/client/data/dnd/zones.ts'
 import { indexFrom, outlineRowsFrom } from './support/outlineFixture.ts'
 import { virtualAddress, workspaceAddress } from '../src/rootEntry.ts'
@@ -42,7 +45,44 @@ function fixture(input: Fixture): OutlineIndex {
   return indexFrom(input)
 }
 
-describe('buildOutlineIndex', () => {
+/**
+ * 某个容器里的全部成员，直接从行序列读
+ *
+ * 索引不再交出这份名单：它的调用方要的是「这一层列几条」（`rootsOf`），而「这个容器里有几个成员」
+ * 只有用例需要拿来当对照基线。容器按形状比：行序列与索引各自持有一批发牌，引用不可跨过去比
+ * @param rows - 行序列
+ * @param container - 那一个容器
+ */
+function membersIn(rows: readonly OutlineRow[], container: ContainerNode): NodeRef[] {
+  const same = (each: ContainerNode): boolean => {
+    if (each.kind !== container.kind) return false
+    if (each.kind === 'root' || container.kind === 'root') return true
+    if (each.kind === 'virtual' && container.kind === 'virtual') return each.id === container.id
+    if (each.kind === 'group' && container.kind === 'group') {
+      return each.workspaceId === container.workspaceId && each.groupId === container.groupId
+    }
+    return false
+  }
+  const seen = new Set<string>()
+  const out: NodeRef[] = []
+  for (const row of rows) {
+    if (!same(row.container)) continue
+    if (row.kind === 'workspaceHead') {
+      if (seen.has('w/' + row.workspaceId)) continue
+      seen.add('w/' + row.workspaceId)
+      out.push(ws(row.workspaceId))
+    }
+    if (row.kind === 'virtualHead') {
+      const id = row.groupId ?? ''
+      if (seen.has('v/' + id)) continue
+      seen.add('v/' + id)
+      out.push(vg(id))
+    }
+  }
+  return out
+}
+
+describe('indexOutline', () => {
   it('holds only the nodes the focused list draws', () => {
     // 聚焦一片内容之后界面上只剩那一片：索引里的节点因此也只该是那几行。
     // 目标范围大于渲染范围时，计划里会出现界面上根本不存在的落点
@@ -56,7 +96,7 @@ describe('buildOutlineIndex', () => {
       focused: virtualAddress('vg-2'),
     })
 
-    expect(index.workspaceNodes.map((node) => node.id)).toEqual(['ws-2'])
+    expect(index.allNodes().map((node) => node.kind + '/' + node.id)).toEqual(['workspace/ws-2'])
     expect(index.virtualGroups).toEqual([])
     expect(index.containerOf(ws('ws-2'))).toEqual({ kind: 'root' })
   })
@@ -73,7 +113,7 @@ describe('buildOutlineIndex', () => {
       focused: workspaceAddress('ws-2'),
     })
 
-    expect(index.workspaceNodes.map((node) => node.id)).toEqual(['ws-2'])
+    expect(index.allNodes().map((node) => node.kind + '/' + node.id)).toEqual(['workspace/ws-2'])
     expect(index.containerOf(ws('ws-2'))).toEqual({ kind: 'root' })
     expect(index.rootsOf(index.containers.root)).toEqual([ws('ws-2')])
   })
@@ -102,13 +142,15 @@ describe('buildOutlineIndex', () => {
 
   it('leaves a nested loose workspace out of the root entries', () => {
     // 根节点那一层的条目是「渲染层要列出来的那些」：被嵌套的工作区在父工作区体内渲染，不在这一层
-    const index = fixture({
+    // 两者同属根节点那一个容器，因此「容器里有几个成员」与「这一层列几条」是两件事
+    const input = {
       workspaceIds: ['ws-1', 'ws-c1'],
       paths: { 'ws-1': '/repo', 'ws-c1': '/repo/pkg' },
-    })
+    }
+    const index = fixture(input)
 
     expect(index.rootsOf(index.containers.root)).toEqual([ws('ws-1')])
-    expect(index.membersOf(index.containers.root)).toEqual([ws('ws-1'), ws('ws-c1')])
+    expect(membersIn(outlineRowsFrom(input), index.containers.root)).toEqual([ws('ws-1'), ws('ws-c1')])
   })
 
   it('hands back one instance per node and per container', () => {
@@ -121,7 +163,8 @@ describe('buildOutlineIndex', () => {
     expect(index.containerOf(vg('vg-1'))).toBe(index.containers.root)
     // 两次取同一段兄弟交回同一批节点实例
     expect(index.siblingsOf(ws('ws-2'))[0]).toBe(index.siblingsOf(ws('ws-1'))[0])
-    expect(index.siblingsOf(ws('ws-2'))[0]).toBe(index.parentOf(ws('ws-c1')))
+    // 容器与节点都可以按引用比较：rootsOf 交回的与 siblingsOf 交回的是同一批实例
+    expect(index.rootsOf(index.containers.virtualOf('vg-1'))[0]).toBe(index.siblingsOf(ws('ws-2'))[0])
   })
 
   it('reports the container each node belongs to', () => {
@@ -146,7 +189,7 @@ describe('buildOutlineIndex', () => {
     const index = fixture(base)
 
     // ws-c1 的父工作区落在同一个容器里，因此它渲染在父工作区体内，不是这一层的顶层
-    expect(index.membersOf(index.containers.virtualOf('vg-1'))).toEqual([
+    expect(membersIn(outlineRowsFrom(base), index.containers.virtualOf('vg-1'))).toEqual([
       ws('ws-1'),
       ws('ws-c1'),
       ws('ws-2'),
@@ -182,16 +225,15 @@ describe('buildOutlineIndex', () => {
     expect(index.siblingsOf(vg('vg-2'))).toEqual([vg('vg-1'), vg('vg-2')])
   })
 
-  it('reports the parent and the ancestor chain of a workspace', () => {
+  it('keeps a nested workspace out of the top level without losing its container', () => {
+    // 父子链本身不对外交：拖拽用的是 dropAncestorsOf 那一条边，而它与这里同一份归属
+    // 界面看得见的后果只有一条——被嵌套的那个不在这一层的顶层里，但它仍属这个容器
     const index = fixture(base)
 
-    expect(index.parentOf(ws('ws-1'))).toBeUndefined()
-    expect(index.parentOf(ws('ws-c1'))).toEqual(ws('ws-1'))
-    // 虚拟分组不参与工作区的父子链
-    expect(index.parentOf(vg('vg-1'))).toBeUndefined()
-    expect(index.ancestorsOf(ws('ws-c1'))).toEqual([ws('ws-1')])
-    expect(index.ancestorsOf(ws('ws-1'))).toEqual([])
-    expect(index.ancestorsOf(vg('vg-1'))).toEqual([])
+    expect(index.rootsOf(index.containers.virtualOf('vg-1'))).not.toContainEqual(ws('ws-c1'))
+    expect(index.containerOf(ws('ws-c1'))).toEqual(index.containers.virtualOf('vg-1'))
+    // 虚拟分组不参与工作区的父子链，它自己就是根节点那一层的条目
+    expect(index.containerOf(vg('vg-1'))).toEqual({ kind: 'root' })
   })
 
   it('ignores a workspace recorded by two virtual groups after the first', () => {
@@ -243,15 +285,25 @@ describe('the index and the row sequence', () => {
     expect(new Set(index.allNodes().map((node) => node.kind + '/' + node.id))).toEqual(fromRows)
   })
 
-  it('registers every zone the sequence says a row occupies', () => {
-    // 行上写着这一行占哪几格，命中层按同一批键把元素换算回身份。
+  it('gives a row the zones the key rules name for its node', () => {
+    // 行上写着这一行占哪几格，命中层按同一批键把元素换算回身份，键的形状由 zones.ts 一处决定
     // 两处对不上时指针落上去读不出节点，表现为「拖到这一片上没反应」
-    const zones = indexFrom(rich).nodesByZone()
-
+    // 因此这里逐行把「行上那几格」与「键规则给这个节点算出的那几格」比一遍
     for (const row of outlineRowsFrom(rich)) {
-      for (const key of row.zoneKeys) {
-        expect(zones.has(key), 'the index knows nothing about zone "' + key + '"').toBe(true)
+      const expected =
+        row.kind === 'workspaceHead'
+          ? zoneKeysOf(ws(row.workspaceId))
+          : row.kind === 'virtualHead'
+            ? zoneKeysOf(vg(row.groupId ?? ''))
+            : row.kind === 'groupHead'
+              ? zoneKeysOf({ kind: 'group', workspaceId: row.workspaceId, groupId: row.groupId ?? '' })
+              : undefined
+      // 会话行与空态不带区域键，它们的落点身份是行自己，由命中层按行 id 认
+      if (expected === undefined) {
+        expect(row.zoneKeys).toEqual([])
+        continue
       }
+      expect(row.zoneKeys, 'row "' + row.key + '" carries its own zones').toEqual(expected)
     }
   })
 
@@ -338,8 +390,8 @@ describe('drop relations', () => {
       groupIds: { 'ws-1': ['group-x'] },
     })
 
-    expect(index.dropParentOf(ws('ws-c1'))).toEqual({ kind: 'workspace', id: 'ws-1' })
-    expect(index.dropParentOf(ws('ws-c2'))).toEqual({ kind: 'workspace', id: 'ws-1' })
+    expect(index.dropAncestorsOf(ws('ws-c1'))).toEqual([{ kind: 'workspace', id: 'ws-1' }])
+    expect(index.dropAncestorsOf(ws('ws-c2'))).toEqual([{ kind: 'workspace', id: 'ws-1' }])
     // 两者的父节点相同，因此互为同层兄弟：一条来自路径、一条来自落盘归属
     expect(index.dropSiblingsOf(ws('ws-c1')).map((entry) => entry.id)).toEqual(['ws-c1', 'ws-c2'])
   })

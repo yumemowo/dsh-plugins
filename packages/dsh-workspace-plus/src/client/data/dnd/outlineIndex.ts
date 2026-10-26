@@ -7,7 +7,6 @@
 import { nearestAncestorAnyScope } from '../nest.ts'
 import type { ContainerNode } from '../nest.ts'
 import type { OutlineRow } from '../outline.ts'
-import { looseZoneKeyOf, zoneKeysOf } from './zones.ts'
 import type { NodeRef } from './zones.ts'
 
 /**
@@ -25,22 +24,10 @@ export interface OutlineIndex {
   }
   /** 节点落进的那一片，节点不在序列里时为 undefined */
   containerOf: (node: NodeRef) => ContainerNode | undefined
-  /** 一个容器里的全部成员，按界面顺序 */
-  membersOf: (container: ContainerNode) => readonly NodeRef[]
   /** 一个容器里的顶层成员：嵌进同容器内另一个成员的那些不在其中 */
   rootsOf: (container: ContainerNode) => readonly NodeRef[]
   /** 节点所在的那一段兄弟，按界面顺序 */
   siblingsOf: (node: NodeRef) => readonly NodeRef[]
-  /** 工作区节点的父节点，虚拟分组节点没有父节点 */
-  parentOf: (node: NodeRef) => NodeRef | undefined
-  /** 工作区节点的祖先链，从近到远 */
-  ancestorsOf: (node: NodeRef) => readonly NodeRef[]
-  /**
-   * 拖拽认的父节点：渲染归属与 cwd 路径上的祖先收成同一条边
-   *
-   * 拖拽只关心「它在谁里面」，不关心那条边是用户放的还是路径推出来的
-   */
-  dropParentOf: (node: NodeRef) => NodeRef | undefined
   /** 拖拽认的祖先链，从近到远 */
   dropAncestorsOf: (node: NodeRef) => readonly NodeRef[]
   /** 拖拽认的同层兄弟，按同一条边认 */
@@ -50,23 +37,13 @@ export interface OutlineIndex {
   /**
    * 节点归属哪个虚拟分组，不在任何分组里时为 undefined
    *
-   * 这是**归属**不是容器：被放进会话分组的子工作区容器已经变成那个分组，但它仍属于原来那个工作区分组
+   * 这是归属不是容器：被放进会话分组的子工作区容器已经变成那个分组，但它仍属于原来那个工作区分组
    */
   virtualGroupOf: (node: NodeRef) => NodeRef | undefined
   /** 一个工作区名下真实存在的会话分组 id，按界面序 */
   sessionGroupsOf: (node: NodeRef) => readonly string[]
-  /** 一个工作区 id 对应的节点身份，序列里没有它时 undefined */
-  workspaceNodeOf: (workspaceId: string) => NodeRef | undefined
   /** 全部分组节点，数组序即界面序 */
   virtualGroups: readonly NodeRef[]
-  /** 全部工作区节点，按界面序 */
-  workspaceNodes: readonly NodeRef[]
-  /**
-   * 区域键 → 节点身份的对照表
-   *
-   * 适配层用它把 DOM 元素（带区域键）映射回节点身份，检测层因此只认节点
-   */
-  nodesByZone: () => ReadonlyMap<string, NodeRef | ContainerNode>
   /** 序列里出现的全部节点，分组在前、工作区在后 */
   allNodes: () => readonly NodeRef[]
 }
@@ -265,19 +242,6 @@ export function indexOutline(
     return ids.map((id) => node('workspace', id))
   }
 
-  const ancestorsOf = (entry: NodeRef): readonly NodeRef[] => {
-    if (entry.kind === 'virtual') return []
-    const chain: NodeRef[] = []
-    const seen = new Set<string>([entry.id])
-    let current = workspaceParent.get(entry.id)
-    while (current !== undefined && !seen.has(current)) {
-      seen.add(current)
-      chain.push(node('workspace', current))
-      current = workspaceParent.get(current)
-    }
-    return chain
-  }
-
   /**
    * 拖拽认的父节点
    *
@@ -328,48 +292,18 @@ export function indexOutline(
     return undefined
   }
 
-  /** 区域键 → 节点，第一次问到时算一次 */
-  let zoneIndex: Map<string, NodeRef | ContainerNode> | undefined
-
   return {
     containers,
     containerOf,
-    membersOf,
     rootsOf,
     siblingsOf,
-    parentOf,
-    ancestorsOf,
-    dropParentOf,
     dropAncestorsOf,
     dropSiblingsOf,
     bindingOf: (entry) => (entry.kind === 'virtual' ? undefined : boundGroupOf.get(entry.id)),
     virtualGroupOf: (entry) => (entry.kind === 'virtual' ? entry : groupNodeOf(entry.id)),
     sessionGroupsOf: (entry) =>
       entry.kind === 'virtual' ? [] : [...(workspaceGroups.get(entry.id) ?? [])],
-    workspaceNodeOf: (workspaceId) =>
-      workspaceContainer.has(workspaceId) ? node('workspace', workspaceId) : undefined,
     virtualGroups: virtualNodes,
-    workspaceNodes,
     allNodes: () => [...virtualNodes, ...workspaceNodes],
-    nodesByZone: () => {
-      if (zoneIndex !== undefined) return zoneIndex
-      const built = new Map<string, NodeRef | ContainerNode>()
-      const add = (entry: NodeRef | ContainerNode): void => {
-        for (const key of zoneKeysOf(entry)) built.set(key, entry)
-      }
-      add(containers.root)
-      for (const entry of virtualNodes) add(entry)
-      for (const entry of workspaceNodes) {
-        add(entry)
-        // 未归组那一段不是独立的一块（它是工作区体内的一截），但它归那个工作区管：
-        // 指针停在上面时读出的身份因此是宿主工作区
-        built.set(looseZoneKeyOf(entry.id), entry)
-        for (const groupId of workspaceGroups.get(entry.id) ?? []) {
-          add(containers.groupOf(entry.id, groupId))
-        }
-      }
-      zoneIndex = built
-      return built
-    },
   }
 }
