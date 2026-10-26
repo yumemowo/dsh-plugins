@@ -235,7 +235,7 @@ describe('dragging a workspace row between virtual workspace groups', () => {
   })
 
   it('draws a line and moves a nested child workspace onto a root level row', async () => {
-    // 用户截图里的那一格：来源是分组里**真正嵌套着**的子工作区，目标是 root 层平铺的一行。
+    // 用户截图里的那一格：来源是分组里真正嵌套着的子工作区，目标是 root 层平铺的一行。
     // 界面上下它们相隔很远，但「移到 root 层那一行的旁边」是合法落点——
     // 落到那一行上同时是「移出分组」与「排到它前后」，两件事都写
     const { container, root, writes } = await mount({
@@ -260,8 +260,13 @@ describe('dragging a workspace row between virtual workspace groups', () => {
     const { container, root, writes } = await mount()
 
     fire(workspaceRow(container, 'ws-1'), 'dragstart')
-    fire(zone(container, 'root')!, 'dragover')
-    fire(zone(container, 'root')!, 'drop')
+    const rootZone = zone(container, 'root')!
+    fire(rootZone, 'dragover')
+    // 根节点那一片没有独立的落点单位：它既不点名一块、也不点名一行
+    // 框因此退回这一片自己的区域元素。这一档只有这里走得到——别处的片区都点了名
+    expect(rootZone.getAttribute('data-wg-drop')).toBe('inside')
+    expect(countMarked(container)).toBe(1)
+    fire(rootZone, 'drop')
     await flush()
 
     expect(writes.moves).toEqual([['ws-1', '']])
@@ -533,10 +538,10 @@ describe('a root level source beside an unrelated root level sibling', () => {
   it('draws one line on a whole block for a seam from either side', async () => {
     // 一处缝从上面看是前一条的下半、从下面看是后一条的上半，两处各画一条就成了两条线。
     // 无论指针从哪一侧靠近，读数都必须逐字相同：同一个标记、画在同一个元素上。
-    // 而且它必须画在**整块**上——贴着标题那一行画会让线只有半行宽，
+    // 而且它必须画在整块上——贴着标题那一行画会让线只有半行宽，
     // 读起来像「落点只覆盖那一行」
     const { container, root } = await mount({ workspaceGroups: [] })
-    // 上下半按**整块**量：落点覆盖整块，指针停在块里任何一处读出的都是同一件事
+    // 上下半按整块量：落点覆盖整块，指针停在块里任何一处读出的都是同一件事
     band(workspaceBlock(container, 'ws-1'), 0)
     band(workspaceBlock(container, 'ws-2'), 20)
 
@@ -841,7 +846,7 @@ describe('a row that is not a container', () => {
   })
 
   it('never marks a member row as a container, only the slice around it', async () => {
-    // 一条工作区行不是容器：落上去时**框**绝不描它自己，框落在它所在的那一片上。
+    // 一条工作区行不是容器：落上去时框绝不描它自己，框落在它所在的那一片上。
     // 线是另一件事——那一行可以作位次参照，因此它自己会带上 before / after
     const { container, root } = await mount()
 
@@ -896,7 +901,7 @@ describe('a row that is not a container', () => {
   it('moves a workspace into the virtual group of its cwd ancestor', async () => {
     // 来源按 cwd 已经是祖先工作区的子工作区，但它此刻平铺在根节点那一层：
     // 两者不在同一个虚拟分组里，渲染层因此没有把它嵌进去。
-    // 落到祖先体内是**真的会改变归属**的一次投放——它把来源移进祖先所在的那一片，
+    // 落到祖先体内是真的会改变归属的一次投放——它把来源移进祖先所在的那一片，
     // 移进去之后 cwd 关系才在界面上成立
     const { container, root, writes } = await mount({
       workspaceGroups: [{ id: 'wg-1', name: '工作区分组甲', workspaceIds: [PARENT_ID] }],
