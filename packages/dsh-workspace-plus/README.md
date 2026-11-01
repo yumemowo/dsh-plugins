@@ -83,7 +83,7 @@ dsh plugin --profile web add ./packages/dsh-workspace-plus
 
 ## 配置置顶区的两个数字
 
-置顶区静止时显示几条、置顶数量上限是多少，是两个插件配置项，默认 `5` 与 `20`。**设置页里没有这两项**：dsh 只把带 volatile 字段的插件列成可配置条目，具体表单要插件自己在客户端注册渲染页，本包没有注册（原因见 [置顶会话的实现计划](docs/session-pinning/implementation-plan.md)）。
+置顶区静止时显示几条、置顶数量上限是多少，是两个插件配置项，默认 `5` 与 `20`。**设置页里没有这两项**：dsh 只把带 volatile 字段的插件列成可配置条目，具体表单要插件自己在客户端注册渲染页，本包没有注册（原因见[置顶会话的实现记录](docs/session-pinning/implementation-notes.md#一两个可调项写成-volatile-字段不是普通字段)）。
 
 改法是编辑 profile 的 patch 层（`$DSH_HOME/profiles/<profile>/cordis.patch.yml`）：
 
@@ -152,7 +152,6 @@ dsh plugin --profile web add ./packages/dsh-workspace-plus
 | [客户端集成](docs/client-integration.md) | 对照模式、热重载与基线模块 |
 | [会话行指示器的备选方案](docs/session-row-indicator/README.md) | 指示器几何的六种解法与取舍 |
 | [置顶会话的最终设计](docs/session-pinning/design.md) | 最终设计有哪些元素、各自做什么 |
-| [置顶会话的实现计划](docs/session-pinning/implementation-plan.md) | 落地步骤、可调项归属与验收方式 |
 | [置顶会话的实现记录](docs/session-pinning/implementation-notes.md) | 落地时与计划正文不一致的三处与原因 |
 | [置顶会话的设计过程](docs/session-pinning/design-options.md) | 八个方案、被否理由与实测依据 |
 | [置顶会话的对照稿](docs/session-pinning/pinning-mockups.html) | 八个方案并排的可交互页面 |

@@ -2,7 +2,7 @@
 
 dsh-workspace-plus 侧边栏里的五类行——置顶会话、会话、会话分组、工作区、虚拟工作区——都可以被拖动，完成归组与排序两类操作。会话行只做归组与移出（不做段内排序，见「会话段没有顺序位」），置顶行与另外三类行做排序。本文记录这套拖拽基础设施的架构与顺序存储：手势怎么收、落点怎么算、顺序存哪里、多个拖拽环境怎么共存。
 
-实现分布在 `src/client/hooks/useDnd.ts`（机制层）、`src/client/hooks/dnd/marks.ts`（DOM 胶水：元素 ↔ 区域键 ↔ 像素）、`src/client/data/dnd/protocol.ts`（计划的形状、DOM 标记属性与区域键封装）、`src/client/data/dnd/plan.ts`（五类来源各自的计划构造）、`src/client/data/dnd/zones.ts`（区域键与落点单位的命名规则）、`src/client/data/outline.ts`（渲染按它逐层展开的行序列，以及由它装配的查询索引）、`src/client/data/dnd/relations.ts`（一个节点此刻能落到哪几片）、`src/client/data/dnd/dropSearcher.ts`（唯一的落点检测入口）、`src/client/data/move.ts`（一次移动要写哪几笔）、`src/client/data/pinned.ts`（置顶顺序合成与段键）、`src/order.ts`（一段顺序的换位换算）。本文是它们的架构说明，不逐文件复述。
+实现分布在 `src/client/hooks/useDnd.ts`（机制层）、`src/client/hooks/dnd/marks.ts`（DOM 胶水：元素 ↔ 区域键 ↔ 像素）、`src/client/data/dnd/protocol.ts`（计划的形状、DOM 标记属性与区域键封装）、`src/client/data/dnd/plan.ts`（四个构造器接住五类来源的计划构造）、`src/client/data/dnd/zones.ts`（区域键与落点单位的命名规则）、`src/client/data/dnd/relations.ts`（一个节点此刻能落到哪几片）、`src/client/data/dnd/dropSearcher.ts`（唯一的落点检测入口）、`src/client/data/dnd/scroll.ts`（边缘自动滚动的纯算术）、`src/client/data/dnd/outlineIndex.ts`（行序列上的查询表）、`src/client/data/outline.ts`（渲染按它逐层展开的行序列）、`src/client/hooks/useOutline.ts`（把行序列算一次交给渲染与索引两处）、`src/client/data/move.ts`（一次移动要写哪几笔）、`src/client/data/pinned.ts`（置顶顺序合成与段键）、`src/client/utils/debug.ts`（两级诊断日志的出口）、`src/order.ts`（一段顺序的换位换算）。本文是它们的架构说明，不逐文件复述。
 
 ## 总体架构：计划驱动
 
@@ -43,8 +43,8 @@ export interface DropArea {
    * 这一片何时算「指针落在它上面」
    *
    * `subtree`（缺省）：指针落进它范围内的任何地方都算
-   * `ownLevel`：中间隔了别的容器就不算。罩住整片列表的那一层必须这么声明，
-   * 否则指针停在任何一个成员上时它都会跟着接住
+   * `ownLevel`：中间隔了别的容器就不算
+   * 罩住整片列表的那一层必须这么声明，否则指针停在任何一个成员上时它都会跟着接住
    */
   hitArea?: 'subtree' | 'ownLevel'
   /** 放开时执行。闭包在计划构造时绑定全量顺序等数据，执行前自行复核 */
@@ -116,6 +116,8 @@ export interface DragPlan {
 
 **一片只接一种读法**：能给框的（祖先工作区、虚拟分组）是 `inside`，能给线的（同层兄弟、根节点平铺行）是 `order`。一格只归一片，这一条由检测器建表时的 `if (!byZone.has(zone))` 守住。
 
+索引只交出**调用方真会问的那几格**：容器发牌器、`containerOf` / `rootsOf` / `siblingsOf`、拖拽认的祖先与同层兄弟、会话分组归属与名单、分组节点表、全节点表。更细的中间量（一个容器的全部成员、父节点、按渲染归属算的祖先链、区域键反查表）留作模块内的私有量——它们的消费方都在这一个文件里，交出去只会多一份没人读的对外面。
+
 ### 一条行只有一种身份：要么是容器，要么是参照行
 
 一条工作区行能不能承接放入，只看它是不是**容器**。对用户来说，虚拟工作区分组与按 cwd 推导出来的父工作区是同一类东西：都是能把工作区收进去的容器。因此落回祖先工作区那一行，读作「成为它的子工作区」，写 `moveWorkspace` 或 `nestWorkspaces`。
@@ -170,7 +172,7 @@ export interface DragPlan {
 
 ## 落点检测只有一个入口
 
-`data/dnd/dropSearcher.ts` 是检测当前落点的唯一 API。它**只拿片区名单**，一次拖拽的名单就是计划里的 `areas`，收进 `maybeDropSearcher(areas)`；此后检测只剩 `checkDrop` 一个调用：
+`src/client/data/dnd/dropSearcher.ts` 是检测当前落点的唯一 API。它**只拿片区名单**，一次拖拽的名单就是计划里的 `areas`，收进 `maybeDropSearcher(areas)`；此后检测只剩 `checkDrop` 一个调用：
 
 ```ts
 // 前两个入参是 DOM 已经给出的两件事：那一点落在哪几格、压着哪一行
@@ -289,7 +291,7 @@ React 树与拖拽机制的唯一接口是 context 提供的一个稳定函数 `
 
 两条排除规则：内容没超出一屏的不进来（没什么可滚）；`overflow: hidden` 的也不进来。后者是实测出来的坑——这种元素同样吃 `scrollTop`，滚它会把被裁掉的内容在**没有滚动条**的情况下推着走。置顶区展开档静止时正是这一种，它要浮出才变成可滚。
 
-**滚动之后必须重算落点。** 程序化滚动不会重派 `dragover`（实测连续滚 6 次，事件数为 0，指针下的元素却已经换了），而 `pendingRef` 里存的还是滚之前那一格，照此提交会放进用户没看见的地方。因此滚动那一帧按同一个指针坐标用 `document.elementFromPoint` 重新命中一次。这条反查是这里的便利而非承重：jsdom 不实现它，取不到时跳过这一帧的重算，用例因此仍能在 node 环境下断言其余部分。
+**滚动之后必须重算落点。** 程序化滚动不会重派 `dragover`（实测连续滚 6 次，事件数为 0，指针下的元素却已经换了），而 `checkRef` 里存的还是滚之前那一格，照此提交会放进用户没看见的地方。因此滚动那一帧按同一个指针坐标用 `document.elementFromPoint` 重新命中一次。这条反查是这里的便利而非承重：jsdom 不实现它，取不到时跳过这一帧的重算，用例因此仍能在 node 环境下断言其余部分。
 
 指针位置只从 `dragover` 里取。拖拽期间浏览器只保证派发拖放那一族事件，`mousemove` 在原生拖放中根本不产生，不能靠它。起拖到指针第一次移动之间有一段静止，那时还没有坐标，循环空转而不退出——退出就再也接不上。
 
@@ -335,7 +337,7 @@ orderSlots: Record<string, string[]>  // 段键 → 手动顺序，缺省表示�
 
 顺带消解的两个既有问题：
 
-- **置顶边界可被混入。** 组内段曾是「手动序 + 默认序」的混合段，而拖拽机制对段一视同仁，非置顶会话可以被拖进置顶前缀里。撤回非置顶段的 `rows` 目标后，这条跨界路径在机制上不存在，不需要补运行时守卫。
+- **置顶边界可被混入。** 组内段曾是「手动序 + 默认序」的混合段，而拖拽机制对段一视同仁，非置顶会话可以被拖进置顶前缀里。撤回非置顶段的 `order` 目标后，这条跨界路径在机制上不存在，不需要补运行时守卫。
 - **整体接管的语义裂缝。** 整体接管把「手动排过的会话」与「未排过的会话」之间的相对关系留给实现猜，受害面现在收窄到置顶区——而置顶集合成员全是用户显式收录的，整体接管在那里不是裂缝而是正解。
 
 旧数据不做正式迁移：撤回会话段排序时，拖拽功能尚未在生产环境中使用过，无需为旧键补守护或兼容代码。读取侧不再认这两类键，写入侧也不清理。
@@ -380,21 +382,21 @@ orderSlots: Record<string, string[]>  // 段键 → 手动顺序，缺省表示�
 
 | 工况 | 落点档 | 写入 |
 | --- | --- | --- |
-| 置顶区手动排序 | `rows`，`pinned` 一格区域、行带参照标记 | `pinned` 槽位 |
-| 会话归组（含空分组） | `container`，分组头与整块分组两格 | `moveSession` |
-| 会话移出分组（落未归组段） | `container`，未归组段那一格（来源在分组里时），落点单位是所在工作区块 | `moveSession` |
-| 会话移出分组（落工作区标题行） | `container`，`workspaceHead` 那一格，落点单位同上是所在工作区块 | `moveSession` |
-| 会话分组之间排序 | `rows`，分组头一格一行 | `moveGroupBefore` |
-| 虚拟工作区之间排序 | `rows`，分组头一格一行 | `moveVirtualWorkspaceBefore` |
-| 工作区移入 / 移出虚拟工作区 | `container`，组头 + 组体 + 组内每行；移出落 `root` 与根节点平铺行 | `moveWorkspace` |
-| 工作区在虚拟工作区内排序 | `rows`，同层工作区行一格一行 | 官方 `insertBefore` |
-| 子工作区移入 / 移出会话分组 | `container`，祖先工作区体内的分组头；移出落父工作区行 | `nestWorkspaces` / `unnestWorkspaces`；跨片时先 `moveWorkspace` 到目标那一片 |
+| 置顶区手动排序 | `order`，`pinned` 一格区域，一格装多行因此每行一处单位 | `pinned` 槽位 |
+| 会话归组（含空分组） | `inside`，分组头与整块分组两格 | `moveSession` |
+| 会话移出分组（落未归组段） | `inside`，未归组段那一格（来源在分组里时），落点单位是所在工作区块 | `moveSession` |
+| 会话移出分组（落工作区标题行） | `inside`，`workspaceHead` 那一格，落点单位同上是所在工作区块 | `moveSession` |
+| 会话分组之间排序 | `order`，分组头一格一行 | `moveGroupBefore` |
+| 虚拟工作区之间排序 | `order`，分组头一格一行 | `moveVirtualWorkspaceBefore` |
+| 工作区移入 / 移出虚拟工作区 | `inside`，组头 + 组体 + 组内每行；移出落 `root` 与根节点平铺行 | `moveWorkspace` |
+| 工作区在虚拟工作区内排序 | `order`，同层工作区行一格一行 | 官方 `insertBefore` |
+| 子工作区移入 / 移出会话分组 | `inside`，祖先工作区体内的分组头；移出落父工作区行 | `nestWorkspaces` / `unnestWorkspaces`；跨片时先 `moveWorkspace` 到目标那一片 |
 | 折叠段的落点换算 | 锚点来自可见行，换算在全量成员顺序上做 | 与对应段同一写入 |
 | 拖到段尾 / 空段 | 段内空白读作 `inside`，追加到段尾 | 与参照行同一写入 |
 
 会话行自己**不带区域键**（只带可拖属性），因此落在组内任意一行上时命中层会一路向上走到包着它的容器那一格。这正是「拖到组内某一行上读作归组」成立的原因；若给会话行挂一格不进计划的键，那一行就会变成命中层停下的死区。工作区的标题行相反：它自己带一格 `workspaceHead`（工作区排序要按它算前后半），因此会话计划里必须**显式登记同一格别名**——目录性质的落点，拖到它上面与拖到未归组段那一格上是同一件事。
 
-同一个区域键在不同计划里可以配不同档（分组头在会话计划里是 `container`、在分组排序计划里是 `rows`）；但在**同一次**计划里一个键只能有一档。工作区计划里父工作区行可能同时够到「同层换位参照行」与「移出会话分组落点」两档，构造期让它先让开 `rows`、只留 `container`——两条读法都成立时，解除嵌套是用户看得见的那一层变化。
+同一个区域键在不同计划里可以配不同档（分组头在会话计划里是 `inside`、在分组排序计划里是 `order`）；但在**同一次**计划里一个键只能有一档。工作区计划里父工作区行可能同时够到「同层换位参照行」与「移出会话分组落点」两档，构造期让它先让开 `order`、只留 `inside`——两条读法都成立时，解除嵌套是用户看得见的那一层变化。
 
 ### 明确不做的
 
@@ -458,10 +460,10 @@ orderSlots: Record<string, string[]>  // 段键 → 手动顺序，缺省表示�
 
 | 层 | 用例 | 覆盖 |
 | --- | --- | --- |
-| 命中与计划 | `test/dnd.test.ts` | 命中几何、区域键、落点换算（`src/order.ts` 的 `placeBefore`）、会话归组计划（块 / 头 / 未归组段 / 工作区标题行，以及原地投放的构造期缺席）、工作区计划、折叠段保序 |
+| 计划构造 | `test/dnd.test.ts` | 区域键的写法、落点换算（`src/order.ts` 的 `placeBefore`）、会话归组计划（块 / 头 / 未归组段 / 工作区标题行，以及原地投放的构造期缺席）、工作区计划、折叠段保序、四个标记属性的名字 |
 | 顺序合成 | `test/pinned.test.ts` | 合成全分支：无槽位零变化、空槽位、槽位序优先、新成员接后、取消再置顶回原槽位、失效 id 丢弃、成员不重不漏 |
 | 宿主写入 | `test/service.test.ts` | `setSegmentOrder`（同序不写盘、空表删格）、`moveSession` 只改归属、`moveGroupBefore` / `moveVirtualWorkspaceBefore`（换位、锚点资格、相邻 noop）、`nestWorkspaces` / `unnestWorkspaces`、无关写入不擦槽位 |
-| 移动的那几笔 | `test/move.test.ts` | `planWorkspaceMove` 的三份名单：已在目的地不写、跨片才挪、跟随的子工作区、指名分组时不解除、没指名时丢掉失效归属 |
+| 移动的那几笔 | `test/move.test.ts` | `planWorkspaceMove` 的三份名单：已在目的地不写、跨片才挪、跟随的子工作区、指名分组时不解除、没指名时丢掉挪完之后失效的归属 |
 | 行序列与索引 | `test/outlineIndex.test.ts`、`test/zones.test.ts` | 容器与兄弟是两份名单、节点与容器恒交回同一实例、区域键、手动归属优先于 cwd、嵌套节点不进根节点条目 |
 | 纯格子检测 | `test/dropSearcher.test.ts` | 沿指针压着的那串格子由近到远找、一格只归一片、框与线各自独立、`ownLevel` 挡住外层的根节点、缝由下一条代言 |
 | 真实 DOM | `test/dndDom.test.tsx` / `test/pinnedDragDom.test.tsx` / `test/workspaceDragDom.test.tsx` | 拖起 / 压淡哪些（够不着的退下去、够得着的原样）/ 一份提交只画一圈 / 标记 / 提交一次 / 相邻 noop / 接管写整份 / 两表面联动 / 端到端往返 / 工作区移入移出、虚拟工作区内排序与子工作区嵌套的落点 |
@@ -477,23 +479,22 @@ jsdom 不做布局（`getBoundingClientRect()` 恒为零矩形）也不实现 `D
 
 **落点线的四个历史缺陷只能在这里量。** 线被裁剪盒吃掉、线画进容器内边距（看得见但指针命中不到）、同一处缝两条线、线画在被拖淡的那一块上——四条都长成「属性与命中全对而像素不对」的样子，jsdom 里一条都观察不到，这也是那批 DOM 用例通过却编码了错误前提的原因。`scripts/probes/drop-line.mjs` 因此不验具体某个位置，而是对每个候选元素逐一写标记、截图、数像素，四个不变量一起查。它的价值在能红：把 `top: 0` 改回 `-2px` 会报 11 处，把 `right: 4px` 改成 `right: 60%` 会报 25 处，给标记元素加一层压淡会报满页。
 
-**「标记挂在哪个元素上」与「线画在哪个像素上」是两半，由不同的东西守着。** 前一半由 jsdom 用例守（`test/orderDom.test.tsx` 里三条会因 `paintFor` 的格子优先级被破坏而红）；后一半由 `drag-drop-marks.mjs` 守，它挂真实组件、让命中层自己画，再量像素。
+**「标记挂在哪个元素上」与「线画在哪个像素上」是两半，由不同的东西守着。** 前一半由 jsdom 用例守（`test/pinnedDragDom.test.tsx` 里五条会因 `paintOf` 的「按行找单位」被破坏而红）；后一半由 `drag-drop-marks.mjs` 守，它挂真实组件、让命中层自己画，再量像素。
 
 `drag-drop-marks.mjs` 的判据有一条是「线必须画在带区域键的整块上，不能缩在行自己身上」。注入破坏验证过它能红：把 `applyHit` 改成「标记一律画在指针落着的那个元素上」，它报出「线画在行上（`SPAN.rows_headSurface`），而不是它所属的整块」——这正是历史缺陷「线缩到标题那一行」的形态，而 jsdom 在那个形态下属性与命中都还是对的，抓不到。
 
-它也不覆盖 `paintFor` 里「优先指针那一格」那条分支：本页面的场景中指针所在格恒等于该节点的第一格，破坏那一条探针输出不变。那一条由 jsdom 用例负责。
+它也不覆盖 `paintOf` 里「没有点名单位就退回这一片的区域元素」那一档：本页面的场景中每一处单位都点了名，破坏那一档探针输出不变。那一档由两条 jsdom 用例守着——`test/workspaceDragDom.test.tsx` 的 `moves the workspace out of its group when it lands on the root list`（根节点那一片既没点名块、也没点名行）与 `test/scrollDom.test.tsx` 的 `keeps the landing on what the pointer now points at after scrolling`。
 
 写这类探针时最花时间的不是判据，是把它们写对。这一份先后把三件事误判成代码缺陷：`inside` 框的 inset 描边被数成第二条线；用启动时取的行矩形去算起拖坐标，而 React 重排后那个坐标落在了会话行上（拖拽计划因此是会话而不是工作区）；指针停在压淡区上本来就没有标记。前两条靠取证元素链发现，第三条靠把「压淡区无标记」写成设计。
 
 ## 诊断日志
 
-拖拽的失败模式大多**在界面上看不出异常**：落点画对了、松手却没写入；写入发了、宿主持有的分组列表里却没有那一项。这类问题靠观察界面无法定位，只能看链路上每一步的现场。因此机制层与服务层各留了几处诊断日志。
+拖拽的失败模式大多**在界面上看不出异常**：落点画对了、松手却没写入；写入发了、宿主持有的分组列表里却没有那一项。这类问题靠观察界面无法定位，只能看链路上每一步的现场。因此机制层与服务层各留了几处诊断日志。浏览器侧那一批今天就能看到；服务层那一批打进 `ctx.logger` 之后没有出口，见本节末尾。
 
-打开方式三选一：
+两种打开方式：
 
 - 浏览器控制台执行 `__workspacePlusDebug()`，当场生效，不必刷新
 - 浏览器控制台执行 `localStorage.setItem('workspace-plus:debug', '1')` 之后刷新，跨会话保持
-- 宿主启动时设置环境变量 `WORKSPACE_PLUS_DEBUG=1`
 
 关掉用 `__workspacePlusDebug(false)`，它同时清掉 localStorage 那一格。
 
@@ -503,20 +504,27 @@ jsdom 不做布局（`getBoundingClientRect()` 恒为零矩形）也不实现 `D
 
 | 级别 | 位置 | 打什么 |
 | --- | --- | --- |
-| 常开 | 浏览器 | `drag begin`：被拖的来源、计划里有哪些格、其中多少格在 DOM 上真的找到了元素、几块被压淡 |
+| 常开 | 浏览器 | `drag begin`：被拖的来源、计划里有哪些格、几块被压淡 |
 | 常开 | 浏览器 | `commit`：松手时提交的框与线 |
 | 常开 | 浏览器 | `snapshot applied`：宿主回来的那份分组状态 |
 | 常开 | 浏览器 | `drop with no landing`：松手时没有任何落点 |
 | 常开 | 浏览器 | `drop event`：浏览器真的派了 `drop`（与上一条对照可分清「没派 `drop`」与「派了但没提交」） |
-| 常开 | 浏览器 | `teardown`：监听从哪条路径被摘掉（`dragend` / `commit` / `provider-unmount`） |
+| 常开 | 浏览器 | `teardown`：监听从哪条路径被摘掉（`dragend` / `commit` / `provider-unmount` / `begin-drag-overwrite`） |
 | 常开 | 浏览器 | `group change failed`：写入被宿主拒绝 |
-| 常开 | 终端 | `moveWorkspace 写入完成`：写的是哪个工作区、写进哪个分组、写完之后各分组的成员 |
-| 常开 | 终端 | `moveWorkspace 拒绝写入，分组不存在`：客户端拿了一个服务端已经没有的分组 id |
+| 常开 | 浏览器 | `pin change failed`：置顶切换被宿主拒绝 |
+| 常开 | 浏览器 | `workspace rename failed`：改名被宿主拒绝 |
+| 常开 | 浏览器 | `write: moveToGroup` / `write: reorder` / `write: nestInto` / `write: unnest`：一次投放落到哪个写入出口、带的是哪个工作区与目的地 |
+| 停用 | 终端 | `moveWorkspace 写入完成`：写的是哪个工作区、写进哪个分组、写完之后各分组的成员 |
+| 停用 | 终端 | `moveWorkspace` / `moveSession` 的「拒绝写入，分组不存在」：客户端拿了一个服务端已经没有的分组 id |
+| 停用 | 终端 | `setSegmentOrder 顺序与现状逐位相同，跳过写入`：客户端那边的换位换算漏判了一次无变化 |
+| 停用 | 终端 | `moveGroupBefore` / `moveVirtualWorkspaceBefore` 的「换位对不上」：来源或锚点已经不在那一份顺序里 |
 | 开关 | 浏览器 | `hit`：指针坐标、指针落着的格、命中的节点、框与线各指向谁、画出来的标记 |
 
-前三行是链路骨架：缺一条就说明那一步根本没执行，这比任何内容都先要看。后五行是「本该落下去却没落下」的分叉，写入被拒绝而界面已经画过落点，用户看到的就是「拖了没反应」。它们都不能依赖用户事先打开什么开关，否则故障现场什么都不留。
+`drag begin` 到 `teardown` 这六行是链路骨架：缺一条就说明那一步根本没执行，这比任何内容都先要看。浏览器侧那三行「写入被拒 / 改名被拒 / 置顶被拒」与终端侧那三条拒绝理由都是「本该落下去却没落下」的分叉：写入被跳过而界面已经画过落点，用户看到的就是「拖了没反应」。这些都不能依赖用户事先打开什么开关，否则故障现场什么都不留。终端侧唯一一条成功日志是 `moveWorkspace 写入完成`，用来对照「发了这一笔而它没到」。
 
-**宿主侧这几条用 `error` 级别而不是 `warn`。** cordis 的 exporter 按「阈值 < 级别就丢弃」过滤，`warn` 的级别是 2、默认阈值是 1，因此 `warn` 在多数配置下根本不会输出；`error` 是 0，任何默认配置都能看到。这条判断是从 cordis 的 `LoggerLevel` 与 `_method` 的实现里读出来的，不是猜的。
+`write:` 那四条常开而不是归进 `hit`，因为它们答的是另一个问题：`hit` 说「画出来的落点指向谁」，`write:` 说「松手之后真的发了哪一笔」。框与线各自沿格子找，两者可以同时命中，落到哪个写入出口只有这四条能看出来——落点画对了却走错出口时，前者一切正常。
+
+**宿主侧那四条今天打不出来。** 它们经 `ctx.logger` 走出去，而宿主没有注册任何把日志写到终端的 exporter，因此打进缓冲之后就没有下文。`src/service.ts` 里的 `logWarn` / `logInfo` 因此停用，函数体那一行留着注释；各处调用点不动，等本插件自己注册 exporter 之后一并恢复。恢复之后仍要用 `error` 级别而不是 `warn`：cordis 的 exporter 按「阈值 < 级别就丢弃」过滤，`warn` 的级别是 2、默认阈值是 1，因此 `warn` 在多数配置下照样不会输出，`error` 是 0。这条判断是从 cordis 的 `LoggerLevel` 与 `_method` 的实现里读出来的，不是猜的。
 
 一次正常拖拽的日志大致长这样：
 

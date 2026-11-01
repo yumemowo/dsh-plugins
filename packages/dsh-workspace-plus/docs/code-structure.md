@@ -10,6 +10,7 @@
 src/
 ├── rootEntry.ts                根节点条目地址的形状与纯变换（宿主与浏览器共用）
 ├── pickerState.ts              菜单状态的形状与纯变换（同上，见 [数据存储](data-storage.md)）
+├── order.ts                    一段顺序的换位换算（挪到某成员之前 / 之后 / 末尾，拖拽与宿主写入共用）
 └── client/
     ├── index.ts                插件入口：语言包注册、remote 挂载、插槽注册、对照开关
     ├── locales.ts              命名空间声明与中英字典（键名取官方叫法）
@@ -17,7 +18,6 @@ src/
     ├── official.ts             官方 workspace 语言包与相对时间的复用面
     ├── directoryFlow.ts        官方 directoryFlow 洞的占用者读数（添加工作区的交互来源）
     ├── hostInfo.ts             宿主固定事实（home 目录）的读数（悬停卡片的路径缩写要用）
-    ├── order.ts                一段顺序的换位换算（挪到某成员之前 / 之后 / 末尾，三处写入共用）
     ├── useFlipMarker.ts        量区域矩形、按需在 body 上挂浮层翻转标记
     ├── actions.ts              RegionActions / RegionDataHooks（组件与宿主的接口）
     ├── compare.tsx             对照模式：挂进原生右侧栏 tab
@@ -57,6 +57,7 @@ src/
     ├── hooks/                  与具体业务无关的通用 hook
     │   ├── useDnd.ts           行拖拽机制层（DndProvider、beginDrag、监听、自动滚动与提交，见 [行拖拽](row-drag.md)）
     │   ├── dnd/marks.ts        拖拽的 DOM 胶水（元素 ↔ 区域键 ↔ 像素：绘制表、压淡范围、可滚容器）
+    │   ├── useOutline.ts       把行序列算一次，交给渲染与查询索引两处（同一批行，见 [行拖拽](row-drag.md)）
     │   ├── useHoverCapable.ts  设备是否具备悬停能力（环境读数，置顶区 expand 档的可用前提）
     │   ├── useLocale.ts        区域文案的唯一读取入口（RegionLocaleProvider + useLocale）
     │   ├── useLocalViewOptions.ts  浏览器 store 里展示方式 / 指示器样式的读取入口（同上）
@@ -111,7 +112,7 @@ src/
 
 文案不下传：容器把本包翻译函数与投影后的文案表合成一个 `RegionLocale` 交给 `useLocale.ts` 的 `RegionLocaleProvider`，需要文案的组件用 `useLocale()` 自取，因此组件接口里没有 `t` / `labels` 这两格。浏览器内持久化状态收在 `store/`——插槽的 `store` 座位只接受一个 `StoreDecl`，而 `persist` 整份序列化状态，后续新增的本地状态要并进同一个状态对象（展示方式、指示器样式与三层折叠态现在共用它）。**这类状态一律不逐层传 props，统一经 provider + 具名 hook 取**：`useLocalViewOptions.ts` 装展示方式与指示器样式，`useExpansion.ts` 装三层折叠态。store 之外的状态仍按各渲染区实际消费的形状下发。
 
-`WorkspaceGroupsRegion.tsx` 按「数据源 / 快照 / 派生布局 / 交互状态 / 命令 / 容器」分段，段间有 `// ── … ──` 分节标记。这些 hook 与容器同处一个文件，因为它们的消费方只有容器一处：`useRegionSources` 读全局数据源，`useSnapshotFeed` 管快照的加载与改动，`useRegionLayout` 把快照切成渲染布局，`useRegionUiState` 持有除折叠态外的全部交互状态，`useExpansionValue` 把 store 座位的三份折叠记录与层级推导演成读 / 取反 / 写入口（并摘掉失效键），与 `useLocalViewOptionsValue` 同构，命令再按对象分成 `useSearchResults`、`useWorkspaceAdoption`、`useRegionGroupActions`、`useRegionNestActions`、`useRegionPickerActions` 五个——搜索结果页与新增工作区的输入几乎不重叠，因此各成一个。渲染按区域拆成 `RegionHeaderArea` / `RegionListArea` / `RegionDialogs` 三个模块，主组件只做装配与宽窄形态分派。Provider 的 value 由容器 `useMemo` 合成一次、宽窄两个渲染分支共用；不过只有真的被 `memo` 行组件消费的那几份才从中获益，哪些承重、哪些只是留余地见 [渲染性能与行级缓存](render-performance.md)。
+`WorkspaceGroupsRegion.tsx` 按「本文件的形状 / 数据源 / 快照 / 派生布局 / 交互状态 / 展开编排 / 命令 / 容器」分段，段间有 `// ── … ──` 分节标记。这些 hook 与容器同处一个文件，因为它们的消费方只有容器一处：`useRegionSources` 读全局数据源，`useSnapshotFeed` 管快照的加载与改动，`useRegionLayout` 把快照切成渲染布局，`useRegionUiState` 持有除折叠态外的全部交互状态，`useExpansionValue` 把 store 座位的三份折叠记录与层级推导演成读 / 取反 / 写入口（并摘掉失效键），与 `useLocalViewOptionsValue` 同构，两者各归「交互状态」那一段，命令再按对象分成 `useSearchResults`、`useWorkspaceAdoption`、`useRegionGroupActions`、`useRegionNestActions`、`useRegionPickerActions` 五个——搜索结果页与新增工作区的输入几乎不重叠，因此各成一个。命令之前另有「展开编排」一段，只放 `revealNewWorkspace`：它把「新工作区与它整条父链都要展开」这一串写入收成一处，服务的是聚焦切换而不是某一条命令。渲染按区域拆成 `RegionHeaderArea` / `RegionListArea` / `RegionDialogs` 三个模块，主组件只做装配与宽窄形态分派。Provider 的 value 由容器 `useMemo` 合成一次、宽窄两个渲染分支共用；不过只有真的被 `memo` 行组件消费的那几份才从中获益，哪些承重、哪些只是留余地见 [渲染性能与行级缓存](render-performance.md)。
 
 每个渲染区只声明自己真正消费的那几格形状，而不是逐字段转发：`RegionListArea` 收 `RegionListLayout` / `RegionListEdits` / `RegionListCommands` 合成的 `WorkspaceNodeScope`，`RegionHeaderArea` 收布局、浮层与命令三格，`RegionDialogs` 收当前那个 `RegionOverlay`、对话框布局、工作区视图与提交入口。列表侧因此不接触任何状态 setter，浮层形状不出容器那一层。只有确实被多个调用点复用的纯逻辑才外提到 `data/` 与 `utils/`，其余留在原地，避免为了「能抽」而抽出一堆只有一个调用点的间接层。
 

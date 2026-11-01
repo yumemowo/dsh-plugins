@@ -1,7 +1,7 @@
 # 置顶会话的设计过程
 
 这份文档记录**为什么是现在这个设计**：走过的路、被否的方案、以及每条结论的实测依据。
-最终设计见[置顶会话的最终设计](design.md)，落地步骤见[实现计划](implementation-plan.md)。
+最终设计见[置顶会话的最终设计](design.md)，落地时改了哪些做法见[实现记录](implementation-notes.md)。
 
 对照稿 [`pinning-mockups.html`](pinning-mockups.html) 是九个方案并排的可交互页面，本文件里的数字全部从那里量出。
 

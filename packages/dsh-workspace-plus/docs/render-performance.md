@@ -21,7 +21,7 @@
 | --- | --- |
 | `row` | `toRow()` 每次渲染都为所有会话造新对象 |
 | `onOpen` | 父组件写的是 `() => openSession(row.id)`，每次渲染新建闭包 |
-| `grouping` | 每次渲染新建，内含刚 `buildLayout` 出来的新 `sections` 数组 |
+| `grouping` | 每次渲染新建，内含刚由快照现造的新 `sections` 数组 |
 | `status` | `sessionStatus()` 每次返回新对象 |
 | `official` | `officialActions()` 每次渲染返回新对象 |
 | `t` / `labels` | 行作用域里的文案每次渲染都是新对象（`regionLabels(t, tWorkspace, tSidebar)` 重建整张文案表） |
@@ -62,7 +62,7 @@ export function sameSessionStatus(a, b): boolean {
 }
 ```
 
-`sameGroupSections` 同理：分组段每次渲染都是新数组新对象，而归组菜单只消费分组的 id 与名字，因此判定这两个字段就够。
+`sameMenuGroups` 同理：分组段每次渲染都是新数组新对象，而归组菜单只消费分组的 id 与名字，因此判定这两个字段就够。
 
 这两个函数刻意只比**决定显示结果的字段**，不是深度相等。多比无关字段会让 `memo` 无谓失效，少比相关字段会让 UI 不更新。
 
@@ -141,7 +141,7 @@ export function sameSessionStatus(a, b): boolean {
 | 未变的摘要在重新投影后保持同一行对象 | `reuses the row object when its summary is unchanged` |
 | 只有变化的那条摘要换新对象，其余不动 | `gives a changed summary a new row object and leaves the rest alone` |
 | 子代理运行数变化时行对象必须重建 | `rebuilds a row when the subagent count changes under it` |
-| 重建的分组段按内容判定为相等 | `sameGroupSections` 一组 |
+| 重建的分组段按内容判定为相等 | `sameMenuGroups` 一组 |
 | 状态位按内容判定 | `sameSessionStatus` 一组 |
 | 层级缩进读的是行组件下发的 `--wg-depth`（子工作区可任意层，不能再按固定层数写死选择器） | `indents each hierarchy level by one icon-column step` |
 

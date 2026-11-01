@@ -2,7 +2,7 @@
 
 本包在侧边栏工作区区域的顶部增加一块**置顶区**，列出全部已置顶的会话。
 
-这份文档只讲最终设计有哪些元素、各自做什么。取舍过程与被否方案见[设计过程](design-options.md)，落地步骤见[实现计划](implementation-plan.md)，逐项实测见[对照稿](pinning-mockups.html)。
+这份文档只讲最终设计有哪些元素、各自做什么。取舍过程与被否方案见[设计过程](design-options.md)，落地时改了哪些做法见[实现记录](implementation-notes.md)，逐项实测见[对照稿](pinning-mockups.html)。
 
 ## 位置与层级
 
@@ -98,7 +98,7 @@
 
 这两项声明成插件的 Config 字段，取值经本包既有的 remote 快照下发到浏览器半边。
 
-改法是编辑 profile 的 `cordis.patch.yml`（不是设置页——dsh 不给插件自动生成配置表单，本包也没有注册渲染页，原因见[实现计划](implementation-plan.md)）：
+改法是编辑 profile 的 `cordis.patch.yml`（不是设置页——dsh 不给插件自动生成配置表单，本包也没有注册渲染页，原因见[实现记录](implementation-notes.md)）：
 
 ```yaml
 - id: workspace-plus

@@ -2,7 +2,7 @@
 
 改这个包时要守的硬约束。每条都注明**怎么被发现**——其中多数违反后不会报错，只表现为「界面不对」或「测试全绿但功能没生效」，因此值得先读一遍。
 
-跨包的约束（pnpm、工作区脚本、构建顺序）在[仓库根 README](../../README.md)；**本文件只收本包范围内的约定**。等第二个真包出现、需要共享这些条目时，再考虑提升到仓库根。
+跨包的约束（pnpm、工作区脚本、构建顺序）在[仓库根 README](../../../README.md)；**本文件只收本包范围内的约定**。等第二个真包出现、需要共享这些条目时，再考虑提升到仓库根。
 
 ## 结论必须有实测支撑
 
@@ -64,7 +64,7 @@ node scripts/probes/pin-hover.mjs
 | `pnpm run typecheck` | **是** | 先跑 `tsconfig.json`，再跑 `tsconfig.test.json` |
 | `pnpm run check` | **是** | typecheck 是其中一步 |
 
-后果是**客户端类型错误在 `build` 与 `test` 下全都不报**：产物照常生成、655 条用例照常全绿，只有 `pnpm run typecheck` 会拒绝。仓库目前没有 CI，`pnpm run check` 是唯一闸门。
+后果是**客户端类型错误在 `build` 与 `test` 下全都不报**：产物照常生成、1055 条用例照常全绿，只有 `pnpm run typecheck` 会拒绝。仓库目前没有 CI，`pnpm run check` 是唯一闸门。
 
 ### 为什么客户端要有一份自己的 `tsconfig.json`
 
@@ -84,7 +84,7 @@ node scripts/probes/pin-hover.mjs
 
 | 约束 | 说明 |
 | --- | --- |
-| 用例名用小写、以第三人称动词开头的行为描述串 | `it('nests a child workspace inside its parent')`。全仓 663 条一律这个形态：小写起首、`keeps` / `reports` / `leaves` 这类动词打头、不用 `should`。写新用例时照同一形态，不要换成 `Should_...` 之类 |
+| 用例名用小写、以第三人称动词开头的行为描述串 | `it('nests a child workspace inside its parent')`。本包 1055 条一律这个形态（全仓含 `dsh-hello` 的 8 条共 1063 条）：小写起首、`keeps` / `reports` / `leaves` 这类动词打头、不用 `should`。写新用例时照同一形态，不要换成 `Should_...` 之类 |
 | 断言 DOM 结构、样式选择器、交互路径的用例用真 `react-dom` | 文件头加 `// @vitest-environment jsdom`，照 `test/nestingDom.test.tsx` 的驱动方式 |
 | 单测 import 的是基线替身，有盲区 | 替身看不到真包导出表；那条链由 `test/bundle.test.ts` 补（按宿主的方式装载产物） |
 | 测试里 CSS 类名不哈希 | `vitest.config.ts` 的 `classNameStrategy: 'non-scoped'`，断言的是「哪个元素带哪条规则」 |
