@@ -250,7 +250,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
   )
 
   dragOrderGroups.current = scope.layout.focusedListing.groups
-  /** 末尾「未分组」桶的题头行，序列里没有它就是这一段不露面 */
+  /** 末尾「未分组」桶的 header 行，序列里没有它就是这一段不露面 */
   const strayHead = rowsUnder(scope.outline, '').find((row) => row.kind === 'strayHead')
 
   if (props.searching) {
@@ -285,8 +285,8 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
        这一格罩住整片列表，因此它是那类落点的兜底
        平铺在它上面的工作区行另各占一格，命中层先撞上行的键 */
     <div className={clsx(regionStyles.list, regionStyles.panel)} {...rootZone} {...scrollProps()}>
-      {/* 根节点这一层按序列排：工作区分组题头在前，未归组的工作区平铺在其后、不带区段头
-          没有建过分组时序列里没有题头行，全部工作区都是平铺的那些
+      {/* 根节点这一层按序列排：工作区分组 header 在前，未归组的工作区平铺在其后、不带区段头
+          没有建过分组时序列里没有 header 行，全部工作区都是平铺的那些
           这一层因此不改变任何行的位置，也不再对着布局递归一遍 */}
       {rowsUnder(scope.outline, '').map((row) =>
         row.kind === 'virtualHead' ? (
@@ -548,7 +548,7 @@ function WorkspaceNode({
     return input
   })()
 
-  /** 本工作区体内的直接下层：子工作区题头、会话分组题头、未归组那一段，以及空态 */
+  /** 本工作区体内的直接下层：子工作区 header 、会话分组 header 、未归组那一段，以及空态 */
   const body = rowsUnder(scope.outline, head.key)
   const nestedHeads = body.filter((row) => row.kind === 'workspaceHead')
   const groupHeads = body.filter((row) => row.kind === 'groupHead')
@@ -641,7 +641,7 @@ function WorkspaceNode({
   )
 }
 
-/** 一个会话分组的题头：分组头 + 组体 */
+/** 一个会话分组的 header ：分组头 + 组体 */
 function GroupNode({
   head,
   scope,

@@ -1,7 +1,7 @@
 /**
  * 一份扁平的行序列：界面上从上到下每占一行，这里就有一条
  *
- * 容器与行一起进序列：题头行（工作区分组、会话分组、工作区）、会话行、溢出按钮与空态都在其中
+ * 容器与行一起进序列： header 行（工作区分组、会话分组、工作区）、会话行、溢出按钮与空态都在其中
  *
  * 这一层做两件事：把元数据切成「谁在哪个分组里」，再把切出来的结果摊成界面顺序
  * 两件事必须一起做，分开就会变成两条推导，各算一遍同一件事
@@ -46,9 +46,9 @@ export interface OutlineRow {
    */
   container: ContainerNode
   /**
-   * 这一行挂在哪个题头行之下
+   * 这一行挂在哪个 header 行之下
    *
-   * 空串表示它在最外层（工作区分组的题头、平铺的工作区、「未分组」桶的题头）
+   * 空串表示它在最外层（工作区分组的 header 、平铺的工作区、「未分组」桶的 header ）
    * 序列是深度优先的，因此这一格也是「谁的子树从这里开始」的唯一凭据
    * 渲染按它分组即可，不必再从布局递归一遍
    */
@@ -71,10 +71,10 @@ export interface OutlineRow {
    * `virtualHead` 是工作区分组，`groupHead` 是会话分组，别的种类为 undefined
    */
   groupId?: string | undefined
-  /** 题头行上的名字：工作区分组名或会话分组名，别的种类为 undefined */
+  /** header 行上的名字：工作区分组名或会话分组名，别的种类为 undefined */
   label?: string | undefined
   /**
-   * 题头行行尾那个数
+   * header 行行尾那个数
    *
    * 工作区分组数名下全部工作区（含被嵌套的），会话分组数组内会话。别的种类为 undefined
    */
@@ -82,7 +82,7 @@ export interface OutlineRow {
   /**
    * 这一行代言的那一段一共几条会话
    *
-   * 只给会话分组的题头行与工作区行（它代言未归组那一段）带这一格
+   * 只给会话分组的 header 行与工作区行（它代言未归组那一段）带这一格
    * 序列只交出露出来的那几条，判断「待揭示的那条是不是被收起了」要这个总数
    */
   total?: number | undefined
@@ -334,7 +334,7 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
     rows.push({ ...rest, hiddenCount, scopeExpanded })
   }
 
-  /** 下一个题头行的归属：子树里的行都记它，空串表示最外层 */
+  /** 下一个 header 行的归属：子树里的行都记它，空串表示最外层 */
   let owner = ''
 
   /** 一个工作区区块 */

@@ -212,18 +212,18 @@ describe('buildOutline', () => {
 
   it('keeps every row under a header that exists, depth first', () => {
     // 渲染按 ownerKey 逐层展开，因此这一格必须自洽
-    // 每行的归属要么是最外层，要么是一条真实存在的题头行，且题头在序列里按深度优先收口
+    // 每行的归属要么是最外层，要么是一条真实存在的 header 行，且 header 在序列里按深度优先收口
     const rows = buildOutline(fixture({ stray: [row('u1')] }))
     const stack: string[] = []
 
     for (const each of rows) {
-      // 回到这行该在的那一层：一路弹出已经收口的题头
+      // 回到这行该在的那一层：一路弹出已经收口的 header 
       while (stack.length > 0 && stack[stack.length - 1] !== each.ownerKey) stack.pop()
       expect(
         stack.length > 0 || each.ownerKey === '',
         'owner "' + each.ownerKey + '" is not open at row "' + each.key + '"',
       ).toBe(true)
-      // 题头自己收得下东西，子工作区与分组都要能被逐层展开
+      //  header 自己收得下东西，子工作区与分组都要能被逐层展开
       const opens =
         each.kind === 'workspaceHead' ||
         each.kind === 'groupHead' ||

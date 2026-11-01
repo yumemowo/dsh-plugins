@@ -20,7 +20,7 @@ import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
 /**
  * outline 与真实渲染的对拍
  *
- * 同一份快照下，outline 里会话行的先后必须与 DOM 里行的先后一致，题头行的条数也要一致
+ * 同一份快照下，outline 里会话行的先后必须与 DOM 里行的先后一致， header 行的条数也要一致
  * 顺序错了界面会错位而类型看不出来，只能靠这条对拍兜
  *
  * 两条链路的输入是同一份夹具：序列由 outline.ts 摊出来，DOM 由区域组件渲染出来
@@ -326,7 +326,7 @@ describe('outline 与渲染对拍', () => {
         row.kind === 'strayHead',
     ).length
 
-    // 四种题头行在 DOM 上落在 .workspaceHead 或 .groupHead 上（工作区分组头两个类都带）
+    // 四种 header 行在 DOM 上落在 .workspaceHead 或 .groupHead 上（工作区分组头两个类都带）
     const fromDom = list.querySelectorAll('.workspaceHead, .groupHead').length
 
     expect(fromOutline).toBe(fromDom)
@@ -337,7 +337,7 @@ describe('outline 与渲染对拍', () => {
   it('crops the sequence to the focused workspace just like the list', async () => {
     // 聚焦一个工作区分组之后列表里不再有组头：那一片只剩组内的工作区
     //
-    // 这条守的是「聚焦后的布局算出来的序列」本身（没有组头、题头数与 DOM 一致）
+    // 这条守的是「聚焦后的布局算出来的序列」本身（没有组头、 header 数与 DOM 一致）
     // 不是「区域组件喂进去的是哪一份布局」——序列与夹具在这里同源，那一处改错它看不见
     const focused = virtualAddress(VIRTUAL_ID)
     const { container, root } = await mount(focused)
@@ -352,7 +352,7 @@ describe('outline 与渲染对拍', () => {
         row.kind === 'strayHead',
     ).length
 
-    // 守一手：这一屏确实还有题头行，否则下面那条断言在「两边都空」时会假通过
+    // 守一手：这一屏确实还有 header 行，否则下面那条断言在「两边都空」时会假通过
     expect(fromOutline).toBeGreaterThan(0)
     expect(fromOutline).toBe(list.querySelectorAll('.workspaceHead, .groupHead').length)
     expect(outlineRows(focused).some((row) => row.kind === 'virtualHead')).toBe(false)

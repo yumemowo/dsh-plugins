@@ -566,7 +566,7 @@ function sessionRowNode(options: {
   }))
 }
 
-/** 一个会话分组的题头行，测试按它渲染分组 */
+/** 一个会话分组的 header 行，测试按它渲染分组 */
 function groupHeadRow(count = 0, key = 'group/w1/g1'): OutlineRow {
   return {
     key,
@@ -722,7 +722,7 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
   return out
 }
 
-/** 一个工作区题头行，测试按它渲染区块 */
+/** 一个工作区 header 行，测试按它渲染区块 */
 function workspaceHeadRow(looseCount = 0): OutlineRow {
   return {
     key: 'workspace/w1',

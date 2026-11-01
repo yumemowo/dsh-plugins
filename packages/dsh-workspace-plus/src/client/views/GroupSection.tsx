@@ -28,7 +28,7 @@ import styles from './components/rows.module.css'
 import clsx from 'clsx'
 
 export interface GroupSectionProps {
-  /** 本分组的题头行：分组 id、名字与会话数都写在它身上 */
+  /** 本分组的 header 行：分组 id、名字与会话数都写在它身上 */
   head: OutlineRow
   /** 本分组所在的工作区，区域键要按它定位 */
   workspaceId: string

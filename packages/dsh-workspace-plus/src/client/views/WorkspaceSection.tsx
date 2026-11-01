@@ -35,7 +35,7 @@ export interface WorkspaceSectionProps {
   workspaceId: string
   /** 工作区标题行的全部输入，整体交给 `WorkspaceRow`，撑开体的开合也读它的 `expanded` */
   row: WorkspaceRowProps
-  /** 本工作区题头行，缩进层级写在它身上 */
+  /** 本工作区 header 行，缩进层级写在它身上 */
   head: OutlineRow
   /** 体内有没有东西：一条也没有时露空态，撑开体因此仍然要渲染 */
   hasBody: boolean

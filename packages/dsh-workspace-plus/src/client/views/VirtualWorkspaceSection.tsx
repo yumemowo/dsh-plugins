@@ -30,7 +30,7 @@ import styles from './components/rows.module.css'
 import clsx from 'clsx'
 
 export interface VirtualWorkspaceSectionProps {
-  /** 本分组的题头行：分组 id、名字与工作区数都写在它身上 */
+  /** 本分组的 header 行：分组 id、名字与工作区数都写在它身上 */
   head: OutlineRow
   /** 本分组名下还有没有工作区，空分组要在撑开体里露占位文案 */
   hasMembers: boolean
