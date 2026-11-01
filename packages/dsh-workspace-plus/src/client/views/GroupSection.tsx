@@ -137,7 +137,8 @@ export function GroupSection({
           {/* 会话数自己成格贴在行右，与 session 行的 time 同格同形，空分组不显示
               只算会话，放进来的子工作区另用层级表达，混进同一个数会看不出组里是什么 */}
           {count <= 0 ? null : <span className={styles.groupCount}>{count}</span>}
-          {/* 操作位收进 session 行同一套可收放槽位，静止时不占宽，上面的会话数因此贴到行右，悬停/菜单展开/键盘聚焦时槽位展开，会话数隐去 */}
+          {/* 操作位收进 session 行同一套可收放槽位：静止时不占宽，上面的会话数因此贴到行右
+              悬停、菜单展开与键盘聚焦这三档下槽位展开，会话数隐去 */}
           <span className={styles.rowActionSlot}>
             <RowActions
               menuOpen={menuOpen}

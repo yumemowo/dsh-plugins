@@ -35,7 +35,7 @@ function index(...items: { workspaceId: string; title: string }[]) {
 /**
  * 一份手写的切分
  *
- * `members` 是归属、`roots` 是这一层要列的（未开启嵌套时两者相同）；`groupOf` 是归属的反查表
+ * `members` 是归属、`roots` 是这一层要列的（未开启嵌套时两者相同），`groupOf` 是归属的反查表
  */
 const LAYOUT: RootListing = {
   groups: [
@@ -190,7 +190,7 @@ describe('focusListing', () => {
   /**
    * 解析之后再裁剪，与容器那条链一致
    *
-   * 记录比列表活得久：指向已消失或被收进分组的条目时，解析交回 undefined，
+   * 记录比列表活得久：指向已消失或被收进分组的条目时，解析交回 undefined
    * 那一步换成 `all`，这一层因此看到的永远是合法地址
    */
   const focusOf = (address: RootEntryAddress) => focusListing(LAYOUT, resolveFocus(entries, address)?.address ?? ALL_ENTRIES)
@@ -247,7 +247,7 @@ describe('focusListing', () => {
 
   it('lists a virtual workspace alone, never the members under it', () => {
     // 菜单里一个虚拟分组只占一个条目，它名下的工作区不单独列出
-    // 理由是「聚焦分组与聚焦成员是同一片内容」，而不是「组内没有层级」——
+    // 理由是「聚焦分组与聚焦成员是同一片内容」，而不是「组内没有层级」
     // 组内的父子关系在列表里照常渲染（见 nest.test.ts 与虚拟分组那一组用例）
     const nesting = deriveNesting({
       enabled: true,
@@ -279,7 +279,7 @@ describe('focusListing', () => {
     })
     const entries = rootPickerEntries(LAYOUT, VIEWS, nesting)
 
-    // 菜单里只有未归组的独立工作区按层级展开，父在 0 层，子跟在它后面缩进一层
+    // 菜单里只有未归组的独立工作区按层级展开，父工作区在 0 层，子工作区跟在它后面缩进一层
     expect(entries).toEqual([
       { address: virtualAddress('vg1'), key: 'vw:vg1', id: 'vg1', label: '前端仓库', kind: 'virtual', depth: 0 },
       { address: virtualAddress('vg2'), key: 'vw:vg2', id: 'vg2', label: '空组', kind: 'virtual', depth: 0 },

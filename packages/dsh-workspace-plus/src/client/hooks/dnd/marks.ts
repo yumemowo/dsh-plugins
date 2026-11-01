@@ -1,14 +1,14 @@
 /**
  * 拖拽的 DOM 胶水：元素 ↔ 区域 ↔ 像素
  *
- * 拖拽期间要碰 DOM 的活全在这里：读指针那一点落在哪几格、按片区名单找出该画在哪一块、
- * 按压淡判定该淡哪一片、找还滚得动的容器，以及日志里怎么称呼一个元素。
+ * 拖拽期间要碰 DOM 的活全在这里：读指针那一点落在哪几格、按片区名单找出该画在哪一块
+ * 按压淡判定该淡哪一片、找还滚得动的容器，以及日志里怎么称呼一个元素
  *
- * 搬出 `useDnd.ts` 的理由与行数无关：这些函数不认识事件时序，也不需要 React。
- * 它们的输入是一次计划、一个元素，输出是区域键、标记或像素位置，因此可以脱离拖拽流程单独读、单独断言。
- * 留在 `useDnd.ts` 里的只有「什么时候做这些事」——监听、单例、自动滚动与提交。
+ * 搬出 `useDnd.ts` 的理由与行数无关：这些函数不认识事件时序，也不需要 React
+ * 它们的输入是一次计划、一个元素，输出是区域键、标记或像素位置，因此可以脱离拖拽流程单独读、单独断言
+ * 留在 `useDnd.ts` 里的只有「什么时候做这些事」——监听、单例、自动滚动与提交
  *
- * 不碰 React；碰的 DOM 只有属性读写、`querySelector` 与 `getBoundingClientRect`
+ * 不碰 React，碰的 DOM 只有属性读写、`querySelector` 与 `getBoundingClientRect`
  */
 import {
   DIM_ATTRIBUTE,
@@ -27,7 +27,7 @@ import type { ScrollBox } from '../../data/dnd/scroll.ts'
 /**
  * 一处落点标记：画在哪个元素上、带哪个值
  *
- * 两件事分开记，是因为「排到这一行之后」那处缝的线画在**下一条**的上缘，
+ * 两件事分开记，是因为「排到这一行之后」那处缝的线画在下一条的上缘
  * 元素与标记不再是同一行上的同一个值
  */
 export interface PaintMark {
@@ -38,7 +38,7 @@ export interface PaintMark {
 /**
  * 把这一帧的落点写上去，同时擦掉上一帧多画的
  *
- * 「上一帧画过、这一帧没画」要逐个摘，因此两个集合都要过一遍；写在元素属性上而不是 React 状态里，
+ * 「上一帧画过、这一帧没画」要逐个摘，因此两个集合都要过一遍，写在元素属性上而不是 React 状态里
  * 拖拽期间因此零次重渲染
  * @param painted - 上一帧画过的元素
  * @param drawn - 这一帧该画的元素与标记
@@ -95,7 +95,7 @@ export function rowIdAt(element: Element): string | undefined {
  * - 只点名了一行（置顶区那种一格装多行）：那一行自己
  * - 都没有：这一片的区域元素（「只有一行的块」）
  *
- * 第二种要单独走一遍，不能落到第三种：置顶段整段共用一格，退回那一格会让线横跨全段，
+ * 第二种要单独走一遍，不能落到第三种：置顶段整段共用一格，退回那一格会让线横跨全段
  * 而用户指的是某一条行
  * @param root - 本实例那一片的根节点
  * @param area - 命中的那一片
@@ -110,7 +110,7 @@ export function paintOf(
     const found = root.querySelector(`[${REGION_ATTRIBUTE}="${unit.region}"]`)
     if (found !== null) return found
   }
-  // 一格装多行：这一处就是一个行，线画在那一行身上。它是同段里的并列成员，
+  // 一格装多行：这一处就是一个行，线画在那一行身上。它是同段里的并列成员
   // 自己就是一处单位——按行找，不按区域找（按区域找会退到整段那一格，线就横跨全段）
   if (unit.row !== undefined) {
     const found = root.querySelector(`[${ROW_ATTRIBUTE}="${unit.row}"]`)
@@ -145,9 +145,8 @@ export function paintBox(
 /**
  * 线的落点
  *
- * 「排到这一条之后」那处缝归下一条的上缘：屏幕上只有一处空白，从哪一侧靠近都该是
- * 同一个像素位置、同一个标记。检测层因此已经把「之后」换成了下一条那一处（见 `OrderHit.seam`），
- * 这里只负责画
+ * 「排到这一条之后」那处缝归下一条的上缘：屏幕上只有一处空白，从哪一侧靠近都该是同一个像素位置、同一个标记
+ * 检测层因此已经把「之后」换成了下一条那一处（见 `OrderHit.seam`），这里只负责画
  *
  * 下一条画在压淡里时那处是原地投放，交给它只会让线跟着一起淡掉，那时退回本条下缘
  * @param root - 本实例那一片的根节点
@@ -208,7 +207,7 @@ export function describeElement(element: Element): string {
 /**
  * 一个元素是不是画在压淡里
  *
- * 压淡写在祖先上、按元素叠乘，因此要从元素自己往上找一遍。
+ * 压淡写在祖先上、按元素叠乘，因此要从元素自己往上找一遍
  * 被拖走的那一行自己也画淡，同样算在这一类里
  * @param element - 待查的元素
  */
@@ -301,7 +300,7 @@ export function dimmedElements(root: ParentNode, plan: DragPlan): Element[] {
  *
  * 两条都要满足：
  * - 内容确实超出了一屏，否则没什么可滚
- * - 溢出样式是 auto 或 scroll。`overflow: hidden` 的元素同样吃 `scrollTop`，
+ * - 溢出样式是 auto 或 scroll。`overflow: hidden` 的元素同样吃 `scrollTop`
  *   滚它会让被裁掉的内容在无滚动条的情况下凭空错位，用户找不回自己在哪
  *
  * 置顶区展开档正是后一种：静止时它靠 `overflow: hidden` 裁掉超出的行，要浮出才变成可滚

@@ -165,7 +165,7 @@ describe('reconcilePinned', () => {
   })
 
   it('returns a re-pinned member to the position the slot remembers', () => {
-    // 取消置顶不写回顺序位，那一格因此留着；重新置顶时这条会话回到原来摆过的位次
+    // 取消置顶不写回顺序位，那一格因此留着，重新置顶时这条会话回到原来摆过的位次
     // 与上一条的分工：顺序位里从来没有它的新成员接在手动项之后，有过它的老成员回到原位
     const members = (ids: readonly string[]) =>
       pinnedEntries(

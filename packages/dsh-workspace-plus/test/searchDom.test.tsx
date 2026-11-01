@@ -309,7 +309,7 @@ describe('search in a real DOM', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
-    // jsdom 没有布局引擎，scrollIntoView 也不存在；本用例只断言写下的记录，装一个空实现即可
+    // jsdom 没有布局引擎，scrollIntoView 也不存在，本用例只断言写下的记录，装一个空实现即可
     const originalScroll = Element.prototype.scrollIntoView
     Element.prototype.scrollIntoView = () => {}
     try {

@@ -5,7 +5,7 @@
  * 因此这里的组件一律返回 null、图标返回一个可断言的标记元素
  *
  * 例外是 HoverCard：它那层包装会改变 DOM 结构，样式里有对应的选择器
- * 因此替身照真原语套一同样的盒
+ * 因此替身照真原语套一层同样的盒
  *
  * 图标名与官方导出表一致：字形名不带尺寸后缀，线宽由 `Regular` / `Medium` 变体承担
  * 本包一律取 `Regular`
@@ -87,7 +87,7 @@ export const Tooltip = ({ children }) => children
  * node 环境没有 body，也不该让它混进被断言的结构里
  * 测试改为从卡片元素的 `content` prop 上直接读正文（见 render.test.ts 的 `cards` 分桶）
  *
- * 那一层盒与真原语一致（根节点是个 display:block 的 span）：
+ * 那一层盒与真原语一致（根节点是个 display:block 的 span）
  * 它会让行不再是列表容器的直接子项，样式里的层级缩进选择器必须为此多写一档
  * 替身不套这层的话，这条结构差异在 jsdom 冒烟里就看不见了
  */

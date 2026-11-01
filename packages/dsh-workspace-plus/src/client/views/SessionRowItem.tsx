@@ -70,7 +70,7 @@ export interface SessionGroupingContext {
 /**
  * 本组件自己算、因此不收的几格
  *
- * `sessionId` 由 `row` 派生；`action` 与 `onContextMenu` 就是下面那两个面板本身，调用方给不了
+ * `sessionId` 由 `row` 派生，`action` 与 `onContextMenu` 就是下面那两个面板本身，调用方给不了
  * `panelOpen` 同理：它由这两个面板的开合状态算出来，收下来既会被覆盖、又让调用方以为它说了算
  */
 type ComputedHere = 'sessionId' | 'action' | 'onContextMenu' | 'panelOpen'
@@ -90,7 +90,7 @@ export interface SessionRowCardInput {
    * 与行首那枚指示器分开传：行上空闲不画指示器，卡片里却要像官方一样把「空闲」也列出来
    */
   statuses?: readonly SessionStatus[] | undefined
-  /** 可复制的内容，取会话标题；缺省表示卡片只读（新建中的空白行） */
+  /** 可复制的内容，取会话标题，缺省表示卡片只读（新建中的空白行） */
   copy?: string | undefined
 }
 
@@ -152,7 +152,7 @@ function sameGrouping(
 /**
  * 比较两张悬停卡片是否表示同一件事
  *
- * 卡片对象每次渲染新建，`statuses` 又是新数组，因此按内容比；不给卡片是稳定的一种状态
+ * 卡片对象每次渲染新建，`statuses` 又是新数组，因此按内容比，不给卡片是稳定的一种状态
  */
 function sameCard(
   a: SessionRowCardInput | undefined,

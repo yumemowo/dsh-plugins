@@ -34,7 +34,7 @@ export interface ScrollStep {
 /**
  * 触发带的实际宽度
  *
- * 容器太矮时上下两条带会在中间重叠，那时各取一半：
+ * 容器太矮时上下两条带会在中间重叠，那时各取一半
  * 宁可带子窄，也不要同一处既算向上又算向下，两处一起滚会互相抵消
  * @param box - 容器范围
  * @param reach - 期望的触发带宽度
@@ -119,7 +119,7 @@ export function autoScrollStep(input: {
   const ratio = Math.min(Math.max((width - gap) / width, 0), 1)
   const maxSpeed = input.maxSpeed ?? SCROLL_MAX_SPEED
   const pixels = maxSpeed * ratio * (input.elapsedMs / 1000)
-  // 刚进带时每帧不足一个像素，四舍五入会变成零；只要还在带里就至少挪一个像素
+  // 刚进带时每帧不足一个像素，四舍五入会变成零，只要还在带里就至少挪一个像素
   const step = Math.max(1, Math.round(pixels))
   return { index, step: upwards ? -step : step }
 }

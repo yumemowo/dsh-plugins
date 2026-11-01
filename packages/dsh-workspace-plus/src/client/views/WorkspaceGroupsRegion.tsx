@@ -161,7 +161,7 @@ interface RegionLayout {
   picker: ReturnType<typeof pickerSections>
   /** 第二行显示的文案，没有聚焦时是「全部工作区」 */
   currentFocus: string
-  /** 解析过的聚焦条目；解析不到时为 undefined，表示「全部工作区」 */
+  /** 解析过的聚焦条目，解析不到时为 undefined，表示「全部工作区」 */
   resolvedFocus: PickerEntry | undefined
   /** 聚焦生效后的切分 */
   focusedListing: RootListing
@@ -180,7 +180,7 @@ interface RegionLayout {
  */
 interface RegionUiState {
   overlay: RegionOverlay | null
-  /** 打开一个浮层，或置空收起；同一时刻只有这一格 */
+  /** 打开一个浮层，或置空收起，同一时刻只有这一格 */
   openOverlay: (overlay: RegionOverlay | null) => void
   /** 下拉菜单的开合，菜单面板与触发器分处两个组件，状态因此留在这一层 */
   pickerOpen: boolean
@@ -208,7 +208,7 @@ interface RegionUiState {
 /**
  * 折叠态的写入口，只有区域容器用得到
  *
- * 读与取反面向所有消费方、走 `useExpansion.ts` 的 hook；这三个是揭示 / 新建会话前的编排，不对外下发
+ * 读与取反面向所有消费方、走 `useExpansion.ts` 的 hook，这三个是揭示 / 新建会话前的编排，不对外下发
  */
 interface ExpansionCommands {
   /** 写到展开，已经生效展开的不重复写 */
@@ -261,7 +261,7 @@ function useRegionSources(props: WorkspaceGroupsProps): RegionSources {
   const workspaces = useWorkspaces((state) => state.items) as readonly WorkspaceView[]
   // 归档集是注册表全局的，归档会话仍留在工作区的 sessionIds 里，必须显式过滤，否则已归档的会话会继续出现在列表里
   const archivedSessionIds = useWorkspaces((state) => state.archivedSessionIds) as readonly string[]
-  // 置顶集合同样是注册表全局的，最近置顶在最前；它与 items / archivedSessionIds 在同一次快照里
+  // 置顶集合同样是注册表全局的，最近置顶在最前，它与 items / archivedSessionIds 在同一次快照里
   // 缺格时按空表读：这一格拿不到就抛错的话，整片区域（对照模式下还包括承载它的右侧栏）会一起打挂
   const pinnedSessionIds =
     (useWorkspaces((state) => state.pinnedSessionIds) as readonly string[] | undefined) ?? []
@@ -378,7 +378,7 @@ function useSnapshotFeed(
           setSnapshot(normalized)
         },
         (reason: unknown) => {
-          // 写入被宿主拒绝时界面已经画过落点，用户看到的是「拖了没反应」。
+          // 写入被宿主拒绝时界面已经画过落点，用户看到的是「拖了没反应」
           // 这一条不受调试开关管：它标记的就是「本该落下去却没落下」的分叉
           debugWarn('group change failed', reason)
           reload()
@@ -414,7 +414,8 @@ function useRegionLayout(
    * workspaceId → 工作区视图
    *
    * 根节点按 id 排布（分组里记的也是 id），渲染每行时都要按 id 取回视图
-   * 流式期间每次活动都会重渲染整片区域，逐个 `find` 会让这一层退化成与工作区数平方成正比。索引只随工作区快照重建一次
+   * 流式期间每次活动都会重渲染整片区域，逐个 `find` 会让这一层退化成与工作区数平方成正比
+   * 索引只随工作区快照重建一次
    */
   const workspaceById = useMemo(() => {
     const index = new Map<string, WorkspaceView>()
@@ -495,7 +496,8 @@ function useRegionLayout(
   /**
    * 当前聚焦的条目
    *
-   * 解析不到（聚焦的条目已经被删掉或解散）时当作没有聚焦，记录比列表活得久，直接按那个地址过滤会让列表整片空掉，而第二行还写着一个已经不存在的名字
+   * 解析不到（聚焦的条目已经被删掉或解散）时当作没有聚焦
+   * 记录比列表活得久，直接按那个地址过滤会让列表整片空掉，而第二行还写着一个已经不存在的名字
    */
   const resolvedFocus = resolveFocus(pickerEntries, snapshot.picker.focused)
   const currentFocus = resolvedFocus?.label ?? labels.picker.all
@@ -599,7 +601,8 @@ function useRegionUiState(): RegionUiState {
 /**
  * 把 store 座位的三层折叠态与层级推导演成读、取反与写入口
  *
- * 三份记录只装「用户显式选过的展开态」，键缺席表示用户从未碰过这一层，缺省由结构现推（无父工作区展开、会话分组折叠…），因此读之前一律先归一到空记录
+ * 三份记录只装「用户显式选过的展开态」，键缺席表示用户从未碰过这一层
+ * 缺省由结构现推（没有父工作区的展开、会话分组折叠…），因此读之前一律先归一到空记录
  * 写入口都是显式赋值（`set…(…)`）而不是取反：取反要先读出当前生效值，而那个值依赖默认推导
  * 生效判据是「用户显式选择 + 结构默认」的合成，因此工作区层要 `nesting`、另两层只要记录
  * @param props - 区域 props，只用它的 store 座位两格
@@ -615,7 +618,8 @@ function useExpansionValue(props: WorkspaceGroupsProps, nesting: Nesting): Expan
   /**
    * 面向所有消费方的读数与取反
    *
-   * 依赖列的是输入（记录、setter 与层级推导）而不是函数名：函数在内部定义，将来加一层只需补进这里，不会出现「加了函数忘了补依赖」那种静默持有旧闭包的情形
+   * 依赖列的是输入（记录、setter 与层级推导）而不是函数名：函数在内部定义
+   * 新增一层折叠态时只需补进这里，不会出现「加了函数忘了补依赖」那种静默持有过时闭包的情形
    * 工作区层的默认按结构分层：没有父工作区的（含末尾「未分组」桶的哨兵空串）默认展开，子工作区默认折叠
    * 判据是 `ancestorsOf` 的长度而不是官方那套「有孩子就展开」——`repo/src` 有父工作区也有子工作区，这里折叠、官方展开
    */
@@ -648,7 +652,7 @@ function useExpansionValue(props: WorkspaceGroupsProps, nesting: Nesting): Expan
    * 把某一层写到展开，除非它已经显式展开
    *
    * 揭示与新建会话前都走它：这两处要的是「展开」这个结果，而不是「写一条记录」
-   * 判据看的是**记录**而不是生效值：默认折叠的层（子工作区、会话分组）靠这条把缺席的键补上，缺了它就看不见目标行
+   * 判据看的是记录而不是生效值：默认折叠的层（子工作区、会话分组）靠这条把缺席的键补上，缺了它就看不见目标行
    * 已经显式为 `true` 的层跳过，它的生效态本就是展开，重复写只会多一条无用的键
    */
   const commands = useMemo((): ExpansionCommands => {
@@ -766,7 +770,7 @@ function useSearchResults(
    * 本包把展开状态放在浏览器本地 store 里，因此在打开前直接写那几份记录
    *
    * 判据是「除非显式展开，否则写展开」而不是官方那套「只在显式为 false 时才写」
-   * 官方默认「有孩子就展开」，缺席通常已经展开；本包对子工作区与会话分组的默认是折叠，缺席必须被补上
+   * 官方默认「有孩子就展开」，缺席通常已经展开，本包对子工作区与会话分组的默认是折叠，缺席必须被补上
    *
    * 清掉查询还有一层意义：结果列表随即被常规列表取代，标记的那一行才真的存在
    */
@@ -811,7 +815,7 @@ interface WorkspaceAdoption {
  *
  * 采纳之后紧接着会在新工作区里开一个新会话并打开它，而聚焦把列表收窄到那一片
  * 新工作区落在被聚焦范围之外时那条会话行谁也看不到，因此先按 {@link adoptionVisibility} 判一次
- * 聚焦虚拟工作区时把它放进那个分组，它当场成为那一片的成员；聚焦真实工作区时没有能替用户做的写入，问一句要不要改换聚焦对象
+ * 聚焦虚拟工作区时把它放进那个分组，它当场成为那一片的成员，聚焦真实工作区时没有能替用户做的写入，问一句要不要改换聚焦对象
  */
 function useWorkspaceAdoption(
   props: WorkspaceGroupsProps,
@@ -824,7 +828,7 @@ function useWorkspaceAdoption(
 ): WorkspaceAdoption {
   // 普通函数而不是 `useCallback`：它的身份从没被观察过
   // 它只落到 `AddWorkspaceActions.onAdopted` 上，被 `AddWorkspaceControl` 在采纳成功后调一次
-  // 那个组件不是 `memo`，也没有依赖数组；两个被 `memo` 包住的行组件都不收它，因此缓存它没有收益
+  // 那个组件不是 `memo`，也没有依赖数组，两个被 `memo` 包住的行组件都不收它，因此缓存它没有收益
   const onWorkspaceAdopted = (workspaceId: string, path: string, name: string): void => {
     const visibility = adoptionVisibility({
       focused: snapshot.picker.focused,
@@ -845,7 +849,7 @@ function useWorkspaceAdoption(
     }
     if (visibility.kind === 'join-virtual') {
       // 分组归属是这一层本地的状态，因此必须收下宿主回的整份快照
-      // 丢掉它会让新工作区归属于旧的快照，界面看起来像「加进去了但列表里没有」
+      // 丢掉它会让新工作区落在一份过时的快照上，界面看起来像「加进去了但列表里没有」
       apply(props.moveWorkspace(workspaceId, visibility.groupId))
       // 用户可能把那个分组合起来过，显式写展开，否则新工作区落在收起的组里
       expansion.expandVirtualWorkspace(visibility.groupId)
@@ -861,7 +865,9 @@ function useWorkspaceAdoption(
   /**
    * 提交一次「是否聚焦到新工作区」
    *
-   * 选「聚焦」时先把新工作区与它的父工作区链展开，再改聚焦：聚焦之后列表只列它自己，而它按路径有自己的父工作区、默认折叠，不展开的话紧接着打开的新会话仍落在看不见的撑开体里
+   * 选「聚焦」时先把新工作区与它的父工作区链展开，再改聚焦
+   * 聚焦之后列表只列它自己，而它按路径有自己的父工作区、默认折叠
+   * 不展开的话紧接着打开的新会话仍落在看不见的撑开体里
    * 选「取消」时什么都不做——用户已经知道那条会话不在视野内
    * @param focus - 为真表示把视图聚焦到新工作区
    */
@@ -997,11 +1003,13 @@ function useRegionGroupActions(
   /**
    * 删除工作区
    *
-   * 先删注册再清分组元数据：工作区没了，它名下的会话分组与根节点归属记录都再也不会被渲染，留着就是读不到的记录
+   * 先删注册再清分组元数据：工作区没了，它名下的会话分组与根节点归属记录都再也不会被渲染
+   * 留着就是读不到的记录
    * 反过来的话，清理成功而删工作区失败会把分组提前丢掉
    * 两处清理由既有的 `deleteGroup` / `forgetWorkspace` 承担，不新增宿主接口
    *
-   * 每一步都回整份快照，取最后一步的那份即可，删工作区本身不动分组元数据，因此最终状态就是最后一次清理的结果（没有分组可清时退回删工作区前的本地值）
+   * 每一步都回整份快照，取最后一步的那份即可，删工作区本身不动分组元数据
+   * 因此最终状态就是最后一次清理的结果，没有分组可清时退回删工作区前的本地值
    */
   const commitWorkspaceDelete = (): void => {
     const draft = ui.overlay
@@ -1168,7 +1176,7 @@ function useRegionNestActions(
    * 工作区行「移动到…」子菜单与「移出工作区分组」一级项的选中项
    *
    * 三个分支：新建一个分组并把该工作区放进去、移出当前分组
-   * 或移入 `vw:<id>` 指名的分组。与 `selectSessionGroup` 一样是 `useCallback`：
+   * 或移入 `vw:<id>` 指名的分组。与 `selectSessionGroup` 一样是 `useCallback`
    * 它会随菜单上下文传到每一行，行级 memo 按引用比对
    */
   const selectVirtualWorkspace = useCallback(
@@ -1205,16 +1213,16 @@ function useRegionNestActions(
   /**
    * 把一个工作区（连同它名下的子工作区）挪到另一处
    *
-   * 目的地由调用方指名：换一个虚拟分组、进某个会话分组、或两件一起做。
-   * 要走哪几笔由 {@link planWorkspaceMove} 按来源与目的地的差算，这里只按它给的名单依次写。
+   * 目的地由调用方指名：换一个虚拟分组、进某个会话分组、或两件一起做
+   * 要走哪几笔由 {@link planWorkspaceMove} 按来源与目的地的差算，这里只按它给的名单依次写
    *
-   * 会话分组那一笔**排在虚拟分组之后**：一条归属只在父子两边同处一个虚拟分组时才生效，
-   * 顺序反过来会先落一条无效归属再改它，中间那一段窗口里界面读作「进了分组但没进分组」。
+   * 会话分组那一笔排在虚拟分组之后：一条归属只在父子两边同处一个虚拟分组时才生效
+   * 顺序反过来会先落一条无效归属再改它，中间那一段窗口里界面读作「进了分组但没进分组」
    *
-   * 会话语义上「进某个分组」也必然意味着「进那一片」，因此拖动与菜单两个入口走的是同一条路。
+   * 会话语义上「进某个分组」也必然意味着「进那一片」，因此拖动与菜单两个入口走的是同一条路
    *
    * 每一步都要走 `apply`，它把宿主回的整份快照写进本地状态
-   * 直接 `void nestWorkspaces(...)` 会把那次写入的结果丢掉，界面因此停在旧快照上——
+   * 直接 `void nestWorkspaces(...)` 会把那次写入的结果丢掉，界面因此停在旧快照上
    * 归属其实已经落盘，看起来却像「移入没有生效」
    *
    * 中途失败时会留下「虚拟分组已改、会话分组还没写」的状态——那是可恢复的，下次再移一次即可，不必为此加补偿事务
@@ -1233,8 +1241,8 @@ function useRegionNestActions(
         scopeOf: layout.virtualOfWorkspace,
         bindingOf: (id) => layout.nesting.bindingOf(id),
       })
-      // 每一笔都回一份整快照，最后交出去的是**最后一笔的那一份**：
-      // 丢掉中间结果再拿闭包里那份旧快照去替换状态，界面会停在改动之前——
+      // 每一笔都回一份整快照，最后交出去的是最后一笔的那一份
+      // 丢掉中间结果再拿闭包里那份旧快照去替换状态，界面会停在改动之前
       // 写入其实已经落盘，看起来却像「拖了没反应」
       const run = async (): Promise<WorkspaceGroupsSnapshot> => {
         let next = snapshot
@@ -1334,7 +1342,7 @@ function useRegionNestActions(
   /**
    * 视图选项里的嵌套开关
    *
-   * 开启直接写；关闭只在真的会把某个子工作区解除嵌套时才过二次确认，并把那批工作区逐个列出来
+   * 开启直接写，关闭只在真的会把某个子工作区解除嵌套时才过二次确认，并把那批工作区逐个列出来
    * 没有任何子工作区归组时关掉它只影响按路径推导的展示层级，当场生效即可
    * 这一层是「用户点了一下」与「真的写盘」之间的分派，真正的写入在 {@link commitNestedOff}
    *
@@ -1481,7 +1489,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   /**
    * 列表就绪时摘掉工作区层里已经失效的键
    *
-   * 守卫不能省：`pending` 期间 `items` 是空的，据它清理会把用户的全部工作区展开记录清光（官方那条 `workspacePhase !== 'ready'` 防的就是这个）
+   * 守卫不能省：`pending` 期间 `items` 是空的，据它清理会把用户的全部工作区展开记录清光
+   * 官方那条 `workspacePhase !== 'ready'` 防的就是这个
    *
    * 会话分组与工作区分组两层不在这里清：它们没有对应的就绪信号（`SnapshotFeed` 初值与拉取失败降级值是同一份空快照形状）
    * 而失效的键只是几十字节的垃圾，用户永远看不到——键不再对应任何渲染对象
@@ -1512,14 +1521,14 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const nestActions = useRegionNestActions(props, snapshot, layout, ui, apply)
   const pickerActions = useRegionPickerActions(props, snapshot, ui, apply)
 
-  // 量出区域右缘到窗口右缘的距离，据此决定悬停卡片是否要翻向左侧——
+  // 量出区域右缘到窗口右缘的距离，据此决定悬停卡片是否要翻向左侧
   // 对照模式下区域挂右侧栏、贴着窗口右缘，官方卡片固定向右展开会开到屏幕外
   const flipRef = useFlipMarker()
 
   /**
    * 区域根节点，交给拖拽机制当范围
    *
-   * 两种引用形状在这里合流：`useFlipMarker` 按节点变化重跑量测，因此只收回调；
+   * 两种引用形状在这里合流：`useFlipMarker` 按节点变化重跑量测，因此只收回调
    * 手势层要的是随时可读的当前节点，因此是 `RefObject`
    */
   const dndRegion = useRef<HTMLElement | null>(null)
@@ -1660,7 +1669,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   /**
    * 清掉置顶段的手动顺序
    *
-   * 空表即整格删除，置顶区因此回到官方集合序；面板尾部那条动作只在这一格非空时露面
+   * 空表即整格删除，置顶区因此回到官方集合序，面板尾部那条动作只在这一格非空时露面
    * 与拖拽走同一个写入方法，清空与接管不会各写一套
    */
   const restorePinnedOrder = useCallback(
@@ -1734,7 +1743,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    * 切换一条会话的置顶
    *
    * 上限只拦新增，已置顶的照常可以取消
-   * 取消的正是当前打开的会话时，接着打开下一条；一条不剩则把聚焦切回「全部」
+   * 取消的正是当前打开的会话时，接着打开下一条，一条不剩则把聚焦切回「全部」
    */
   const toggleSessionPin = useCallback(
     (sessionId: string) => {

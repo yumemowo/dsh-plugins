@@ -22,10 +22,10 @@ import { viewModeProps } from './viewMode-stub.ts'
 /** 一个工作区分组里的两条工作区，用来验证组内换位 */
 const GROUP_MEMBERS = ['ws-1', 'ws-2']
 
-/** 一个祖先工作区，它名下带一个会话分组，供工况 12 落点 */
+/** 一个祖先工作区，它名下带一个会话分组，子工作区要靠它换归属 */
 const PARENT_ID = 'ws-9'
 
-/** 挂在祖先工作区之下的子工作区，工况 12 拖的就是它 */
+/** 挂在祖先工作区之下的子工作区，进出会话分组拖的就是它 */
 const CHILD_ID = 'ws-4'
 
 /** 挂在同一祖先之下的第二个子工作区，同层子工作区换位的参照行 */
@@ -39,8 +39,8 @@ const ALL_WORKSPACES = [...GROUP_MEMBERS, PARENT_ID, CHILD_ID, SIBLING_CHILD_ID,
 /**
  * 一条工作区的路径
  *
- * `ws-4` 挂在 `ws-9` 之下，因此它是 `ws-9` 的子工作区；`ws-1` 与 `ws-2` 同层且互不为祖先
- * 这样工况 12 的候选里只有 `ws-9` 那一个分组，而工况 11 的同层名单里是 `ws-1` 与 `ws-2`
+ * `ws-4` 挂在 `ws-9` 之下，因此它是 `ws-9` 的子工作区，`ws-1` 与 `ws-2` 同层且互不为祖先
+ * 这样进出会话分组时候选里只有 `ws-9` 那一个分组，而组内换位的同层名单里是 `ws-1` 与 `ws-2`
  */
 const PATH_OF: Record<string, string> = {
   'ws-1': '/repo/one',
@@ -93,7 +93,7 @@ function props(
     /**
      * 写入之后宿主要回的那份快照
      *
-     * 缺省时全部写回同一份（只验写入的实参）。要验「界面跟着写入走」时给出它：
+     * 缺省时全部写回同一份（只验写入的实参）。要验「界面跟着写入走」时给出它
      * 回的那一份必须反映改动，否则用例分不清「界面没更新」与「宿主没写」
      */
     next?: (workspaceId: string) => ReturnType<typeof snapshot>
@@ -217,7 +217,7 @@ afterEach(() => {
 
 describe('dragging a workspace row between virtual workspace groups', () => {
   it('moves the workspace into the group it was dropped on', async () => {
-    // 工况 10 的入组：拖到另一个分组的头上、或拖到它组体那一大片里，都读作移入
+    // 移入虚拟分组：拖到另一个分组的头上、或拖到它组体那一大片里，都读作移入
     const { container, root, writes } = await mount({
       workspaceGroups: [
         { id: 'wg-1', name: '工作区分组甲', workspaceIds: ['ws-1'] },
@@ -235,8 +235,8 @@ describe('dragging a workspace row between virtual workspace groups', () => {
   })
 
   it('draws a line and moves a nested child workspace onto a root level row', async () => {
-    // 用户截图里的那一格：来源是分组里真正嵌套着的子工作区，目标是 root 层平铺的一行。
-    // 界面上下它们相隔很远，但「移到 root 层那一行的旁边」是合法落点——
+    // 用户截图里的那一格：来源是分组里真正嵌套着的子工作区，目标是 root 层平铺的一行
+    // 界面上下它们相隔很远，但「移到 root 层那一行的旁边」是合法落点
     // 落到那一行上同时是「移出分组」与「排到它前后」，两件事都写
     const { container, root, writes } = await mount({
       workspaceGroups: [
@@ -256,7 +256,7 @@ describe('dragging a workspace row between virtual workspace groups', () => {
   })
 
   it('moves the workspace out of its group when it lands on the root list', async () => {
-    // 工况 10 的移出：根节点那一片整片是落点，空串在宿主那一侧表示移出
+    // 移出虚拟分组：根节点那一片整片是落点，空串在宿主那一侧表示移出
     const { container, root, writes } = await mount()
 
     fire(workspaceRow(container, 'ws-1'), 'dragstart')
@@ -331,7 +331,7 @@ describe('dragging a workspace row between virtual workspace groups', () => {
 
 describe('dragging a workspace row inside its own virtual workspace group', () => {
   it('never draws the root region box while lining up two members of a group', async () => {
-    // 组内换位只该画线：根节点那一片的「移出分组」落点不该跟着亮起来——
+    // 组内换位只该画线：根节点那一片的「移出分组」落点不该跟着亮起来
     // 用户拖的是同组内的两个成员，落点语义只有「排到它前后」一件事
     const { container, root } = await mount()
     band(workspaceRow(container, 'ws-1'), 0)
@@ -347,7 +347,7 @@ describe('dragging a workspace row inside its own virtual workspace group', () =
   })
 
   it('writes the anchor of the converted member order', async () => {
-    // 工况 11：组内换位落在成员数组上，写入的是「插到谁之前」那一格
+    // 组内换位落在成员数组上，写入的是「插到谁之前」那一格
     const { container, root, writes } = await mount()
     band(workspaceRow(container, 'ws-1'), 0)
     band(workspaceRow(container, 'ws-2'), 20)
@@ -456,7 +456,7 @@ describe('a source whose cwd parent sits inside a group', () => {
     const marked = [...container.querySelectorAll('[data-wg-drop]')]
     const box = marked[0]
     expect(marked).toHaveLength(1)
-    // 框落在这一块的整块上，而不是它外面那个分组：
+    // 框落在这一块的整块上，而不是它外面那个分组
     // 整块含体内的子工作区行，那些行是落点的子集，因此一并圈进来
     expect(box).toBe(parentRow.closest('[data-wg-dnd-region]'))
     expect(box).not.toBe(zone(container, 'virtualWorkspaceBody/wg-1'))
@@ -465,7 +465,7 @@ describe('a source whose cwd parent sits inside a group', () => {
   })
 
   it('shows a box on the ancestor row and a line on the same layer sibling at once', async () => {
-    // 用户要的两件事同时成立：范围缩到父工作区那一块（框），
+    // 用户要的两件事同时成立：范围缩到父工作区那一块（框）
     // 并且与同父工作区的兄弟谈位次（线）——一次检测最多一个框加一条线
     const { container, root } = await mount({
       workspaceGroups: [
@@ -503,7 +503,7 @@ describe('a source whose cwd parent sits inside a group', () => {
 
 describe('a root level source beside an unrelated root level sibling', () => {
   it('offers an ordering line against the row it sits next to', async () => {
-    // 来源与目标都没有 cwd 祖先，只是恰好并排在根节点那一层——
+    // 来源与目标都没有 cwd 祖先，只是恰好并排在根节点那一层
     // 用户看见它们并排，因此可以互相换位。位次参照不能只按 cwd 认
     const { container, root, writes } = await mount({ workspaceGroups: [] })
     band(workspaceRow(container, 'ws-1'), 0)
@@ -536,9 +536,9 @@ describe('a root level source beside an unrelated root level sibling', () => {
   })
 
   it('draws one line on a whole block for a seam from either side', async () => {
-    // 一处缝从上面看是前一条的下半、从下面看是后一条的上半，两处各画一条就成了两条线。
-    // 无论指针从哪一侧靠近，读数都必须逐字相同：同一个标记、画在同一个元素上。
-    // 而且它必须画在整块上——贴着标题那一行画会让线只有半行宽，
+    // 一处缝从上面看是前一条的下半、从下面看是后一条的上半，两处各画一条就成了两条线
+    // 无论指针从哪一侧靠近，读数都必须逐字相同：同一个标记、画在同一个元素上
+    // 而且它必须画在整块上——贴着标题那一行画会让线只有半行宽
     // 读起来像「落点只覆盖那一行」
     const { container, root } = await mount({ workspaceGroups: [] })
     // 上下半按整块量：落点覆盖整块，指针停在块里任何一处读出的都是同一件事
@@ -571,8 +571,8 @@ describe('a root level source beside an unrelated root level sibling', () => {
   })
 
   it('reads the spacing a row carries as that row own band', async () => {
-    // 行与行之间没有 margin：那点间距挂在后一行带的上内边距里（见 rows.module.css 的行带一节），
-    // 相邻两条带因此严丝合缝。指针停在带的上内边距里，命中的就是这一条带本身，
+    // 行与行之间没有 margin：那点间距挂在后一行带的上内边距里（见 rows.module.css 的行带一节）
+    // 相邻两条带因此严丝合缝。指针停在带的上内边距里，命中的就是这一条带本身
     // 而那段读作「排到它之前」——同一处缝从上面还是从下面靠近都是同一个读数
     const { container, root } = await mount({ workspaceGroups: [] })
     band(workspaceBlock(container, 'ws-1'), 0, 38)
@@ -590,7 +590,7 @@ describe('a root level source beside an unrelated root level sibling', () => {
   })
 
   it('reads the band above the first row as dropping before it', async () => {
-    // 段首那一行带着自己那段间距，指针落在里面仍读作「排到第一条之前」：
+    // 段首那一行带着自己那段间距，指针落在里面仍读作「排到第一条之前」
     // 上面没有哪一条能替它画，这一档因此由它自己给出
     const { container, root } = await mount({ workspaceGroups: [] })
     band(workspaceBlock(container, 'ws-1'), 20, 38)
@@ -607,8 +607,8 @@ describe('a root level source beside an unrelated root level sibling', () => {
   })
 
   it('keeps the seam off the row it is dragging', async () => {
-    // 后一条正是被拖走的那一条时，线不能交给它：那一行画淡着（.rowDragging），
-    // 线画上去会跟着一起淡下去，用户看到的是「这条线颜色不对」而不是「这里能放」。
+    // 后一条正是被拖走的那一条时，线不能交给它：那一行画淡着（.rowDragging）
+    // 线画上去会跟着一起淡下去，用户看到的是「这条线颜色不对」而不是「这里能放」
     // 同一处缝因此留在前一条的下缘——位置一样，仍然是同一条线
     const { container, root } = await mount({ workspaceGroups: [] })
     band(workspaceBlock(container, 'ws-1'), 0)
@@ -624,7 +624,7 @@ describe('a root level source beside an unrelated root level sibling', () => {
   })
 
   it('puts the box on the group and the line on the member row it points at', async () => {
-    // target 是 order 时，它的直接父容器响应 inside——用户指着组内某一行时，
+    // target 是 order 时，它的直接父容器响应 inside——用户指着组内某一行时
     // 框说「放进这一组」，线说「排到这一条前后」，两件事同时成立
     const { container, root } = await mount({
       workspaceGroups: [
@@ -636,7 +636,7 @@ describe('a root level source beside an unrelated root level sibling', () => {
     fire(workspaceRow(container, MUN_ID), 'dragstart')
     fire(workspaceRow(container, 'ws-1'), 'dragover', 2)
 
-    // 行自己只拿线；框落在它所属的那一块分组上
+    // 行自己只拿线，框落在它所属的那一块分组上
     expect(workspaceBlock(container, 'ws-1').getAttribute('data-wg-drop')).toBe('before')
     const boxes = [...container.querySelectorAll('[data-wg-drop="inside"]')]
     expect(boxes).toHaveLength(1)
@@ -645,7 +645,7 @@ describe('a root level source beside an unrelated root level sibling', () => {
   })
 
   it('offers a box on the ancestor row and a line on the neighbour at once', async () => {
-    // 来源在 root 层、cwd 父工作区住在分组里，而它旁边还有一条并排的行：
+    // 来源在 root 层、cwd 父工作区住在分组里，而它旁边还有一条并排的行
     // 两条关系都要出来——框缩到祖先那一块，线与旁边的行谈位次
     const { container, root } = await mount({
       workspaceGroups: [
@@ -667,8 +667,8 @@ describe('the real topology the user reported', () => {
   /**
    * 一份结构等价的中性改写：来源平铺在 root 层，目标是它要移进去的那个分组
    *
-   * 分组里住着别的成员，且组内还有一个按 cwd 挂在它为子工作区的工作区——
-   * 用户截图里正是这个形状，也是「框画不出来」最容易复发的场合
+   * 分组里住着别的成员，且组内还有一个按 cwd 挂在它为子工作区的工作区
+   * 这个形状也是「框画不出来」最容易复发的场合
    */
   const TOPOLOGY = {
     workspaceGroups: [
@@ -687,7 +687,7 @@ describe('the real topology the user reported', () => {
   })
 
   it('shows a box when the pointer is on a member row inside the group', async () => {
-    // 指针停在组内某个成员行上时，两件事同时成立：
+    // 指针停在组内某个成员行上时，两件事同时成立
     // 框说「放进这一组」（那一行是这一片的成员），线说「排到这一行前后」
     const { container, root } = await mount(TOPOLOGY)
 
@@ -769,9 +769,9 @@ describe('a source that sits at the root level', () => {
 describe('the big box of a whole group', () => {
   it('draws one box around the whole group rather than only its head', async () => {
     // 组头与组体是同一份提交的两格，合并后应套住整块分组
-    // 合并闸门曾把「组块体内还有工作区行」判成干扰，而分组非空时体内必然有行，
-    // 于是圈永远退回组头那一小格——整块放入的框根本画不出来
-    // 落点那个分组里必须有工作区：闸门误判正是「体内有行」时发生，空分组测不出来
+    // 闸门若把「组块体内还有工作区行」判成干扰，圈就会退回组头那一小格
+    // 分组非空时体内必然有行，整块放入的框因此根本画不出来
+    // 落点那个分组里必须有工作区：这条只在体内有行时才成立，空分组测不出来
     const { container, root } = await mount({
       workspaceGroups: [
         { id: 'wg-1', name: '工作区分组甲', workspaceIds: ['ws-1'] },
@@ -794,8 +794,8 @@ describe('the big box of a whole group', () => {
 
 describe('a row that is not a container', () => {
   it('draws the line alone when the row it points at lives in the same group', async () => {
-    // 用户截图里的那一格：MunNovel 与 checkin 同在 novel 组，拖 MunNovel 去和 checkin 换位。
-    // checkin 的 cwd 父工作区住在别的组里，与这次拖拽毫无关系——
+    // 用户截图里的那一格：MunNovel 与 checkin 同在 novel 组，拖 MunNovel 去和 checkin 换位
+    // checkin 的 cwd 父工作区住在别的组里，与这次拖拽毫无关系
     // 那一块绝不能因为「checkin 有父工作区」就被高亮起来
     const { container, root } = await mount({
       workspaceGroups: [
@@ -820,7 +820,7 @@ describe('a row that is not a container', () => {
   })
 
   it('offers a line on a row of another virtual group it can move into', async () => {
-    // 用户截图里的那一格：来源在 dsh plugins 组里，novel 组此刻只有一条成员。
+    // 用户截图里的那一格：来源在 dsh plugins 组里，novel 组此刻只有一条成员
     // 界面上下它们隔得很远，但「移到那一行前后」是合法落点——那也是移进 novel 组的入口
     const { container, root, writes } = await mount({
       workspaceGroups: [
@@ -846,7 +846,7 @@ describe('a row that is not a container', () => {
   })
 
   it('never marks a member row as a container, only the slice around it', async () => {
-    // 一条工作区行不是容器：落上去时框绝不描它自己，框落在它所在的那一片上。
+    // 一条工作区行不是容器：落上去时框绝不描它自己，框落在它所在的那一片上
     // 线是另一件事——那一行可以作位次参照，因此它自己会带上 before / after
     const { container, root } = await mount()
 
@@ -863,7 +863,7 @@ describe('a row that is not a container', () => {
   })
 
   it('never draws a box on a row of a group the source cannot enter', async () => {
-    // 分属两个虚拟分组的工作区之间既无 cwd 祖先关系，也不该被读成「放进它体内」。
+    // 分属两个虚拟分组的工作区之间既无 cwd 祖先关系，也不该被读成「放进它体内」
     // 那一行可能作为位次参照（同层兄弟）给线，但绝不能给它描框
     const { container, root } = await mount({
       workspaceGroups: [
@@ -899,9 +899,9 @@ describe('a row that is not a container', () => {
   })
 
   it('moves a workspace into the virtual group of its cwd ancestor', async () => {
-    // 来源按 cwd 已经是祖先工作区的子工作区，但它此刻平铺在根节点那一层：
-    // 两者不在同一个虚拟分组里，渲染层因此没有把它嵌进去。
-    // 落到祖先体内是真的会改变归属的一次投放——它把来源移进祖先所在的那一片，
+    // 来源按 cwd 已经是祖先工作区的子工作区，但它此刻平铺在根节点那一层
+    // 两者不在同一个虚拟分组里，渲染层因此没有把它嵌进去
+    // 落到祖先体内是真的会改变归属的一次投放——它把来源移进祖先所在的那一片
     // 移进去之后 cwd 关系才在界面上成立
     const { container, root, writes } = await mount({
       workspaceGroups: [{ id: 'wg-1', name: '工作区分组甲', workspaceIds: [PARENT_ID] }],
@@ -919,7 +919,7 @@ describe('a row that is not a container', () => {
 
   it('never draws an ordering line on the row of an ancestor workspace', async () => {
     // 推导出来的 cwd 父工作区在用户眼里就是容器，与虚拟分组同类
-    // 一条行能承接放入，它在这次拖拽里就只能是容器，不能再是同层排序的参照行——
+    // 一条行能承接放入，它在这次拖拽里就只能是容器，不能再是同层排序的参照行
     // 一个工作区不会既被放进某个容器、又与那个容器的行谈先后
     //
     // ws-4 按 cwd 本来就住在 ws-9 体内，落回父工作区是原地投放，因此这一次不写
@@ -941,7 +941,7 @@ describe('a row that is not a container', () => {
 
 describe('dragging a workspace row into and out of a session group', () => {
   it('nests the workspace into the session group of its ancestor', async () => {
-    // 工况 12 的入组：落点是祖先工作区体内的会话分组头
+    // 移入会话分组：落点是祖先工作区体内的会话分组头
     const { container, root, writes } = await mount()
 
     fire(workspaceRow(container, 'ws-4'), 'dragstart')
@@ -954,7 +954,7 @@ describe('dragging a workspace row into and out of a session group', () => {
   })
 
   it('unnests the workspace when it lands on its parent workspace row', async () => {
-    // 工况 12 的移出：落点是父工作区那一行，它在来源的上一层
+    // 移出会话分组：落点是父工作区那一行，它在来源的上一层
     const { container, root, writes } = await mount({
       nesting: { 'ws-4': { workspaceId: 'ws-9', groupId: 'group-a' } },
     })
@@ -986,7 +986,7 @@ describe('dragging a workspace row into and out of a session group', () => {
   })
 
   it('moves the workspace into the virtual group that holds the target', async () => {
-    // 来源与目标分属两个虚拟分组：一条归属只在两边同处一片时才生效，
+    // 来源与目标分属两个虚拟分组：一条归属只在两边同处一片时才生效
     // 因此「拖进那一片里的分组」这一手要先把来源挪过去
     const { container, root, writes } = await mount({
       workspaceGroups: [

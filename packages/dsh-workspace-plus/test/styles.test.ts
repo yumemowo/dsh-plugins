@@ -22,7 +22,7 @@ const OWN_CLASSES = [...new Set([...readCss().matchAll(/\.([A-Za-z_][A-Za-z0-9_-
 
 describe('client stylesheet', () => {
   /**
-   * 每张样式表**真正声明过**的类名
+   * 每张样式表真正声明过的类名
    *
    * 只看选择器里的类名，不看注释：注释会举别的模块的类名当例子
    * 声明形如 `.name` 且紧跟 `{`、`,`、`:` 或伪类，出现在选择器位置
@@ -40,7 +40,7 @@ describe('client stylesheet', () => {
   /**
    * 同名类出现在多个模块里就是危险的
    *
-   * CSS Modules 按**所属模块**哈希：在 A 表里写 `B 的类名` 会编译成 `A 的哈希 + 该名字`，
+   * CSS Modules 按所属模块哈希：在 A 表里写 `B 的类名` 会编译成 `A 的哈希 + 该名字`
    * 与 B 表真正产出的 `B 的哈希 + 该名字` 对不上，选择器永远匹配不到，规则静默失效
    * 界面上只表现为「某处少了一点样式」，编译、类型与 DOM 断言都不报错
    * 因此这类名字必须由本模块自己声明，或改用不受哈希保护的 `data-wg-*` 选择
@@ -210,8 +210,8 @@ describe('client stylesheet', () => {
     const bar = bodyOf('.indicatorBar')
     expect(bar).toMatch(/background:\s*currentColor/)
 
-    // 色条不能在那 16px 的指示器盒里居中：那个盒是给官方 16px 图标用的，
-    // 3px 宽的色条居中会让左缘落到 内缩 + 6.5px 上，比设计稿右移 6.5px
+    // 色条不能在那 16px 的指示器盒里居中：那个盒是给官方 16px 图标用的
+    // 3px 宽的色条居中会让左缘落到「内缩 + 6.5px」上，比设计稿右移 6.5px
     // 靠左对齐后左缘正好压在 --wg-indicator-inset 上，与设计稿的 ::before 落点一致
     expect(bodyOf("[data-wg-indicator='bar'] .indicator")).toMatch(/justify-content:\s*flex-start/)
     // 高度取设计稿那条色条（行高 32、上下各留 6）
@@ -223,8 +223,8 @@ describe('client stylesheet', () => {
     expect(stateColour('ongoing')).toMatch(/--dsw-alias-state-business-primary/)
     expect(stateColour('warning')).toMatch(/--dsw-alias-state-warn-primary/)
     expect(stateColour('done')).toMatch(/--dsw-alias-state-success-primary/)
-    // 这条规则不必限定「指示器是药丸的直接内盒」：它只有一个产出点（SessionRowView 的
-    // StatusIndicator），会话行也不会互相嵌套，.indicator 在本包里不可能出现在别处
+    // 这条规则不必限定「指示器是药丸的直接内盒」：它只有一个产出点，即 SessionRowView 的 StatusIndicator
+    // 会话行也不会互相嵌套，.indicator 在本包里不可能出现在别处
     for (const state of ['ongoing', 'warning', 'done']) {
       const selector = `.indicator[data-wg-state='${state}']`
       const scoped = rules.filter((rule) =>
@@ -250,7 +250,7 @@ describe('client stylesheet', () => {
     // 底色画在药丸（.rowSurface）上，不在行带上：带含那段上行间距
     // 底色若铺满整条带就比可见的行高出 2px
     //
-    // 运行与待交互各上一层浅色底；完成与空闲不设底色，否则整段长期泛色
+    // 运行与待交互各上一层浅色底，完成与空闲不设底色，否则整段长期泛色
     expect(bodyOf(".row[data-wg-state='ongoing'] > .rowSurface")).toMatch(
       /background-color:\s*color-mix\(/,
     )
@@ -317,7 +317,7 @@ describe('client stylesheet', () => {
     expect(css).not.toMatch(/data-wg-indicator='bar'\]\s*\.rowSelected/)
 
     // 底色一律不用 background 简写：简写会把同一元素上另一条声明一起清掉
-    // 只看那些真的在设底色的行规则（`:hover` / `.rowSelected` / `[data-wg-state]`），
+    // 只看那些真的在设底色的行规则（`:hover` / `.rowSelected` / `[data-wg-state]`）
     // 行内按钮的 `background: 0 0` 之类与底色无关
     const shorthand = rules.filter(
       (rule) =>
@@ -418,9 +418,9 @@ describe('client stylesheet', () => {
     expect(declared('.workspaceBody', '--wg-row-base')).toBe('24px')
     expect(declared('.groupBody', '--wg-row-base')).toBe('40px')
 
-    // 落点线画在**整块**上，而块不含行带的层，读不到头行那一格变量。
-    // 块上不声明时线退回伪元素那条规则的兜底 24px：第 0 层工作区（头行 8px）、
-    // 虚拟分组（8px）与组内成员（24px）因此画出起点相同的线，屏幕上读作「它们在同一层」。
+    // 落点线画在整块上，而块不含行带的层，读不到头行那一格变量
+    // 块上不声明时线退回伪元素那条规则的兜底 24px：第 0 层工作区（头行 8px）
+    // 虚拟分组（8px）与组内成员（24px）因此画出起点相同的线，屏幕上读作「它们在同一层」
     // 三档必须与各自头行同值，线才与它指向的那一层的标题对齐
     expect(declared('.workspace', '--wg-row-start')).toBe(
       'calc(8px + 16px * var(--wg-depth, 0))',
@@ -779,7 +779,7 @@ describe('client stylesheet', () => {
     // 收起后内容仍在文档里，必须自己让出焦点顺序
     expect(clip).toMatch(/visibility:\s*hidden/)
 
-    // 这套做法不依赖任何写死的尺寸或序号。只查折叠相关的规则：
+    // 这套做法不依赖任何写死的尺寸或序号。只查折叠相关的规则
     // 样式表里别处出现 max-height（如下拉菜单的高度上限）与这条取舍无关
     // 按类前缀挑，不看子串：置顶区那条闸门属性叫 data-wg-expandable，名字里也含 expand，但它与这套轨道动画无关
     const expandBodies = rules
@@ -887,7 +887,7 @@ describe('client stylesheet', () => {
   it('drops the panel fade under prefers-reduced-motion', () => {
     const reduced = readReducedMotionCss()
 
-    // 面板动画的初态是 opacity: 0，这里必须整条 animation 撤掉而不是只撤 transition——
+    // 面板动画的初态是 opacity: 0，这里必须整条 animation 撤掉而不是只撤 transition
     // 否则 reduced-motion 下面板会一直停在不可见
     expect(reduced).toMatch(/\.panel\s*\{\s*animation:\s*none/)
   })
@@ -1019,7 +1019,7 @@ describe('client stylesheet', () => {
   })
 
   it('paints the hover card text for a dark card rather than a theme-tinted one', () => {
-    // 卡片底色在两种主题下都是原语写死的深色，因此三档文字色必须是浅色常量：
+    // 卡片底色在两种主题下都是原语写死的深色，因此三档文字色必须是浅色常量
     // 用随主题翻转的 --dsw-alias-label-* 会在浅色主题下变成近黑的字压在深色卡片上
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
@@ -1166,7 +1166,7 @@ describe('client stylesheet', () => {
     const selectorsOf = (pattern: RegExp): string[] =>
       rules.filter((rule) => pattern.test(rule.body)).flatMap((rule) => rule.selectors)
 
-    // 菜单里的条目行与列表行共用同一套操作位：
+    // 菜单里的条目行与列表行共用同一套操作位
     // `.rowAction` 的隐藏与三条显示路径都只有一份，因此两处的显隐语义不可能漂移
     const base = rules.find((rule) => rule.selectors.includes('.rowAction'))?.body ?? ''
     expect(base).toMatch(/opacity:\s*0/)
@@ -1205,7 +1205,7 @@ describe('client stylesheet', () => {
     // 操作位在菜单里常驻占位（不是列表行那种从 0 宽展开）
     expect(bodyOf('.pickerRow .rowActions')).toMatch(/gap:\s*10px/)
 
-    // 旧的两个并排热区已经不存在，行按钮 + 兄弟按钮那套选择器不该留残骸
+    // 并排热区那套选择器不该留在样式里：行按钮 + 兄弟按钮的布局已经由行带那一层取代
     for (const gone of ['.wg-picker-item', '.wg-picker-action', '.wg-picker-row-focused']) {
       expect(bodyOf(gone), `${gone} is a leftover from the sibling-button layout`).toBe('')
     }
@@ -1283,7 +1283,7 @@ describe('client stylesheet', () => {
     const body = rules.find((rule) => rule.selectors.includes('.pickerMenu'))?.body ?? ''
 
     // 面板是浮层，底下就是会话列表：底色必须真的解析出来
-    // 这里只认官方菜单面板那两个 token——
+    // 这里只认官方菜单面板那两个 token
     // 写一个不存在的名字（如 --dsw-alias-bg-elevated）时 background 整条失效
     // 面板变透明、后面的会话穿过来，而界面上不会有任何报错
     expect(body).toMatch(/background:\s*var\(--dsw-specific-menu\)/)
@@ -1432,7 +1432,7 @@ describe('client stylesheet', () => {
     expect(bodyOf('.menuArrow')).toContain('var(--dsw-alias-label-tertiary)')
 
     // 箭头恒指向右，翻转态下二级面板改从左侧展开，箭头也不跟着镜像
-    // 断言落在「没有任何一条含 .menuArrow 的规则声明 transform」上——
+    // 断言落在「没有任何一条含 .menuArrow 的规则声明 transform」上
     // 只要有人给箭头加了翻转，这条就失败
     expect(
       rules.filter((rule) => rule.selectors.some((s) => s.includes('.menuArrow'))),
@@ -1461,7 +1461,7 @@ describe('client stylesheet', () => {
   })
 
   it('gives the pinned scroller the same right inset the list uses', () => {
-    // 列表靠 .list 的这两项把 scrollbar 沟槽的宽度还回去（见 WorkspaceGroupsRegion.module.css），
+    // 列表靠 .list 的这两项把 scrollbar 沟槽的宽度还回去（见 WorkspaceGroupsRegion.module.css）
     // 置顶区不在 .list 里，不自己还一次的话整块比列表窄一条沟槽，行右缘与图钉都对不齐
     const region = stripComments(readModuleCss('views/WorkspaceGroupsRegion.module.css'))
     const pinned = stripComments(readModuleCss('views/PinnedSection.module.css'))
@@ -1531,7 +1531,7 @@ describe('client stylesheet', () => {
     expect(expanded[0]?.selectors).toEqual(openSelectors)
 
     // 浮出面板是一块四缘完整的圆角矩形：段头与首行之间有常驻空隙撑着，上缘圆弧不削行、不压段头
-    // 圆角只允许写全值一种；写半值（如 0 0 10px 10px）上缘会被裁成直角
+    // 圆角只允许写全值一种，写半值（如 0 0 10px 10px）上缘会被裁成直角
     // 过渡目标必须含段头空隙：面板顶上的那一段空隙也要算进可见高度里
     const openBody = expanded[0]?.body ?? ''
     expect(openBody).toMatch(/border-radius:\s*10px\s*;/)
@@ -1542,7 +1542,7 @@ describe('client stylesheet', () => {
     expect(bodyOf('.pinScroll')).toMatch(/transition:\s*max-height/)
 
     // 被裁掉的行留在文档里（收回要有东西可收），但静止时不可见
-    // 判据与浮出同源：指针不在预览行上时收起；行上有面板开着时仍要可见（面板 portal 出去，`:hover` 已经为假）
+    // 判据与浮出同源：指针不在预览行上时收起，行上有面板开着时仍要可见（面板 portal 出去，`:hover` 已经为假）
     const clipped = rules
       .filter((rule) => rule.selectors.some((sel) => sel.includes('[data-wg-clipped]')))
       .map((rule) => rule.body)
@@ -1598,7 +1598,7 @@ describe('client stylesheet', () => {
     // 2 CSS 像素落在设备像素网格的哪一侧由缩放决定，浏览器对边框做设备像素吸附、对背景不做
     // 用背景或阴影画，同一套几何会在不同缩放下显形为「粗细不一致」
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
-    // 只有那两条单选择器规则各自画一条边；共享几何那条（写成「A::before, B::after」）不带边框
+    // 只有那两条单选择器规则各自画一条边，共享几何那条（写成「A::before, B::after」）不带边框
     const lineRules = dropLineRules().filter(
       (rule) => !rule.selector.includes(',') && /::(?:before|after)$/.test(rule.selector),
     )
@@ -1617,7 +1617,7 @@ describe('client stylesheet', () => {
 
   it('keeps both drop lines inside the row box they point at', () => {
     // 线画在行盒子之外时，指针瞄着线就落在容器上，读出的不是这一行
-    // 于是线在、松手却什么都不发生；盒子外侧那一段还会被各处的裁剪盒吃掉
+    // 于是线在、松手却什么都不发生，盒子外侧那一段还会被各处的裁剪盒吃掉
     // 两端因此都收在盒子内侧：一端顶边、一端底边，看得见的那一条与能放下去的是同一处
     const before = dropLineRules().find(
       (rule) => rule.selector === "[data-wg-drop='before']::before",

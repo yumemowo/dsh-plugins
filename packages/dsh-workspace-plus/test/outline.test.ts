@@ -99,7 +99,7 @@ describe('buildOutline', () => {
   it('walks each root section before the loose ones', () => {
     const rows = buildOutline(fixture())
 
-    // ws-2 按 cwd 挂在 ws-1 之下，因此它排在 ws-1 体内；它自己那行会话也跟着进来
+    // ws-2 按 cwd 挂在 ws-1 之下，因此它排在 ws-1 体内，它自己那行会话也跟着进来
     expect(shape(rows)).toEqual([
       'virtual:vg-1',
       'workspace:ws-1',
@@ -211,7 +211,7 @@ describe('buildOutline', () => {
   })
 
   it('keeps every row under a header that exists, depth first', () => {
-    // 渲染按 ownerKey 逐层展开，因此这一格必须自洽：
+    // 渲染按 ownerKey 逐层展开，因此这一格必须自洽
     // 每行的归属要么是最外层，要么是一条真实存在的题头行，且题头在序列里按深度优先收口
     const rows = buildOutline(fixture({ stray: [row('u1')] }))
     const stack: string[] = []

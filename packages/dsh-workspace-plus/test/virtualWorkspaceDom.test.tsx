@@ -194,11 +194,11 @@ describe('workspace group DOM structure', () => {
       expect(matched, `no selector matched for rule { ${body} }`).not.toEqual([])
     }
 
-    // 这一层的缩进不再按固定层数写死选择器，子工作区可以是任意层
-    // 整棵子树抬高多少，由各容器累加出来的 --wg-depth-offset 承担
+    // 这一层的缩进不按固定层数写死选择器，子工作区可以是任意层
+    // 每层的偏移由行组件在 JS 里算好，经 --wg-depth 下发
     const all = rules.flatMap((rule) => rule.selectors)
     expect(all).toContain('.virtualWorkspaceBody')
-    // 组内工作区行不再单独写一条缩进规则，它读的是抬高后的 --wg-depth
+    // 组内工作区行不单独写一条缩进规则，它读的是那个下发下来的 --wg-depth
     expect(all).not.toContain('.virtualWorkspaceBody > .workspace > .workspaceHead')
 
     await act(async () => root.unmount())

@@ -41,7 +41,7 @@ export interface WorkspaceGroupsService {
   /**
    * 写某一段的手动顺序
    *
-   * 宿主不解析键的形状，只当一格存储用；今天只剩置顶段用得到它
+   * 宿主不解析键的形状，只当一格存储用，用到它的只有置顶段
    * 顺序与现状相同时不写盘，空顺序整格删掉，两者都收在同一个判断里
    * @param key - 段键
    * @param order - 该段成员的完整顺序，缺席的成员由渲染侧按默认序接在后面
@@ -147,8 +147,9 @@ type ReorderResult<T> =
 /**
  * 把一段带 id 的成员按换位换算重排
  *
- * 换算本身在 {@link placeAt} 里，与拖拽计划用的是同一份实现；这里只做「字符串序列 ↔ 带 id 的对象序列」
- * 的适配：换算只认 id，而这一层交出去的是整份对象，写入时需要它们原本的字段
+ * 换算本身在 {@link placeAt} 里，与拖拽计划用的是同一份实现
+ * 这里只做「字符串序列 ↔ 带 id 的对象序列」之间的适配：换算只认 id，而这一层交出去的是整份对象
+ * 写入时需要它们原本的字段
  * @param items - 当前顺序
  * @param movingId - 被挪动的成员
  * @param beforeId - 挪到哪个成员之前，缺省表示挪到末尾
@@ -191,7 +192,7 @@ export async function createWorkspaceGroupsService(
   ctx: Context,
   pinnedConfig?: WorkspacePlusConfig | undefined,
 ): Promise<WorkspaceGroupsService> {
-  // 宿主侧日志出口。停用中：这些日志经 `ctx.logger` 打出后没有出口能看见，
+  // 宿主侧日志出口。停用中：这些日志经 `ctx.logger` 打出后没有出口能看见
   // 要让它们出现得由本插件自己注册一个 exporter。恢复时连同下面各处调用一起放开
   //
   // const logInfo = (message: string): void => {
@@ -444,7 +445,7 @@ export async function createWorkspaceGroupsService(
 
     async setSegmentOrder(key, order) {
       const slot = tree.get().orderSlots[key]
-      // 写一份与现状相同的顺序不该在盘上留下一次改动，与分组排序对相邻位空操作的取舍一致。
+      // 写一份与现状相同的顺序不该在盘上留下一次改动，与分组排序对相邻位空操作的取舍一致
       // 这一支本该到不了：客户端那边的换位换算已经把无变化的落点判掉了，走到这里说明它漏判了一次
       if (slot !== undefined && sameOrder(slot, order)) {
         // logWarn(`workspace-plus: setSegmentOrder 顺序与现状逐位相同，跳过写入 key=${key} 成员=${order.length}`)
@@ -456,7 +457,7 @@ export async function createWorkspaceGroupsService(
     async moveGroupBefore(workspaceId, groupId, beforeGroupId) {
       const reorder = reorderById(groupsOf(workspaceId), groupId, beforeGroupId)
       if (reorder.kind === 'unknown') {
-        // 两侧数据已经不同步：客户端拿的是一份旧快照，或分组在别处被删。
+        // 两侧数据已经不同步：客户端拿的是一份旧快照，或分组在别处被删
         // 写入被跳过而界面已经画过落点，用户看到的就是「拖了没反应」，因此这一条必须留痕
         // logWarn(
         //   `workspace-plus: moveGroupBefore 换位对不上 workspace=${workspaceId} groupId=${groupId} ` +
@@ -512,7 +513,7 @@ export async function createWorkspaceGroupsService(
       if (groupId !== null) {
         const target = groups.find((group) => group.id === groupId)
         if (target === undefined) {
-          // 客户端拿着一个服务端已经没有的分组 id 时走到这里（分组在别处被删、或两边快照不同步）。
+          // 客户端拿着一个服务端已经没有的分组 id 时走到这里（分组在别处被删、或两边快照不同步）
           // 写入被拒绝而界面已经画过落点，用户看到的就是「拖了没反应」，因此这一条必须留痕
           // logWarn(
           //   `workspace-plus: moveWorkspace 拒绝写入，分组不存在 workspace=${workspaceId} groupId=${groupId}`,
@@ -525,7 +526,9 @@ export async function createWorkspaceGroupsService(
       const saved = await saveTree(groups)
       // logInfo(
       //   `workspace-plus: moveWorkspace 写入完成 workspace=${workspaceId} groupId=${groupId ?? '(root)'} ` +
-      //     `分组状态=${saved.workspaceGroups.map((group) => `${group.id}[${group.workspaceIds.join('|')}]`).join(' ') || '(none)'}`,
+      //     `分组状态=${saved.workspaceGroups
+      //       .map((group) => `${group.id}[${group.workspaceIds.join('|')}]`)
+      //       .join(' ') || '(none)'}`,
       // )
       return saved
     },

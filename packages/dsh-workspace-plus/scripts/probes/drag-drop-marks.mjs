@@ -1,32 +1,31 @@
 /**
  * 真实组件 + 真实拖拽的落点探针
  *
- * 与 `drop-line.mjs` 分工不同：那份直接往元素上写 `data-wg-drop`，只守 CSS；
+ * 与 `drop-line.mjs` 分工不同：那份直接往元素上写 `data-wg-drop`，只守 CSS
  * 这份挂真实的 `WorkspaceGroupsRegion`，标记由命中层自己画，因此同时守住
- * `paintBox` / `lineOf` / `applyHit` 选中的那个元素与它画出的像素。
+ * `paintBox` / `lineOf` / `applyHit` 选中的那个元素与它画出的像素
  *
- * 这一层原先没有守门：jsdom 用例只断言「属性挂在哪个元素上」，而那恰好是缺陷发生时
- * 依然正确的那一半。历史上「线缩到标题那一行」「线画在淡掉的那块上」两条都落在这里。
+ * jsdom 用例只断言「属性挂在哪个元素上」，而那是标记画错时依然正确的那一半
+ * 标记选中别的元素、或画出的位置不对，只有这里量得出来
  *
- * 做法：用 esbuild 把真实组件打成一个 IIFE，宿主依赖换成本仓库已有的测试替身；
- * 再用 CDP 的拖拽拦截在真实浏览器里制造原生拖拽（headless 下连续 mouseMoved
- * 不会延续原生拖拽，只会派一次 dragover 就停），逐格量标记与像素。
+ * 做法：用 esbuild 把真实组件打成一个 IIFE，宿主依赖换成本仓库已有的测试替身
+ * 再用 CDP 的拖拽拦截在真实浏览器里制造原生拖拽，headless 下连续 mouseMoved
+ * 不会延续原生拖拽、只会派一次 dragover 就停，于是逐格量标记与像素
  *
  * 判据：
  *   1. 一次拖拽里 inside 框至多一个、order 线至多一条
- *   2. 标记所在的元素及其祖先，合成不透明度为 1（线不会被压淡）
+ *   2. 标记所在的元素及其祖先，合成不透明度为 1，线不会被压淡
  *   3. 标记指向的那一行真的画出了线，且线在它的盒子之内
- *   4. 线横跨它所在那一块的宽度（不缩到标题那一行）
+ *   4. 线横跨它所在那一块的宽度，不缩到标题那一行
  *   5. 线画在带区域键的整块上，而不是缩在那一行自己身上
  *
- * 它能红：把 `applyHit` 改成「标记一律画在指针落着的那个元素上」，它会报
- * 「线画在行上（SPAN.rows_headSurface），而不是它所属的整块」——这正是历史缺陷
- * 「线缩到标题那一行」的形态。这一条 jsdom 用例抓不到（那里属性与命中都还是对的）。
+ * 把 `applyHit` 改成「标记一律画在指针落着的那个元素上」，它会报
+ * 「线画在行上（SPAN.rows_headSurface），而不是它所属的整块」
  *
- * 它不覆盖的部分：`paintFor` 里「优先指针那一格」那条分支。本页面的场景中 `here`
- * 恒等于该节点的第一格，破坏它探针与这里都不变；抓它的是 `test/orderDom.test.tsx` 那三条用例。
+ * 不覆盖 `paintFor` 里「优先指针那一格」那条分支：本页面的场景中 `here`
+ * 恒等于该节点的第一格，破坏它探针不变，抓它的是 `test/orderDom.test.tsx` 那三条用例
  *
- * 用法（要先构建，本探针渲染的是构建后的样式）：
+ * 用法，要先构建，本探针渲染的是构建后的样式：
  *   pnpm run build
  *   node scripts/probes/drag-drop-marks.mjs
  *
@@ -313,7 +312,7 @@ for (let toIndex = 0; toIndex < rows.length; toIndex += 1) {
 
     const orderMark = marked.find((m) => m.mark === 'before' || m.mark === 'after')
     // 工作区拖拽里落点单位一律是「整块」：线画在带区域键的块上，不是缩在那一行自己身上
-    // 这一条正是历史缺陷「线缩到标题那一行」的判据
+    // 线缩到行自己身上时读起来像「落点只覆盖那一行」，而松手写的是整块
     if (orderMark !== undefined && orderMark.region === null) {
       fail(label + ' 线画在行上（' + orderMark.tag + '），而不是它所属的整块')
     }
@@ -336,7 +335,7 @@ for (let toIndex = 0; toIndex < rows.length; toIndex += 1) {
         (l) => boxTop === null || (l.y > boxTop + FRAME && l.y < boxBottom - FRAME),
       )
       if (horizontal.length === 0) {
-        // 框与线同位：目标行是所在那片里的最后一条，它的下缘就是那一片的底边，
+        // 框与线同位：目标行是所在那片里的最后一条，它的下缘就是那一片的底边
         // 于是 after 线正好落在 inside 框的下边上。这时那一条边同时充当两者，不是缺陷
         const touchesFrame =
           boxBottom !== null && lines.some((l) => Math.abs(l.y - boxBottom) <= FRAME)

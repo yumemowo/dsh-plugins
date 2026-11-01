@@ -80,7 +80,7 @@ const SERVICE = 'workspacePlus'
  * https://deepseek-harness.github.io/deepseek-harness/reference/subsystems/typert.html
  *
  * 本包参数全是 `source: 'json'`，这类参数的 `wire` 恒等于源码形参名，因此缺省回退到 `name`
- * 将来引入 lookup 参数时必须逐条显式写出 `wire`
+ * 引入 lookup 参数时则要逐条显式写出 `wire`
  *
  * `acceptsUndefined` 单独成格而不是按 codec 推断：网关的缺参校验读的是这一格
  * 排在末尾的可选形参在客户端被传成 undefined 时会整格不出现在线上，缺了这一格调用会被判为参数不全

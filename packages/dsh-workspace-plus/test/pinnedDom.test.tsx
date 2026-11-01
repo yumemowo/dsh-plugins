@@ -63,8 +63,8 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
  * 快照替身
  *
  * 必须建在模块级
- * `useWorkspaces` / `useSessions` 的选择器每次渲染都会被调用，每次新建对象或数组会让
- * `useSyncExternalStore` 判定为快照变过，渲染因此无限循环
+ * `useWorkspaces` / `useSessions` 的选择器每次渲染都会被调用
+ * 每次新建对象或数组会让 `useSyncExternalStore` 判定为快照变过，渲染因此无限循环
  */
 const CREATED = new Date(2026, 0, 1, 0, 0).toISOString()
 
@@ -517,7 +517,7 @@ describe('pinned interaction', () => {
 })
 
 describe('pin in the row menu', () => {
-  /** 一行上渲染出来的菜单项 id，顺序即渲染顺序；行菜单在文档里出现两次，去重后取集合 */
+  /** 一行上渲染出来的菜单项 id，顺序即渲染顺序，行菜单在文档里出现两次，去重后取集合 */
   function itemIds(row: HTMLElement): string[] {
     return [
       ...new Set(
@@ -904,7 +904,7 @@ describe('in-place pinning', () => {
       useSessions: sessionSource({ ids: ungrouped }),
     })
 
-    // 列表序 u1,u2,u3；时间倒序 u3,u2,u1。置顶 u2 提前后是 u2,u1,u3——
+    // 列表序 u1,u2,u3；时间倒序 u3,u2,u1。置顶 u2 提前后是 u2,u1,u3
     // 若整段套用了工作区那个比较器，结果会是 u2,u3,u1
     expect(titles(container)).toEqual(['会话 u2', '会话 u1', '会话 u3'])
     await act(async () => root.unmount())
@@ -938,7 +938,7 @@ describe('pin callback freshness', () => {
     // 每次渲染新建一份会让依赖数组每次都判定为变过，把「依赖没列全」这类陈旧闭包掩盖掉
     const pinnedSource = workspaceSource({ pinned: ['a', 'b'] })
 
-    // 挂载时当前会话是 a；随后换到 c（不在置顶集合里），再把 a 取消置顶
+    // 挂载时当前会话是 a，随后换到 c（不在置顶集合里），再把 a 取消置顶
     // a 此刻已经不是当前会话了，因此不该替他换会话，也不该改聚焦
     const { container, root } = await mount({
       useWorkspaces: pinnedSource,

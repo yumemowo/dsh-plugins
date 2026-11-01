@@ -1,21 +1,21 @@
 /**
  * 拖拽自动滚动的真实浏览器探针
  *
- * 这一条只能实测：jsdom 不做版式，`getBoundingClientRect()` 恒为零矩形、`scrollHeight` 恒为 0，
+ * 这一条只能实测：jsdom 不做版式，`getBoundingClientRect()` 恒为零矩形、`scrollHeight` 恒为 0
  * 因此「指针进带就滚」「越靠边越快」「松手落在滚之后那一格」在用例里全是替身喂出来的读数
  *
  * 探针做三件事：
- *   1. 用 esbuild 把**真实的** `DndProvider` 与一棵真实几何的树打进一个 IIFE
- *   2. 用真实鼠标事件起一场**真原生拖拽**，把指针停在容器边缘的带里
+ *   1. 用 esbuild 把真实的 `DndProvider` 与一棵真实几何的树打进一个 IIFE
+ *   2. 用真实鼠标事件起一场真原生拖拽，把指针停在容器边缘的带里
  *   3. 读容器的 `scrollTop`，与不滚的那几档对照
  *
- * 关键对照：原生拖放自带的边缘滚动只在贴边约 16px 内生效，实测距下缘 20px 起就已经完全不滚。
+ * 关键对照：原生拖放自带的边缘滚动只在贴边约 16px 内生效，实测距下缘 20px 起就已经完全不滚
  * 因此探针把指针停在距下缘 40px 处——那一档原生读数为 0，滚动只可能来自本包的机制
  *
  * 用法（读的是源码，不读构建产物，因此不必先构建）：
  *   node scripts/probes/drag-autoscroll.mjs
  *
- * 浏览器要自带一个：脚本自己起一条 chromium 命令，CDP 端口固定。退出码非零即有用例不符。
+ * 浏览器要自带一个：脚本自己起一条 chromium 命令，CDP 端口固定。退出码非零即有用例不符
  */
 import { spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'

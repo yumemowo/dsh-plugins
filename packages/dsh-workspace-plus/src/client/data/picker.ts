@@ -166,8 +166,8 @@ export function pickerSections(
  *
  * 平铺列表不分段，只能按工作区归属过滤，因此这里交出的是归属而不是渲染层级
  * 聚焦一个工作区分组时组内被嵌套的成员也算在内：平铺下它们与顶层成员同属这片内容
- * @param layout - 未聚焦时的根节点布局
- * @param entries - 菜单条目，聚焦对象必须是其中之一才算数
+ * @param listing - 未聚焦时的根节点布局
+ * @param focused - 当前生效的聚焦地址，须是调用方已经解析过的
  * @returns 允许出现的工作区 id，无聚焦时为 undefined，表示「全部」
  */
 export function focusedWorkspaceIds(

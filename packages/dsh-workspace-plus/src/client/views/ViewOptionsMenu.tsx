@@ -94,7 +94,7 @@ export interface ViewOptionsMenuProps {
     onToggle: () => void
   }
   /**
-   * 置顶段现在有没有手动顺序
+   * 置顶段有没有手动顺序
    *
    * 没有时尾部那条动作不渲染：没有可恢复的顺序，摆一条点不动的行只会让用户去猜它为什么没用
    */

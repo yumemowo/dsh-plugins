@@ -10,7 +10,7 @@ import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
 /**
  * 置顶区拖拽的真实 DOM
  *
- * 置顶区的顺序是三份来源合成的（官方置顶集合、本包顺序位、段内名次），
+ * 置顶区的顺序是三份来源合成的（官方置顶集合、本包顺序位、段内名次）
  * 算错时界面上不会报错，只表现为「拖完位置没变」或「拖一条别的跟着动」
  * 因此逐条断言交给宿主的顺序位写入，以及界面上那几行到底排成了什么顺序
  *
@@ -204,7 +204,7 @@ describe('dragging a pinned row', () => {
   })
 
   it('marks the anchor row it was dropped on', async () => {
-    // 置顶段的每一行自己就是一处落点单位（它们没有单位标记）：线画在参照行身上，
+    // 置顶段的每一行自己就是一处落点单位（它们没有单位标记）：线画在参照行身上
     // 画在段容器上会跑到整段的上边或下边
     const { container, root } = await mount()
     band(pinnedRow(container, 'session-1'), 0)
@@ -221,8 +221,8 @@ describe('dragging a pinned row', () => {
   })
 
   it('draws one line for a seam from above or below alike', async () => {
-    // 一处缝从上面看是前一条的下半、从下面看是后一条的上半：屏幕上是同一处空白，
-    // 因此必须落在同一个像素位置、给同一个标记。后者天然画在下一条的上缘，
+    // 一处缝从上面看是前一条的下半、从下面看是后一条的上半：屏幕上是同一处空白
+    // 因此必须落在同一个像素位置、给同一个标记。后者天然画在下一条的上缘
     // 前者交给它代言，「之后」因此读作下一条的「之前」
     const { container, root } = await mount({ pinned: [...PINNED_IDS, 'session-3'] })
     band(pinnedRow(container, 'session-1'), 0)
@@ -237,7 +237,7 @@ describe('dragging a pinned row', () => {
       element.getAttribute('data-wg-drop'),
       element.getAttribute('data-wg-dnd-row'),
     ])
-    // 从下面靠近：指针在 session-1 的下半，交回「session-1 之后」——
+    // 从下面靠近：指针在 session-1 的下半，交回「session-1 之后」
     // 同一处缝，读数必须逐字相同
     fire(pinnedRow(container, 'session-1'), 'dragover', 8)
     const fromBelow = [...container.querySelectorAll('[data-wg-drop]')].map((element) => [
@@ -251,7 +251,7 @@ describe('dragging a pinned row', () => {
   })
 
   it('reads the spacing a pinned row carries as that row own band', async () => {
-    // 置顶段那 2px 也挂在后一条带的上内边距里（见 PinnedSection.module.css），
+    // 置顶段那 2px 也挂在后一条带的上内边距里（见 PinnedSection.module.css）
     // 两条带因此严丝合缝。指针停在那段间距里命中的就是后一条带本身，读作「排到它之前」
     const { container, root } = await mount({ pinned: [...PINNED_IDS, 'session-3'] })
     band(pinnedRow(container, 'session-1'), 0, 34)
@@ -270,7 +270,7 @@ describe('dragging a pinned row', () => {
   })
 
   it('keeps the seam off the row it is dragging', async () => {
-    // 下一条正是被拖走的那一条时，那一处是原地投放：它画淡着，线抢过去只会一起淡掉。
+    // 下一条正是被拖走的那一条时，那一处是原地投放：它画淡着，线抢过去只会一起淡掉
     // 缝因此留在前一条的下缘，位置一样，仍然是同一条线
     const { container, root } = await mount()
     band(pinnedRow(container, 'session-1'), 0)

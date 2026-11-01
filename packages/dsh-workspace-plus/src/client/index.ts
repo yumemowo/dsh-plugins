@@ -1,7 +1,7 @@
 /**
  * 工作区分组插件的浏览器半边
  *
- * 注册进侧边栏 shell 的 `sidebar.workspaces` 区域。该插槽是 `single` 类型：
+ * 注册进侧边栏 shell 的 `sidebar.workspaces` 区域。该插槽是 `single` 类型
  * 同一优先级重复注册会抛错，且数值更低的优先级渲染。官方 ui-workspace 用默认优先级 0，本包以 `priority: -1` 成为渲染者
  *
  * 本包自己不声明任何子插槽：`sidebar.workspaces.directoryFlow` 已被 ui-workspace 声明

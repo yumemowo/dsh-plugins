@@ -216,7 +216,7 @@ export function compareSessionRows(a: SessionRow, b: SessionRow): number {
  *
  * 三种段落都要用它：分组内的行、工作区未归组段的行、平铺列表的行
  * 只改其中一处不会报错，只表现为「有的地方置顶了、有的没有」
- * @param pins - 会话 id → 置顶名次，名次小的在前；未置顶的会话不在其中
+ * @param pins - 会话 id → 置顶名次，名次小的在前，未置顶的会话不在其中
  * @param a - 参与比较的一行
  * @param b - 参与比较的另一行
  */
@@ -261,7 +261,7 @@ export function flatSessionRows(
 /**
  * 按聚焦范围收窄平铺列表
  *
- * `allowed` 为 undefined 表示没有聚焦、全部保留；无所属的会话不在索引里，聚焦时因此被排除
+ * `allowed` 为 undefined 表示没有聚焦、全部保留，无所属的会话不在索引里，聚焦时因此被排除
  * @param rows - 平铺列表的全部可见行
  * @param workspaceOf - 会话 id → 所属工作区 id，无所属的会话不在其中
  * @param allowed - 聚焦允许出现的工作区，undefined 表示全部

@@ -5,9 +5,9 @@
  * 渲染由 `Menu` 原语负责，开合状态由持有锚点的行组件负责
  *
  * 条目 id 一律是字符串（官方原语的契约），选中回调据此分派
- * 需要表达「对哪个对象的什么操作」时，把标识拼进字符串，由本模块解析回来:
- *   - `pg:` 已做到构造与解析各只一处（`buildParentGroupMenuItem` / `parseParentGroupId`）
- *   - `vw:` 目前只有构造在这里，解析由消费侧按前缀切分，改动时两处都要看
+ * 需要表达「对哪个对象的什么操作」时，把标识拼进字符串，由本模块解析回来：
+ *   - `pg:` 构造与解析各只一处（`buildParentGroupMenuItem` / `parseParentGroupId`）
+ *   - `vw:` 只有构造在这里，解析由消费侧按前缀切分，改动时两处都要看
  */
 import {
   IconArchiveOutlineRegular,
@@ -266,7 +266,7 @@ export const WORKSPACE_MENU_SEPARATOR = {
 /**
  * 工作区行菜单里进父工作区分组那一项的选项集
  *
- * 与虚拟工作区分组那一项是两个层级的概念，因此各占一个一级项：
+ * 与虚拟工作区分组那一项是两个层级的概念，因此各占一个一级项
  * 这一项进的是父工作区体内的某个会话分组，那一项进的是根节点的虚拟工作区分组
  * @see WorkspaceMenuInput.virtualWorkspaceGrouping
  */
@@ -384,8 +384,8 @@ export interface VirtualWorkspaceMenuInput {
 /**
  * 工作区行「移动到…」子菜单里「移入某个工作区分组」的条目 id 前缀，后面跟分组 id
  *
- * 与 `rootEntry.ts` 的 `addressKey()` 为工作区分组交出的字符串字面相同，但互不相干：
- * 这一个只活在菜单打开期间，选中即弃；那一个由 `RootEntryAddress` 派生，供 React 的 `key` 用
+ * 与 `rootEntry.ts` 的 `addressKey()` 为工作区分组交出的字符串字面相同，但互不相干
+ * 这一个只活在菜单打开期间，选中即弃，那一个由 `RootEntryAddress` 派生，供 React 的 `key` 用
  * 改动其中之一不必跟着改另一个
  */
 export const VIRTUAL_WORKSPACE_PREFIX = 'vw:'
@@ -393,13 +393,13 @@ export const VIRTUAL_WORKSPACE_PREFIX = 'vw:'
 /**
  * 父工作区体内某个分组的条目 id 前缀，后面跟 `<父工作区 id>:<分组 id>`
  *
- * 两个 id 拼成一个字符串是为了满足官方 Menu 原语的契约：条目只有 `id: string`，
+ * 两个 id 拼成一个字符串是为了满足官方 Menu 原语的契约：条目只有 `id: string`
  * 选中回调也是 `(id: string) => void`，本次选择的目标只能编码进字符串
  *
  * 与 `rootEntry.ts` 的 `RootEntryAddress` 是两回事：那里用带 `kind` 标签的对象承载类别
  *
  * 分隔符沿用 `:`：工作区 id 是宿主生成的 UUID，分组 id 由本包生成（`g…`），两者都不含冒号
- * 若将来某一方的 id 可能含冒号，这里要换成不会出现在 id 里的分隔符，否则 `parseParentGroupId` 会切错位
+ * 某一方的 id 一旦可能含冒号，这里就要换成不会出现在 id 里的分隔符，否则 `parseParentGroupId` 会切错位
  */
 export const PARENT_GROUP_PREFIX = 'pg:'
 
@@ -542,7 +542,7 @@ export function buildWorkspaceMenuItems(input: WorkspaceMenuInput): readonly Men
 /**
  * 把行内菜单条目补成右键菜单条目
  *
- * 右键是行内操作位的捷径，因此条目集合与分派都必须一致，差别只有一条：
+ * 右键是行内操作位的捷径，因此条目集合与分派都必须一致，差别只有一条
  * 「新建会话」在行内是 `+` 按钮，菜单里没有对应项，右键时补在最前——它是该行最高频的建造动作，正因如此才占着行内位置
  *
  * 只在真的有新建入口时补，未分组桶的工作区行没有可建会话的工作区归属，那时补一项就是点不动的死按钮

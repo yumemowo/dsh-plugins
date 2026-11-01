@@ -2,14 +2,14 @@
  * 拖拽链路上的诊断日志
  *
  * 两级：
- * - `debugWarn`：**不受开关管**，永远输出。链路骨架（起拖、提交、回写）与「本该发生却没发生」
- *   的分叉（松手无落点、写入被拒）都走它。拖拽出问题时最先要看的就是这几条，
+ * - `debugWarn`：不受开关管，永远输出。链路骨架（起拖、提交、回写）与「本该发生却没发生」
+ *   的分叉（松手无落点、写入被拒）都走它。拖拽出问题时最先要看的就是这几条
  *   因此它们不能依赖用户事先打开什么开关
- * - `debugLog`：开关控制，默认关。逐格现场（命中详情里的每一格、计划全文）走它，
+ * - `debugLog`：开关控制，默认关。逐格现场（命中详情里的每一格、计划全文）走它
  *   一次拖拽会打出几十行，平时不需要
  *
- * 打开方式：浏览器控制台执行 `__workspacePlusDebug()`，当场生效、不必刷新；
- * 或 `localStorage.setItem('workspace-plus:debug', '1')` 之后刷新。
+ * 打开方式：浏览器控制台执行 `__workspacePlusDebug()`，当场生效、不必刷新
+ * 或 `localStorage.setItem('workspace-plus:debug', '1')` 之后刷新
  */
 
 /** localStorage 里的开关键 */
@@ -41,7 +41,7 @@ function isEnabled(): boolean {
 export function debugLog(label: string, detail?: unknown): void {
   if (!isEnabled()) return
   if (detail === undefined) console.info(`${PREFIX} ${label}`)
-  // 一行紧凑文本而不是原样对象：控制台里不用逐层展开就能读完整条，
+  // 一行紧凑文本而不是原样对象：控制台里不用逐层展开就能读完整条
   // 复制出来贴进 issue 时也还是一行
   else console.info(`${PREFIX} ${label} ${compact(detail)}`)
 }
@@ -49,7 +49,7 @@ export function debugLog(label: string, detail?: unknown): void {
 /**
  * 把一份现场压成一行
  *
- * 对象压成 `k=v` 并用空格连接，数组压成 `[a|b]`，字符串原样。
+ * 对象压成 `k=v` 并用空格连接，数组压成 `[a|b]`，字符串原样
  * 只求一眼能读，不求可机器解析——需要结构化时看的是调用点传进来的字段名
  * @param value - 要压的值
  */

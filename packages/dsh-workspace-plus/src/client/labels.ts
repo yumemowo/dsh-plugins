@@ -56,7 +56,9 @@ export interface RegionLabels {
    * 容器行右键菜单里的「新建会话」项
    *
    * 取官方 sidebar 新建按钮的动词短语 `session.new.label`
-   * 与行内 `+` 的无障碍标签（`actions.newSession.aria`，带对象名）分工不同：菜单项是一次性动作，读作动词短语，和「新建分组 / 重命名 / 删除工作区」一致
+   * 与行内 `+` 的无障碍标签（`actions.newSession.aria`，带对象名）分工不同
+   * 那一个是「在这个工作区新建会话」，这一项是一次性动作，读作动词短语
+   * 与「新建分组 / 重命名 / 删除工作区」同一形态
    */
   newSessionItem: string
   /** 新建中（空白）会话行的固定名，取官方 `session.new` */
@@ -144,7 +146,7 @@ export interface RegionLabels {
   expandSessions: (n: number) => string
   /** 同一个按钮在展开之后的文案 */
   collapseSessions: string
-  /** 列表底部的一行说明，本区域暂未提供的能力 */
+  /** 列表底部的一行说明，列出本区域没有提供的几项能力 */
   unimplemented: string
   /** 下拉菜单与 header 两行标题的文案 */
   picker: PickerLabels
@@ -270,7 +272,7 @@ export interface PickerLabels {
   /**
    * 两行标题那个按钮的无障碍标签，名称由调用方传入
    *
-   * 它可见的文字是「工作区」+ 当前聚焦的对象，读屏要读出「点它是做什么用的」：
+   * 它可见的文字是「工作区」+ 当前聚焦的对象，读屏要读出「点它是做什么用的」
    * 只报一个工作区名字的话，这行听上去是一段说明文字而不是一个入口
    */
   change: (name: string) => string

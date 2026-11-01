@@ -1,8 +1,8 @@
 /**
  * 行头外壳：一条可点、可聚焦、可拖、可右键的行头
  *
- * 会话、会话分组、工作区、虚拟分组四类行头长着同一个外壳：一条带、带里一颗药丸、右键菜单跟在最前。
- * 它们各自的差异（撑开箭头与数目、药丸里放什么、拖拽接线从哪来）都由 children 与可选 props 表达，
+ * 会话、会话分组、工作区、虚拟分组四类行头长着同一个外壳：一条带、带里一颗药丸、右键菜单跟在最前
+ * 它们各自的差异（撑开箭头与数目、药丸里放什么、拖拽接线从哪来）都由 children 与可选 props 表达
  * 因此「哪些属性必须写、写在哪」只在本文里有一份
  *
  * 四处原本各写一遍这七格属性，漏一处的表现是「这一行 Tab 不到」或「这一行拖不动」，都不会报错
@@ -40,7 +40,7 @@ export interface RowHeadShellProps {
   zone?: Record<string, string> | undefined
   /** 参照行 id 那一格，可作 before / after 参照物的行才有 */
   rowAttribute?: Record<string, string> | undefined
-  /** 排序段的拖拽接线，与参照行属性同生共死；缺省表示这一行拖不动 */
+  /** 排序段的拖拽接线，与参照行属性同生共死，缺省表示这一行拖不动 */
   drag?:
     | {
         draggable: true
@@ -63,8 +63,7 @@ export interface RowHeadShellProps {
 /**
  * 一条行头
  *
- * 属性顺序即叠放顺序：行自己的数据属性在前，拖拽那三格在后，因此计划有变时后者覆盖前者
- * @param props - 行头的类名、动作、拖拽接线与内容
+ * 属性顺序即叠放顺序：行自己的数据属性在前，拖拽那三格在后，因此两处同名时拖拽那三格胜出
  */
 export function RowHeadShell({
   className,

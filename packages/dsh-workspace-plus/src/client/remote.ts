@@ -30,7 +30,8 @@ const virtualWorkspaceSchema = z.object({
 /**
  * 与宿主 `spec.ts` 的 `entryAddressSchema` 同形，两端形状必须一致否则网关拒收
  *
- * 标注成 {@link RootEntryAddress} 钉住形状：两侧各写一份是网关的要求（客户端不得引用宿主那半边的模块），但形状只有 `rootEntry.ts` 一处定义
+ * 标注成 {@link RootEntryAddress} 钉住形状：两侧各写一份是网关的要求
+ * 客户端不得引用宿主那半边的模块，但形状只有 `rootEntry.ts` 一处定义
  */
 const entryAddressSchema: z.ZodType<RootEntryAddress> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace'), id: z.string() }),

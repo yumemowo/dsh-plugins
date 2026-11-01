@@ -3,8 +3,8 @@
  *
  * 容器与行一起进序列：题头行（工作区分组、会话分组、工作区）、会话行、溢出按钮与空态都在其中
  *
- * 这一层做两件事：把元数据切成「谁在哪个分组里」，再把切出来的结果摊成界面顺序。
- * 两件事必须一起做——分开就会变成两条推导，各算一遍同一件事
+ * 这一层做两件事：把元数据切成「谁在哪个分组里」，再把切出来的结果摊成界面顺序
+ * 两件事必须一起做，分开就会变成两条推导，各算一遍同一件事
  *
  * 不碰 React、不碰 DOM，也不记几何：一行多高由样式表按内容决定，这一层只说顺序
  */
@@ -48,12 +48,12 @@ export interface OutlineRow {
   /**
    * 这一行挂在哪个题头行之下
    *
-   * 空串表示它在最外层（工作区分组的题头、平铺的工作区、「未分组」桶的题头）。
-   * 序列是深度优先的，因此这一格也是「谁的子树从这里开始」的唯一凭据：
+   * 空串表示它在最外层（工作区分组的题头、平铺的工作区、「未分组」桶的题头）
+   * 序列是深度优先的，因此这一格也是「谁的子树从这里开始」的唯一凭据
    * 渲染按它分组即可，不必再从布局递归一遍
    */
   ownerKey: string
-  /** 这一行挂在哪个工作区名下；根节点那一层与「未分组」桶为空串 */
+  /** 这一行挂在哪个工作区名下，根节点那一层与「未分组」桶为空串 */
   workspaceId: string
   /** 缩进层级，与 `nest` 的 `levelOf` 同值 */
   depth: number
@@ -68,7 +68,7 @@ export interface OutlineRow {
   /**
    * 这一行是哪个分组的头
    *
-   * `virtualHead` 是工作区分组，`groupHead` 是会话分组；别的种类为 undefined
+   * `virtualHead` 是工作区分组，`groupHead` 是会话分组，别的种类为 undefined
    */
   groupId?: string | undefined
   /** 题头行上的名字：工作区分组名或会话分组名，别的种类为 undefined */
@@ -82,7 +82,7 @@ export interface OutlineRow {
   /**
    * 这一行代言的那一段一共几条会话
    *
-   * 只给会话分组的题头行与工作区行（它代言未归组那一段）带这一格。
+   * 只给会话分组的题头行与工作区行（它代言未归组那一段）带这一格
    * 序列只交出露出来的那几条，判断「待揭示的那条是不是被收起了」要这个总数
    */
   total?: number | undefined
@@ -100,7 +100,7 @@ export interface OutlineRow {
   row?: SessionRow | undefined
   /** 溢出按钮代言的条数，除 `overflow` 那一行之外都为 0 */
   hiddenCount: number
-  /** 这一行所在的那一段此刻是否展开到全部；只有 `overflow` 那一行带这一格 */
+  /** 这一行所在的那一段此刻是否展开到全部，只有 `overflow` 那一行带这一格 */
   scopeExpanded: boolean
 }
 
@@ -118,7 +118,7 @@ export interface OutlineInput {
   virtualGroups: readonly VirtualWorkspace[]
   /** 一个工作区的全部会话行 */
   rowsOf: (workspaceId: string) => readonly SessionRow[]
-  /** 一个工作区名下的会话分组，按创建顺序；含空分组 */
+  /** 一个工作区名下的会话分组，按创建顺序，含空分组 */
   groupsOf: (workspaceId: string) => readonly Group[]
   /** 层级推导：容器归属、父工作区、缩进层级都从它读 */
   nesting: Nesting
@@ -158,7 +158,7 @@ export interface OutlineInput {
 /**
  * 一个工作区分组，以及它名下要列出来的那些工作区
  *
- * `members` 是归属，含被嵌套的那些；`roots` 是这一层真正画出来的那些
+ * `members` 是归属，含被嵌套的那些，`roots` 是这一层真正画出来的那些
  * 两者开启嵌套时不同：`/repo` 与 `/repo/pkg` 都归属这个分组，但只有 `/repo` 在这一层
  */
 export interface RootGroup {
@@ -195,7 +195,7 @@ export interface RootListingInput {
  * 分组定义里的 `workspaceIds` 只当归属集合用：组内的先后由注册表序决定，与那个数组的书写序无关
  * 这样顶层成员与子工作区共用同一个顺序来源，换位写入在各层读到的都是同一份序
  *
- * 元数据里存在、而列表里已经没有的工作区静默跳过；一个工作区被两个分组同时记录时以先出现的为准
+ * 元数据里存在、而列表里已经没有的工作区静默跳过，一个工作区被两个分组同时记录时以先出现的为准
  * @param allowed - 只留这些工作区，缺省表示全部
  */
 export function listRoot(input: RootListingInput, allowed?: ReadonlySet<string> | undefined): RootListing {
@@ -271,8 +271,8 @@ export function focusListing(whole: RootListing, focused: RootEntryAddress): Roo
 /**
  * 一个工作区体内的会话切分
  *
- * `groups` 里每段只收它认领、且此刻还在列表里的那些行；`loose` 是没人认领的
- * 元数据里写着、而列表里已经没有的会话静默跳过；一条会话被两个分组同时记录时只归先出现的那个
+ * `groups` 里每段只收它认领、且此刻还在列表里的那些行，`loose` 是没人认领的
+ * 元数据里写着、而列表里已经没有的会话静默跳过，一条会话被两个分组同时记录时只归先出现的那个
  */
 export interface WorkspaceRows {
   groups: readonly { id: string; label: string; rows: readonly SessionRow[] }[]

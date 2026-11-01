@@ -444,7 +444,7 @@ describe('collapsed session rows', () => {
   })
 
   it('hides a pinned session while the display mode is pinned-area only', async () => {
-    // 「仅置顶区」档下置顶行不享受豁免，仍按普通行折叠；它在上方置顶区照常可见
+    // 「仅置顶区」档下置顶行不享受豁免，仍按普通行折叠，它在上方置顶区照常可见
     const pinned = ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6']
     const sessions: OwnedSessions = {
       owned: pinned,

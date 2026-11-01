@@ -23,7 +23,8 @@ import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
  * 同一份快照下，outline 里会话行的先后必须与 DOM 里行的先后一致，题头行的条数也要一致
  * 顺序错了界面会错位而类型看不出来，只能靠这条对拍兜
  *
- * 价值在渲染改吃 outline 之前：那之后两边同源，对拍就退化成自证
+ * 两条链路的输入是同一份夹具：序列由 outline.ts 摊出来，DOM 由区域组件渲染出来
+ * 覆盖的是「两边对同一份快照得出同一份顺序」，两边各自的推导细节不在它的射程里
  */
 
 const CREATED = new Date(2026, 0, 1).toISOString()
@@ -234,7 +235,7 @@ function listOf(container: HTMLElement): Element | null {
  * 布局、嵌套推导与三层折叠态的默认值都照区域组件那几处抄：这一份要复现的是「渲染输入」，而不是另起一套
  * 会话区段的展开态默认是收起，与 useSessionScopes 一致
  *
- * 聚焦那一格照渲染那条链走：区域组件喂给序列的是裁剪过的布局，夹具也必须先裁再算，
+ * 聚焦那一格照渲染那条链走：区域组件喂给序列的是裁剪过的布局，夹具也必须先裁再算
  * 否则这里测的是一份界面上并不存在的序列
  * @param focused - 当前聚焦的条目地址，缺省是「全部工作区」
  */
@@ -334,9 +335,9 @@ describe('outline 与渲染对拍', () => {
   })
 
   it('crops the sequence to the focused workspace just like the list', async () => {
-    // 聚焦一个工作区分组之后列表里不再有组头：那一片只剩组内的工作区。
+    // 聚焦一个工作区分组之后列表里不再有组头：那一片只剩组内的工作区
     //
-    // 这条守的是「聚焦后的布局算出来的序列」本身（没有组头、题头数与 DOM 一致），
+    // 这条守的是「聚焦后的布局算出来的序列」本身（没有组头、题头数与 DOM 一致）
     // 不是「区域组件喂进去的是哪一份布局」——序列与夹具在这里同源，那一处改错它看不见
     const focused = virtualAddress(VIRTUAL_ID)
     const { container, root } = await mount(focused)

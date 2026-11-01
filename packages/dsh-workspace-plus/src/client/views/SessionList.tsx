@@ -3,15 +3,15 @@
  *
  * 「展示范围」与 `data/collapse.ts` 同义：一个工作区的未归组会话、工作区内的一个会话分组，或末尾的「未分组」桶
  *
- * 这里不再自己折叠。范围里露哪几条、还差几条被收起，都由 `data/outline.ts` 算好——
- * 那是同一件事的第二份实现，而两份实现对不上时界面会静默错位：行少一条没人报错，
- * 拖拽的落点行与实际渲染的行对不上也不会报错。这一层因此只做两件事：
- * 按序列给的顺序渲染行，把溢出按钮的文案与点击接上。
+ * 这里不自己折叠，范围里露哪几条、还差几条被收起都由 `data/outline.ts` 算好
+ * 再算一份就是同一件事的第二份实现，而两份实现对不上时界面会静默错位
+ * 那种错位不会报错：行少一条没人发现，拖拽的落点行与实际渲染的行对不上也一样
+ * 这一层因此只做两件事：按序列给的顺序渲染行，把溢出按钮的文案与点击接上
  *
- * 展开态仍在这里取（`useSessionScopes`）：它是本段的交互状态，序列只消费它的结果
+ * 展开态在这里取（`useSessionScopes`），它是本段的交互状态，序列只消费它的结果
  *
  * 从搜索结果打开一条会话时那条行可能正被折起来，此处照官方口径把本段撑开
- * 结果行的意图是「去看这条会话」，行不在文档里就无从滚进可视区
+ * 结果行的意图是「去看这条会话」——行不在文档里就无从滚进可视区
  */
 import { Fragment, useEffect } from 'react'
 import type { ReactElement, ReactNode } from 'react'
@@ -60,7 +60,7 @@ export function SessionList({
   const sessions = rows.filter((row) => row.kind === 'session')
   const overflow = rows.find((row) => row.kind === 'overflow')
   const expanded = overflow?.scopeExpanded === true
-  // 露出来的条数少于总数，说明本段正收着；此时揭示目标若不在露出的那些里就该撑开
+  // 露出来的条数少于总数，说明本段正收着，此时揭示目标若不在露出的那些里就该撑开
   const hiddenReveal =
     overflow !== undefined &&
     revealSessionId !== undefined &&

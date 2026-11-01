@@ -6,8 +6,9 @@ import type { RootEntryAddress } from './rootEntry.ts'
 /**
  * 空顺序位表的落盘初值
  *
- * 标注成 `Record<string, string[]>` 而不是就地写个 `{}`：`z.record` 的 `.default()` 会把
- * 字面量 `{}` 也留进推断出的取值类型里，下游读这一格时就成了「表或空对象」的联合，索引不了
+ * 标注成 `Record<string, string[]>` 而不是就地写个 `{}`
+ * `z.record` 的 `.default()` 会把字面量 `{}` 也留进推断出的取值类型里
+ * 下游读这一格时就成了「表或空对象」的联合，索引不了
  */
 const NO_ORDER_SLOTS: Record<string, string[]> = {}
 
@@ -97,7 +98,7 @@ export const workspaceTreeSchema = z.object({
    * 顺序位：段键到手动顺序的映射
    *
    * 缺一格表示该段没有手动顺序，按各自的默认序渲染
-   * 取值是该段成员 id 的列表；今天只有置顶段写这一格，键的形状由 `data/pinned.ts` 钉住
+   * 取值是该段成员 id 的列表，只有置顶段写这一格，键的形状由 `data/pinned.ts` 钉住
    *
    * 与 `picker` / `nested` 同一取舍：旧文件里缺这一格时按空表读，不必升版本
    */
@@ -135,10 +136,10 @@ export const workspaceGroupsSpec = defineDomain({
  *
  * `nested` 既回开关本身，也回按该开关归一后的归属，关着时每一条归属都已被清空，渲染侧不必再自行判断
  *
- * `orderSlots` 是各段的手动顺序，渲染侧据它决定那一段按手动序还是默认序；今天只有置顶段有这一档
+ * `orderSlots` 是各段的手动顺序，渲染侧据它决定那一段按手动序还是默认序，有这一档的只有置顶段
  *
- * 末尾两格来自插件的行配置而不是存储域：官方 pin 集合没有上限参数，置顶区显示几条与置顶数量上限
- * 只能由本包在界面侧实施，因此与 `nested` 走同一条下发路径
+ * 末尾两格来自插件的行配置而不是存储域：官方 pin 集合没有上限参数
+ * 置顶区显示几条与置顶数量上限只能由本包在界面侧实施，因此与 `nested` 走同一条下发路径
  */
 export const snapshotSchema = z.object({
   byWorkspace: z.record(z.string(), z.array(groupSchema)),

@@ -5,7 +5,7 @@
  * 它自己属于哪个容器、往下又有哪些子工作区都问 `nesting`，深度因此不必沿递归手工累加
  * 行级 memo 的前提是 props 身份稳定，因此传下去的都是原语或内容稳定值
  *
- * 会话行元素由 `sessionRowElement` 统一构造：工作区内的行与未分组桶里的行共用同一套状态位、
+ * 会话行元素由 `sessionRowElement` 统一构造：工作区内的行与未分组桶里的行共用同一套状态位
  * 悬停卡片与空白行取舍，两处只在菜单与归组上下文上不同
  *
  * 这一层只声明自己真正消费的那几格：折叠态、揭示标记、派生布局与四个语义回调
@@ -59,7 +59,7 @@ import clsx from 'clsx'
 /**
  * 会话行工厂消费的那两格文案
  *
- * 两个工厂是普通函数而不是组件（行由 `map` 生成，写成组件会给每一行多挂一层 fiber），
+ * 两个工厂是普通函数而不是组件（行由 `map` 生成，写成组件会给每一行多挂一层 fiber）
  * 因此它们不能自己调 `useLocale()`，文案由调用点作为实参交给它们
  */
 export interface SessionRowLabels {
@@ -389,7 +389,7 @@ function WorkspaceNode({
   /**
    * 拖起这一条会话时的计划
    *
-   * 与 `selectSessionGroup` 同理是 `useCallback`：它会随归组上下文到达每一行，
+   * 与 `selectSessionGroup` 同理是 `useCallback`：它会随归组上下文到达每一行
    * 行级 memo 按引用比对，每渲染新建一个会让整片列表的 memo 失效
    *
    * 计划只声明归属变更：落到哪个容器上就归入哪个容器，段内位次不在它手里
@@ -443,15 +443,15 @@ function WorkspaceNode({
    *
    * 枚举面与合法性判定都收在 `dropAreasOf` 那一层，这里只交出索引与四个写入出口
    * 移入 / 移出虚拟分组走 `moveWorkspace`，换位一律走官方 `insertBefore`
-   * （注册表序是各层共用的顺序来源），会话分组那一族走 `nestWorkspaces` 与 `unnestWorkspaces`
+   * 注册表序是各层共用的顺序来源，会话分组那一族则走 `nestWorkspaces` 与 `unnestWorkspaces`
    */
   const buildWorkspaceDragPlan = useCallback(
     (memberId: string) =>
       workspaceTreeDragPlan({
         index: scope.index,
         workspaceId: memberId,
-        // 四个写入出口是这次投放**真正要做的那件事**。
-        // 视觉层交回的是「框在哪一片、线在哪一行」，两者可以各自沿链找；
+        // 四个写入出口是这次投放真正要做的那件事
+        // 视觉层交回的是「框在哪一片、线在哪一行」，两者可以各自沿链找
         // 只有在这里才看得出它们落成了哪个动作——框与线是否指向同一件事，只能在这里对照
         moveToGroup: (groupId) => {
           debugWarn('write: moveToGroup', { workspace: memberId, groupId: groupId === '' ? '(root)' : groupId })
@@ -500,7 +500,7 @@ function WorkspaceNode({
    * 该工作区行上那份「移动工作区分组」菜单的选项集
    *
    * 归属与可选分组都随行而变，因此不能与行文案一起缓存
-   * 每行一份新对象，行级 memo 因此按内容比对（`sameGroupSections`）
+   * 每行一份新对象，工作区行不做行级 memo，这一份每渲染重建一次
    */
   const virtualWorkspaceMenu: VirtualWorkspaceMenuInput = {
     sections: layout.listing.groups.map((group) => ({ id: group.id, label: group.label })),
@@ -738,7 +738,7 @@ function rowTimes(
 /**
  * 渲染一个会话行
  *
- * `grouping` 缺省表示该行没有分组可归（平铺列表与未分组桶）：那一层少了归组菜单项，
+ * `grouping` 缺省表示该行没有分组可归（平铺列表与未分组桶）：那一层少了归组菜单项
  * 行本身其余的取值完全相同，因此不另写一个工厂
  *
  * 空白行的名字取语言包的固定名（官方 `session.new`），并且像官方一样不挂行尾菜单

@@ -1,8 +1,9 @@
 /**
  * 一个工作区区块：标题行 + 撑开体
  *
- * 只搭外壳，体内那些行由调用方按序列渲染好整批交进来。
- * 折叠状态由区域组件按 key 记录在浏览器本地 store 里，这里只消费算好的布尔值，因此不同工作区、不同分组之间的开合互不影响
+ * 只搭外壳，体内那些行由调用方按序列渲染好整批交进来
+ * 折叠状态由区域组件按 key 记录在浏览器本地 store 里，这里只消费算好的布尔值
+ * 因此不同工作区、不同分组之间的开合互不影响
  */
 import type { ReactElement, ReactNode } from 'react'
 import { ExpandableBody } from './components/ExpandableBody.tsx'
@@ -22,7 +23,7 @@ import type { OrderDragging } from '../data/dnd/protocol.ts'
 import type { OutlineRow } from '../data/outline.ts'
 import styles from './components/rows.module.css'
 
-/** 本工作区块体内会话分组的操作，作用于哪个分组由参数指明；开合不在这里，它走 `useExpansion` */
+/** 本工作区块体内会话分组的操作，作用于哪个分组由参数指明，开合不在这里，它走 `useExpansion` */
 export interface WorkspaceGroupActions {
   onRename: (section: { id: string; label: string }) => void
   onDelete: (section: { id: string; label: string }) => void
@@ -85,9 +86,9 @@ export function WorkspaceSection({
   }
 
   return (
-    // 这一块是工作区的整体：标题行与它体内的子工作区、会话分组都在其中。
-    // 标的是「标题格对应的整块」——指针停在标题行或体内空白上时框因此套住整块，
-    // 与虚拟分组那一块同形；体内的子工作区行是落点的子集，框把它们一并圈进来
+    // 这一块是工作区的整体：标题行与它体内的子工作区、会话分组都在其中
+    // 标的是「标题格对应的整块」，指针停在标题行或体内空白上时框因此套住整块
+    // 与虚拟分组那一块同形，体内的子工作区行是落点的子集，框把它们一并圈进来
     <section
       className={styles.workspace}
       style={indent}

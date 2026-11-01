@@ -57,7 +57,7 @@ export function indexFrom(input: OutlineFixture): OutlineIndex {
 /**
  * 装配一条行序列，与渲染那条链同序
  *
- * 与 {@link indexFrom} 分开是为了让它可测：用例要拿「索引里有什么」与「行序列里有什么」对一遍，
+ * 与 {@link indexFrom} 分开是为了让它可测：用例要拿「索引里有什么」与「行序列里有什么」对一遍
  * 两者对不上就说明索引自己又推了一遍
  * @param input - 见 {@link OutlineFixture}
  */

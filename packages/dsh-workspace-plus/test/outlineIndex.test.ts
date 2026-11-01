@@ -13,7 +13,7 @@ import type { RootEntryAddress } from '../src/rootEntry.ts'
 /**
  * 行序列上的查询索引
  *
- * 这一层把行序列扫成一张表，让拖拽层只认节点身份。两条关系分开取是它的要点：
+ * 这一层把行序列扫成一张表，让拖拽层只认节点身份。两条关系分开取是它的要点
  * 容器回答「放进哪一片」，兄弟回答「排在第几」，同一格不会既算排序又算放入
  *
  * 另有几条守的是「索引与序列不许分叉」：表里的位置必须能在那条序列里找到对应行
@@ -48,8 +48,9 @@ function fixture(input: Fixture): OutlineIndex {
 /**
  * 某个容器里的全部成员，直接从行序列读
  *
- * 索引不再交出这份名单：它的调用方要的是「这一层列几条」（`rootsOf`），而「这个容器里有几个成员」
- * 只有用例需要拿来当对照基线。容器按形状比：行序列与索引各自持有一批发牌，引用不可跨过去比
+ * 索引不再交出这份名单：它的调用方要的是「这一层列几条」（`rootsOf`）
+ * 而「这个容器里有几个成员」只有用例需要拿来当对照基线
+ * 容器按形状比：行序列与索引各自持有一批发牌，引用不可跨过去比
  * @param rows - 行序列
  * @param container - 那一个容器
  */
@@ -84,7 +85,7 @@ function membersIn(rows: readonly OutlineRow[], container: ContainerNode): NodeR
 
 describe('indexOutline', () => {
   it('holds only the nodes the focused list draws', () => {
-    // 聚焦一片内容之后界面上只剩那一片：索引里的节点因此也只该是那几行。
+    // 聚焦一片内容之后界面上只剩那一片：索引里的节点因此也只该是那几行
     // 目标范围大于渲染范围时，计划里会出现界面上根本不存在的落点
     const index = fixture({
       workspaceIds: ['ws-1', 'ws-c1', 'ws-2', 'ws-3'],
@@ -102,10 +103,10 @@ describe('indexOutline', () => {
   })
 
   it('turns the focused workspace into the root place', () => {
-    // 全部视图里「根节点那一片空白」在聚焦之后变成了被聚焦的工作区自己：
+    // 全部视图里「根节点那一片空白」在聚焦之后变成了被聚焦的工作区自己
     // 索引因此把它当成根节点的顶层，而不是它原来所在的那一片
     //
-    // 聚焦只对菜单里出现的条目成立，而工作区分组名下的成员不在菜单里（那里只有分组一项），
+    // 聚焦只对菜单里出现的条目成立，而工作区分组名下的成员不在菜单里（那里只有分组一项）
     // 因此这一条聚焦的是一个平铺在根节点上的工作区
     const index = fixture({
       workspaceIds: ['ws-1', 'ws-2', 'ws-3'],
@@ -271,7 +272,7 @@ describe('the index and the row sequence', () => {
   }
 
   it('holds a node for every row the sequence lists', () => {
-    // 索引只吃行序列：界面上每画一行，索引里就该有对应的一份身份。
+    // 索引只吃行序列：界面上每画一行，索引里就该有对应的一份身份
     // 反过来说，索引里多出来的那个身份界面上没有，用户也就指不到它
     const index = indexFrom(rich)
     const rows = outlineRowsFrom(rich)
@@ -308,7 +309,7 @@ describe('the index and the row sequence', () => {
   })
 
   it('puts a child workspace in the container the sequence gives it', () => {
-    // 容器由行自己带着，索引不再按嵌套推导重算一遍：两处各算一次时，
+    // 容器由行自己带着，索引不再按嵌套推导重算一遍：两处各算一次时
     // 聚焦裁剪过的布局会与未裁剪的推导对不上，计划因此落到屏幕上没有的位置
     const index = indexFrom(rich)
     const row = outlineRowsFrom(rich).find(
@@ -356,7 +357,7 @@ describe('drop relations', () => {
     const order = areas.filter((entry) => entry.accepts === 'order').map((entry) => entry.zones[0])
 
     expect(order).toContain('workspaceHead/ws-2')
-    // ws-3 平铺在根节点那一层。来源在虚拟分组里，两者既不并排也不同父，
+    // ws-3 平铺在根节点那一层。来源在虚拟分组里，两者既不并排也不同父工作区
     // 但「移到 root 层这一行的前后」仍是一个合法落点：落上去先回 root 层，再排队
     expect(order).toContain('workspaceHead/ws-3')
     // 自己的子工作区不是同层兄弟，不给位次
@@ -364,7 +365,7 @@ describe('drop relations', () => {
   })
 
   it('pairs the root level row with leaving the group it currently sits in', () => {
-    // 落到 root 层那一行前后，位置要真的变：位次只是一半，另一半是「退出此刻所在的分组」。
+    // 落到 root 层那一行前后，位置要真的变：位次只是一半，另一半是「退出此刻所在的分组」
     // 后者由根节点那一片自己的 inside 关系给出——它罩着整片列表，落到任何一行上都成立
     const index = fixture(base)
     const areas = dropAreasOf(index, ws('ws-1'), writes())
@@ -382,7 +383,7 @@ describe('drop relations', () => {
 
   it('reads manual nesting and cwd nesting through the same parent edge', () => {
     // 对拖拽来说两种嵌套没有区别：都是「这个工作区在谁里面」
-    // ws-c1 按 cwd 挂在 ws-1 下；ws-c2 与它的路径无关，但落盘把它放进了 ws-1 的分组
+    // ws-c1 按 cwd 挂在 ws-1 下，ws-c2 与它的路径无关，但落盘把它放进了 ws-1 的分组
     const index = fixture({
       workspaceIds: ['ws-1', 'ws-c1', 'ws-c2'],
       paths: { 'ws-1': '/repo', 'ws-c1': '/repo/pkg', 'ws-c2': '/repo/other' },
@@ -397,7 +398,7 @@ describe('drop relations', () => {
   })
 
   it('never puts one row in both the order and the inside table', () => {
-    // 一行不能同时承接两种关系：能谈先后就不再承接放入，
+    // 一行不能同时承接两种关系：能谈先后就不再承接放入
     // 那时它的直接父工作区承接 inside
     const index = fixture(base)
     const areas = dropAreasOf(index, ws('ws-1'), writes())
@@ -425,7 +426,7 @@ describe('drop relations', () => {
     const areas = dropAreasOf(index, ws('ws-1'), writes())
     const inside = areas.filter((entry) => entry.accepts === 'inside')
 
-    // 别的分组两格（组头 + 组体）；自己所在的那个分组不在其中
+    // 别的分组两格（组头 + 组体），自己所在的那个分组不在其中
     expect(inside.some((entry) => entry.zones.includes('virtualWorkspaceHead/vg-2'))).toBe(true)
     expect(inside.some((entry) => entry.zones.includes('virtualWorkspaceHead/vg-1'))).toBe(false)
   })

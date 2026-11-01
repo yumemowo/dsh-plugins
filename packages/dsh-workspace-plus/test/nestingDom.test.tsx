@@ -87,9 +87,9 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
 /**
  * 子工作区嵌套的真实 DOM
  *
- * 层级由 cwd 路径现推，落盘的归属只决定渲染在哪一段：这些取舍在元素树里看不出来
- * 递归嵌出来的结构、缩进用的自定义属性、放进分组的那个落在谁的撑开体里，都不行
- * 这里用真 `react-dom` 渲染一遍并断言结构
+ * 层级由 cwd 路径现推，落盘的归属只决定渲染在哪一段，这些取舍在元素树里看不出来
+ * 只有渲染一遍才看得见的有三件：递归嵌出来的结构、缩进用的自定义属性
+ * 以及放进分组的那个工作区落在谁的撑开体里，因此这里用真 `react-dom` 渲染并断言结构
  */
 
 /** 造一份注入面完整的数据，`workspaces` 决定路径关系，`groups` / `nesting` 决定归属 */
@@ -434,7 +434,7 @@ describe('nested sub-workspaces in a real DOM', () => {
   })
 
   it('renders no parent-group entry while the workspace has neither a group nor a target', async () => {
-    // W3 在 /repo/a/b 下，它没有分组；它的祖先 W1、W2 名下也没有任何分组，因此整项不渲染
+    // W3 在 /repo/a/b 下，它没有分组，它的祖先 W1、W2 名下也没有任何分组，因此整项不渲染
     const { container, root } = await mount()
 
     const row = await openRowMenu(container, 'W3')
@@ -475,7 +475,7 @@ describe('nested sub-workspaces in a real DOM', () => {
   })
 
   it('leaves the session run unlabelled even when only a session group shares its body', async () => {
-    // 会话分组与未归组会话行现在缩进同一档，但指示器把两者的标题错开了，因此标题仍不需要
+    // 会话分组与未归组会话行缩进同一档，但指示器把两者的标题错开了，因此标题仍不需要
     const { container, root } = await mount({
       loadGroups: async () =>
         snapshot({
@@ -634,7 +634,7 @@ describe('nested sub-workspaces in a real DOM', () => {
         ?.click()
     })
 
-    // 四组「标题 + 两条互斥可选项」，标题说明各自选的是哪件事；开关那一组不带这个标题行
+    // 四组「标题 + 两条互斥可选项」，标题说明各自选的是哪件事，开关那一组不带这个标题行
     expect(
       Array.from(document.body.querySelectorAll('.viewGroupLabel')).map((el) => el.textContent),
     ).toEqual(['展示方式', '指示器', '置顶溢出', '置顶显示'])
@@ -663,7 +663,7 @@ describe('nested sub-workspaces in a real DOM', () => {
       'true',
       'false',
     ])
-    // 勾与字形都取官方图标，替身把字形名渲染成文本；替身不吃 className，因此按文本来认
+    // 勾与字形都取官方图标，替身把字形名渲染成文本，替身不吃 className，因此按文本来认
     for (const [index, row] of rows.entries()) {
       expect(row.textContent?.includes('IconCheckOutlineRegular')).toBe(index % 2 === 0)
     }
@@ -869,7 +869,7 @@ describe('nested sub-workspaces in a real DOM', () => {
     await act(async () => adopted?.('w-new', '/repo/a/c', '新工作区'))
     expect(document.body.querySelector('[role="dialog"]')).toBeNull()
 
-    // /repo 之下的新工作区，w1 恰好只有一个分组——此前会在这里问一句，现在也不问
+    // /repo 之下的新工作区，w1 恰好只有一个分组：只有一个候选同样不问，直接放进去
     await act(async () => adopted?.('w-new', '/repo/x', '新工作区'))
     expect(document.body.querySelector('[role="dialog"]')).toBeNull()
     expect(placed).toEqual([])
@@ -1121,7 +1121,7 @@ describe('nested sub-workspaces in a real DOM', () => {
 
   it('expands a newly added workspace together with its parent chain', async () => {
     // 采纳之后紧接着会在新工作区里开一个新会话，展开是那一步的副作用
-    // 新工作区自己有父、默认折叠，不写记录的话新会话会落在看不见的撑开体里
+    // 新工作区自己有父工作区、默认折叠，不写记录的话新会话会落在看不见的撑开体里
     const store = viewModeStoreStub()
     let adopted: ((workspaceId: string, path: string, name: string) => void) | undefined
     const { root } = await mount({
@@ -1137,10 +1137,10 @@ describe('nested sub-workspaces in a real DOM', () => {
       },
     })
 
-    // /repo/a/b 之下的新工作区：父是 w3，它自己的父链是 w3 → w2 → w1
+    // /repo/a/b 之下的新工作区：父工作区是 w3，它自己的祖先链是 w3 → w2 → w1
     await act(async () => adopted?.('w-new', '/repo/a/b/c', '新工作区'))
 
-    // 新工作区自己与整条父链都被显式写成展开；父链顶层 w1 本就是默认展开，这里也记一条（判据看记录、不看生效值）
+    // 新工作区自己与整条祖先链都被显式写成展开，链顶的 w1 本就默认展开，这里也记一条（判据看记录、不看生效值）
     expect(store.getSnapshot().expansion?.workspace).toEqual({
       'w-new': true,
       w3: true,
@@ -1179,7 +1179,7 @@ describe('nested sub-workspaces in a real DOM', () => {
   })
 
   it('writes no folding record when nesting is off', async () => {
-    // 关掉嵌套时每个工作区都是自己那个容器的顶层，父链在渲染上不存在，展开是白送的
+    // 关掉嵌套时每个工作区都是自己那个容器的顶层，祖先链在渲染上不存在，展开是白送的
     const store = viewModeStoreStub()
     let adopted: ((workspaceId: string, path: string, name: string) => void) | undefined
     const { root } = await mount({
@@ -1246,7 +1246,7 @@ describe('nested sub-workspaces in a real DOM', () => {
 
   it('expands a top-level workspace but collapses a child one by default', async () => {
     // 三态的默认按结构分层：没有父工作区的展开，子工作区折叠
-    // 这与官方「有孩子就展开、叶子折叠」不是同一条规则，反例是「有父且自己还有子节点」的那种
+    // 这与官方「有孩子就展开、叶子折叠」不是同一条规则，反例是「有父工作区且自己还有子工作区」的那种
     const { container, root } = await mount()
 
     expect(isExpanded(sectionNamed(container, 'W1'))).toBe(true)
@@ -1307,7 +1307,7 @@ describe('nested sub-workspaces in a real DOM', () => {
     const second = await mount(storeViewModeProps(store))
 
     expect(isExpanded(sectionNamed(second.container, 'W1'))).toBe(false)
-    // 没碰过的那一层仍按结构默认：W4 无父，照常展开
+    // 没碰过的那一层仍按结构默认：W4 没有父工作区，照常展开
     expect(isExpanded(sectionNamed(second.container, 'W4'))).toBe(true)
 
     await act(async () => second.root.unmount())
@@ -1325,7 +1325,7 @@ describe('nested sub-workspaces in a real DOM', () => {
   })
 
   it('shows the ungrouped bucket expanded by default', async () => {
-    // 「未分组」桶的键是哨兵空串，它按「无父」那一档默认展开
+    // 「未分组」桶的键是哨兵空串，它按「没有父工作区」那一档默认展开
     // 桶只在真有无所属工作区的会话时才渲染，因此这里补一条挂在不存在的工作区上的会话
     const store = viewModeStoreStub()
     const byId = {

@@ -5,11 +5,11 @@ import type { DropArea, DropUnit } from '../src/client/data/dnd/protocol.ts'
 /**
  * 检测器的行为
  *
- * 输入只有 DOM 已经给出的两样东西：指针那一点落在哪几格上、压着哪一行。
- * 输出至多两处落点：一个画框、一个画线。
+ * 输入只有 DOM 已经给出的两样东西：指针那一点落在哪几格上、压着哪一行
+ * 输出至多两处落点：一个画框、一个画线
  *
- * 判定不碰元素也不认识索引——片区自己声明占哪几格，因此检测就是「沿这一串格子往上，
- * 找第一个接这种读法的片区」。
+ * 判定不碰元素也不认识索引：片区自己声明占哪几格
+ * 因此检测就是「沿这一串格子往上，找第一个接这种读法的片区」
  */
 
 /** 一块的读数：检测器拿它分线的上下半 */
@@ -113,7 +113,7 @@ describe('maybeDropSearcher', () => {
   })
 
   it('reads a zero height unit as before', () => {
-    // jsdom 恒零矩形，尚未布局的元素也如此：那时分不出上下，
+    // jsdom 恒零矩形，尚未布局的元素也如此：那时分不出上下
     // 读作「之前」让线落在这块自己身上，与指针到底指着哪一处无关
     const searcher = maybeDropSearcher([orderArea(['workspaceHead/ws-2'])])
 
@@ -157,7 +157,7 @@ describe('maybeDropSearcher', () => {
   })
 
   it('answers for a single unit area whatever row the pointer is on', () => {
-    // 一处单位的片区是一个整体：指针压着它体内的任何一行，说的都是这一片。
+    // 一处单位的片区是一个整体：指针压着它体内的任何一行，说的都是这一片
     // 只有「一格装多行」那种才按行分单位
     const searcher = maybeDropSearcher([orderArea(['workspaceHead/ws-1'], { row: 'ws-1' })])
 
@@ -165,7 +165,7 @@ describe('maybeDropSearcher', () => {
   })
 
   it('turns a drop after one unit into the seam the next unit owns', () => {
-    // 一处缝从上面看是前一条的下半、从下面看是后一条的上半：屏幕上同一处空白，
+    // 一处缝从上面看是前一条的下半、从下面看是后一条的上半：屏幕上同一处空白
     // 因此「之后」在检测层就换成下一条的「之前」，画出来只有一条线
     const area: DropArea = {
       zones: ['pinned'],
@@ -186,7 +186,7 @@ describe('maybeDropSearcher', () => {
   })
 
   it('resolves a seam that lives in another area', () => {
-    // 每个成员各占一片时，下一条是另一片：两处都要在这张名单里找得到。
+    // 每个成员各占一片时，下一条是另一片：两处都要在这张名单里找得到
     // 成员 id 与会话分组那种情况一致——组的成员 id 就是分组 id
     const searcher = maybeDropSearcher([
       orderArea(['groupHead/ws-1/group-a'], { row: 'group-a', seam: 'group-b' }),
@@ -200,7 +200,7 @@ describe('maybeDropSearcher', () => {
   })
 
   it('lets only the nearest area stand when one declares its own level', () => {
-    // 罩住整片列表的那一片裹着所有成员：指针停在成员身上时不该由它接住，
+    // 罩住整片列表的那一片裹着所有成员：指针停在成员身上时不该由它接住
     // 否则「移出分组」会抢在成员自己那一片之前
     const root: DropArea = {
       zones: ['root'],

@@ -3,7 +3,7 @@
  *
  * jsdom 不做版式也不算样式，因此「够不着的淡下去了」「够得着的没被额外上色」「指针下那一处抬高了」
  * 三条只能在真实浏览器里量。本脚本做三件事：
- *   1. 从构建产物 `lib/client.js` 里取出本包那张**编译后**的样式表（类名已带哈希）
+ *   1. 从构建产物 `lib/client.js` 里取出本包那张编译后的样式表（类名已带哈希）
  *   2. 按实际类名拼一个最小页面：三个工作区块分别代表三段 —— 够不着的、够得着的、指针下那一处
  *   3. 用 chromium 读每块的计算样式，要求压淡只落在第一块、后两块保持原样且第三块带落点标记
  *
@@ -17,8 +17,8 @@
  *   pnpm run build
  *   node scripts/probes/drag-guide.mjs
  *
- * 浏览器要自带一个：脚本自己起一条 chromium 命令，CDP 端口固定。
- * 退出码非零即有用例不符。不进 `package.json` 的 scripts：跑一次要自带浏览器、读构建产物，
+ * 浏览器要自带一个：脚本自己起一条 chromium 命令，CDP 端口固定
+ * 退出码非零即有用例不符。不进 `package.json` 的 scripts：跑一次要自带浏览器、读构建产物
  * 结论也不是那种能进 CI 的断言，写成一个命令会让人以为随便跑跑就行
  */
 import { spawn } from 'node:child_process'
@@ -69,7 +69,7 @@ function cssLiteral(source, marker) {
 }
 
 const bundle = readFileSync(join(ROOT, 'lib/client.js'), 'utf8')
-// 产物里类名是 `[hash]_[name]`；取首个类的哈希前缀，据此把页面里的裸类名换掉
+// 产物里类名是 `[hash]_[name]`，取首个类的哈希前缀，据此把页面里的裸类名换掉
 const css = cssLiteral(bundle, '_workspaceHead')
 const prefix = css.match(/\.([A-Za-z0-9_]+?)_workspaceHead/)?.[1]
 if (prefix === undefined) throw new Error('产物样式表里没找到 workspaceHead 类名')
@@ -115,7 +115,7 @@ mkdirSync(OUT_DIR, { recursive: true })
 const pagePath = join(OUT_DIR, 'drag-guide-probe.html')
 writeFileSync(pagePath, page)
 
-// chromium 用一条独立命令起，跑完即退；CDP 端口固定，探针自己连上去读
+// chromium 用一条独立命令起，跑完即退，CDP 端口固定，探针自己连上去读
 spawn(
   'chromium',
   [

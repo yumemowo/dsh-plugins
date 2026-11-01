@@ -11,11 +11,11 @@ import { snapshot } from './snapshot-stub.ts'
 /**
  * 会话归组拖拽的真实 DOM
  *
- * 落点算错、标记画错、提交两次，界面上都不会报错，只表现为「拖过去放不进那个分组」「松手后放进了两处」，
+ * 落点算错、标记画错、提交两次，界面上都不会报错，只表现为「拖过去放不进那个分组」「松手后放进了两处」
  * 因此逐条断言的是交给宿主的 `moveSession` 调用与落点标记画在哪个元素上
  *
- * jsdom 不实现 `DataTransfer`（用例里用最小替身），也不做布局（`getBoundingClientRect()` 恒为全零），
- * `elementFromPoint` 与 `setPointerCapture` 同样缺席，因此命中走事件目标向上找标记元素，
+ * jsdom 不实现 `DataTransfer`（用例里用最小替身），也不做布局（`getBoundingClientRect()` 恒为全零）
+ * `elementFromPoint` 与 `setPointerCapture` 同样缺席，因此命中走事件目标向上找标记元素
  * 用例只需把事件派发到目标元素上，不必给定确切坐标
  *
  * 造事件、造矩形带、挂载区域这些每个 DOM 测试都要的东西在 `./support/dndDom.ts`
@@ -78,8 +78,8 @@ function props(
   orders: string[][] = [],
   slots: [string, readonly string[]][] = [],
 ): WorkspaceGroupsProps {
-  // 两份快照在这里建好、每次渲染交出同一份引用：选择器每次新建对象会让下游的 memo 与
-  // effect 依赖每渲染都换引用，于是「派生 → 写入 → 重渲染」一路自激
+  // 两份快照在这里建好、每次渲染交出同一份引用：选择器每次新建对象会让下游的 memo
+  // 与 effect 依赖每渲染都换引用，于是「派生 → 写入 → 重渲染」一路自激
   const state = workspaceState()
   const sessions = sessionState()
   return regionProps({
@@ -164,7 +164,7 @@ describe('dragging a session into a group', () => {
 
     fire(row(container, 'session-3'), 'dragstart')
     fire(target, 'dragover')
-    // 框套住的是这一段所在的工作区，不是这一段自己：会话不是容器，
+    // 框套住的是这一段所在的工作区，不是这一段自己：会话不是容器
     // 未归组段也只是工作区体内的一截，落进去等于回到那个工作区
     expect(target.getAttribute('data-wg-drop')).toBeNull()
     const block = container.querySelector('[data-wg-dnd-region="workspaceBlock/ws-1"]')
@@ -329,8 +329,8 @@ describe('the marker while the pointer moves', () => {
   })
 
   it('asks the browser for a move drop effect while the pointer is over a zone', async () => {
-    // 松手能不能落下由 `dataTransfer.dropEffect` 决定，`preventDefault()` 只表示「我接受」。
-    // 停在 `none` 时浏览器不派 `drop`：界面上框与线都画着，松手却什么都不发生。
+    // 松手能不能落下由 `dataTransfer.dropEffect` 决定，`preventDefault()` 只表示「我接受」
+    // 停在 `none` 时浏览器不派 `drop`：界面上框与线都画着，松手却什么都不发生
     // 症状与「拖到空白处」无法区分，因此这条要钉住那个赋值本身
     const { container, root } = await mount()
     const target = zone(container, 'sessionGroup/ws-1/group-a')
@@ -434,7 +434,7 @@ describe('a zone this drag does not accept', () => {
 
 describe('releasing after the browser gave up the target', () => {
   it('commits on release when no drop arrives but the pointer had settled on a landing', async () => {
-    // 浏览器在指针静止期间会放弃当前目标：此后一个事件也不派，松手也不派 drop。
+    // 浏览器在指针静止期间会放弃当前目标：此后一个事件也不派，松手也不派 drop
     // 界面上框和线都还在，用户看到的是一次正常的投放，因此松手仍然要提交
     const { container, root, moves } = await mount()
     const target = zone(container, 'sessionGroup/ws-1/group-a')

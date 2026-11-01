@@ -1,7 +1,7 @@
 /**
  * 行拖拽的手势层
  *
- * 提供者只交出一个稳定的 `beginDrag(plan)`：整条拖拽路径不经过 React，
+ * 提供者只交出一个稳定的 `beginDrag(plan)`：整条拖拽路径不经过 React
  * 计划存模块级单例、监听挂 `document`、落点标记直写在命中元素上，因此拖拽期间零次重渲染
  *
  * 所有权由那个单例表达，只有调过 `beginDrag` 的那个提供者会挂 `document` 监听，另一个实例的监听根本不存在，天然不抢
@@ -12,7 +12,7 @@
  * 命中从事件目标沿祖先链向上找，不走坐标反查。jsdom 不实现 `document.elementFromPoint()`
  * 真实运行里坐标反查还要先处理遮挡与滚动，向上走一层是同一件事的更省的写法
  *
- * 碰 DOM 的那一层在 `dnd/marks.ts`：元素怎么读成节点、计划怎么算成绘制表、哪一片该压淡。
+ * 碰 DOM 的那一层在 `dnd/marks.ts`：元素怎么读成节点、计划怎么算成绘制表、哪一片该压淡
  * 本文件只决定「什么时候」调它们——监听、单例、自动滚动与提交
  */
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
@@ -117,11 +117,11 @@ const DndContext = createContext<Dnd | null>(null)
  *
  * 本实例渲染出来的那一片的根节点由调用方经 `region` 交给它
  * 侧边栏与对照 tab 双开时两个实例共享同一个 `document`，各自挂在 `document` 上的监听因此都会
- * 收到对方的 DOM 事件。真实指针只会划过其中一片，但监听本身不带这个信息，靠元素归属来判：
+ * 收到对方的 DOM 事件。真实指针只会划过其中一片，但监听本身不带这个信息，靠元素归属来判
  * 事件目标不在自己这一片里，这一次 `dragover` 与 `drop` 就不归本实例管
  * 不报节点表示不作范围判定，此时本实例接管 `document` 上全部拖放事件（单实例场景，如单独渲染一行）
  *
- * 全局只该有一个实例。并列的第二个已经能用（上面那条元素归属各自收住），嵌套的第二个不行：
+ * 全局只该有一个实例。并列的第二个已经能用（上面那条元素归属各自收住），嵌套的第二个不行
  * 收区域键一路收到 `document`，没有在本实例那一片的根处停下
  *
  * 单实例下越过根之后没有别的区域键，多走这一截不改结果，键撞不撞都一样
@@ -151,7 +151,7 @@ export function DndProvider({
    *
    * 只从 `dragover` 里取，不额外挂别的事件
    * 拖拽期间浏览器只保证派发拖放那一族，`mousemove` 在原生拖放中根本不产生
-   * 自动滚动会让指针下的内容移位，而程序化滚动不会重派 `dragover`，
+   * 自动滚动会让指针下的内容移位，而程序化滚动不会重派 `dragover`
    * 因此滚动之后要拿这个坐标自己重算一次落点，否则松手提交的是滚之前那一格
    */
   const pointerRef = useRef<{ x: number; y: number } | null>(null)
@@ -173,29 +173,28 @@ export function DndProvider({
   /**
    * 查元素的那一片根节点，dragstart 时定下
    *
-   * 检测交回「哪一片、哪一处单位」，把这两样换成像素要在这棵树里找一次。
+   * 检测交回「哪一片、哪一处单位」，把这两样换成像素要在这棵树里找一次
    * 放在这里而不是每帧传下去：一场拖拽里它不变
    *
-   * 初值不给 `document`：宿主半边不跑浏览器（服务端渲染与纯逻辑测试里没有它），
+   * 初值不给 `document`：宿主半边不跑浏览器（服务端渲染与纯逻辑测试里没有它）
    * 起拖时一定会写这一格，因此空着是安全的
    */
   const scopeRef = useRef<ParentNode | null>(null)
 
   /**
-   * 上一次 `dragover` 算出的落点
+   * 上一次 `dragover` 算出的落点，放开时提交的就是它
    *
    * `drop` 只用它，不按自己的坐标重算
    * 指针在两格之间可能已经越过中线，那时提交的会是与用户看到的标记不同的一件事
    */
-  /** 上一次检测的结果，放开时提交的就是它 */
   const checkRef = useRef<DropHit | null>(null)
   /** 本次拖拽是否已经提交过，提交只发生一次 */
   const committedRef = useRef(false)
   /**
    * 上一次打出来的落点摘要
    *
-   * 用来只在落点**变了**的时候打日志；放 ref 而不是局部变量，因为 `applyHit` 可能在
-   * 组件重渲染时重建，那时局部变量会被重置成空串，同一次拖拽里就会重复打
+   * 用来只在落点变了的时候打日志，放 ref 而不是局部变量
+   * 因为 `applyHit` 可能在组件重渲染时重建，那时局部变量会被重置成空串，同一次拖拽里就会重复打
    */
   const lastMarkKeyRef = useRef('')
 
@@ -246,7 +245,7 @@ export function DndProvider({
   /**
    * 处理一次 `dragover`：问一次检测器，按它交回的至多两个元素画标记
    *
-   * 画什么完全由检测结果决定：有 `inside` 就画框、有 `order` 就画线，
+   * 画什么完全由检测结果决定：有 `inside` 就画框、有 `order` 就画线
    * 调用方不再自己往上找区域、也不再把两份提交合并成一格
    * @param target - 事件目标，可能为 null
    * @param point - 指针位置
@@ -260,7 +259,7 @@ export function DndProvider({
     // 指针那一点落在哪几格、压着哪一行：DOM 已经给出的两样东西，检测层只要这两样
     const zones = inside && target !== null ? zoneKeysAt(target) : []
     const rowId = inside && target !== null ? rowIdAt(target) : undefined
-    // 起拖前一定写过这一格；万一没有，就没有可查的那棵树，这一格跳过
+    // 起拖前一定写过这一格，万一没有，就没有可查的那棵树，这一格跳过
     const root = scopeRef.current
     if (root === null) return
     const check =
@@ -278,7 +277,7 @@ export function DndProvider({
     if (line !== undefined) drawn.set(line.element, line.mark)
     markedRef.current = applyDropMarks(markedRef.current, drawn)
 
-    // 只在落点**变了**的时候打：指针每移动一像素都会重算，逐帧打会把日志刷满
+    // 只在落点变了的时候打：指针每移动一像素都会重算，逐帧打会把日志刷满
     const key = [...drawn].map(([element, mark]) => mark + '@' + describeElement(element)).join(' ')
     if (key !== lastMarkKeyRef.current) {
       lastMarkKeyRef.current = key
@@ -382,7 +381,7 @@ export function DndProvider({
     const searcher = searcherRef.current
     const check = checkRef.current
     if (searcher === null || check === null) {
-      // 松手时没有任何落点：界面上看不出异常，用户只会觉得「拖了没反应」。
+      // 松手时没有任何落点：界面上看不出异常，用户只会觉得「拖了没反应」
       // 这一条因此不受调试开关管，永远打出来
       debugWarn('drop with no landing', {
         hasSearcher: searcher !== null,
@@ -396,7 +395,7 @@ export function DndProvider({
       order: check.order === undefined ? undefined : (check.order.unit.region ?? check.order.unit.row),
       side: check.order?.side,
     })
-    // 两笔各自执行：框说「放进这一片」，线说「排到这一行前后」，它们是两件事。
+    // 两笔各自执行：框说「放进这一片」，线说「排到这一行前后」，它们是两件事
     // 拖一条工作区进分组时两者同时成立，因此两笔都写
     check.inside?.area.commit({ kind: 'inside' })
     if (check.order !== undefined) {
@@ -430,9 +429,9 @@ export function DndProvider({
       const dragover = (event: DragEvent): void => {
         // 接管这一格，浏览器才会把元素读成可放置的容器，`drop` 才会派发
         event.preventDefault()
-        // 松手能不能落下由这一格决定，不由 preventDefault 决定：
-        // `dropEffect` 停在 `none` 时浏览器照样不派 `drop`，界面上表现为「框线都在、松手什么都没发生」。
-        // 浏览器只在 `dropEffect` 属于 `effectAllowed` 允许的集合时才认这次赋值，
+        // 松手能不能落下由这一格决定，不由 preventDefault 决定
+        // `dropEffect` 停在 `none` 时浏览器照样不派 `drop`，界面上表现为「框线都在、松手什么都没发生」
+        // 浏览器只在 `dropEffect` 属于 `effectAllowed` 允许的集合时才认这次赋值
         // 因此给它 move（拖拽起手处 setData 时写的也是 move）
         if (event.dataTransfer !== null) event.dataTransfer.dropEffect = 'move'
         const point = { x: event.clientX, y: event.clientY }
@@ -455,11 +454,11 @@ export function DndProvider({
        * 松手
        *
        * 正常路径是 `drop` 先到、这里只做清理。但有另一种情形：浏览器在指针静止期间
-       * 放弃了这个目标，之后再没向本片派过任何事件——框和线留在界面上，松手什么也不发生。
-       * `drop` 在那种情形下永远不会来，而 `dragend` 一定来，因此在这里补交一次。
+       * 放弃了这个目标，之后再没向本片派过任何事件——框和线留在界面上，松手什么也不发生
+       * `drop` 在那种情形下永远不会来，而 `dragend` 一定来，因此在这里补交一次
        *
-       * 补交有误交的风险：用户按 Esc 取消拖拽时也只有 `dragend`。
-       * 两者靠 `dropEffect` 分开——它只在本包的 `dragover` 里被写成 `move`，
+       * 补交有误交的风险：用户按 Esc 取消拖拽时也只有 `dragend`
+       * 两者靠 `dropEffect` 分开——它只在本包的 `dragover` 里被写成 `move`
        * 取消时浏览器把它重置成 `none`。因此只认 `move`
        */
       const dragend = (event: DragEvent): void => {
@@ -500,9 +499,9 @@ export function DndProvider({
         event.dataTransfer.setData('text/plain', `${PAYLOAD_PREFIX}${id}`)
         beginDrag(plan)
       },
-      // 这里**不**清理：React 的事件挂在根容器上，它比 `document` 那一层先跑，
+      // 这里不清理：React 的事件挂在根容器上，它比 `document` 那一层先跑
       // 在这里 teardown 会把 `document` 上的 dragend 监听摘掉，那条「拖拽结束了」的日志
-      // 因此永远打不出来，事后分不清「浏览器没派 drop」与「自己摘早了」。
+      // 因此永远打不出来，事后分不清「浏览器没派 drop」与「自己摘早了」
       onDragEnd: () => {},
     }),
     [beginDrag],

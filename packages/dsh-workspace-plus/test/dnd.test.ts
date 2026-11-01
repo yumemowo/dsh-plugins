@@ -1,11 +1,11 @@
 /**
  * 拖拽命中层的纯逻辑
  *
- * 命中算错时界面不会报错，只表现为「拖过去放不进那一段」或「放进了另一段」，
- * 因此这里逐条钉住区域键的编解码、计划查表、最近行的前后半判定，以及三种「查不到」的缺席：
+ * 命中算错时界面不会报错，只表现为「拖过去放不进那一段」或「放进了另一段」
+ * 因此这里逐条钉住区域键的编解码、计划查表、最近行的前后半判定，以及三种「查不到」的缺席
  * 不在计划表里的区域、原地投放（构造期就不收进计划）、区域里一行都没有
  *
- * 命中函数只读 `getAttribute` 与 `getBoundingClientRect`，因此替身给这两格就够，
+ * 命中函数只读 `getAttribute` 与 `getBoundingClientRect`，因此替身给这两格就够
  * 不必拉起 jsdom 或搭一棵真实元素树
  */
 import { describe, expect, it } from 'vitest'
@@ -156,7 +156,7 @@ describe('building a session grouping plan', () => {
   }
 
   it('collects the head and the body of every other group as one place each', () => {
-    // 组头与组体同属一整块：拖到头上、拖到组体里的空白上，读的都是「归到这个分组」。
+    // 组头与组体同属一整块：拖到头上、拖到组体里的空白上，读的都是「归到这个分组」
     // 两格都要在，拖着会话把指针移进组里时线才不会整个消失
     const { plan } = groupingPlan('group-a')
 
@@ -197,7 +197,7 @@ describe('building a session grouping plan', () => {
   })
 
   it('names the whole workspace block as the unit the loose stretch lands in', () => {
-    // 未归组那一段只是工作区体内的一截，它自己不是容器：能放进去的是它所在的工作区，
+    // 未归组那一段只是工作区体内的一截，它自己不是容器：能放进去的是它所在的工作区
     // 框因此套住整块工作区，而不是缩成那一段
     const { plan } = groupingPlan('group-a')
 
@@ -337,7 +337,7 @@ describe('building an ordering drag plan', () => {
   })
 
   it('names the next member for the seam after a member', () => {
-    // 「排到这一条之后」与「排到下一条之前」是同一处空白：后者天然画在下一条的上缘，
+    // 「排到这一条之后」与「排到下一条之前」是同一处空白：后者天然画在下一条的上缘
     // 前者因此点名下一条，两条路径画出同一条线
     const p = orderDragPlan({
       source: { kind: 'sessionGroup', workspaceId: 'ws-1', groupId: 'group-a' },
@@ -544,7 +544,7 @@ describe('building an index driven workspace drag plan', () => {
   }
 
   it('collects the head and the body of every group the source is not in', () => {
-    // 组头与组体同属一片：拖到组头的标题上、或者拖到组体里那一片空白上，都读作移入这个分组。
+    // 组头与组体同属一片：拖到组头的标题上、或者拖到组体里那一片空白上，都读作移入这个分组
     // 两格都要在，指针移进组里时线才不会整个消失
     const p = planFor('ws-p1', { writes: { moves: [], orders: [], nests: [], unnests: [] } })
 
@@ -605,9 +605,9 @@ describe('building an index driven workspace drag plan', () => {
   })
 
   it('writes nothing when the source is dropped on the group it already belongs to', () => {
-    // 已经归属的那一组落上去是原地投放：归属与位次都没有变化，因此一笔都不写。
+    // 已经归属的那一组落上去是原地投放：归属与位次都没有变化，因此一笔都不写
     //
-    // 那一片必须仍在名单里：整片跳过时指针一落到组头就没人接，检测层沿格继续往外找，
+    // 那一片必须仍在名单里：整片跳过时指针一落到组头就没人接，检测层沿格继续往外找
     // 框于是套到外层的虚拟分组上——而这一行明明就在这个分组体内
     const writes = { moves: [] as string[], orders: [] as (string | undefined)[], nests: [] as string[], unnests: [] as string[] }
     const p = planFor('ws-c1', {

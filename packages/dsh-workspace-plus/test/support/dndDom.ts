@@ -1,11 +1,11 @@
 /**
  * DOM 测试的共用夹具
  *
- * 五个拖拽方向的 DOM 测试各自起过一套：造事件、造矩形带、挂载区域、按区域键取元素。
- * 这些与用例要验证的东西无关，却会在协议一改时各自失修，因此收在一处
+ * 五个拖拽方向的 DOM 测试共用这一套：造事件、造矩形带、挂载区域、按区域键取元素
+ * 这些与用例要验证的东西无关，各写一份只会在协议一改时各自失修
  *
- * 这里的每一件都只做「把 jsdom 缺的那点东西补上」：它不实现原生拖放，
- * 也不猜测组件的行为——事件上挂什么、元素量出多少，都由用例说了算
+ * 这里的每一件都只做「把 jsdom 缺的那点东西补上」，它不实现原生拖放
+ * 也不猜测组件的行为，事件上挂什么、元素量出多少都由用例说了算
  */
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -44,7 +44,7 @@ export function summary(
 /**
  * 拖拽事件上那份 `dataTransfer` 替身
  *
- * jsdom 不实现原生拖放，事件上根本没有这一格；组件读它来认拖拽载荷，因此必须补上
+ * jsdom 不实现原生拖放，事件上根本没有这一格，组件读它来认拖拽载荷，因此必须补上
  * @param event - 要补的事件
  */
 export function transferable(event: Event): Event {
@@ -88,7 +88,7 @@ export function withTransfer(
 /**
  * 派发一个拖拽事件
  *
- * 指针位置有两个来源：竖直方向用数字给（大多数用例只看上下半），
+ * 指针位置有两个来源：竖直方向用数字给（大多数用例只看上下半）
  * 自动滚动那一类需要完整坐标时给 `{ x, y }`
  *
  * 整场拖拽共用一份 `dataTransfer` 时传第三格：那时组件写下的 `dropEffect` 要能被用例读到
@@ -126,8 +126,8 @@ export async function flush(): Promise<void> {
 /**
  * 给一个元素替身一条矩形带
  *
- * 全零矩形下「离哪一行最近」「落在带的上半还是下半」两个判定都不可控：
- * 距离恒为 0、上下半恒判上半。因此让带落在指针上方（`top` 为负）即读作下半，
+ * 全零矩形下「离哪一行最近」「落在带的上半还是下半」两个判定都不可控
+ * 距离恒为 0、上下半恒判上半。因此让带落在指针上方（`top` 为负）即读作下半
  * 落在下方即为上半
  * @param element - 要替身的参照行或区域
  * @param top - 带的上缘
@@ -151,7 +151,7 @@ export function band(element: HTMLElement, top: number, height = 10): void {
 /**
  * 六格恒定的座位：文案、搜索额度、官方会话动作、添加工作区入口
  *
- * 每个 DOM 测试都要写一遍这六格，而它们与用例关心的东西无关。
+ * 每个 DOM 测试都要写一遍这六格，而它们与用例关心的东西无关
  * 展示方式的 store 座位不在这里：那一格各文件用法不同（有的要可订阅读数，有的要可控初值）
  */
 export function shellSeats(): Pick<
@@ -183,13 +183,13 @@ export function shellSeats(): Pick<
 /**
  * 一份注入面完整的区域 props
  *
- * 区域组件有四十来格动作与数据 hook，绝大多数用例只关心其中一两格。
+ * 区域组件有四十来格动作与数据 hook，绝大多数用例只关心其中一两格
  * 这里给出全部合法的空实现，用例只覆盖自己那几格
  * @param overrides - 要覆盖的格
  */
 export function regionProps(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsProps {
-  // 两个快照都建在工厂里、每次渲染返回同一份引用：选择器每次交出新的对象会让下游的
-  // memo 与 effect 依赖每渲染都换引用，于是「派生 → 写入 → 重渲染」一路自激
+  // 两个快照都建在工厂里、每次渲染返回同一份引用
+  // 选择器每次交出新的对象会让下游的 memo 与 effect 依赖每渲染都换引用，于是「派生 → 写入 → 重渲染」一路自激
   const workspaceState = { items: [], archivedSessionIds: [], pinnedSessionIds: [], phase: 'ready' }
   const sessionState = { ids: [], byId: {}, phase: 'ready' }
   return {

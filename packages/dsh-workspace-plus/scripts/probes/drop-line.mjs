@@ -1,15 +1,14 @@
 /**
  * 落点线的像素探针：线必须画在「松手会写到的那一块」上，并且真的看得见
  *
- * 五个历史 bug 里有五个都是同一族症状，而它们全部只能在这里量：
- *   - 线被裁剪盒吃掉（属性、命中全对，像素为空）
- *   - 线画进容器内边距（看得见，但指针瞄着它命中的是容器，松手什么都不发生）
- *   - 同一处缝出现两条线（画在相邻两块的各一条边上）
- *   - 线画在正被拖淡的那一块上（合成不透明度叠乘，线跟着变淡）
+ * 五类毛病只能在像素上量，属性与命中怎么断言都看不出来：
+ *   - 线被裁剪盒吃掉，此时属性、命中全对，像素为空
+ *   - 线画进容器内边距，看得见，但指针瞄着它命中的是容器，松手什么都不发生
+ *   - 同一处缝出现两条线，画在相邻两块的各一条边上
+ *   - 线画在正被拖淡的那一块上，合成不透明度叠乘，线跟着变淡
  *   - 线只跨了标题那一行，没有横跨整个区域
  *
- * jsdom 不做版式，上面每一条在那里都无法观察——这也是为什么此前的用例通过了却
- * 编码了错误前提。本探针用真实 chromium：
+ * jsdom 不做版式，上面每一条在那里都观察不到。本探针用真实 chromium：
  *   1. 从构建产物 lib/client.js 取出编译后的样式表（类名带哈希）
  *   2. 按真实组件结构拼一个列表：虚拟分组 → 组内工作区 → 会话分组 → 未归组会话
  *   3. 依次在每一条行上派发落点标记（before / after / inside），每次都对整页截图
@@ -18,7 +17,7 @@
  *      b. 那条线的横向跨度占满它所在区域的宽度（不是只跨标题那一行）
  *      c. 同一个落点只出现一处蓝色像素行（没有两条线）
  *
- * 用法（读的是 lib/ 里的编译产物，因此先构建）：
+ * 用法，读的是 lib/ 里的编译产物，因此先构建：
  *   pnpm run build
  *   node scripts/probes/drop-line.mjs
  *
@@ -277,10 +276,10 @@ async function probeMark(target, mark, name) {
       const el = document.querySelector('[data-wg-drop]')
       const r = el.getBoundingClientRect()
       const cs = getComputedStyle(el, '${mark === 'inside' ? '::before' : mark === 'before' ? '::before' : '::after'}')
-      // 线左端的期望起点：**这一块头行**的真实缩进，而不是块自己的属性
+      // 线左端的期望起点：这一块头行的真实缩进，而不是块自己的属性
       //
-      // 直接把变量值读出来是没用的：calc(...) 读到的是未解析的字符串，parseFloat 得 NaN；
-      // 而按块自己的值去算又等于复述伪元素那条规则，永远成立、守不住任何东西。
+      // 直接把变量值读出来是没用的：calc(...) 读到的是未解析的字符串，parseFloat 得 NaN
+      // 而按块自己的值去算又等于复述伪元素那条规则，永远成立、守不住任何东西
       // 因此把 var() 交给浏览器解析一次，量出来的才是这一行文字真正落在哪一列
       const row = el.matches('[data-wg-dnd-row]') ? el : el.querySelector('[data-wg-dnd-row]')
       const probe = document.createElement('div')
@@ -340,10 +339,10 @@ async function probeMark(target, mark, name) {
   if (line.y < box.top - 1 || line.y > box.bottom) {
     fail(`${name}: 线在 y=${line.y}，落在元素盒子 ${box.top}..${box.bottom} 之外`)
   }
-  // 线的左端必须跟着**这一块自己那一层**的缩进走，不能是一根固定的 24px
+  // 线的左端必须跟着这一块自己那一层的缩进走，不能是一根固定的 24px
   //
-  // 块与行带不在同一层：块上不声明 --wg-row-start 时那条规则退回兜底 24px，
-  // 于是第 0 层工作区（头行 8px）与组内成员（头行 24px）画出起点相同的线——
+  // 块与行带不在同一层：块上不声明 --wg-row-start 时那条规则退回兜底 24px
+  // 于是第 0 层工作区（头行 8px）与组内成员（头行 24px）画出起点相同的线
   // 屏幕上读作「它们在同一层」，而实际指向的是两层不同的落点
   const expected = Math.round(box.left + (box.indent ?? 24))
   if (Math.abs(line.first - expected) > 2) {

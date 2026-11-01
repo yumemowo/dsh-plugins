@@ -5,8 +5,8 @@ import type { MoveBinding } from '../src/client/data/move.ts'
 /**
  * 一次移动要写哪几笔
  *
- * 只回答「按来源与目的地的差该发哪几笔」，不碰盘也不碰渲染。
- * 三份名单就是三次写入的实参，用例因此断言名单本身，不必看快照。
+ * 只回答「按来源与目的地的差该发哪几笔」，不碰盘也不碰渲染
+ * 三份名单就是三次写入的实参，用例因此断言名单本身，不必看快照
  */
 
 /** 用两份表搭出一组现状读数 */
@@ -55,7 +55,7 @@ describe('planWorkspaceMove', () => {
   })
 
   it('carries the followers that sit in another scope', () => {
-    // 已放进别处分组的后代跟着走，留在原地会让层级在分组边界上断开；
+    // 已放进别处分组的后代跟着走，留在原地会让层级在分组边界上断开
     // 已在目的地那一片的不必写
     const plan = planWorkspaceMove({
       workspaceId: 'ws-1',
@@ -84,7 +84,7 @@ describe('planWorkspaceMove', () => {
   })
 
   it('drops a binding whose parent workspace stays behind', () => {
-    // 只换虚拟分组、没有指名新分组：原来那份归属的父工作区不在新那一片，
+    // 只换虚拟分组、没有指名新分组：原来那份归属的父工作区不在新那一片
     // 这条归属已经不可能生效，留着只会在挪回去时毫无征兆地复活
     const plan = planWorkspaceMove({
       workspaceId: 'ws-1',

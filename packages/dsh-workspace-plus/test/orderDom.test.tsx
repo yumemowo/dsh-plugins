@@ -154,7 +154,7 @@ describe('dragging a session group head', () => {
     fire(row(container, 'group-a'), 'dragstart')
     fire(target, 'dragover', 0)
 
-    // 线跨整块画在分组头所在的那一块上，而不是缩到组头那一行：
+    // 线跨整块画在分组头所在的那一块上，而不是缩到组头那一行
     // 组头只是这一片的标题行，贴着它画会读成「落点只覆盖那一行」
     const block = target.closest('[data-wg-dnd-region]')
     expect(block?.getAttribute('data-wg-drop')).toBe('before')
@@ -162,12 +162,12 @@ describe('dragging a session group head', () => {
   })
 
   it('draws one line for a seam from either side', async () => {
-    // 「排到 group-a 之后」与「排到 group-b 之前」是同一处空白，读数必须逐字相同：
+    // 「排到 group-a 之后」与「排到 group-b 之前」是同一处空白，读数必须逐字相同
     // 同一个标记、画在同一个元素上，用户看不出自己是从哪一侧靠过来的
     const { container, root } = await mount()
     const above = zone(container, 'groupHead/ws-1/group-a')
     const below = zone(container, 'groupHead/ws-1/group-b')
-    // 上下半按**落点那一整块**分，不按组头那一行：落点覆盖全块，指针停在块里任何一处
+    // 上下半按落点那一整块分，不按组头那一行：落点覆盖全块，指针停在块里任何一处
     // 读出的都是同一件事，因此量的也是全块
     band(block(above), -20)
     band(block(below), 20)
@@ -265,7 +265,7 @@ describe('dragging a session group head', () => {
 
   it('reads a drop on the group body as ordering that whole group', async () => {
     // 组体与组头是同一个成员的两个入口：指针移进组里（空组体那一大片、组内某条会话）
-    // 读出的仍是「排到这一整个分组之前 / 之后」。只认组头会让组体成为死区，
+    // 读出的仍是「排到这一整个分组之前 / 之后」。只认组头会让组体成为死区
     // 用户把指针从组头往下一移，线就整个消失
     const { container, root, orders } = await mount()
     const body = zone(container, 'sessionGroup/ws-1/group-c')
@@ -373,7 +373,7 @@ describe('dragging a workspace group head', () => {
   })
 
   it('reads a drop on the group body as ordering that whole workspace group', async () => {
-    // 组体与组头是同一个成员的两个入口，与「拖会话分组头」那一处同理：
+    // 组体与组头是同一个成员的两个入口，与「拖会话分组头」那一处同理
     // 只认组头会让组体成为死区，指针从组头往下一移，线就整个消失
     const { container, root, orders } = await mount()
     const body = zone(container, 'virtualWorkspaceBody/wg-3')
