@@ -571,7 +571,7 @@ function groupHeadRow(count = 0, key = 'group/w1/g1'): OutlineRow {
   return {
     key,
     kind: 'groupHead',
-    ownerKey: 'workspace/w1',
+    parent: undefined,
     container: { kind: 'group', workspaceId: 'w1', groupId: 'g1' },
     workspaceId: 'w1',
     depth: 1,
@@ -727,7 +727,7 @@ function workspaceHeadRow(looseCount = 0): OutlineRow {
   return {
     key: 'workspace/w1',
     kind: 'workspaceHead',
-    ownerKey: '',
+    parent: undefined,
     container: { kind: 'root' },
     workspaceId: 'w1',
     depth: 0,

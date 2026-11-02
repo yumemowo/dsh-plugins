@@ -16,12 +16,12 @@ export interface Outline {
   /** 从上到下的全部行 */
   rows: readonly OutlineRow[]
   /**
-   * header 行的键 → 挂在它下面的那几行，按界面顺序
+   * header 行 -> 挂在它下面的那几行，按界面顺序
    *
    * 只收直接下层：一个工作区 header 下面是它的子工作区 header 、会话分组 header 与它体内那几段
    * 渲染按它逐层展开，因此不必再对着布局递归一遍
    */
-  owners: ReadonlyMap<string, readonly OutlineRow[]>
+  owners: ReadonlyMap<OutlineRow | undefined, readonly OutlineRow[]>
 }
 
 /** 空序列：缺少输入时给一个稳定引用，免得每次渲染都新建一份 */
@@ -61,10 +61,10 @@ export function useOutline(source: OutlineInput): Outline {
  */
 export function outlineOf(source: OutlineInput): Outline {
   const rows = buildOutline(source)
-  const owners = new Map<string, OutlineRow[]>()
+  const owners = new Map<OutlineRow | undefined, OutlineRow[]>()
   for (const row of rows) {
-    const bucket = owners.get(row.ownerKey)
-    if (bucket === undefined) owners.set(row.ownerKey, [row])
+    const bucket = owners.get(row.parent)
+    if (bucket === undefined) owners.set(row.parent, [row])
     else bucket.push(row)
   }
   return { rows, owners }
@@ -73,9 +73,12 @@ export function outlineOf(source: OutlineInput): Outline {
 /**
  * 挂在某个 header 行下面的那几行
  * @param outline - {@link useOutline} 的结果
- * @param key -  header 行的键，空串表示最外层
+ * @param parent - header 行本身，缺省表示最外层
  * @returns 直接下层那几行，按界面顺序，没有时为空表
  */
-export function rowsUnder(outline: Outline, key: string): readonly OutlineRow[] {
-  return outline.owners.get(key) ?? EMPTY.rows
+export function rowsUnder(
+  outline: Outline,
+  parent: OutlineRow | undefined,
+): readonly OutlineRow[] {
+  return outline.owners.get(parent) ?? EMPTY.rows
 }

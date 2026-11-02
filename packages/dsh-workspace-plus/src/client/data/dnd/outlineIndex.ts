@@ -89,8 +89,8 @@ export function indexOutline(
 
   const workspaceNodes: NodeRef[] = []
   const workspaceContainer = new Map<string, ContainerNode>()
-  /** header 行的键 → 它挂在哪个工作区名下，用来把子工作区还原回父工作区 */
-  const workspaceOfHead = new Map<string, string>()
+  /** header 行 -> 它挂在哪个工作区名下，用来把子工作区还原回父工作区 */
+  const workspaceOfHead = new Map<OutlineRow, string>()
   const workspaceParent = new Map<string, string>()
   const virtualNodes: NodeRef[] = []
   const virtualMembers = new Map<string, readonly string[]>()
@@ -138,10 +138,10 @@ export function indexOutline(
       const entry = node('workspace', row.workspaceId)
       workspaceNodes.push(entry)
       workspaceContainer.set(row.workspaceId, row.container)
-      workspaceOfHead.set(row.key, row.workspaceId)
+      workspaceOfHead.set(row, row.workspaceId)
       //  header 行自己挂在哪个工作区名下，那个工作区就是它的父工作区
       // 归属只在这种嵌套成立时才算：被放进会话分组的子工作区，容器就是那个分组本身
-      const parentId = workspaceOfHead.get(row.ownerKey)
+      const parentId = row.parent === undefined ? undefined : workspaceOfHead.get(row.parent)
       if (parentId !== undefined) {
         workspaceParent.set(row.workspaceId, parentId)
         if (row.container.kind === 'group') {
@@ -158,7 +158,7 @@ export function indexOutline(
       else holder.push(groupId)
       // 分组 header 也归属于它的宿主工作区：被放进这个分组的子工作区挂在它下面
       // 反推父工作区时因此照样能落到宿主工作区上
-      workspaceOfHead.set(row.key, row.workspaceId)
+      workspaceOfHead.set(row, row.workspaceId)
     }
   }
 

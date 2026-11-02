@@ -251,7 +251,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
 
   dragOrderGroups.current = scope.layout.focusedListing.groups
   /** 末尾「未分组」桶的 header 行，序列里没有它就是这一段不露面 */
-  const strayHead = rowsUnder(scope.outline, '').find((row) => row.kind === 'strayHead')
+  const strayHead = rowsUnder(scope.outline, undefined).find((row) => row.kind === 'strayHead')
 
   if (props.searching) {
     return (
@@ -288,12 +288,12 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
       {/* 根节点这一层按序列排：工作区分组 header 在前，未归组的工作区平铺在其后、不带区段头
           没有建过分组时序列里没有 header 行，全部工作区都是平铺的那些
           这一层因此不改变任何行的位置，也不再对着布局递归一遍 */}
-      {rowsUnder(scope.outline, '').map((row) =>
+      {rowsUnder(scope.outline, undefined).map((row) =>
         row.kind === 'virtualHead' ? (
           <VirtualWorkspaceSection
             key={row.key}
             head={row}
-            hasMembers={rowsUnder(scope.outline, row.key).length > 0}
+            hasMembers={rowsUnder(scope.outline, row).length > 0}
             expanded={expansion.isVirtualWorkspaceExpanded(row.groupId ?? '')}
             onToggle={() => expansion.toggleVirtualWorkspace(row.groupId ?? '')}
             onRename={() =>
@@ -305,7 +305,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
             orderDragging={virtualWorkspaceDragging}
             bodyZone={dndZoneProps(virtualWorkspaceBodyKey(row.groupId ?? ''))}
           >
-            {rowsUnder(scope.outline, row.key).map((child) => (
+            {rowsUnder(scope.outline, row).map((child) => (
               <WorkspaceNode key={child.key} head={child} scope={scope} />
             ))}
           </VirtualWorkspaceSection>
@@ -333,7 +333,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
               <div className={rowsStyles.sessions}>
                 <SessionList
                   scope={{ kind: 'stray' }}
-                  rows={rowsUnder(scope.outline, strayHead.key)}
+                  rows={rowsUnder(scope.outline, strayHead)}
                   total={strayHead.total ?? 0}
                   open={expansion.isWorkspaceExpanded(UNGROUPED_KEY)}
                   revealSessionId={session.revealSessionId}
@@ -549,7 +549,7 @@ function WorkspaceNode({
   })()
 
   /** 本工作区体内的直接下层：子工作区 header 、会话分组 header 、未归组那一段，以及空态 */
-  const body = rowsUnder(scope.outline, head.key)
+  const body = rowsUnder(scope.outline, head)
   const nestedHeads = body.filter((row) => row.kind === 'workspaceHead')
   const groupHeads = body.filter((row) => row.kind === 'groupHead')
   const looseRows = body.filter((row) => row.kind === 'session' || row.kind === 'overflow')
@@ -659,7 +659,7 @@ function GroupNode({
   const workspaceId = head.workspaceId
   const groupId = head.groupId ?? ''
   const label = head.label ?? ''
-  const body = rowsUnder(scope.outline, head.key)
+  const body = rowsUnder(scope.outline, head)
   const nestedHeads = body.filter((row) => row.kind === 'workspaceHead')
   const sessionRows = body.filter((row) => row.kind === 'session' || row.kind === 'overflow')
   const groupExpanded = expansion.isGroupExpanded({ workspaceId, groupId })

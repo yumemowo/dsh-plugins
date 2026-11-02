@@ -36,7 +36,11 @@ export type OutlineRowKind =
 
 /** 界面上的一行 */
 export interface OutlineRow {
-  /** 全局唯一，供 React 的 key 与调试日志用 */
+  /**
+   * 供 React 的 key 与调试日志用
+   *
+   * 只保证同一层的兄弟之间不重：会话 id 由宿主全局唯一，其余各类行的前缀各不相同
+   */
   key: string
   kind: OutlineRowKind
   /**
@@ -46,13 +50,11 @@ export interface OutlineRow {
    */
   container: ContainerNode
   /**
-   * 这一行挂在哪个 header 行之下
+   * 这一行挂在哪个 header 行之下，最外层时缺省
    *
-   * 空串表示它在最外层（工作区分组的 header 、平铺的工作区、「未分组」桶的 header ）
-   * 序列是深度优先的，因此这一格也是「谁的子树从这里开始」的唯一凭据
    * 渲染按它分组即可，不必再从布局递归一遍
    */
-  ownerKey: string
+  parent: OutlineRow | undefined
   /** 这一行挂在哪个工作区名下，根节点那一层与「未分组」桶为空串 */
   workspaceId: string
   /** 缩进层级，与 `nest` 的 `levelOf` 同值 */
@@ -324,18 +326,29 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
     input.focused ?? ALL_ENTRIES,
   )
 
+  /**
+   * 记下一行，并把那一行交回去
+   *
+   * @returns 刚记下的那一行本身，不是副本
+   */
   const push = (
-    row: Omit<OutlineRow, 'hiddenCount' | 'scopeExpanded'> & {
+    row: Omit<OutlineRow, 'hiddenCount' | 'scopeExpanded' | 'parent'> & {
       hiddenCount?: number
       scopeExpanded?: boolean
     },
-  ): void => {
-    const { hiddenCount = 0, scopeExpanded = false, ...rest } = row
-    rows.push({ ...rest, hiddenCount, scopeExpanded })
+  ): OutlineRow => {
+    const created: OutlineRow = {
+      ...row,
+      parent: owner,
+      hiddenCount: row.hiddenCount ?? 0,
+      scopeExpanded: row.scopeExpanded ?? false,
+    }
+    rows.push(created)
+    return created
   }
 
-  /** 下一个 header 行的归属：子树里的行都记它，空串表示最外层 */
-  let owner = ''
+  /** 下一个 header 行的归属：子树里的行都记它，缺省表示最外层 */
+  let owner: OutlineRow | undefined
 
   /** 一个工作区区块 */
   const addWorkspace = (workspaceId: string, container: ContainerNode): void => {
@@ -344,13 +357,12 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
     const looseChildren = nesting.looseChildIdsOf(workspaceId)
     const depth = nesting.levelOf(workspaceId)
     const headKey = 'workspace/' + workspaceId
-    const outer = owner
+    const outer: OutlineRow | undefined = owner
     let hasBody = false
 
-    push({
+    owner = push({
       key: headKey,
       kind: 'workspaceHead',
-      ownerKey: outer,
       container,
       workspaceId,
       depth,
@@ -358,7 +370,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       regionKey: input.keys.workspaceRegion(workspaceId),
       total: split.loose.length,
     })
-    owner = headKey
 
     // 子工作区排在会话分组之前，与分组内部同一顺序
     for (const childId of looseChildren) {
@@ -370,12 +381,11 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       const groupHeadKey = 'group/' + workspaceId + '/' + group.id
       const groupContainer = containers.groupOf(workspaceId, group.id)
       const inGroup = nesting.groupedChildIdsOf(workspaceId, group.id)
-      const inner = owner
+      const inner: OutlineRow | undefined = owner
       hasBody = true
-      push({
+      owner = push({
         key: groupHeadKey,
         kind: 'groupHead',
-        ownerKey: inner,
         container: groupContainer,
         workspaceId,
         depth,
@@ -388,7 +398,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
         label: group.label,
         count: group.rows.length,
       })
-      owner = groupHeadKey
       // 被放进这个分组的子工作区排在该组的会话之前，与组内的绘制顺序一致
       for (const childId of inGroup) addWorkspace(childId, groupContainer)
       addSessions({ kind: 'group', workspaceId, groupId: group.id }, group.rows, groupContainer, workspaceId, depth)
@@ -409,7 +418,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       push({
         key: 'empty/' + workspaceId,
         kind: 'empty',
-        ownerKey: owner,
         container,
         workspaceId,
         depth,
@@ -440,12 +448,10 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
     const collapsed = collapseSessionRows(sorted, input.alwaysVisibleSessionIds, input.now)
     const expanded = input.isScopeExpanded(scope)
     const shown = expanded && collapsed.hiddenCount > 0 ? sorted : collapsed.rows
-    const prefix = workspaceId + '/' + sessionScopeKey(scope) + '/'
     for (const row of shown) {
       push({
-        key: prefix + row.id,
+        key: row.id,
         kind: 'session',
-        ownerKey: owner,
         container,
         workspaceId,
         depth,
@@ -458,9 +464,8 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
     }
     if (collapsed.hiddenCount > 0) {
       push({
-        key: prefix + 'overflow',
+        key: 'overflow/' + sessionScopeKey(scope),
         kind: 'overflow',
-        ownerKey: owner,
         container,
         workspaceId,
         depth,
@@ -476,10 +481,9 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
   // 根节点：先各工作区分组段，再平铺的那些
   for (const section of listing.groups) {
     const virtualHeadKey = 'virtual/' + section.id
-    push({
+    owner = push({
       key: virtualHeadKey,
       kind: 'virtualHead',
-      ownerKey: '',
       container: containers.root,
       workspaceId: '',
       depth: 0,
@@ -490,11 +494,10 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       count: section.members.length,
       members: section.members,
     })
-    owner = virtualHeadKey
     for (const workspaceId of section.roots) {
       addWorkspace(workspaceId, containers.virtualOf(section.id))
     }
-    owner = ''
+    owner = undefined
   }
   for (const workspaceId of listing.loose) {
     addWorkspace(workspaceId, containers.root)
@@ -502,10 +505,9 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
 
   // 「未分组」桶不属于任何一片，聚焦到某一处时它整段不进序列
   if (input.stray.length > 0 && (input.focused ?? ALL_ENTRIES).kind === 'all') {
-    push({
+    owner = push({
       key: 'stray/head',
       kind: 'strayHead',
-      ownerKey: '',
       container: containers.root,
       workspaceId: '',
       depth: 0,
@@ -513,10 +515,9 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       regionKey: undefined,
       total: input.stray.length,
     })
-    owner = 'stray/head'
     // 「未分组」桶的次序在容器那一层已经定好（置顶提前、其余维持列表原序），这里不再重排
     addSessions({ kind: 'stray' }, input.stray, containers.root, '', 0, undefined, true)
-    owner = ''
+    owner = undefined
   }
 
   return rows

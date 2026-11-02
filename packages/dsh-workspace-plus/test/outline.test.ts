@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildOutline } from '../src/client/data/outline.ts'
-import type { OutlineInput } from '../src/client/data/outline.ts'
+import type { OutlineInput, OutlineRow } from '../src/client/data/outline.ts'
 import { deriveNesting } from '../src/client/data/nest.ts'
 import type { SessionRow } from '../src/client/data/types.ts'
 import { virtualAddress } from '../src/rootEntry.ts'
@@ -211,17 +211,17 @@ describe('buildOutline', () => {
   })
 
   it('keeps every row under a header that exists, depth first', () => {
-    // 渲染按 ownerKey 逐层展开，因此这一格必须自洽
+    // 渲染按 parent 逐层展开，因此这一格必须自洽
     // 每行的归属要么是最外层，要么是一条真实存在的 header 行，且 header 在序列里按深度优先收口
     const rows = buildOutline(fixture({ stray: [row('u1')] }))
-    const stack: string[] = []
+    const stack: OutlineRow[] = []
 
     for (const each of rows) {
-      // 回到这行该在的那一层：一路弹出已经收口的 header 
-      while (stack.length > 0 && stack[stack.length - 1] !== each.ownerKey) stack.pop()
+      // 回到这行该在的那一层：一路弹出已经收口的 header
+      while (stack.length > 0 && stack[stack.length - 1] !== each.parent) stack.pop()
       expect(
-        stack.length > 0 || each.ownerKey === '',
-        'owner "' + each.ownerKey + '" is not open at row "' + each.key + '"',
+        stack.length > 0 || each.parent === undefined,
+        'parent of row "' + each.key + '" is not open',
       ).toBe(true)
       //  header 自己收得下东西，子工作区与分组都要能被逐层展开
       const opens =
@@ -229,10 +229,10 @@ describe('buildOutline', () => {
         each.kind === 'groupHead' ||
         each.kind === 'virtualHead' ||
         each.kind === 'strayHead'
-      if (opens) stack.push(each.key)
+      if (opens) stack.push(each)
     }
 
     // 守一手：这份夹具确实有嵌套，否则上面那条在平铺序列上恒真
-    expect(rows.filter((each) => each.ownerKey !== '').length).toBeGreaterThan(0)
+    expect(rows.filter((each) => each.parent !== undefined).length).toBeGreaterThan(0)
   })
 })
