@@ -273,11 +273,12 @@ export function deriveNesting(input: NestingInput): Nesting {
    * 容器节点的发牌器
    *
    * 节点在推导内部按身份寻址，因此同一个容器必须只发一个实例
-   * 按 `kind + id` 缓存，重复请求交回同一个对象
+   * 按身份缓存，重复请求交回同一个对象
    */
   const rootNode: ContainerNode = { kind: 'root' }
   const virtualNodes = new Map<string, ContainerNode>()
-  const groupNodes = new Map<string, ContainerNode>()
+  /** 工作区 id -> 该工作区体内各会话分组的容器，分组 id 只在一个工作区内唯一 */
+  const groupNodes = new Map<string, Map<string, ContainerNode>>()
   const containers = {
     root: rootNode,
     virtualOf: (groupId: string): ContainerNode => {
@@ -288,13 +289,12 @@ export function deriveNesting(input: NestingInput): Nesting {
       return node
     },
     groupOf: (workspaceId: string, groupId: string): ContainerNode => {
-      // 两个 id 都不是本包能限定字符集的东西，分隔符取一个它们不可能含的字符
-      // 这个键只作 Map 的键、从不解析回来，因此不必可读——与 `client/menus.tsx` 里要切分回两个 id 的 `pg:` 取舍相反
-      const composite = `${workspaceId}\u0000${groupId}`
-      const cached = groupNodes.get(composite)
+      const byGroup = groupNodes.get(workspaceId)
+      const cached = byGroup?.get(groupId)
       if (cached !== undefined) return cached
       const node: ContainerNode = { kind: 'group', workspaceId, groupId }
-      groupNodes.set(composite, node)
+      if (byGroup === undefined) groupNodes.set(workspaceId, new Map([[groupId, node]]))
+      else byGroup.set(groupId, node)
       return node
     },
   }
