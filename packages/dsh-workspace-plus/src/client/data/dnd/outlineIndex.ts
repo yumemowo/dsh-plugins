@@ -68,13 +68,14 @@ export function indexOutline(
    * 同一身份恒交回同一实例：拖拽层按引用比较节点（「链上第一个在名单里的」）
    * 现造一个内容相同的对象会让比较恒不成立
    */
-  const nodes = new Map<string, NodeRef>()
+  const workspaceNodeCache = new Map<string, NodeRef>()
+  const virtualNodeCache = new Map<string, NodeRef>()
   const node = (kind: 'workspace' | 'virtual', id: string): NodeRef => {
-    const key = kind + '/' + id
-    const cached = nodes.get(key)
+    const table = kind === 'workspace' ? workspaceNodeCache : virtualNodeCache
+    const cached = table.get(id)
     if (cached !== undefined) return cached
     const entry: NodeRef = { kind, id }
-    nodes.set(key, entry)
+    table.set(id, entry)
     return entry
   }
 
