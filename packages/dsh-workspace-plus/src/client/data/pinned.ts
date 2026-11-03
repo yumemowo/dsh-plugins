@@ -48,7 +48,7 @@ export interface PinnedEntry {
  * @param pinnedSessionIds - 官方快照里的置顶集合，最近置顶在最前
  * @param sessions - 会话快照，用于取标题、状态与可见性
  * @param archivedSessionIds - 注册表全局的归档集合
- * @param workspaceOf - 会话 id → 所属工作区 id，无所属的会话不在其中
+ * @param workspaceOf - 会话 id -> 所属工作区 id，无所属的会话不在其中
  * @param currentSessionId - 当前打开的会话 id
  * @param statuses - 统一状态快照，缺省时只有摘要里的运行态可用
  * @returns 可见的置顶行，顺序与传入的置顶集合一致
@@ -119,7 +119,7 @@ export function reconcilePinned(
 }
 
 /**
- * 把置顶集合收成「会话 id → 名次」的索引，供就地置顶的比较器使用
+ * 把置顶集合收成「会话 id -> 名次」的索引，供就地置顶的比较器使用
  *
  * 名次是这一份顺序里的位置，顺序本身由调用方给定
  * 置顶区与分组内就地置顶段因此读同一份，两处的先后不会各排一套

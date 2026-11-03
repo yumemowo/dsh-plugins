@@ -142,7 +142,7 @@ interface RegionLayout {
   workspaceById: ReadonlyMap<string, WorkspaceView>
   /** 取一个工作区的 cwd，缺省表示它没有可用路径，那个工作区因此不会被嵌套 */
   pathOfWorkspace: (workspaceId: string) => string | undefined
-  /** workspaceId → 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里 */
+  /** workspaceId -> 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里 */
   virtualOfWorkspace: (workspaceId: string) => string
   nesting: Nesting
   listing: RootListing
@@ -406,7 +406,7 @@ function useRegionLayout(
   )
 
   /**
-   * workspaceId → 工作区视图
+   * workspaceId -> 工作区视图
    *
    * 根节点按 id 排布（分组里记的也是 id），渲染每行时都要按 id 取回视图
    * 流式期间每次活动都会重渲染整片区域，逐个 `find` 会让这一层退化成与工作区数平方成正比
@@ -430,7 +430,7 @@ function useRegionLayout(
   )
 
   /**
-   * workspaceId → 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里
+   * workspaceId -> 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里
    *
    * 虚拟工作区归属由根节点布局交出，那一层已经把「哪些工作区在哪个虚拟分组里」算过一遍
    */
@@ -1573,7 +1573,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const searching = search.normalized !== ''
 
   /**
-   * 会话 id → 它所属的工作区 id，无所属的会话不在其中
+   * 会话 id -> 它所属的工作区 id，无所属的会话不在其中
    *
    * 平铺列表按聚焦范围过滤时要用它：只有归属能回答「这一行属于哪一片内容」
    * 索引一次建好，逐行去各工作区的名单里找会退化成与工作区数平方成正比

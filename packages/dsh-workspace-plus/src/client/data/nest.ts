@@ -46,13 +46,13 @@ export interface NestingInput {
   enabled: boolean
   /** 工作区 id，按宿主给的顺序 */
   workspaceIds: readonly string[]
-  /** workspaceId → cwd，缺省表示该工作区没有可用路径 */
+  /** workspaceId -> cwd，缺省表示该工作区没有可用路径 */
   pathOf: (workspaceId: string) => string | undefined
-  /** workspaceId → 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里 */
+  /** workspaceId -> 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里 */
   virtualOf: (workspaceId: string) => string
-  /** workspaceId → 落盘的嵌套归属，没有时返回 undefined */
+  /** workspaceId -> 落盘的嵌套归属，没有时返回 undefined */
   bindingOf: (workspaceId: string) => NestingBinding | undefined
-  /** workspaceId → 它名下真实存在的会话分组 id 集合 */
+  /** workspaceId -> 它名下真实存在的会话分组 id 集合 */
   groupIdsOf: (workspaceId: string) => ReadonlySet<string>
 }
 
@@ -77,10 +77,10 @@ export interface Nesting {
     /** 某个工作区体内某个会话分组那一段 */
     groupOf: (workspaceId: string, groupId: string) => ContainerNode
   }
-  /** workspaceId → 它所属的容器 */
+  /** workspaceId -> 它所属的容器 */
   containerOf: (workspaceId: string) => ContainerNode
   /**
-   * workspaceId → 它当前生效的父工作区 id，没有时为空串
+   * workspaceId -> 它当前生效的父工作区 id，没有时为空串
    *
    * 有效归属优先于路径推导，与 {@link rootsOf} 的「顶层」判定同源
    * 同层名单按「父工作区相同」过滤时，父工作区身份从这里取，而不是从 {@link ancestorsOf} 的第一格猜
@@ -303,7 +303,7 @@ export function deriveNesting(input: NestingInput): Nesting {
   const containerCache = new Map<string, ContainerNode>()
 
   /**
-   * workspaceId → 它所属的容器，也就是「列表里哪一段把它当作自己的一项」
+   * workspaceId -> 它所属的容器，也就是「列表里哪一段把它当作自己的一项」
    *
    * 被放进分组的落在父工作区体内的那个分组里，其余落在父工作区自己所在的那个容器里
    * 后一条是「整棵子树跟着父工作区走」的实现：没有自己归属的后代与父工作区同处一段，放进分组时整片一起过去
@@ -351,7 +351,7 @@ export function deriveNesting(input: NestingInput): Nesting {
     return level
   }
 
-  /** 容器节点 → 它的成员（按传入顺序） */
+  /** 容器节点 -> 它的成员（按传入顺序） */
   const members = new Map<ContainerNode, string[]>()
   for (const workspaceId of workspaceIds) {
     const container = containerOf(workspaceId)
@@ -363,9 +363,9 @@ export function deriveNesting(input: NestingInput): Nesting {
   const roots = new Map<ContainerNode, string[]>()
   const ancestors = new Map<string, string[]>()
   const levels = new Map<string, number>()
-  /** 父工作区 id → 它名下全部直接子工作区，不分段 */
+  /** 父工作区 id -> 它名下全部直接子工作区，不分段 */
   const childrenByParent = new Map<string, string[]>()
-  /** 父工作区 id → 落进各个分组的子工作区 */
+  /** 父工作区 id -> 落进各个分组的子工作区 */
   const childrenByGroup = new Map<string, Map<string, string[]>>()
   /**
    * 一个容器里的直接父工作区
@@ -497,7 +497,7 @@ export function descendantsOf(
  * 挪过去之后它与乙组里那些 cwd 祖先就成了真正的父子——所以这里按路径认祖先，不看此刻住在哪一片
  *
  * @param workspaceIds - 全部工作区 id
- * @param pathOf - workspaceId → cwd
+ * @param pathOf - workspaceId -> cwd
  * @param workspaceId - 要查的那个工作区
  * @returns 最近的祖先 id，没有祖先时为 undefined
  */

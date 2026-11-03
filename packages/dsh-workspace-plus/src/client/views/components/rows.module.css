@@ -405,7 +405,7 @@
 }
 
 /* 行尾相对时间，官方 .time 的几何与色阶（12px/20px、label-tertiary）
-   悬停、菜单展开、键盘聚焦时让位给操作位——官方是同一处 CSS 互换（time → ellipsis）
+   悬停、菜单展开、键盘聚焦时让位给操作位——官方是同一处 CSS 互换（time -> ellipsis）
    本包把「键盘聚焦」也列为一条显隐路径 */
 .rowTime,
 .groupCount {
@@ -722,7 +722,7 @@ body[data-wg-flip] [data-wg-hover-card] {
  * 左边距单独下发一次（与未归组会话那一档同值）。缺了它空态会停在 .empty 基础规则的 12px 处
  * 比同一层的行更靠左，子工作区里尤其明显：父行缩进了一层，子工作区的空态却跑回根节点那一列
  *
- * 上边距 18px = 空态自身那 16px + 「容器行 → 空态」的 2px
+ * 上边距 18px = 空态自身那 16px + 「容器行 -> 空态」的 2px
  * 空态不是行，没有行带可以承担那一点，因此由它自己吃下 */
 .workspaceBody > .empty,
 .virtualWorkspaceBody > .empty {

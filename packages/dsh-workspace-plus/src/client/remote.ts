@@ -222,13 +222,13 @@ export const DEFAULT_PINNED_LIMIT = 20
 
 export interface WorkspaceGroupsSnapshot {
   byWorkspace: Record<string, Group[]>
-  /** 子工作区 → 它被放进的那个分组，开关关着时是空表 */
+  /** 子工作区 -> 它被放进的那个分组，开关关着时是空表 */
   nesting: Record<string, WorkspaceNesting>
   workspaceGroups: VirtualWorkspace[]
   picker: PickerSnapshot
   /** 是否按子工作区渲染，缺省当开启 */
   nested: boolean
-  /** 各段的顺序位：段键 → 手动顺序，缺一格表示该段按默认序渲染 */
+  /** 各段的顺序位：段键 -> 手动顺序，缺一格表示该段按默认序渲染 */
   orderSlots: Record<string, string[]>
   /** 置顶区静止时显示几条 */
   pinnedVisibleCount: number

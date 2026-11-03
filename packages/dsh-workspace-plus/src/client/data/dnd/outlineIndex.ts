@@ -79,7 +79,7 @@ export function indexOutline(
     return entry
   }
 
-  /** 容器 → 按序列先后登记的成员 */
+  /** 容器 -> 按序列先后登记的成员 */
   const members = new Map<ContainerNode, NodeRef[]>()
   const pushMember = (container: ContainerNode, entry: NodeRef): void => {
     const list = members.get(container)
@@ -212,7 +212,7 @@ export function indexOutline(
     return top
   }
 
-  /** 父工作区 id → 它名下的直接子工作区，按界面顺序 */
+  /** 父工作区 id -> 它名下的直接子工作区，按界面顺序 */
   const childrenByParent = new Map<string, string[]>()
   for (const entry of workspaceNodes) {
     const parent = workspaceParent.get(entry.id)

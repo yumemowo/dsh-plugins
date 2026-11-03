@@ -175,7 +175,7 @@ export interface WorkspaceNodeScope {
   index: OutlineIndex
   edits: RegionListEdits
   commands: RegionListCommands
-  /** 会话 id → 该工作区的会话行，只随会话快照重建 */
+  /** 会话 id -> 该工作区的会话行，只随会话快照重建 */
   rowsByWorkspace: ReadonlyMap<string, readonly SessionRow[]>
   currentSessionId: string | undefined
   home: string | undefined
@@ -681,7 +681,7 @@ function GroupNode({
       onCreateSession={() => commands.createSessionIn(workspaceId, groupId)}
       orderDragging={orderDragging}
     >
-      {/* 组内同样是「子工作区 → 会话」，先文件夹后文件，与父工作区体内同一顺序 */}
+      {/* 组内同样是「子工作区 -> 会话」，先文件夹后文件，与父工作区体内同一顺序 */}
       {nestedHeads.length === 0 ? null : (
         <div className={rowsStyles.nest}>
           {nestedHeads.map((row) => (

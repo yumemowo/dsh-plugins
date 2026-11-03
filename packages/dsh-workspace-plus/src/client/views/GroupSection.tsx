@@ -155,7 +155,7 @@ export function GroupSection({
       </RowHeadShell>
       {/* 空分组既没有会话也没有子工作区，整块撑开体都不渲染 */}
       {hasBody ? (
-        // 组内同样是「子工作区 → 会话」，先文件夹后文件，与父工作区体内同一顺序
+        // 组内同样是「子工作区 -> 会话」，先文件夹后文件，与父工作区体内同一顺序
         <ExpandableBody open={expanded}>
           <div className={styles.groupBody}>{children}</div>
         </ExpandableBody>

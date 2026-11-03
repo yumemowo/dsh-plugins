@@ -83,7 +83,7 @@ export interface DropSearcher {
  * @param areas - 这次拖拽允许落到哪几片
  */
 export function maybeDropSearcher(areas: readonly DropArea[]): DropSearcher {
-  /** 区域键 → 那一片：一片占好几格，每一格都指向同一片 */
+  /** 区域键 -> 那一片：一片占好几格，每一格都指向同一片 */
   const byZone = new Map<string, DropArea>()
   for (const area of areas) {
     for (const zone of area.zones) {
