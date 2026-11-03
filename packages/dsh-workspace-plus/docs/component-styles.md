@@ -6,16 +6,17 @@
 
 拆分的边界不是「哪个组件用这些样式」，而是「哪些类名在同一条选择器里共现」。类名在编译期被替换成 `[hash]_rowSelected`，**跨 module 引用的类名会指向一个不存在的选择器**，样式静默失效。因此同一条选择器里出现的类名必须落在同一个 module。
 
-按这条规则对 1374 行 CSS 建图后，112 个类名归成 82 个连通分量；再按语义把同属一块界面的分量合并，得到 10 张表：
+按这条规则对 1374 行 CSS 建图后，112 个类名归成 82 个连通分量；再按语义把同属一块界面的分量合并，得到下面这些表。行数那一列是拆分当时的记录，此后各处都在增减，要现读用 `wc -l`：
 
-| 表 | 行数 | 消费方 |
+| 表 | 拆分时的行数 | 消费方 |
 | --- | --- | --- |
-| `views/components/rows.module.css` | 494 | 13 个组件 |
-| `views/SearchControl.module.css` | 255 | 2 个 |
-| `views/header.module.css` | 202 | 4 个 |
-| `views/WorkspacePickerMenu.module.css` | 143 | 2 个 |
+| `views/components/rows.module.css` | 494 | 14 个组件 |
+| `views/PinnedSection.module.css` | — | 1 个 |
+| `views/SearchControl.module.css` | 255 | 1 个 |
+| `views/header.module.css` | 202 | 3 个 |
+| `views/WorkspacePickerMenu.module.css` | 143 | 1 个 |
 | `views/ViewOptionsMenu.module.css` | 105 | 1 个 |
-| `views/WorkspaceGroupsRegion.module.css` | 80 | 3 个 |
+| `views/WorkspaceGroupsRegion.module.css` | 80 | 4 个 |
 | `menus.module.css` | 51 | 4 个 |
 | `views/components/dialogs/dialogs.module.css` | 49 | 3 个 |
 | `views/components/HoverCards.module.css` | 40 | 1 个 |
@@ -73,12 +74,12 @@ CSS Modules 最危险的一点是**大多数接错法都不会报错**：类型�
 
 ## 测试接法
 
-`vitest.config.ts` 配 `css.include` 与 `classNameStrategy: 'non-scoped'`，类名在测试里保持源文件原名，因此测试里 201 处 `querySelector('.row')` 这类选择器可以直接写源文件的类名，不必去读编译产物。不配 `css.include` 时 vitest 只给一个惰性代理（`Object.keys` 为空但 `styles.foo` 有值），断言与快照都不稳。
+`vitest.config.ts` 配 `css.include` 与 `classNameStrategy: 'non-scoped'`，类名在测试里保持源文件原名，因此测试里那一批 `querySelector('.row')` 这类选择器可以直接写源文件的类名，不必去读编译产物。不配 `css.include` 时 vitest 只给一个惰性代理（`Object.keys` 为空但 `styles.foo` 有值），断言与快照都不稳。
 
 要读整份样式表文本的测试用 `test/readCss.ts`：`readAllCss()` 按稳定顺序合并全部 `.module.css`，`readReducedMotionCss()` 收集全部 reduced-motion 块（拆分后每张表各带一份，只看第一条会漏）。
 
 ## 验收
 
-拆分前后用同一份 DOM 各渲染一次（拆分前是 `styles.ts` 的原文，拆分后是 10 张表编译产物），无头 Chromium 截图**逐字节相同**；规则集合逐条比对 214/214 完全相同，112 个类名无缺失。
+拆分前后用同一份 DOM 各渲染一次（拆分前是 `styles.ts` 的原文，拆分后是当时那 10 张表的编译产物），无头 Chromium 截图**逐字节相同**；规则集合逐条比对 214/214 完全相同，112 个类名无缺失。
 
-类名去前缀与转 camelCase 之后又验了一遍：用与构建脚本相同的参数重编译 10 张表，113 个类名（112 个类 + 1 个 keyframes）在产物里都能同时找到「映射」与「选择器」，`--wg-*` 与 `data-wg-*` 共 10 个标记原样保留。
+类名去前缀与转 camelCase 之后又验了一遍：用与构建脚本相同的参数重编译那 10 张表，113 个类名（112 个类 + 1 个 keyframes）在产物里都能同时找到「映射」与「选择器」，`--wg-*` 与 `data-wg-*` 共 10 个标记原样保留。此后新增的 `PinnedSection.module.css` 不在那次核对的范围里。

@@ -51,6 +51,10 @@ function createFakeContext(initialGlobal?: unknown): {
       },
     },
     effect: (install: () => () => void) => install(),
+    logger: {
+      error: () => {},
+      info: () => {},
+    },
   } as unknown as Context
 
   return { ctx, records, readStored: () => stored }
@@ -67,6 +71,7 @@ describe('workspace groups service', () => {
       workspaceGroups: [],
       picker: { focused: ALL_ENTRIES, recent: [], pinned: [] },
       nested: true,
+      orderSlots: {},
       pinnedVisibleCount: 5,
       pinnedLimit: 20,
     })
@@ -155,6 +160,147 @@ describe('workspace groups service', () => {
     await service.createGroup('w1', '前端')
 
     await expect(service.moveSession('w1', 's1', 'nope')).rejects.toThrow(/unknown group/)
+  })
+
+  it('changes only the membership when a session moves', async () => {
+    // 归属变更不带位次：会话在新段里的位置由渲染侧的默认序决定
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const created = await service.createGroup('w1', '前端')
+    const groupId = created.byWorkspace['w1']?.[0]?.id ?? ''
+
+    const snapshot = await service.moveSession('w1', 's3', groupId)
+
+    expect(snapshot.byWorkspace['w1']?.[0]?.sessionIds).toContain('s3')
+    // 顺序位那一格完全不参与归属变更
+    expect(snapshot.orderSlots).toEqual({})
+  })
+
+  it('leaves the pinned order alone when a session moves', async () => {
+    // 置顶段的顺序位与会话归属是两件事，归组不该把它擦掉
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const created = await service.createGroup('w1', '前端')
+    const groupId = created.byWorkspace['w1']?.[0]?.id ?? ''
+    await service.setSegmentOrder('pinned', ['s1', 's2'])
+
+    const snapshot = await service.moveSession('w1', 's3', groupId)
+
+    expect(snapshot.orderSlots['pinned']).toEqual(['s1', 's2'])
+  })
+
+  it('writes a segment order and reads it back', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+
+    const snapshot = await service.setSegmentOrder('pinned', ['s2', 's1'])
+
+    expect(snapshot.orderSlots['pinned']).toEqual(['s2', 's1'])
+  })
+
+  it('drops a segment order when it is written empty', async () => {
+    // 空表与「这一段没有手动顺序」是同一件事，留一格空数组只会让 global 越堆越多
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    await service.setSegmentOrder('pinned', ['s1'])
+
+    const snapshot = await service.setSegmentOrder('pinned', [])
+
+    expect(snapshot.orderSlots).toEqual({})
+  })
+
+  it('writes nothing when a segment order is unchanged', async () => {
+    const { ctx, readStored } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    await service.setSegmentOrder('pinned', ['s2', 's1'])
+    const before = JSON.stringify(readStored())
+
+    await service.setSegmentOrder('pinned', ['s2', 's1'])
+
+    expect(JSON.stringify(readStored())).toBe(before)
+  })
+
+  it('keeps the segment order through an unrelated write', async () => {
+    // 每个变更方法写回的 global 都必须带上这一格，漏掉就等于把别人的手动顺序擦掉
+    const { ctx, readStored } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    await service.setSegmentOrder('pinned', ['s2', 's1'])
+
+    await service.createGroup('w1', '前端')
+
+    const stored = readStored() as { orderSlots: Record<string, string[]> }
+    expect(stored.orderSlots['pinned']).toEqual(['s2', 's1'])
+  })
+
+  it('moves a group before another group', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const first = (await service.createGroup('w1', '第一')).byWorkspace['w1']?.[0]?.id ?? ''
+    const groups = (await service.createGroup('w1', '第二')).byWorkspace['w1'] ?? []
+    const second = groups[1]?.id ?? ''
+
+    const snapshot = await service.moveGroupBefore('w1', second, first)
+
+    expect(snapshot.byWorkspace['w1']?.map((group) => group.id)).toEqual([second, first])
+  })
+
+  it('appends a group to the end when no anchor is given', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const first = (await service.createGroup('w1', '第一')).byWorkspace['w1']?.[0]?.id ?? ''
+    const groups = (await service.createGroup('w1', '第二')).byWorkspace['w1'] ?? []
+    const second = groups[1]?.id ?? ''
+
+    const snapshot = await service.moveGroupBefore('w1', first, undefined)
+
+    expect(snapshot.byWorkspace['w1']?.map((group) => group.id)).toEqual([second, first])
+  })
+
+  it('leaves the order alone when the anchor belongs to another workspace', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const mine = (await service.createGroup('w1', '第一')).byWorkspace['w1']?.[0]?.id ?? ''
+    const foreign = (await service.createGroup('w2', '别处')).byWorkspace['w2']?.[0]?.id ?? ''
+
+    const snapshot = await service.moveGroupBefore('w1', mine, foreign)
+
+    // 锚点必须仍是同一工作区的成员，别的工作区的分组不是合法锚点
+    expect(snapshot.byWorkspace['w1']?.map((group) => group.id)).toEqual([mine])
+  })
+
+  it('leaves the order alone when the anchor is the group itself', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const groupId = (await service.createGroup('w1', '第一')).byWorkspace['w1']?.[0]?.id ?? ''
+
+    const snapshot = await service.moveGroupBefore('w1', groupId, groupId)
+
+    expect(snapshot.byWorkspace['w1']?.map((group) => group.id)).toEqual([groupId])
+  })
+
+  it('leaves the order alone when the group is unknown', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const groupId = (await service.createGroup('w1', '第一')).byWorkspace['w1']?.[0]?.id ?? ''
+
+    // 与 moveSession 不同，排序的资格复核不过时按无操作返回而不是抛错
+    const snapshot = await service.moveGroupBefore('w1', 'nope', groupId)
+
+    expect(snapshot.byWorkspace['w1']?.map((group) => group.id)).toEqual([groupId])
+  })
+
+  it('writes nothing when a group is dropped on its own neighbour', async () => {
+    const { ctx, records } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const first = (await service.createGroup('w1', '第一')).byWorkspace['w1']?.[0]?.id ?? ''
+    const groups = (await service.createGroup('w1', '第二')).byWorkspace['w1'] ?? []
+    const second = groups[1]?.id ?? ''
+    const before = JSON.stringify(records.get('w1'))
+
+    // 拖到相邻位是一次相邻空操作：顺序没变，盘上不该留下一次改动
+    await service.moveGroupBefore('w1', first, second)
+
+    expect(JSON.stringify(records.get('w1'))).toBe(before)
   })
 
   it('renames a group in place', async () => {
@@ -289,6 +435,53 @@ describe('root-level workspace groups', () => {
     await expect(service.moveWorkspace('w1', 'nope')).rejects.toThrow(/unknown workspace group/)
   })
 
+  it('moves a workspace group before another workspace group', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const first = (await service.createVirtualWorkspace('第一')).workspaceGroups[0]?.id ?? ''
+    const groups = (await service.createVirtualWorkspace('第二')).workspaceGroups
+    const second = groups[groups.length - 1]?.id ?? ''
+
+    const snapshot = await service.moveVirtualWorkspaceBefore(second, first)
+
+    expect(snapshot.workspaceGroups.map((group) => group.id)).toEqual([second, first])
+  })
+
+  it('appends a workspace group to the end when no anchor is given', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const first = (await service.createVirtualWorkspace('第一')).workspaceGroups[0]?.id ?? ''
+    const groups = (await service.createVirtualWorkspace('第二')).workspaceGroups
+    const second = groups[groups.length - 1]?.id ?? ''
+
+    const snapshot = await service.moveVirtualWorkspaceBefore(first, undefined)
+
+    expect(snapshot.workspaceGroups.map((group) => group.id)).toEqual([second, first])
+  })
+
+  it('leaves the order alone when a workspace group anchor is unknown', async () => {
+    const { ctx } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const groupId = (await service.createVirtualWorkspace('第一')).workspaceGroups[0]?.id ?? ''
+
+    const snapshot = await service.moveVirtualWorkspaceBefore(groupId, 'nope')
+
+    expect(snapshot.workspaceGroups.map((group) => group.id)).toEqual([groupId])
+  })
+
+  it('writes nothing when a workspace group is dropped on its own neighbour', async () => {
+    const { ctx, readStored } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const first = (await service.createVirtualWorkspace('第一')).workspaceGroups[0]?.id ?? ''
+    const groups = (await service.createVirtualWorkspace('第二')).workspaceGroups
+    const second = groups[groups.length - 1]?.id ?? ''
+    const before = JSON.stringify(readStored())
+
+    await service.moveVirtualWorkspaceBefore(first, second)
+
+    expect(JSON.stringify(readStored())).toBe(before)
+  })
+
   it('renames a workspace group in place', async () => {
     const { ctx } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
@@ -348,7 +541,7 @@ describe('root-level workspace groups', () => {
 /**
  * 菜单的聚焦 / 最近使用 / 置顶
  *
- * 三份记录与工作区分组同处 global 槽位，这一段固化它们与既有变更操作的配合：
+ * 三份记录与工作区分组同处 global 槽位，这一段固化它们与既有变更操作的配合
  * 聚焦要落盘并保持最近一次在最前，删除对象时三处一起清掉
  */
 describe('picker state', () => {
@@ -606,7 +799,7 @@ describe('picker state', () => {
 
   it('writes a global that still parses on the next open', async () => {
     // 真域只在持久读边界上校验，因此「写进去的形状对不对」只有下次 open 才知道
-    // 每个变更方法写回的 global 都必须带上三个字段，缺一个就等于把文件写坏
+    // 每个变更方法写回的 global 都必须带上四个字段，缺一个就等于把文件写坏
     const { ctx, readStored } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     const groupId = (await service.createVirtualWorkspace('前端')).workspaceGroups[0]?.id ?? ''
@@ -615,7 +808,7 @@ describe('picker state', () => {
     await service.moveWorkspace('w1', groupId)
 
     const stored = readStored() as { virtualWorkspaces: unknown[]; picker: unknown }
-    expect(Object.keys(stored).sort()).toEqual(['nested', 'picker', 'virtualWorkspaces'])
+    expect(Object.keys(stored).sort()).toEqual(['nested', 'orderSlots', 'picker', 'virtualWorkspaces'])
     expect(stored.virtualWorkspaces).toHaveLength(1)
     expect(workspaceTreeSchema.safeParse(stored).success).toBe(true)
   })

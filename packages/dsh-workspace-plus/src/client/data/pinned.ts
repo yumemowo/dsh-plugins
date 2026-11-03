@@ -2,16 +2,24 @@
  * 置顶集合到置顶区各行的投影
  *
  * 官方 `pinnedSessionIds` 是注册表全局的集合，不保证每一个仍出现在当前可见列表里
- * （会话可能已归档、可能是子代理来源），因此投影时必须滤掉不可见的那些
+ * 会话可能已归档、可能是子代理来源，因此投影时必须滤掉不可见的那些
  * 判据复用 `sessions.ts` 里既有的可见性规则，不另写一套
  *
- * 顺序直接沿用官方集合的顺序（最近置顶在最前），不自己再排
+ * 顺序沿用官方集合的顺序（最近置顶在最前），手动顺序的合成交给 {@link reconcilePinned}
  * 这一层没有 React 依赖，置顶区按可见条数切片，就地置顶按名次做稳定分区
  */
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import { isSessionVisible, toSessionRow } from './sessions.ts'
 import type { SessionRow } from './types.ts'
+
+/**
+ * 置顶段顺序位的存储键
+ *
+ * 跨工作区共用一格：置顶集合本身就是注册表全局的，不按工作区切分
+ * 置顶区按它渲染，分组内就地置顶的名次也从同一份顺序取，两个表面因此永不打架
+ */
+export const PINNED_SLOT_KEY = 'pinned'
 
 /** 置顶区里的一行 */
 export interface PinnedEntry {
@@ -36,12 +44,11 @@ export interface PinnedEntry {
  * 把置顶集合投影成置顶区的行
  *
  * 官方集合的每个 id 都要在会话快照里找得到，且要过一遍可见性判据
- * 
  * 归档的、子代理来源的、非当前的空白会话都要滤掉
  * @param pinnedSessionIds - 官方快照里的置顶集合，最近置顶在最前
  * @param sessions - 会话快照，用于取标题、状态与可见性
  * @param archivedSessionIds - 注册表全局的归档集合
- * @param workspaceOf - 会话 id → 所属工作区 id，无所属的会话不在其中
+ * @param workspaceOf - 会话 id -> 所属工作区 id，无所属的会话不在其中
  * @param currentSessionId - 当前打开的会话 id
  * @param statuses - 统一状态快照，缺省时只有摘要里的运行态可用
  * @returns 可见的置顶行，顺序与传入的置顶集合一致
@@ -75,11 +82,49 @@ export function pinnedEntries(
 }
 
 /**
- * 把置顶集合收成「会话 id → 名次」的索引，供就地置顶的比较器使用
+ * 置顶集合与顺序位合成后的渲染顺序
  *
- * 名次只是集合里的位置，因此最近置顶的名次最小、排最前
+ * 成员集合仍是官方集合，顺序位只在它的范围内定次序
+ * 顺序位里已不是成员的 id（取消置顶、归档）静默丢弃，不在顺序位里的成员按官方集合的位置接在后面
+ * 没有顺序位时按官方集合的顺序，与引入顺序位之前逐项相同
+ *
+ * 顺序位只记 id、成员集合另有一份来源，两者会漂移，因此渲染不直接用顺序位，而是把它与成员集合对一遍
+ * 成员集合是事实来源，顺序位只在它的范围内定次序：重复的 id 只认第一格，界面不会因此丢行或重复
+ *
+ * 置顶区与分组内就地置顶段都读这一份结果，两个表面因此永不打架
+ * @param slot - 置顶段的顺序位，缺省表示置顶区还没有手动顺序
+ * @param entries - {@link pinnedEntries} 的结果，顺序即官方集合的顺序
+ * @returns 渲染顺序，成员身份与传入的一致
+ */
+export function reconcilePinned(
+  slot: readonly string[] | undefined,
+  entries: readonly PinnedEntry[],
+): PinnedEntry[] {
+  const rank = new Map(entries.map((entry, index) => [entry.id, index]))
+  const byRank = (a: PinnedEntry, b: PinnedEntry): number =>
+    (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)
+  // 空表与缺席同义：两者都表示置顶区没有手动顺序，留一份空数组只是落盘时的一格噪音
+  if (slot === undefined || slot.length === 0) return [...entries].sort(byRank)
+
+  const byId = new Map(entries.map((entry) => [entry.id, entry]))
+  const ordered: PinnedEntry[] = []
+  const placed = new Set<string>()
+  for (const id of slot) {
+    const entry = byId.get(id)
+    if (entry === undefined || placed.has(id)) continue
+    placed.add(id)
+    ordered.push(entry)
+  }
+  return [...ordered, ...entries.filter((entry) => !placed.has(entry.id)).sort(byRank)]
+}
+
+/**
+ * 把置顶集合收成「会话 id -> 名次」的索引，供就地置顶的比较器使用
+ *
+ * 名次是这一份顺序里的位置，顺序本身由调用方给定
+ * 置顶区与分组内就地置顶段因此读同一份，两处的先后不会各排一套
  * 只收可见的置顶项：不可见的那几条不会渲染，占着名次只会让别的行排得更后
- * @param entries - {@link pinnedEntries} 的结果
+ * @param entries - {@link reconcilePinned} 的结果
  * @returns 会话 id 到名次的索引
  */
 export function pinRanks(entries: readonly PinnedEntry[]): ReadonlyMap<string, number> {
@@ -109,7 +154,7 @@ export function frontPinnedRows(
   const rest: SessionRow[] = []
   for (const row of rows) (pins.has(row.id) ? pinned : rest).push(row)
   if (pinned.length === 0) return [...rows]
-  // 置顶内部按名次排，最近置顶的在最前
+  // 置顶内部按名次排，名次小的在最前
   pinned.sort((a, b) => (pins.get(a.id) ?? 0) - (pins.get(b.id) ?? 0))
   return [...pinned, ...rest]
 }

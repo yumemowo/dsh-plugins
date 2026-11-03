@@ -27,6 +27,8 @@ export interface SnapshotInit {
   picker?: PickerSnapshot
   /** 是否按子工作区渲染，未给时是开启 */
   nested?: boolean
+  /** 会话段的顺序位，未给时是「每一段都没有手动顺序」 */
+  orderSlots?: Record<string, string[]>
   /** 置顶区静止时显示几条，未给时取本包默认值 */
   pinnedVisibleCount?: number
   /** 置顶数量上限，未给时取本包默认值 */
@@ -41,6 +43,7 @@ export function snapshot(init: SnapshotInit = {}): WorkspaceGroupsSnapshot {
     workspaceGroups: init.workspaceGroups ?? [],
     picker: init.picker ?? { focused: ALL_ENTRIES, recent: [], pinned: [] },
     nested: init.nested ?? true,
+    orderSlots: init.orderSlots ?? {},
     pinnedVisibleCount: init.pinnedVisibleCount ?? DEFAULT_PINNED_VISIBLE_COUNT,
     pinnedLimit: init.pinnedLimit ?? DEFAULT_PINNED_LIMIT,
   }

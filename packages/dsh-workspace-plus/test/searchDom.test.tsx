@@ -5,13 +5,8 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
-import {
-  officialAddLabels,
-  officialSessionLabels,
-  timeLabel,
-} from '../src/client/official.ts'
-import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { shellSeats } from './support/dndDom.ts'
 import { viewModeProps, viewModeStoreStub, storeViewModeProps } from './viewMode-stub.ts'
 
 /**
@@ -61,6 +56,9 @@ function props(wide = true): WorkspaceGroupsProps {
     renameGroup: async () => snapshot(),
     deleteGroup: async () => snapshot(),
     moveSession: async () => snapshot(),
+    setSegmentOrder: async () => snapshot(),
+    moveGroupBefore: async () => snapshot(),
+    moveVirtualWorkspaceBefore: async () => snapshot(),
     createVirtualWorkspace: async () => snapshot(),
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),
@@ -72,27 +70,11 @@ function props(wide = true): WorkspaceGroupsProps {
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
     setSessionPinned: async () => {},
+    insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
-    searchResultLimit: 20,
-    t: regionTranslate(),
-    tWorkspace: workspaceTranslate(),
-    tSidebar: sidebarTranslate(),
+    ...shellSeats(),
     ...viewModeProps(),
-    official: () => ({
-      renameSession: async () => {},
-      forkSession: () => {},
-      archiveSession: async () => {},
-      labels: officialSessionLabels(workspaceTranslate()),
-      relativeTime: (updatedAt: number, now: number) =>
-        timeLabel(updatedAt, now, workspaceTranslate()),
-    }),
-    addWorkspace: () => ({
-      createWorkspace: async (path: string) => ({ workspaceId: `w-${path}`, title: path }),
-      startSession: () => {},
-      occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
-      labels: officialAddLabels(workspaceTranslate()),
-    }),
   }
 }
 
@@ -327,7 +309,7 @@ describe('search in a real DOM', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
-    // jsdom 没有布局引擎，scrollIntoView 也不存在；本用例只断言写下的记录，装一个空实现即可
+    // jsdom 没有布局引擎，scrollIntoView 也不存在，本用例只断言写下的记录，装一个空实现即可
     const originalScroll = Element.prototype.scrollIntoView
     Element.prototype.scrollIntoView = () => {}
     try {

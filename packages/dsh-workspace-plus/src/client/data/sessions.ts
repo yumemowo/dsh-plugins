@@ -211,12 +211,12 @@ export function compareSessionRows(a: SessionRow, b: SessionRow): number {
 /**
  * 带就地置顶的显示顺序：置顶会话排最前，其后仍是「空白会话最前、其余按最近更新倒序」
  *
- * 置顶顺序由调用方按官方 `pinnedSessionIds` 交进来（最近置顶在最前）
+ * 置顶名次由调用方交进来，它取自置顶段顺序位与官方集合合成后的那一份顺序
  * 比较器自己不读任何全局状态，三种段落各有各的成员集合，读全局只会让「这一段里谁在前」取决于别处
  *
  * 三种段落都要用它：分组内的行、工作区未归组段的行、平铺列表的行
  * 只改其中一处不会报错，只表现为「有的地方置顶了、有的没有」
- * @param pins - 会话 id → 置顶名次，名次小的在前；未置顶的会话不在其中
+ * @param pins - 会话 id -> 置顶名次，名次小的在前，未置顶的会话不在其中
  * @param a - 参与比较的一行
  * @param b - 参与比较的另一行
  */
@@ -261,9 +261,9 @@ export function flatSessionRows(
 /**
  * 按聚焦范围收窄平铺列表
  *
- * `allowed` 为 undefined 表示没有聚焦、全部保留；无所属的会话不在索引里，聚焦时因此被排除
+ * `allowed` 为 undefined 表示没有聚焦、全部保留，无所属的会话不在索引里，聚焦时因此被排除
  * @param rows - 平铺列表的全部可见行
- * @param workspaceOf - 会话 id → 所属工作区 id，无所属的会话不在其中
+ * @param workspaceOf - 会话 id -> 所属工作区 id，无所属的会话不在其中
  * @param allowed - 聚焦允许出现的工作区，undefined 表示全部
  */
 export function flatRowsInFocus(
@@ -311,4 +311,20 @@ export function straySessions(
     rows.push(toSessionRow(sessions, statuses, summary))
   }
   return rows
+}
+
+/**
+ * 一个会话当前所属的分组 id
+ *
+ * 读的是落盘的元数据而不是会话行：会话行上没有归属这一格
+ * @returns 所属分组 id，不在任何分组里时为空串
+ */
+export function groupIdOfSession(
+  groups: readonly { id: string; sessionIds: readonly string[] }[],
+  sessionId: string,
+): string {
+  for (const group of groups) {
+    if (group.sessionIds.includes(sessionId)) return group.id
+  }
+  return ''
 }

@@ -32,8 +32,9 @@ import type { ParentGroupMenuInput, VirtualWorkspaceMenuInput } from '../menus.t
 import { RowActions } from './RowActions.tsx'
 import { WorkspaceHoverContent } from './components/HoverCards.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
-import { handleRowKeyDown } from './components/rowKeyboard.ts'
+import { RowHeadShell } from './components/RowHeadShell.tsx'
 import { useLocale } from '../hooks/useLocale.ts'
+import type { DragStartEvent } from '../hooks/useDnd.ts'
 import styles from './components/rows.module.css'
 import clsx from 'clsx'
 
@@ -91,6 +92,29 @@ export interface WorkspaceRowProps {
    * 交回的是菜单条目 id 原文，解析归 `menus.tsx` 的 `parseParentGroupId`
    */
   onSelectParentGroup?: ((id: string) => void) | undefined
+  /**
+   * 这一行的拖拽接线
+   *
+   * 缺省表示这一行不参与拖拽，那时它既不挂区域属性也不可拖起
+   * 未分组桶里的工作区行、以及被当纯展示渲染的行都属于这一档
+   */
+  dnd?: WorkspaceRowDnd | undefined
+}
+
+/** 工作区标题行的拖拽接线，由 {@link WorkspaceSection} 从 `useOrderRow` 取下后原样摊进行里 */
+export interface WorkspaceRowDnd {
+  /** 摊在行上，让这一行成为落点区域 */
+  zone: Record<string, string>
+  /** 摊在行上，让这一行成为同层换位换算的参照行 */
+  rowAttribute: Record<string, string>
+  /** 摊在行上让它可以被拖起，无排序计划时为 null */
+  drag: {
+    draggable: true
+    onDragStart: (event: DragStartEvent) => void
+    onDragEnd: () => void
+  } | null
+  /** 这一行是否正被拖，样式据此画淡 */
+  dragging: boolean
 }
 
 export function WorkspaceRow({
@@ -108,6 +132,7 @@ export function WorkspaceRow({
   hover,
   hoverCopy,
   virtualWorkspace,
+  dnd,
 }: WorkspaceRowProps): ReactElement {
   const { labels } = useLocale()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -160,16 +185,20 @@ export function WorkspaceRow({
   })
 
   const row = (
-    <div
-      className={clsx(styles.workspaceHead)}
-      role="button"
-      tabIndex={0}
-      aria-expanded={expanded}
-      onClick={onToggle}
-      onKeyDown={(event) => handleRowKeyDown(event, onToggle)}
+    // 区域属性恒在（有接线时）：这一行是别的落点接收方的参照物，只有拖起那一半随计划有无而变
+    <RowHeadShell
+      className={styles.workspaceHead}
+      expanded={expanded}
+      // 不参与逐个淡入：工作区行落在根节点那一层，外层没有撑开体按文档序给它下发延迟
+      stagger={false}
+      dragging={dnd?.dragging === true}
+      activate={onToggle}
       onContextMenu={contextMenu.onContextMenu}
+      menu={contextMenu.menu}
+      zone={dnd?.zone}
+      rowAttribute={dnd?.rowAttribute}
+      drag={dnd?.drag}
     >
-      {contextMenu.menu}
       {/* 药丸：底色、圆角与悬停都在它身上，外层的带只承担与上一行之间的那点间距 */}
       <span className={styles.headSurface}>
         <span className={clsx(styles.slot, styles.folder, folderActive && styles.folderActive)}>
@@ -190,7 +219,7 @@ export function WorkspaceRow({
           }
         />
       </span>
-    </div>
+    </RowHeadShell>
   )
 
   // 没有正文（未分组桶）或拿不到官方文案时不挂浮层

@@ -48,6 +48,25 @@ const nestedEnabledCodec = codec('NestedEnabled', () => z.boolean())
 /** 可空分组 id，null 表示「移出到未分组」 */
 const nullableGroupIdCodec = codec('NullableGroupId', () => z.string().nullable())
 
+/**
+ * 可缺省的分组 id
+ *
+ * 排序的锚点参数缺席表示「挪到末尾」，与 null 表示「移出分组」不是一回事，因此不能合用一个 codec
+ * 网关只在 `acceptsUndefined` 为真时容忍整格缺席，两处必须同时声明
+ */
+const optionalGroupIdCodec = codec('OptionalGroupId', () => z.union([z.undefined(), z.string()]))
+
+/** 可缺省的工作区分组 id，缺省表示「挪到末尾」 */
+const optionalVirtualWorkspaceIdCodec = codec('OptionalVirtualWorkspaceId', () =>
+  z.union([z.undefined(), z.string()]),
+)
+
+/** 一个会话段的顺序位键，宿主不解析它 */
+const segmentKeyCodec = codec('SegmentKey', () => z.string())
+
+/** 一段成员的完整顺序 */
+const sessionIdsCodec = codec('SessionIds', () => z.array(z.string()))
+
 /** 根节点条目地址：工作区 / 工作区分组 / 「全部」三类共用一套带 `kind` 标签的取值（见 `rootEntry.ts`） */
 const entryAddressCodec = codec('RootEntryAddress', () => entryAddressSchema)
 
@@ -61,7 +80,10 @@ const SERVICE = 'workspacePlus'
  * https://deepseek-harness.github.io/deepseek-harness/reference/subsystems/typert.html
  *
  * 本包参数全是 `source: 'json'`，这类参数的 `wire` 恒等于源码形参名，因此缺省回退到 `name`
- * 将来引入 lookup 参数时必须逐条显式写出 `wire`
+ * 引入 lookup 参数时则要逐条显式写出 `wire`
+ *
+ * `acceptsUndefined` 单独成格而不是按 codec 推断：网关的缺参校验读的是这一格
+ * 排在末尾的可选形参在客户端被传成 undefined 时会整格不出现在线上，缺了这一格调用会被判为参数不全
  * @param method - 宿主服务上的方法名，同时是 endpoint 的方法段
  * @param parameters - 按宿主签名顺序排列的形参
  */
@@ -71,6 +93,8 @@ function direct(
     name: string
     /** 线上键名，缺省时回退 `name` */
     wire?: string | undefined
+    /** 该形参允许缺席，与 codec 收 undefined 是一对 */
+    acceptsUndefined?: boolean | undefined
     codec: unknown
   }[],
 ) {
@@ -84,6 +108,7 @@ function direct(
       name: parameter.name,
       wire: parameter.wire ?? parameter.name,
       source: 'json' as const,
+      ...(parameter.acceptsUndefined === true ? { acceptsUndefined: true } : {}),
       codec: parameter.codec,
     })),
     result: snapshotCodec,
@@ -114,7 +139,24 @@ export const TYPERT = {
       { name: 'sessionId', codec: sessionIdCodec },
       { name: 'groupId', codec: nullableGroupIdCodec },
     ]),
+    direct('setSegmentOrder', [
+      { name: 'key', codec: segmentKeyCodec },
+      { name: 'order', codec: sessionIdsCodec },
+    ]),
+    direct('moveGroupBefore', [
+      { name: 'workspaceId', codec: workspaceIdCodec },
+      { name: 'groupId', codec: groupIdCodec },
+      { name: 'beforeGroupId', acceptsUndefined: true, codec: optionalGroupIdCodec },
+    ]),
     direct('createVirtualWorkspace', [{ name: 'name', codec: nameCodec }]),
+    direct('moveVirtualWorkspaceBefore', [
+      { name: 'groupId', codec: virtualWorkspaceIdCodec },
+      {
+        name: 'beforeGroupId',
+        acceptsUndefined: true,
+        codec: optionalVirtualWorkspaceIdCodec,
+      },
+    ]),
     direct('renameVirtualWorkspace', [
       { name: 'groupId', codec: virtualWorkspaceIdCodec },
       { name: 'name', codec: nameCodec },
@@ -173,12 +215,34 @@ export const TYPERT = {
             kind: 'method',
             name: 'moveSession',
             signature:
-              'moveSession(workspaceId: string, sessionId: string, groupId: string | null): Promise<WorkspaceGroupsSnapshot>',
+              'moveSession(workspaceId: string, sessionId: string, groupId: string | null):' +
+              ' Promise<WorkspaceGroupsSnapshot>',
+          },
+          {
+            kind: 'method',
+            name: 'setSegmentOrder',
+            signature:
+              'setSegmentOrder(key: string, order: readonly string[]): Promise<WorkspaceGroupsSnapshot>',
+          },
+          {
+            kind: 'method',
+            name: 'moveGroupBefore',
+            signature:
+              // 可选形参写成 `?: string`：`?` 已经含了 undefined，补写另一半是把同一件事说两遍
+              'moveGroupBefore(workspaceId: string, groupId: string, beforeGroupId?: string):' +
+                ' Promise<WorkspaceGroupsSnapshot>',
           },
           {
             kind: 'method',
             name: 'createVirtualWorkspace',
             signature: 'createVirtualWorkspace(name: string): Promise<WorkspaceGroupsSnapshot>',
+          },
+          {
+            kind: 'method',
+            name: 'moveVirtualWorkspaceBefore',
+            signature:
+              'moveVirtualWorkspaceBefore(groupId: string, beforeGroupId?: string):' +
+                ' Promise<WorkspaceGroupsSnapshot>',
           },
           {
             kind: 'method',
@@ -255,7 +319,7 @@ export const TYPERT = {
           {
             name: 'WorkspaceGroupsSnapshot',
             declaration:
-              'export interface WorkspaceGroupsSnapshot { byWorkspace: Record<string, Group[]>; nesting: Record<string, WorkspaceNesting>; workspaceGroups: VirtualWorkspace[]; picker: PickerSnapshot; nested: boolean; pinnedVisibleCount: number; pinnedLimit: number }',
+              'export interface WorkspaceGroupsSnapshot { byWorkspace: Record<string, Group[]>; nesting: Record<string, WorkspaceNesting>; workspaceGroups: VirtualWorkspace[]; picker: PickerSnapshot; nested: boolean; orderSlots: Record<string, string[]>; pinnedVisibleCount: number; pinnedLimit: number }',
           },
         ],
       },

@@ -30,7 +30,8 @@ const virtualWorkspaceSchema = z.object({
 /**
  * 与宿主 `spec.ts` 的 `entryAddressSchema` 同形，两端形状必须一致否则网关拒收
  *
- * 标注成 {@link RootEntryAddress} 钉住形状：两侧各写一份是网关的要求（客户端不得引用宿主那半边的模块），但形状只有 `rootEntry.ts` 一处定义
+ * 标注成 {@link RootEntryAddress} 钉住形状：两侧各写一份是网关的要求
+ * 客户端不得引用宿主那半边的模块，但形状只有 `rootEntry.ts` 一处定义
  */
 const entryAddressSchema: z.ZodType<RootEntryAddress> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace'), id: z.string() }),
@@ -50,6 +51,7 @@ const snapshotSchema = z.object({
   workspaceGroups: z.array(virtualWorkspaceSchema),
   picker: pickerSchema,
   nested: z.boolean(),
+  orderSlots: z.record(z.string(), z.array(z.string())),
   pinnedVisibleCount: z.number(),
   pinnedLimit: z.number(),
 })
@@ -81,10 +83,18 @@ const str = (name: string) => codec(name, () => z.string())
 const bool = (name: string) => codec(name, () => z.boolean())
 const strList = (name: string) => codec(name, () => z.array(z.string()))
 
+/**
+ * 可缺省的 id codec
+ *
+ * 排序的锚点形参缺席表示「挪到末尾」，客户端把它传成 undefined 时网关会让整格不上线
+ * 宿主那一侧因此同时声明了 `acceptsUndefined`，这里收得下 undefined 才能与它配对
+ */
+const optionalId = (name: string) => codec(name, () => z.union([z.undefined(), z.string()]))
+
 /** 构造一条 direct 调用描述，避免逐条重复 id/service/namespace */
 function descriptor(
   method: string,
-  parameters: { name: string; codec: unknown }[],
+  parameters: { name: string; acceptsUndefined?: boolean | undefined; codec: unknown }[],
 ): Record<string, unknown> {
   return {
     id: `${PACKAGE}#${SERVICE}/${method}`,
@@ -96,6 +106,7 @@ function descriptor(
       name: parameter.name,
       wire: parameter.name,
       source: 'json',
+      ...(parameter.acceptsUndefined === true ? { acceptsUndefined: true } : {}),
       codec: parameter.codec,
     })),
     result: snapshot,
@@ -124,7 +135,24 @@ export const REMOTE_CONTRIBUTION = {
       { name: 'sessionId', codec: str('SessionId') },
       { name: 'groupId', codec: codec('NullableGroupId', () => z.string().nullable()) },
     ]),
+    descriptor('setSegmentOrder', [
+      { name: 'key', codec: str('SegmentKey') },
+      { name: 'order', codec: strList('SessionIds') },
+    ]),
+    descriptor('moveGroupBefore', [
+      { name: 'workspaceId', codec: str('WorkspaceId') },
+      { name: 'groupId', codec: str('GroupId') },
+      { name: 'beforeGroupId', acceptsUndefined: true, codec: optionalId('OptionalGroupId') },
+    ]),
     descriptor('createVirtualWorkspace', [{ name: 'name', codec: str('GroupName') }]),
+    descriptor('moveVirtualWorkspaceBefore', [
+      { name: 'groupId', codec: str('VirtualWorkspaceId') },
+      {
+        name: 'beforeGroupId',
+        acceptsUndefined: true,
+        codec: optionalId('OptionalVirtualWorkspaceId'),
+      },
+    ]),
     descriptor('renameVirtualWorkspace', [
       { name: 'groupId', codec: str('VirtualWorkspaceId') },
       { name: 'name', codec: str('GroupName') },
@@ -194,12 +222,14 @@ export const DEFAULT_PINNED_LIMIT = 20
 
 export interface WorkspaceGroupsSnapshot {
   byWorkspace: Record<string, Group[]>
-  /** 子工作区 → 它被放进的那个分组，开关关着时是空表 */
+  /** 子工作区 -> 它被放进的那个分组，开关关着时是空表 */
   nesting: Record<string, WorkspaceNesting>
   workspaceGroups: VirtualWorkspace[]
   picker: PickerSnapshot
   /** 是否按子工作区渲染，缺省当开启 */
   nested: boolean
+  /** 各段的顺序位：段键 -> 手动顺序，缺一格表示该段按默认序渲染 */
+  orderSlots: Record<string, string[]>
   /** 置顶区静止时显示几条 */
   pinnedVisibleCount: number
   /** 置顶数量的上限，达到后置顶入口转禁用态 */
@@ -224,6 +254,8 @@ export function normalizeSnapshot(value: unknown): WorkspaceGroupsSnapshot {
     workspaceGroups: Array.isArray(raw.workspaceGroups) ? raw.workspaceGroups : [],
     picker: normalizePickerState(raw.picker),
     nested: raw.nested !== false,
+    // 旧宿主回的快照里没有这一格，缺格时按空表读，渲染侧因此把每一段都当作没有手动顺序
+    orderSlots: raw.orderSlots ?? {},
     pinnedVisibleCount: raw.pinnedVisibleCount ?? DEFAULT_PINNED_VISIBLE_COUNT,
     pinnedLimit: raw.pinnedLimit ?? DEFAULT_PINNED_LIMIT,
   }

@@ -1,0 +1,93 @@
+/**
+ * 一整片区域的行序列
+ *
+ * 由容器算一次，向下交给渲染与拖拽两处：渲染按它逐层展开，拖拽按它装配查询索引
+ * 因此两处认的是同一批行，不存在「计划里有、界面上没有」的位置
+ *
+ * 与容器里那份布局同一取舍：输入都是快照与偏好，`useMemo` 按输入列
+ * 因此流式期间的重渲染不会重算
+ *
+ * 依赖列按值比对，任何一格每渲染换一次身份都会让缓存整片失效，而界面只表现为卡顿
+ * 函数与数组由调用方用 `useCallback` / `useMemo` 稳定
+ * `now` 由这里按小时归一（见 {@link useOutline}）
+ */
+import { useMemo } from 'react'
+import { recentClockAt } from '../data/collapse.ts'
+import { buildOutline } from '../data/outline.ts'
+import type { OutlineInput, OutlineRow } from '../data/outline.ts'
+
+/** 算出来的那一份：整条序列，以及按归属切好的索引 */
+export interface Outline {
+  /** 从上到下的全部行 */
+  rows: readonly OutlineRow[]
+  /**
+   * header 行 -> 挂在它下面的那几行，按界面顺序
+   *
+   * 只收直接下层：一个工作区 header 下面是它的子工作区 header 、会话分组 header 与它体内那几段
+   * 渲染按它逐层展开，因此不必再对着布局递归一遍
+   */
+  owners: ReadonlyMap<OutlineRow | undefined, readonly OutlineRow[]>
+}
+
+/** 空序列：缺少输入时给一个稳定引用，免得每次渲染都新建一份 */
+const EMPTY: Outline = { rows: [], owners: new Map() }
+
+/**
+ * 算一次行序列
+ *
+ * `now` 在这里按小时归一后再进依赖列：它只用于窗口判据，渲染当刻那个逐毫秒变化的时刻放进去
+ * 会让缓存每渲染失效一次，而算出来的结果在同一个小时里完全相同
+ * 其余各格是快照、偏好与稳定引用的回调，由调用方负责保持身份
+ * @param source - 见 {@link OutlineInput}
+ * @returns 整条序列与按段切好的索引
+ */
+export function useOutline(source: OutlineInput): Outline {
+  const recentNow = recentClockAt(source.now)
+  return useMemo(
+    () => outlineOf({ ...source, now: recentNow }),
+    [
+      source.workspaceIds,
+      source.virtualGroups,
+      source.rowsOf,
+      source.groupsOf,
+      source.nesting,
+      source.focused,
+      source.isScopeExpanded,
+      source.alwaysVisibleSessionIds,
+      recentNow,
+      source.stray,
+      source.compareRows,
+    ],
+  )
+}
+
+/**
+ * 算一次行序列，不做缓存
+ *
+ * 与 {@link useOutline} 分开是为了让它可测：测试直接调这个，不必为一个纯函数搭一套 hook 环境
+ * @param source - 见 {@link OutlineInput}
+ * @returns 整条序列与按段切好的索引
+ */
+export function outlineOf(source: OutlineInput): Outline {
+  const rows = buildOutline(source)
+  const owners = new Map<OutlineRow | undefined, OutlineRow[]>()
+  for (const row of rows) {
+    const bucket = owners.get(row.parent)
+    if (bucket === undefined) owners.set(row.parent, [row])
+    else bucket.push(row)
+  }
+  return { rows, owners }
+}
+
+/**
+ * 挂在某个 header 行下面的那几行
+ * @param outline - {@link useOutline} 的结果
+ * @param parent - header 行本身，缺省表示最外层
+ * @returns 直接下层那几行，按界面顺序，没有时为空表
+ */
+export function rowsUnder(
+  outline: Outline,
+  parent: OutlineRow | undefined,
+): readonly OutlineRow[] {
+  return outline.owners.get(parent) ?? EMPTY.rows
+}

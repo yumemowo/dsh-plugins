@@ -5,10 +5,9 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
-import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { readAllCss } from './readCss.ts'
-import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { shellSeats } from './support/dndDom.ts'
 import { viewModeProps, viewModeStoreStub, storeViewModeProps } from './viewMode-stub.ts'
 
 /**
@@ -94,6 +93,9 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     renameGroup: async () => snapshot(),
     deleteGroup: async () => snapshot(),
     moveSession: async () => snapshot(),
+    setSegmentOrder: async () => snapshot(),
+    moveGroupBefore: async () => snapshot(),
+    moveVirtualWorkspaceBefore: async () => snapshot(),
     createVirtualWorkspace: async () => snapshot(),
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),
@@ -105,27 +107,11 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
     setSessionPinned: async () => {},
+    insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
-    searchResultLimit: 20,
-    t: regionTranslate(),
-    tWorkspace: workspaceTranslate(),
-    tSidebar: sidebarTranslate(),
+    ...shellSeats(),
     ...viewModeProps(),
-    official: () => ({
-      renameSession: async () => {},
-      forkSession: () => {},
-      archiveSession: async () => {},
-      labels: officialSessionLabels(workspaceTranslate()),
-      relativeTime: (updatedAt: number, now: number) =>
-        timeLabel(updatedAt, now, workspaceTranslate()),
-    }),
-    addWorkspace: () => ({
-      createWorkspace: async (path: string) => ({ workspaceId: `w-${path}`, title: path }),
-      startSession: () => {},
-      occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
-      labels: officialAddLabels(workspaceTranslate()),
-    }),
     ...overrides,
   }
 }
@@ -208,11 +194,11 @@ describe('workspace group DOM structure', () => {
       expect(matched, `no selector matched for rule { ${body} }`).not.toEqual([])
     }
 
-    // 这一层的缩进不再按固定层数写死选择器，子工作区可以是任意层
-    // 整棵子树抬高多少，由各容器累加出来的 --wg-depth-offset 承担
+    // 这一层的缩进不按固定层数写死选择器，子工作区可以是任意层
+    // 每层的偏移由行组件在 JS 里算好，经 --wg-depth 下发
     const all = rules.flatMap((rule) => rule.selectors)
     expect(all).toContain('.virtualWorkspaceBody')
-    // 组内工作区行不再单独写一条缩进规则，它读的是抬高后的 --wg-depth
+    // 组内工作区行不单独写一条缩进规则，它读的是那个下发下来的 --wg-depth
     expect(all).not.toContain('.virtualWorkspaceBody > .workspace > .workspaceHead')
 
     await act(async () => root.unmount())

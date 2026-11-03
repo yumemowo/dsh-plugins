@@ -33,7 +33,7 @@ export interface NestingBinding {
  */
 export type ContainerNode =
   | { kind: 'root' }
-  | { kind: 'virtual'; groupId: string }
+  | { kind: 'virtual'; id: string }
   | { kind: 'group'; workspaceId: string; groupId: string }
 
 /** 推导的输入 */
@@ -46,13 +46,13 @@ export interface NestingInput {
   enabled: boolean
   /** 工作区 id，按宿主给的顺序 */
   workspaceIds: readonly string[]
-  /** workspaceId → cwd，缺省表示该工作区没有可用路径 */
+  /** workspaceId -> cwd，缺省表示该工作区没有可用路径 */
   pathOf: (workspaceId: string) => string | undefined
-  /** workspaceId → 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里 */
+  /** workspaceId -> 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里 */
   virtualOf: (workspaceId: string) => string
-  /** workspaceId → 落盘的嵌套归属，没有时返回 undefined */
+  /** workspaceId -> 落盘的嵌套归属，没有时返回 undefined */
   bindingOf: (workspaceId: string) => NestingBinding | undefined
-  /** workspaceId → 它名下真实存在的会话分组 id 集合 */
+  /** workspaceId -> 它名下真实存在的会话分组 id 集合 */
   groupIdsOf: (workspaceId: string) => ReadonlySet<string>
 }
 
@@ -61,8 +61,10 @@ export interface Nesting {
   /**
    * 容器节点的发牌器
    *
-   * 三个入口都只回答「这个容器对应哪个节点」，不回答「谁属于谁」——后者是 {@link Nesting.containerOf} 的方向
-   * 参数给的都是**容器自身的身份**：最外层那一段无参；虚拟分组那一个取该分组自己的 id（会话分组的 id 不经过这里，走 `groupOf`）；会话分组那一个取持有它的工作区 id 与该分组的 id
+   * 三个入口都只回答「这个容器对应哪个节点」，不回答「谁属于谁」
+   * 后者是 {@link Nesting.containerOf} 的方向
+   * 参数给的都是容器自身的身份：最外层那一段无参，虚拟分组那一个取该分组自己的 id
+   * 会话分组的 id 不经过这里（走 `groupOf`），那一个取持有它的工作区 id 与该分组的 id
    *
    * 节点在推导内部按身份寻址（{@link Nesting.rootsOf} 的入参就是这里的返回值），因此同一个容器只能用这里交出的实例
    * 自行拼一个同形状的节点按引用查不到任何东西
@@ -75,16 +77,28 @@ export interface Nesting {
     /** 某个工作区体内某个会话分组那一段 */
     groupOf: (workspaceId: string, groupId: string) => ContainerNode
   }
-  /** workspaceId → 它所属的容器 */
+  /** workspaceId -> 它所属的容器 */
   containerOf: (workspaceId: string) => ContainerNode
+  /**
+   * workspaceId -> 它当前生效的父工作区 id，没有时为空串
+   *
+   * 有效归属优先于路径推导，与 {@link rootsOf} 的「顶层」判定同源
+   * 同层名单按「父工作区相同」过滤时，父工作区身份从这里取，而不是从 {@link ancestorsOf} 的第一格猜
+   */
+  parentOf: (workspaceId: string) => string
   /**
    * 一个容器里的顶层工作区，按传入顺序
    *
-   * 这一层只认结构，与界面上当前聚焦在谁无关：`containers.root` 恒指「不在任何虚拟分组里」那一段，不是「当前显示的那一片」
-   * 「顶层」也是结构判断——一个工作区的生效父工作区仍落在这个容器里时，它不是这一段的顶层而是排在父工作区体内；父工作区落在别的容器（例如被放进会话分组）时，它才是那一段的顶层
+   * 这一层只认结构，与界面上当前聚焦在谁无关：`containers.root` 恒指「不在任何虚拟分组里」那一段
+   * 不是「当前显示的那一片」
    *
-   * 例：`repo`(`/repo`) 与 `pkg`(`/repo/pkg`) 都不在任何虚拟分组里时，两者同属 `containers.root`，而 `rootsOf(root)` 只有 `['repo']`——`pkg` 的父工作区在同段内，因此排在 `repo` 体内
-   * 把 `pkg` 放进 `repo` 的分组 `g1` 后，它的容器变成 `groupOf('repo', 'g1')`，父工作区不再同段，于是 `rootsOf(groupOf('repo', 'g1'))` 是 `['pkg']`，而 `rootsOf(root)` 仍是 `['repo']`
+   * 「顶层」也是结构判断：一个工作区的生效父工作区仍落在这个容器里时，它不是这一段的顶层
+   * 而是排在父工作区体内，父工作区落在别的容器（例如被放进会话分组）时，它才是那一段的顶层
+   *
+   * 例：`repo`(`/repo`) 与 `pkg`(`/repo/pkg`) 都不在任何虚拟分组里时，两者同属 `containers.root`
+   * 而 `rootsOf(root)` 只有 `['repo']`，因为 `pkg` 的父工作区在同段内，排在 `repo` 体内
+   * 把 `pkg` 放进 `repo` 的分组 `g1` 后，它的容器变成 `groupOf('repo', 'g1')`，父工作区不再同段
+   * 于是 `rootsOf(groupOf('repo', 'g1'))` 是 `['pkg']`，而 `rootsOf(root)` 仍是 `['repo']`
    */
   rootsOf: (container: ContainerNode) => readonly string[]
   /**
@@ -192,12 +206,12 @@ function nearestAncestor(
 /**
  * 推导每个工作区的容器归属与容器内的森林
  *
- * 只有父工作区没有归属时，才把子工作区嵌进它体内。这一条把嵌套限定在需求要的那个范围：
+ * 只有父工作区没有归属时，才把子工作区嵌进它体内，因此嵌套只发生在同一片里
  * 「a 不在任何虚拟工作区中、/a/b 也不在任何虚拟工作区中」才把 /a/b 嵌到 a 下
- * 父工作区一旦被放进某个虚拟工作区分组，它的子工作区就不再嵌进它体内——那时两者各自按虚拟工作区
- * 归属平铺，界面上读作两个并列的工作区，而不是一个套一个
+ * 父工作区一旦被放进某个虚拟工作区分组，它的子工作区就不再嵌进它体内
+ * 那时两者各自按虚拟工作区归属平铺，界面上读作两个并列的工作区，而不是一个套一个
  *
- * 一条落盘的归属只有全部条件都成立时才算数，否则退回按 cwd 推导的位置：
+ * 一条落盘的归属只有全部条件都成立时才算数，否则退回按 cwd 推导的位置
  * 父工作区与那个分组都还在、父工作区确实是它的祖先目录、两者同处一个虚拟工作区
  *
  * 这样元数据与真实列表出现偏差时界面只是「少一层嵌套」，不会丢工作区
@@ -259,28 +273,28 @@ export function deriveNesting(input: NestingInput): Nesting {
    * 容器节点的发牌器
    *
    * 节点在推导内部按身份寻址，因此同一个容器必须只发一个实例
-   * 按 `kind + id` 缓存，重复请求交回同一个对象
+   * 按身份缓存，重复请求交回同一个对象
    */
   const rootNode: ContainerNode = { kind: 'root' }
   const virtualNodes = new Map<string, ContainerNode>()
-  const groupNodes = new Map<string, ContainerNode>()
+  /** 工作区 id -> 该工作区体内各会话分组的容器，分组 id 只在一个工作区内唯一 */
+  const groupNodes = new Map<string, Map<string, ContainerNode>>()
   const containers = {
     root: rootNode,
     virtualOf: (groupId: string): ContainerNode => {
       const cached = virtualNodes.get(groupId)
       if (cached !== undefined) return cached
-      const node: ContainerNode = { kind: 'virtual', groupId }
+      const node: ContainerNode = { kind: 'virtual', id: groupId }
       virtualNodes.set(groupId, node)
       return node
     },
     groupOf: (workspaceId: string, groupId: string): ContainerNode => {
-      // 两个 id 都不是本包能限定字符集的东西，分隔符取一个它们不可能含的字符
-      // 这个键只作 Map 的键、从不解析回来，因此不必可读——与 `client/menus.tsx` 里要切分回两个 id 的 `pg:` 取舍相反
-      const composite = `${workspaceId}\u0000${groupId}`
-      const cached = groupNodes.get(composite)
+      const byGroup = groupNodes.get(workspaceId)
+      const cached = byGroup?.get(groupId)
       if (cached !== undefined) return cached
       const node: ContainerNode = { kind: 'group', workspaceId, groupId }
-      groupNodes.set(composite, node)
+      if (byGroup === undefined) groupNodes.set(workspaceId, new Map([[groupId, node]]))
+      else byGroup.set(groupId, node)
       return node
     },
   }
@@ -289,7 +303,7 @@ export function deriveNesting(input: NestingInput): Nesting {
   const containerCache = new Map<string, ContainerNode>()
 
   /**
-   * workspaceId → 它所属的容器，也就是「列表里哪一段把它当作自己的一项」
+   * workspaceId -> 它所属的容器，也就是「列表里哪一段把它当作自己的一项」
    *
    * 被放进分组的落在父工作区体内的那个分组里，其余落在父工作区自己所在的那个容器里
    * 后一条是「整棵子树跟着父工作区走」的实现：没有自己归属的后代与父工作区同处一段，放进分组时整片一起过去
@@ -337,7 +351,7 @@ export function deriveNesting(input: NestingInput): Nesting {
     return level
   }
 
-  /** 容器节点 → 它的成员（按传入顺序） */
+  /** 容器节点 -> 它的成员（按传入顺序） */
   const members = new Map<ContainerNode, string[]>()
   for (const workspaceId of workspaceIds) {
     const container = containerOf(workspaceId)
@@ -349,9 +363,9 @@ export function deriveNesting(input: NestingInput): Nesting {
   const roots = new Map<ContainerNode, string[]>()
   const ancestors = new Map<string, string[]>()
   const levels = new Map<string, number>()
-  /** 父工作区 id → 它名下全部直接子工作区，不分段 */
+  /** 父工作区 id -> 它名下全部直接子工作区，不分段 */
   const childrenByParent = new Map<string, string[]>()
-  /** 父工作区 id → 落进各个分组的子工作区 */
+  /** 父工作区 id -> 落进各个分组的子工作区 */
   const childrenByGroup = new Map<string, Map<string, string[]>>()
   /**
    * 一个容器里的直接父工作区
@@ -409,6 +423,7 @@ export function deriveNesting(input: NestingInput): Nesting {
   return {
     containers,
     containerOf,
+    parentOf,
     rootsOf: (container) => roots.get(container) ?? [],
     childIdsOf: (workspaceId) => childrenByParent.get(workspaceId) ?? [],
     groupedChildIdsOf: (workspaceId, groupId) =>
@@ -470,4 +485,32 @@ export function descendantsOf(
       return path !== undefined && isAncestorPath(rootPath, path)
     })
     .sort((a, b) => (pathOf(a)?.length ?? 0) - (pathOf(b)?.length ?? 0))
+}
+/**
+ * 一个工作区在 cwd 路径上的最近祖先，不限虚拟分组
+ *
+ * 与 {@link deriveNesting} 的作用范围刻意不同：那一处回答「现在渲染成什么样」
+ * 因此要求父工作区与子工作区同处一个虚拟分组——跨组的两个工作区在列表上是两片互不相干的内容
+ * 不该因为路径关系就连起来渲染
+ *
+ * 拖拽问的是另一件事：「可能落到哪儿」。把一个工作区从甲组挪到乙组是允许的操作
+ * 挪过去之后它与乙组里那些 cwd 祖先就成了真正的父子——所以这里按路径认祖先，不看此刻住在哪一片
+ *
+ * @param workspaceIds - 全部工作区 id
+ * @param pathOf - workspaceId -> cwd
+ * @param workspaceId - 要查的那个工作区
+ * @returns 最近的祖先 id，没有祖先时为 undefined
+ */
+export function nearestAncestorAnyScope(
+  workspaceIds: readonly string[],
+  pathOf: (workspaceId: string) => string | undefined,
+  workspaceId: string,
+): string | undefined {
+  const path = pathOf(workspaceId)
+  if (path === undefined) return undefined
+  return nearestAncestor(
+    path,
+    workspaceIds.filter((id) => id !== workspaceId),
+    pathOf,
+  )
 }

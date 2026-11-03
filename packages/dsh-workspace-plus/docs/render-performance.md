@@ -21,7 +21,7 @@
 | --- | --- |
 | `row` | `toRow()` 每次渲染都为所有会话造新对象 |
 | `onOpen` | 父组件写的是 `() => openSession(row.id)`，每次渲染新建闭包 |
-| `grouping` | 每次渲染新建，内含刚 `buildLayout` 出来的新 `sections` 数组 |
+| `grouping` | 每次渲染新建，内含刚由快照现造的新 `sections` 数组 |
 | `status` | `sessionStatus()` 每次返回新对象 |
 | `official` | `officialActions()` 每次渲染返回新对象 |
 | `t` / `labels` | 行作用域里的文案每次渲染都是新对象（`regionLabels(t, tWorkspace, tSidebar)` 重建整张文案表） |
@@ -62,7 +62,7 @@ export function sameSessionStatus(a, b): boolean {
 }
 ```
 
-`sameGroupSections` 同理：分组段每次渲染都是新数组新对象，而归组菜单只消费分组的 id 与名字，因此判定这两个字段就够。
+`sameMenuGroups` 同理：分组段每次渲染都是新数组新对象，而归组菜单只消费分组的 id 与名字，因此判定这两个字段就够。
 
 这两个函数刻意只比**决定显示结果的字段**，不是深度相等。多比无关字段会让 `memo` 无谓失效，少比相关字段会让 UI 不更新。
 
@@ -80,6 +80,27 @@ export function sameSessionStatus(a, b): boolean {
 | 归组上下文 | 动作传未绑定的版本，行自己在组件内绑 id | 同上；`onSelectGroup` 因此对所有行是同一个引用 |
 
 一个通用手法：把「传动作」换成「传动作 + 参数」。行级 `memo` 比对的是动作本身（稳定），参数在组件内部拼接，于是 `memo` 能命中。
+
+### 会跟着时钟变的那一格
+
+`useOutline` 的输入里有一格 `now`，容器按官方做法在渲染当刻取 `Date.now()`。
+它会毁掉整条依赖列：其余各格即使都稳定，缓存也每次重渲染都失效，因为这一格每毫秒都不一样。
+
+判据只需要「窗口内用过没有」，因此这一格不需要渲染当刻的精度。
+`useOutline` 里先用 `recentClockAt` 向下取整到整小时（`RECENT_CLOCK_STEP_MS`）再进依赖列，
+同一个小时内的多次重渲染因此读到同一个基准时刻，算出来的序列也完全相同。
+偏差方向是偏宽松的：某一行跨过窗口线之后最多再过一小时才被算作「太久没用」，不会提前消失。
+
+**同一类的坑还有三处，都在调用点**：
+`rowsOf` / `groupsOf` / `isScopeExpanded` 原本写成内联 lambda，
+`compareRows` 与 `stray` 每次渲染现造，它们同样每渲染换一次身份。
+改用 `useCallback` / `useMemo` 之后，缺格的回落值也要换成模块级空表
+（`EMPTY_SESSION_ROWS` / `EMPTY_GROUPS`），否则 `?? []` 仍然每次给一个新数组。
+
+`test/outlineCache.test.tsx` 把这条钉住：`buildOutline` 换成计数替身，
+断言的是「两次重渲染之间它跑了几遍」。
+同一小时内推进时钟不重算，跨到下一小时重算一次。
+变异测试做过：去掉 `recentClockAt`、或把任一格改回内联 lambda，第一条断言立刻反转。
 
 ### provider 的 value 与行级缓存的真实关系
 
@@ -141,8 +162,10 @@ export function sameSessionStatus(a, b): boolean {
 | 未变的摘要在重新投影后保持同一行对象 | `reuses the row object when its summary is unchanged` |
 | 只有变化的那条摘要换新对象，其余不动 | `gives a changed summary a new row object and leaves the rest alone` |
 | 子代理运行数变化时行对象必须重建 | `rebuilds a row when the subagent count changes under it` |
-| 重建的分组段按内容判定为相等 | `sameGroupSections` 一组 |
+| 重建的分组段按内容判定为相等 | `sameMenuGroups` 一组 |
 | 状态位按内容判定 | `sameSessionStatus` 一组 |
+| 渲染当刻的时钟在同一小时内推进时，行序列不重算 | `reuses the row sequence while the render clock moves inside one hour` |
+| 时钟跨到下一个小时时，行序列重算一次 | `rebuilds the row sequence once the render clock enters the next hour` |
 | 层级缩进读的是行组件下发的 `--wg-depth`（子工作区可任意层，不能再按固定层数写死选择器） | `indents each hierarchy level by one icon-column step` |
 
 最后一条与缓存无关，但同属「只表现为界面不对、不会报错」的一类：缩进由行组件下发的 `--wg-depth` 驱动，选择器写错或变量没传到时界面只是没有缩进。`virtualWorkspaceDom.test.tsx` 因此用真 `react-dom` 渲染一遍，把样式表里所有带 `wg-virtual-workspace-body` 的规则逐条拿去 `querySelectorAll`，任一规则一个选择器都不命中就失败；`nestingDom.test.tsx` 再把递归嵌出来的每一层深度逐一断言。

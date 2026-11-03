@@ -3,6 +3,20 @@
 .virtualWorkspace,
 .virtualWorkspaceBody { position: relative; display: flex; flex-direction: column; }
 
+/* 区块根下发自己头行那一档缩进
+ *
+ * 落点线画在整块上，而块自己不含行带的层，读不到头行的 --wg-row-start
+ * 不声明时线退回那条规则的兜底 24px
+ * 第 0 层工作区（头行 8px）与虚拟分组（8px）的线因此都从 24px 起
+ * 与它指向的那一层无关，看上去像是落在更深处那一层上
+ *
+ * 三档与头行同值，线因此与那一层的标题左对齐 */
+.workspace { --wg-row-start: calc(8px + 16px * var(--wg-depth, 0)); }
+
+.virtualWorkspace { --wg-row-start: 8px; }
+
+.group { --wg-row-start: calc(24px + 16px * var(--wg-depth, 0)); }
+
 /* ── 行带与药丸 ─────────────────────────────────────────────────
    行与行之间不留 margin。margin 是一段不属于任何行的像素，
    指针停在上面时事件由容器接住，按元素命中算的落点就读不到行
@@ -11,7 +25,7 @@
    带自己承担那点上间距，相邻两条严丝合缝，指针落在哪一像素都归属于某一行
    药丸（.rowSurface / .headSurface）是带里的内盒，底色、圆角与悬停都在它身上
 
-   间距按边界分档：段内与撑开体首条 2px、顶层两个工作区之间 4px、
+   间距按边界分档：段内与撑开体首条 2px、顶层两个工作区之间 4px
    列表首项与紧随虚拟分组之后的那一项 0 */
 .row,
 .workspaceHead,
@@ -156,7 +170,7 @@
    - 会话行：24 + 16d（未归组）、40 + 16d（组内）
 
    会话行的文本缩进与会话分组头、子工作区行错开一格，因此「这几行是会话」由缩进自己读出来
-   状态指示器**不参与这套定位**：它绝对定位在行的左缘（容器最左侧），与深度无关，见 .indicator 一节
+   状态指示器不参与这套定位：它绝对定位在行的左缘（容器最左侧），与深度无关，见 .indicator 一节
    指示器盒宽 16px + 内缩量，因此会话行的缩进下限（24px）恰好让它不与标题相撞
 
    会话行多出「> *」那一档：挂了悬停卡片的行被官方 HoverCard 的根节点包了一层（那是个 display:block 的 span）
@@ -189,7 +203,7 @@
    缩进与同段会话行共用上面那条规则给的 --wg-row-start，左缘因此不会与行悄悄错开
    几何与配色照官方 .sessionOverflowButton：28px 高、12px 字、tertiary 转 secondary
 
-   它与行一样是「带」：相邻兄弟规则给它下发同一个 2px，由它自己的上内边距吃下，
+   它与行一样是「带」：相邻兄弟规则给它下发同一个 2px，由它自己的上内边距吃下
    高度同时加回这一格，可见盒仍是 28px
    那 2px 若留成行与它之间的空白，指针停上去就读不出行 */
 .sessionOverflow {
@@ -335,7 +349,7 @@
 /* 指示器的颜色按状态取语义词。完成与空闲共用中性色（空闲根本不渲染指示器）
    运行取强调蓝、待交互取琥珀，与官方 StateDot 的两个状态色同一组 token
 
-   这里不必限定「它是药丸的直接内盒」。.indicator 只有 StatusIndicator 一个产出点，
+   这里不必限定「它是药丸的直接内盒」。.indicator 只有 StatusIndicator 一个产出点
    会话行也不会互相嵌套，因此它在本包里不可能出现在别处 */
 .indicator[data-wg-state='ongoing'] { color: var(--dsw-alias-state-business-primary); }
 
@@ -391,7 +405,7 @@
 }
 
 /* 行尾相对时间，官方 .time 的几何与色阶（12px/20px、label-tertiary）
-   悬停、菜单展开、键盘聚焦时让位给操作位——官方是同一处 CSS 互换（time → ellipsis）
+   悬停、菜单展开、键盘聚焦时让位给操作位——官方是同一处 CSS 互换（time -> ellipsis）
    本包把「键盘聚焦」也列为一条显隐路径 */
 .rowTime,
 .groupCount {
@@ -559,7 +573,7 @@
    比列表里的工作区行略高一点，菜单项外围还有面板自己的 4px 内边距
 
    它自己就是那颗药丸，不再套一层 .rowSurface：菜单项不需要「带 + 药丸」两层
-   （面板的 4px 内边距已经隔开相邻条目，没有上行间距要由带承担），
+   面板的 4px 内边距已经隔开相邻条目，没有上行间距要由带承担
    而药丸那一档的 32px 定高与菜单项的 34px 不同，套上去反而要多写一组覆盖 */
 .pickerRow {
   box-sizing: border-box;
@@ -578,7 +592,7 @@
 }
 
 /* 悬停底色与列表里的行同一档
-   列表里这一档画在药丸上（.row:hover > .rowSurface），菜单项没有那一层，
+   列表里这一档画在药丸上（.row:hover > .rowSurface），菜单项没有那一层
    少了这一条条目就悬停无声 */
 .pickerRow:hover { background-color: var(--dsw-alias-interactive-bg-hover); }
 
@@ -623,6 +637,80 @@ body[data-wg-flip] [data-wg-hover-card] {
   right: var(--wg-flip-right) !important;
 }
 
+/* ── 拖拽期间的三段外观 ─────────────────────────────────────
+   写入方分两处，都不进 React 状态，因此重渲染不会擦掉它们：
+   够不着的压淡与当前落点标记由命中层直接写在元素上（属性名 data-wg-dnd-dim / data-wg-drop）
+   被拖行的画淡由 React 按所在行自己的开关给出
+
+   三段依次递进，靠「只压够不着的」而不是「点亮够得着的」分开：
+   - 够不着的区域压淡（data-wg-dnd-dim）
+   - 够得着的保持原样，不额外上色：一次拖拽能落到的地方往往有好几处，逐个点亮会把界面涂成一片
+   - 指针下那一处抬高（data-wg-drop）
+
+   落点标记取值是落点形状：
+   - inside：整块落进容器（会话归组、移出分组），整块描一圈强调色边
+   - before / after：插到参照行之前 / 之后（分组排序），在那一侧画一条线
+   同一个元素上给哪一档由计划决定：分组头在会话计划里读作 inside，在分组排序计划里读作 before / after
+   两个样式节因此都常年有业务用 */
+
+/* 够不着的那一片退下去
+   来源自己所在的那一片也在内：按计划构造它就不是落点，拖回去是原地投放，因此它同样「放不进去」
+
+   被拖的行常常正落在这一片里，父元素的不透明度会与它自己那一层相乘（0.45 × 0.4 ≈ 0.18）
+   淡到几乎看不见，因此它让开自己那一层，整片淡得均匀
+   它仍在跟着指针移动，辨认「搬的是哪一条」由拖拽影像承担 */
+[data-wg-dnd-dim] { opacity: 0.45; }
+
+[data-wg-dnd-dim] [data-wg-dragging] { opacity: 1; }
+
+.rowDragging { opacity: 0.4; }
+
+[data-wg-drop='inside'] {
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-state-business-primary);
+  border-radius: var(--dsw-radius-md);
+}
+
+/* 落点线由伪元素画，不由 box-shadow 或背景色：
+   - 线要跨整块区域的宽度，而 inset 的 box-shadow 只能贴着这一行自己的盒子，缩进之后右边会短一截
+   - 2 CSS 像素落在设备像素网格的哪一侧由缩放决定（125% 下 2 × 1.25 = 2.5 设备像素）
+     浏览器对边框做设备像素吸附、对背景不做，背景画法会显形为「不同落点的线粗细不一致」
+   行的左缘由 --wg-row-start 给出，与行自己的 padding-left 同源，线因此与文字左对齐 */
+[data-wg-drop='before'],
+[data-wg-drop='after'] {
+  position: relative;
+}
+
+[data-wg-drop='before']::before,
+[data-wg-drop='after']::after {
+  content: '';
+  position: absolute;
+  left: var(--wg-row-start, 24px);
+  right: 4px;
+  height: 2px;
+  box-sizing: border-box;
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 线与行的关系是「落在这一行身上」，因此两侧都画在行的盒子里，一端顶边、一端底边
+ *
+ * 不往外伸，也不再靠外层容器让出空间
+ * 撑开体是 overflow: hidden，置顶区两档分别是 auto 与 hidden，列表是 auto
+ * 外侧那一段正好落在裁剪边上，会被整条吃掉——属性与命中全对而像素为空
+ *
+ * 更要紧的是命中：线一旦画到行盒子之外，指针瞄着线就落在容器上，读出的不是这一行
+ * 于是线在、松手却什么都不发生。画在盒子里，看得见的那一条与能放下去的是同一处 */
+[data-wg-drop='before']::before {
+  top: 0;
+  border-top: 2px solid var(--dsw-alias-state-business-primary);
+}
+
+[data-wg-drop='after']::after {
+  bottom: 0;
+  border-bottom: 2px solid var(--dsw-alias-state-business-primary);
+}
+
 .empty {
   color: var(--dsw-alias-label-tertiary);
   padding: 16px 12px;
@@ -634,7 +722,7 @@ body[data-wg-flip] [data-wg-hover-card] {
  * 左边距单独下发一次（与未归组会话那一档同值）。缺了它空态会停在 .empty 基础规则的 12px 处
  * 比同一层的行更靠左，子工作区里尤其明显：父行缩进了一层，子工作区的空态却跑回根节点那一列
  *
- * 上边距 18px = 空态自身那 16px + 「容器行 → 空态」的 2px
+ * 上边距 18px = 空态自身那 16px + 「容器行 -> 空态」的 2px
  * 空态不是行，没有行带可以承担那一点，因此由它自己吃下 */
 .workspaceBody > .empty,
 .virtualWorkspaceBody > .empty {

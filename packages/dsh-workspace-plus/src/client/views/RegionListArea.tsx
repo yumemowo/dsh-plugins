@@ -5,7 +5,7 @@
  * 它自己属于哪个容器、往下又有哪些子工作区都问 `nesting`，深度因此不必沿递归手工累加
  * 行级 memo 的前提是 props 身份稳定，因此传下去的都是原语或内容稳定值
  *
- * 会话行元素由 `sessionRowElement` 统一构造：工作区内的行与未分组桶里的行共用同一套状态位、
+ * 会话行元素由 `sessionRowElement` 统一构造：工作区内的行与未分组桶里的行共用同一套状态位
  * 悬停卡片与空白行取舍，两处只在菜单与归组上下文上不同
  *
  * 这一层只声明自己真正消费的那几格：折叠态、揭示标记、派生布局与四个语义回调
@@ -13,27 +13,42 @@
  */
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import { useCallback, useMemo, useRef } from 'react'
 import type { ReactElement } from 'react'
 import type { OfficialSessionActions } from '../actions.ts'
-import { buildLayout, containsSession, groupIdOfSession, virtualWorkspaceIdOf } from '../data/layout.ts'
+import { containsSession } from '../data/rows.ts'
+import { groupIdOfSession } from '../data/sessions.ts'
+import type { Outline } from '../hooks/useOutline.ts'
+import { rowsUnder } from '../hooks/useOutline.ts'
+import { ROOT_KEY, scrollProps, virtualWorkspaceBodyKey, looseKey } from '../data/dnd/protocol.ts'
+import { areaShapeOf } from '../data/dnd/zones.ts'
+import type { DragPlan, OrderDragging } from '../data/dnd/protocol.ts'
+import { orderDragPlan, sessionGroupingPlan, workspaceTreeDragPlan } from '../data/dnd/plan.ts'
+import { debugWarn } from '../utils/debug.ts'
 import type { Nesting } from '../data/nest.ts'
+import type { OutlineRow } from '../data/outline.ts'
+import type { OutlineIndex } from '../data/dnd/outlineIndex.ts'
 import { relativeTimeOfRow, statusViewOfRow } from '../data/rows.ts'
 import type { SearchMatch, SessionSearchResult } from '../data/search.ts'
-import type { RootLayout, SessionRow } from '../data/types.ts'
+import type { RootGroup, RootListing } from '../data/outline.ts'
+import type { Group } from '../remote.ts'
+import type { SessionRow } from '../data/types.ts'
 import type { RegionLabels } from '../labels.ts'
 import { UNGROUPED_KEY } from '../store/viewMode.ts'
 import { useExpansion } from '../hooks/useExpansion.ts'
 import { hasMovableParentGroup } from '../menus.tsx'
-import type { ParentGroupMenuInput, VirtualWorkspaceMenuInput } from '../menus.tsx'
+import type { MenuGroup, ParentGroupMenuInput, VirtualWorkspaceMenuInput } from '../menus.tsx'
 import type { WorkspaceGroupsSnapshot } from '../remote.ts'
 import { abbreviateHomePath } from '../utils/pathUtils.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useLocalViewOptions } from '../hooks/useLocalViewOptions.ts'
+import { useDnd } from '../hooks/useDnd.ts'
 import { ExpandableBody } from './components/ExpandableBody.tsx'
 import { SearchResults } from './SearchControl.tsx'
 import { SessionList } from './SessionList.tsx'
 import { SessionRowItem } from './SessionRowItem.tsx'
 import type { SessionGroupingContext } from './SessionRowItem.tsx'
+import { GroupSection } from './GroupSection.tsx'
 import { VirtualWorkspaceSection } from './VirtualWorkspaceSection.tsx'
 import { WorkspaceRow } from './WorkspaceRow.tsx'
 import { WorkspaceSection } from './WorkspaceSection.tsx'
@@ -44,7 +59,7 @@ import clsx from 'clsx'
 /**
  * 会话行工厂消费的那两格文案
  *
- * 两个工厂是普通函数而不是组件（行由 `map` 生成，写成组件会给每一行多挂一层 fiber），
+ * 两个工厂是普通函数而不是组件（行由 `map` 生成，写成组件会给每一行多挂一层 fiber）
  * 因此它们不能自己调 `useLocale()`，文案由调用点作为实参交给它们
  */
 export interface SessionRowLabels {
@@ -78,10 +93,10 @@ export interface SessionRowScope {
 
 /** 列表侧消费的派生布局 */
 export interface RegionListLayout {
-  /** 聚焦生效后的根节点布局 */
-  listLayout: RootLayout
-  /** 未经聚焦裁剪的根节点布局，工作区行的「移动工作区分组」菜单按它的分组段列出候选 */
-  rootLayout: RootLayout
+  /** 聚焦生效后的切分：这一屏有哪些分组段、每段哪些工作区 */
+  focusedListing: RootListing
+  /** 未经聚焦裁剪的切分，工作区行的「移动工作区分组」菜单按它的分组段列出候选 */
+  listing: RootListing
   nesting: Nesting
   workspaceById: ReadonlyMap<string, WorkspaceView>
   /** 真的聚焦在某一片内容上时，「未分组」区段整段隐藏 */
@@ -103,12 +118,38 @@ export interface RegionListEdits {
   onDeleteVirtualWorkspace: (groupId: string, label: string) => void
 }
 
-/** 列表侧消费的命令，四个都随行下发，因此是稳定引用 */
+/** 列表侧消费的命令，都随行下发，因此是稳定引用 */
 export interface RegionListCommands {
   selectSessionGroup: (workspaceId: string, sessionId: string, id: string) => void
   selectVirtualWorkspace: (workspaceId: string, id: string) => void
   selectParentGroup: (workspaceId: string, id: string) => void
   createSessionIn: (workspaceId: string, groupId: string) => void
+  /**
+   * 把一个会话分组挪到同工作区的另一个分组之前
+   *
+   * `beforeGroupId` 为 undefined 表示挪到末尾
+   */
+  moveGroupBefore: (workspaceId: string, groupId: string, beforeGroupId: string | undefined) => void
+  /** 把一个工作区分组挪到根节点的另一个分组之前，同上 */
+  moveVirtualWorkspaceBefore: (groupId: string, beforeGroupId: string | undefined) => void
+  /** 把一个工作区移入 / 移出虚拟工作区分组，空串表示移出到根节点 */
+  moveWorkspaceToGroup: (workspaceId: string, groupId: string) => void
+  /**
+   * 把一个工作区挪到注册表里的另一个工作区之前
+   *
+   * 工作区类段落的顺序唯一来自注册表序，组内换位、同层子工作区换位与根节点平铺段换位都落到这一格
+   * 改归属是 `moveWorkspaceToGroup` 的事
+   * `beforeWorkspaceId` 为 undefined 表示挪到末尾
+   */
+  moveWorkspaceInOrder: (workspaceId: string, beforeWorkspaceId: string | undefined) => void
+  /**
+   * 把一个工作区连同它名下的子工作区放进某个祖先工作区的会话分组
+   *
+   * 与菜单里那条「移动到分组…」落到同一件事上：两条入口表达的都是「把这一条放进去」
+   */
+  nestWorkspaceInto: (workspaceId: string, parentId: string, groupId: string) => void
+  /** 解除一个工作区的嵌套归属，它退回按 cwd 路径推导的位置 */
+  unnestWorkspace: (workspaceId: string) => void
 }
 
 /**
@@ -120,9 +161,21 @@ export interface RegionListCommands {
 export interface WorkspaceNodeScope {
   snapshot: WorkspaceGroupsSnapshot
   layout: RegionListLayout
+  /**
+   * 整片区域的行序列
+   *
+   * 渲染与拖拽都读它取「这一段有哪几条、谁排第几」，因此它由容器算一次后整份交给递归层
+   */
+  outline: Outline
+  /**
+   * 序列上的查询表：容器归属、同层兄弟与拖拽认的祖先
+   *
+   * 由上面那条序列扫出来，因此表里的位置与界面上的行是同一批：拖拽的落点范围恒等于渲染范围
+   */
+  index: OutlineIndex
   edits: RegionListEdits
   commands: RegionListCommands
-  /** 会话 id → 该工作区的会话行，只随会话快照重建 */
+  /** 会话 id -> 该工作区的会话行，只随会话快照重建 */
   rowsByWorkspace: ReadonlyMap<string, readonly SessionRow[]>
   currentSessionId: string | undefined
   home: string | undefined
@@ -153,9 +206,52 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
   const { labels } = useLocale()
   const { mode: viewMode } = useLocalViewOptions()
   const expansion = useExpansion()
+  const { dndZoneProps } = useDnd()
   const { scope } = props
   const { session, currentSessionId } = scope
   const rowLabels = sessionRowLabels(labels)
+
+  /**
+   * 根节点那一层的区域属性
+   *
+   * 工作区拖到分组结构之外的任何空白上都读作移出虚拟工作区分组
+   * 这一格罩住整片列表，因此它是那类落点的兜底
+   * 平铺在它上面的工作区行另各占一格，命中层先撞上行的键
+   */
+  const rootZone = dndZoneProps(ROOT_KEY)
+
+  /**
+   * 根节点工作区分组段的最新一份，供排序计划的构造器读取
+   *
+   * 与会话分组那一处同一取舍：分组段每次渲染都是新数组，放进依赖列会让构造器每渲染换一次引用
+   * 构造器在调用当刻读它，依赖列只留稳定的那一格
+   */
+  const dragOrderGroups = useRef<readonly RootGroup[]>([])
+
+  /** 拖起一个工作区分组头时的计划，同取舍 */
+  const buildVirtualWorkspaceDragPlan = useCallback(
+    (groupId: string) =>
+      orderDragPlan({
+        source: { kind: 'virtualWorkspace', groupId },
+        // 组头与组体同属一片：指针停在组体里（任何一条工作区行、空组体那一大片）
+        // 读出的仍是「排到这一整个分组之前 / 之后」
+        shapeOf: (memberId) => areaShapeOf({ kind: 'virtual', id: memberId }),
+        // 根节点那一层还平铺着未归组的工作区，它们不参与排序，因此这一段只收分组自己的顺序
+        order: dragOrderGroups.current.map((section) => section.id),
+        movingId: groupId,
+        commit: (beforeGroupId) => scope.commands.moveVirtualWorkspaceBefore(groupId, beforeGroupId),
+      }),
+    [scope.commands.moveVirtualWorkspaceBefore],
+  )
+
+  const virtualWorkspaceDragging: OrderDragging = useMemo(
+    () => ({ buildDragPlan: buildVirtualWorkspaceDragPlan }),
+    [buildVirtualWorkspaceDragPlan],
+  )
+
+  dragOrderGroups.current = scope.layout.focusedListing.groups
+  /** 末尾「未分组」桶的 header 行，序列里没有它就是这一段不露面 */
+  const strayHead = rowsUnder(scope.outline, undefined).find((row) => row.kind === 'strayHead')
 
   if (props.searching) {
     return (
@@ -171,7 +267,8 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
 
   if (viewMode === 'flat') {
     return (
-      /* 平铺：全部可见会话在同一条列表里，与官方「单列表」（groupBy: 'flat'）一致 */
+      /* 平铺：全部可见会话在同一条列表里，与官方「单列表」（groupBy: 'flat'）一致
+         这一支不挂滚动标记：平铺的行拖不动，整片也没有任何落点，让它跟着指针滚没有意义 */
       <div className={clsx(regionStyles.list, regionStyles.panel)}>
         <div className={rowsStyles.flatList}>
           {props.flatRows.map((row) => sessionRowElement(row, session, rowLabels))}
@@ -183,32 +280,42 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
   }
 
   return (
-    /* 按工作区：工作区分组段 + 未归组工作区 + 末尾的「未分组」桶 */
-    <div className={clsx(regionStyles.list, regionStyles.panel)}>
-      {/* 工作区分组段排在前面，未归组的工作区平铺在其后、不带区段头
-          没有建过分组时 rootLayout.groups 为空、全部工作区都在 loose 里
-          这一层因此不改变任何行的位置 */}
-      {scope.layout.listLayout.groups.map((section) => (
-        <VirtualWorkspaceSection
-          key={section.id}
-          section={section}
-          expanded={expansion.isVirtualWorkspaceExpanded(section.id)}
-          onToggle={() => expansion.toggleVirtualWorkspace(section.id)}
-          onRename={() => scope.edits.onRenameVirtualWorkspace(section.id, section.label)}
-          onDelete={() => scope.edits.onDeleteVirtualWorkspace(section.id, section.label)}
-        >
-          {section.roots.map((workspaceId) => (
-            <WorkspaceNode key={workspaceId} workspaceId={workspaceId} scope={scope} />
-          ))}
-        </VirtualWorkspaceSection>
-      ))}
-      {scope.layout.listLayout.loose.map((workspaceId) => (
-        <WorkspaceNode key={workspaceId} workspaceId={workspaceId} scope={scope} />
-      ))}
+    /* 按工作区：工作区分组段 + 未归组工作区 + 末尾的「未分组」桶
+       根节点整片另带一格区域属性：工作区拖到分组结构之外的任何空白上都读作移出虚拟工作区分组
+       这一格罩住整片列表，因此它是那类落点的兜底
+       平铺在它上面的工作区行另各占一格，命中层先撞上行的键 */
+    <div className={clsx(regionStyles.list, regionStyles.panel)} {...rootZone} {...scrollProps()}>
+      {/* 根节点这一层按序列排：工作区分组 header 在前，未归组的工作区平铺在其后、不带区段头
+          没有建过分组时序列里没有 header 行，全部工作区都是平铺的那些
+          这一层因此不改变任何行的位置，也不再对着布局递归一遍 */}
+      {rowsUnder(scope.outline, undefined).map((row) =>
+        row.kind === 'virtualHead' ? (
+          <VirtualWorkspaceSection
+            key={row.key}
+            head={row}
+            hasMembers={rowsUnder(scope.outline, row).length > 0}
+            expanded={expansion.isVirtualWorkspaceExpanded(row.groupId ?? '')}
+            onToggle={() => expansion.toggleVirtualWorkspace(row.groupId ?? '')}
+            onRename={() =>
+              scope.edits.onRenameVirtualWorkspace(row.groupId ?? '', row.label ?? '')
+            }
+            onDelete={() =>
+              scope.edits.onDeleteVirtualWorkspace(row.groupId ?? '', row.label ?? '')
+            }
+            orderDragging={virtualWorkspaceDragging}
+            bodyZone={dndZoneProps(virtualWorkspaceBodyKey(row.groupId ?? ''))}
+          >
+            {rowsUnder(scope.outline, row).map((child) => (
+              <WorkspaceNode key={child.key} head={child} scope={scope} />
+            ))}
+          </VirtualWorkspaceSection>
+        ) : row.kind === 'workspaceHead' ? (
+          <WorkspaceNode key={row.key} head={row} scope={scope} />
+        ) : null,
+      )}
       {/* 未分组桶排在全部工作区之后，与官方一致
-        * 空则整段不渲染
-        * 聚焦时整段隐藏：这些会话不属于任何一个工作区，聚焦到某一片内容时与它们无关 */}
-      {props.stray.length === 0 || scope.layout.focused ? null : (
+        * 序列里没有这一段时整段不渲染，聚焦时它本来就不进序列 */}
+      {strayHead === undefined ? null : (
         <section className={rowsStyles.workspace}>
           <WorkspaceRow
             title={labels.ungrouped}
@@ -226,12 +333,11 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
               <div className={rowsStyles.sessions}>
                 <SessionList
                   scope={{ kind: 'stray' }}
-                  rows={props.stray}
-                  alwaysVisibleSessionIds={scope.alwaysVisibleSessionIds}
-                  now={scope.session.now}
+                  rows={rowsUnder(scope.outline, strayHead)}
+                  total={strayHead.total ?? 0}
                   open={expansion.isWorkspaceExpanded(UNGROUPED_KEY)}
                   revealSessionId={session.revealSessionId}
-                  renderSession={(row) => ungroupedRowElement(row, session, rowLabels)}
+                  renderSession={(row) => sessionRowElement(row, session, rowLabels)}
                 />
               </div>
             </div>
@@ -259,36 +365,146 @@ function sessionRowLabels(labels: RegionLabels): SessionRowLabels {
  * 行级 memo 的前提是 props 身份稳定，因此这里传下去的都是原语或内容稳定值
  */
 function WorkspaceNode({
-  workspaceId,
+  head,
   scope,
 }: {
-  workspaceId: string
+  head: OutlineRow
   scope: WorkspaceNodeScope
 }): ReactElement | null {
+  const workspaceId = head.workspaceId
   const { labels } = useLocale()
   const { snapshot, layout, edits, commands, rowsByWorkspace } = scope
   const expansion = useExpansion()
+  const { dndZoneProps } = useDnd()
+
+  /**
+   * 这一段布局的最新一份，供拖拽计划的构造器读取
+   *
+   * 分组段每次渲染都是新数组，放进依赖列会让构造器每渲染换一次引用，行级 memo 随之整片失效
+   * 构造器因此在调用当刻读它，依赖列只留真正稳定的那几格
+   * 与 `ExpandableBody` 把节奏参数放进 ref 同一取舍：只用于换算与下发的值不进依赖
+   */
+  const dragBuilt = useRef<readonly Group[]>([])
+
+  /**
+   * 拖起这一条会话时的计划
+   *
+   * 与 `selectSessionGroup` 同理是 `useCallback`：它会随归组上下文到达每一行
+   * 行级 memo 按引用比对，每渲染新建一个会让整片列表的 memo 失效
+   *
+   * 计划只声明归属变更：落到哪个容器上就归入哪个容器，段内位次不在它手里
+   * 来源当前所在的分组由构造当刻的布局读出，那一份与渲染用的是同一份数据
+   */
+  const buildDragPlan = useCallback(
+    (sessionId: string) =>
+      sessionGroupingPlan({
+        workspaceId,
+        sessionId,
+        currentGroupId: dragBuilt.current.find((group) => group.sessionIds.includes(sessionId))?.id ?? '',
+        sections: dragBuilt.current,
+        moveToGroup: (groupId) =>
+          commands.selectSessionGroup(
+            workspaceId,
+            sessionId,
+            groupId === '' ? 'ungroup' : `group:${groupId}`,
+          ),
+      }),
+    [workspaceId, commands.selectSessionGroup, scope.index],
+  )
+
+  /**
+   * 拖起一个会话分组头时的计划
+   *
+   * 同取舍：分组顺序每次渲染都是新数组，构造器在调用当刻读那份 ref，依赖列只留稳定的两格
+   * 换位写的是这个工作区分组的顺序，因此与会话归组落在两个不同的宿主方法上
+   */
+  const buildGroupDragPlan = useCallback(
+    (groupId: string) =>
+      orderDragPlan({
+        source: { kind: 'sessionGroup', workspaceId, groupId },
+        // 同上一处：组头与组体是同一件事的两个入口
+        shapeOf: (memberId) => areaShapeOf({ kind: 'group', workspaceId, groupId: memberId }),
+        // 只收分组自己的顺序，会话行不在这段里，因此拖到组内会话上也读不出落点
+        order: dragBuilt.current.map((group) => group.id),
+        movingId: groupId,
+        commit: (beforeGroupId) => commands.moveGroupBefore(workspaceId, groupId, beforeGroupId),
+      }),
+    [workspaceId, commands.moveGroupBefore],
+  )
+
+  // 整袋接线按引用下发：构造器已经稳定，包一层新对象会让「稳定」在这一层白做
+  const groupDragging: OrderDragging = useMemo(
+    () => ({ buildDragPlan: buildGroupDragPlan }),
+    [buildGroupDragPlan],
+  )
+
+  /**
+   * 拖起一条工作区行时的计划
+   *
+   * 枚举面与合法性判定都收在 `dropAreasOf` 那一层，这里只交出索引与四个写入出口
+   * 移入 / 移出虚拟分组走 `moveWorkspace`，换位一律走官方 `insertBefore`
+   * 注册表序是各层共用的顺序来源，会话分组那一族则走 `nestWorkspaces` 与 `unnestWorkspaces`
+   */
+  const buildWorkspaceDragPlan = useCallback(
+    (memberId: string) =>
+      workspaceTreeDragPlan({
+        index: scope.index,
+        workspaceId: memberId,
+        // 四个写入出口是这次投放真正要做的那件事
+        // 视觉层交回的是「框在哪一片、线在哪一行」，两者可以各自沿链找
+        // 只有在这里才看得出它们落成了哪个动作——框与线是否指向同一件事，只能在这里对照
+        moveToGroup: (groupId) => {
+          debugWarn('write: moveToGroup', { workspace: memberId, groupId: groupId === '' ? '(root)' : groupId })
+          commands.moveWorkspaceToGroup(memberId, groupId)
+        },
+        reorder: (beforeWorkspaceId) => {
+          debugWarn('write: reorder', { workspace: memberId, before: beforeWorkspaceId ?? '(end)' })
+          commands.moveWorkspaceInOrder(memberId, beforeWorkspaceId)
+        },
+        nestInto: (parentId, groupId) => {
+          debugWarn('write: nestInto', { workspace: memberId, parent: parentId, groupId })
+          commands.nestWorkspaceInto(memberId, parentId, groupId)
+        },
+        unnest: () => {
+          debugWarn('write: unnest', { workspace: memberId })
+          commands.unnestWorkspace(memberId)
+        },
+      }),
+    [
+      scope.index,
+      commands.moveWorkspaceToGroup,
+      commands.moveWorkspaceInOrder,
+      commands.nestWorkspaceInto,
+      commands.unnestWorkspace,
+    ],
+  )
+
+  const workspaceDragging: OrderDragging = useMemo(
+    () => ({ buildDragPlan: buildWorkspaceDragPlan }),
+    [buildWorkspaceDragPlan],
+  )
+
   const workspace = layout.workspaceById.get(workspaceId)
   // 布局只包含快照里存在的工作区，因此这里不会落空，防御一下避免类型断言
   if (workspace === undefined) return null
   const expanded = expansion.isWorkspaceExpanded(workspaceId)
-  const built = buildLayout(
-    rowsByWorkspace.get(workspaceId) ?? [],
-    snapshot.byWorkspace[workspaceId] ?? [],
-    // 组内子工作区，放进这个分组、且父工作区是当前工作区的那些。它们自己可能还有后代，渲染时逐层向下取
-    (groupId) => layout.nesting.groupedChildIdsOf(workspaceId, groupId),
-    layout.nesting.looseChildIdsOf(workspaceId),
-  )
-
+  // 会话分组名单只用于归组候选与换位换算：段内的画法已经全在序列上
+  const groups = snapshot.byWorkspace[workspaceId] ?? []
+  dragBuilt.current = groups
+  // 归组菜单只要身份与名字：会话数变了不影响它，行级 memo 因此不必跟着变
+  const menuGroups: readonly MenuGroup[] = groups.map((group) => ({
+    id: group.id,
+    label: group.name,
+  }))
   /**
    * 该工作区行上那份「移动工作区分组」菜单的选项集
    *
    * 归属与可选分组都随行而变，因此不能与行文案一起缓存
-   * 每行一份新对象，行级 memo 因此按内容比对（`sameGroupSections`）
+   * 每行一份新对象，工作区行不做行级 memo，这一份每渲染重建一次
    */
   const virtualWorkspaceMenu: VirtualWorkspaceMenuInput = {
-    sections: layout.rootLayout.groups,
-    currentGroupId: virtualWorkspaceIdOf(layout.rootLayout.groups, workspaceId),
+    sections: layout.listing.groups.map((group) => ({ id: group.id, label: group.label })),
+    currentGroupId: layout.listing.groupOf.get(workspaceId) ?? '',
     // 菜单项用带省略号的那份：点下去还要再填一次名字
     newLabel: labels.newVirtualWorkspaceMenu,
     moveToLabel: labels.moveToVirtualWorkspace,
@@ -332,10 +548,19 @@ function WorkspaceNode({
     return input
   })()
 
+  /** 本工作区体内的直接下层：子工作区 header 、会话分组 header 、未归组那一段，以及空态 */
+  const body = rowsUnder(scope.outline, head)
+  const nestedHeads = body.filter((row) => row.kind === 'workspaceHead')
+  const groupHeads = body.filter((row) => row.kind === 'groupHead')
+  const looseRows = body.filter((row) => row.kind === 'session' || row.kind === 'overflow')
+  const emptyRows = body.filter((row) => row.kind === 'empty')
+
   return (
     <WorkspaceSection
       key={workspaceId}
       workspaceId={workspaceId}
+      head={head}
+      hasBody={body.length > 0}
       row={{
         title: workspace.title,
         expanded,
@@ -364,29 +589,128 @@ function WorkspaceNode({
         onRename: () => edits.onRenameWorkspace(workspaceId, workspace.title),
         onDelete: () => edits.onDeleteWorkspace(workspaceId, workspace.title),
       }}
-      layout={built}
-      depth={layout.nesting.levelOf(workspaceId)}
-      compareRows={scope.compareRows}
-      alwaysVisibleSessionIds={scope.alwaysVisibleSessionIds}
-      now={scope.session.now}
-      revealSessionId={scope.session.revealSessionId}
-      groupActions={{
-        onRename: (section) => edits.onRenameGroup(workspaceId, section.id, section.label),
-        onDelete: (section) => edits.onDeleteGroup(workspaceId, section.id, section.label),
-        onCreateSession: (section) => commands.createSessionIn(workspaceId, section.id),
-      }}
-      renderChildWorkspace={(childId) => (
-        <WorkspaceNode key={childId} workspaceId={childId} scope={scope} />
+      workspaceDragging={workspaceDragging}
+    >
+      {/* 子工作区排在会话分组之前，与分组内部同一顺序，文件夹在前 */}
+      {nestedHeads.length === 0 ? null : (
+        <div className={rowsStyles.nest}>
+          {nestedHeads.map((row) => (
+            <WorkspaceNode key={row.key} head={row} scope={scope} />
+          ))}
+        </div>
       )}
-      renderSession={(row) =>
-        sessionRowElement(row, scope.session, sessionRowLabels(labels), {
-          workspaceId,
-          sections: built.groups,
-          currentGroupId: groupIdOfSession(built.groups, row.id),
-          onSelectGroup: commands.selectSessionGroup,
-        })
-      }
-    />
+      {groupHeads.map((row) => (
+        <GroupNode
+          key={row.key}
+          head={row}
+          scope={scope}
+          orderDragging={groupDragging}
+          buildDragPlan={buildDragPlan}
+        />
+      ))}
+      {/* 未归组的会话平铺在工作区下，不套任何分组头
+          指示器不占行内流，会话行的标题因此落在同级容器的图标列上，与会话分组头、子工作区行都不重合 */}
+      {looseRows.length === 0 ? null : (
+        <div className={rowsStyles.sessions} {...dndZoneProps(looseKey(workspaceId))}>
+          <SessionList
+            scope={{ kind: 'loose', workspaceId }}
+            rows={looseRows}
+            total={head.total ?? 0}
+            open={expanded}
+            revealSessionId={scope.session.revealSessionId}
+            renderSession={(row) =>
+              sessionRowElement(row, scope.session, sessionRowLabels(labels), {
+                workspaceId,
+                sections: menuGroups,
+                currentGroupId:
+                  groups.find((group) => group.sessionIds.includes(row.id))?.id ?? '',
+                onSelectGroup: commands.selectSessionGroup,
+                buildDragPlan,
+              })
+            }
+          />
+        </div>
+      )}
+      {/* 空态也是撑开体里要露面的子元素，与行一样参与逐个淡入 */}
+      {emptyRows.map((row) => (
+        <div key={row.key} className={rowsStyles.empty} data-wg-stagger="">
+          {labels.empty}
+        </div>
+      ))}
+    </WorkspaceSection>
+  )
+}
+
+/** 一个会话分组的 header ：分组头 + 组体 */
+function GroupNode({
+  head,
+  scope,
+  orderDragging,
+  buildDragPlan,
+}: {
+  head: OutlineRow
+  scope: WorkspaceNodeScope
+  orderDragging: OrderDragging
+  buildDragPlan: (sessionId: string) => DragPlan
+}): ReactElement {
+  const { labels } = useLocale()
+  const expansion = useExpansion()
+  const { edits, commands } = scope
+  const workspaceId = head.workspaceId
+  const groupId = head.groupId ?? ''
+  const label = head.label ?? ''
+  const body = rowsUnder(scope.outline, head)
+  const nestedHeads = body.filter((row) => row.kind === 'workspaceHead')
+  const sessionRows = body.filter((row) => row.kind === 'session' || row.kind === 'overflow')
+  const groupExpanded = expansion.isGroupExpanded({ workspaceId, groupId })
+  // 归组菜单问的是这个工作区名下的全部分组，与会话分组自己那一层无关
+  const groups = scope.snapshot.byWorkspace[workspaceId] ?? []
+  const menuGroups: readonly MenuGroup[] = groups.map((group) => ({
+    id: group.id,
+    label: group.name,
+  }))
+  return (
+    <GroupSection
+      head={head}
+      workspaceId={workspaceId}
+      hasBody={body.length > 0}
+      expanded={groupExpanded}
+      onToggle={() => expansion.toggleGroup({ workspaceId, groupId })}
+      onRename={() => edits.onRenameGroup(workspaceId, groupId, label)}
+      onDelete={() => edits.onDeleteGroup(workspaceId, groupId, label)}
+      onCreateSession={() => commands.createSessionIn(workspaceId, groupId)}
+      orderDragging={orderDragging}
+    >
+      {/* 组内同样是「子工作区 -> 会话」，先文件夹后文件，与父工作区体内同一顺序 */}
+      {nestedHeads.length === 0 ? null : (
+        <div className={rowsStyles.nest}>
+          {nestedHeads.map((row) => (
+            <WorkspaceNode key={row.key} head={row} scope={scope} />
+          ))}
+        </div>
+      )}
+      {sessionRows.length === 0 ? null : (
+        // 组内会话行不带区域键：整块分组那一格接得住归组，落在行上会一路走到它
+        <div className={rowsStyles.sessions}>
+          <SessionList
+            scope={{ kind: 'group', workspaceId, groupId }}
+            rows={sessionRows}
+            total={head.total ?? 0}
+            open={groupExpanded}
+            revealSessionId={scope.session.revealSessionId}
+            renderSession={(row) =>
+              sessionRowElement(row, scope.session, sessionRowLabels(labels), {
+                workspaceId,
+                sections: menuGroups,
+                currentGroupId: groupIdOfSession(groups, row.id),
+                onSelectGroup: commands.selectSessionGroup,
+                buildDragPlan,
+              })
+            }
+          />
+        </div>
+      )}
+    </GroupSection>
   )
 }
 
@@ -414,9 +738,11 @@ function rowTimes(
 /**
  * 渲染一个会话行
  *
+ * `grouping` 缺省表示该行没有分组可归（平铺列表与未分组桶）：那一层少了归组菜单项
+ * 行本身其余的取值完全相同，因此不另写一个工厂
+ *
  * 空白行的名字取语言包的固定名（官方 `session.new`），并且像官方一样不挂行尾菜单
  * 它只是「准备开始一个新会话」的占位，没有会话可重命名或归档
- * `grouping` 缺省表示该行没有分组可归（平铺列表）
  *
  * 传下去的字段都是原语或稳定引用，动作传的是未绑定的函数本身，行级 memo 要按字段比对，任何一处每渲染新建都会让它整片失效
  */
@@ -466,50 +792,6 @@ export function sessionRowElement(
       onReveal={reveal}
     />
   );
-}
-
-/**
- * 渲染未分组桶里的一个会话行
- *
- * 这些会话不属于任何工作区，没有分组可归，因此菜单里只有官方操作块（归组项无处落）
- * 与工作区内的行分开成两处：那里的行按分组上下文渲染，这里的行没有那层上下文
- */
-export function ungroupedRowElement(
-  row: SessionRow,
-  context: SessionRowScope,
-  labels: SessionRowLabels,
-): ReactElement {
-  const view = statusViewOfRow(row, context.statusSnapshot, labels.status)
-  const reveal =
-    row.id === context.revealSessionId ? () => context.acknowledgeReveal(row.id) : undefined
-  const { time, hoverTime } = rowTimes(row, context, labels)
-  return (
-    <SessionRowItem
-      key={row.id}
-      row={row}
-      title={row.blank ? null : row.title}
-      selected={row.id === context.currentSessionId}
-      status={view.dot}
-      time={time}
-      official={context.official}
-      // 宿主没加载官方 ui-workspace 时官方文案整体拿不到，浮出一个空壳不如不浮
-      card={
-        context.official === undefined
-          ? undefined
-          : { time: hoverTime, statuses: view.statuses, copy: row.blank ? undefined : row.title }
-      }
-      // 空白会话是「准备开始一个新会话」的占位，不提供置顶入口
-      {...(row.blank
-        ? {}
-        : {
-            pinned: context.pinnedSessionIds.has(row.id),
-            canPin: context.canPin,
-            onTogglePin: context.onTogglePin,
-          })}
-      onOpenSession={context.openSession}
-      onReveal={reveal}
-    />
-  )
 }
 
 /**

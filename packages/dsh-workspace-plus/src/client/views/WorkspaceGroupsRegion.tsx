@@ -25,12 +25,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement, RefObject } from 'react'
 import { EMPTY_PICKER_STATE } from '../../pickerState.ts'
 import type { AddWorkspaceActions, OfficialSessionActions, RegionActions, RegionDataHooks } from '../actions.ts'
-import { buildRootLayout, virtualWorkspaceIdOf } from '../data/layout.ts'
+import { focusListing, listRoot } from '../data/outline.ts'
+import { planWorkspaceMove } from '../data/move.ts'
+import type { WorkspaceMoveTarget } from '../data/move.ts'
 import { descendantsOf, deriveNesting, nearestAncestorForPath } from '../data/nest.ts'
 import type { Nesting } from '../data/nest.ts'
 import {
   adoptionVisibility,
-  focusedLayout,
   focusedWorkspaceIds,
   pickerSections,
   resolveFocus,
@@ -47,17 +48,24 @@ import {
   mainSessionId,
   straySessions,
 } from '../data/sessions.ts'
-import { frontPinnedRows, pinRanks, pinnedEntries } from '../data/pinned.ts'
-import type { RootLayout, SessionRow } from '../data/types.ts'
+import { frontPinnedRows, pinRanks, pinnedEntries, reconcilePinned } from '../data/pinned.ts'
+import { PINNED_KEY } from '../data/dnd/protocol.ts'
+import { useOutline } from '../hooks/useOutline.ts'
+import { stretchDragPlan } from '../data/dnd/plan.ts'
+import { debugWarn } from '../utils/debug.ts'
+import { indexOutline } from '../data/dnd/outlineIndex.ts'
+import type { RootListing } from '../data/outline.ts'
+import type { SessionRow } from '../data/types.ts'
 import type { HostInfo } from '../hostInfo.ts'
 import { regionLabels } from '../labels.ts'
 import type { RegionLabels } from '../labels.ts'
 import type { RegionTranslate } from '../locales.ts'
 import { PARENT_GROUP_ITEM, VIRTUAL_WORKSPACE_ITEM, VIRTUAL_WORKSPACE_PREFIX, parseParentGroupId } from '../menus.tsx'
 import { DEFAULT_PINNED_LIMIT, DEFAULT_PINNED_VISIBLE_COUNT, normalizeSnapshot } from '../remote.ts'
-import type { WorkspaceGroupsSnapshot } from '../remote.ts'
+import type { Group, WorkspaceGroupsSnapshot } from '../remote.ts'
 import { ALL_ENTRIES, sameAddress, virtualAddress, workspaceAddress } from '../../rootEntry.ts'
 import type { RootEntryAddress } from '../../rootEntry.ts'
+import { PINNED_SLOT_KEY } from '../data/pinned.ts'
 import { useFlipMarker } from '../useFlipMarker.ts'
 import { UNGROUPED_KEY, expandedAt, indicatorOf, modeOf, pinnedOf, sessionGroupExpansionOf, sessionGroupKey, virtualExpansionOf, workspaceExpansionOf } from '../store/viewMode.ts'
 import type { SessionGroupRef, ViewModeStoreHandle } from '../store/viewMode.ts'
@@ -67,6 +75,8 @@ import type { Expansion } from '../hooks/useExpansion.ts'
 import { SessionScopesProvider } from '../hooks/useSessionScopes.ts'
 import type { SessionScopes } from '../hooks/useSessionScopes.ts'
 import { sessionScopeKey } from '../data/collapse.ts'
+import type { SessionScopeRef } from '../data/collapse.ts'
+import { DndProvider } from '../hooks/useDnd.ts'
 import { LocalViewOptionsProvider } from '../hooks/useLocalViewOptions.ts'
 import type { LocalViewOptions } from '../hooks/useLocalViewOptions.ts'
 import type { RegionLocale } from '../hooks/useLocale.ts'
@@ -132,16 +142,18 @@ interface RegionLayout {
   workspaceById: ReadonlyMap<string, WorkspaceView>
   /** 取一个工作区的 cwd，缺省表示它没有可用路径，那个工作区因此不会被嵌套 */
   pathOfWorkspace: (workspaceId: string) => string | undefined
-  /** workspaceId → 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里 */
+  /** workspaceId -> 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里 */
   virtualOfWorkspace: (workspaceId: string) => string
   nesting: Nesting
-  rootLayout: RootLayout
+  listing: RootListing
   pickerEntries: PickerEntry[]
   picker: ReturnType<typeof pickerSections>
   /** 第二行显示的文案，没有聚焦时是「全部工作区」 */
   currentFocus: string
-  /** 聚焦生效后的根节点布局 */
-  listLayout: RootLayout
+  /** 解析过的聚焦条目，解析不到时为 undefined，表示「全部工作区」 */
+  resolvedFocus: PickerEntry | undefined
+  /** 聚焦生效后的切分 */
+  focusedListing: RootListing
   /** 真的聚焦在某一片内容上时，「未分组」区段整段隐藏 */
   focused: boolean
   /** 会被解除嵌套的子工作区显示名，工作区已被删掉时退回 id，名单因此不会出现空行 */
@@ -157,7 +169,7 @@ interface RegionLayout {
  */
 interface RegionUiState {
   overlay: RegionOverlay | null
-  /** 打开一个浮层，或置空收起；同一时刻只有这一格 */
+  /** 打开一个浮层，或置空收起，同一时刻只有这一格 */
   openOverlay: (overlay: RegionOverlay | null) => void
   /** 下拉菜单的开合，菜单面板与触发器分处两个组件，状态因此留在这一层 */
   pickerOpen: boolean
@@ -185,7 +197,7 @@ interface RegionUiState {
 /**
  * 折叠态的写入口，只有区域容器用得到
  *
- * 读与取反面向所有消费方、走 `useExpansion.ts` 的 hook；这三个是揭示 / 新建会话前的编排，不对外下发
+ * 读与取反面向所有消费方、走 `useExpansion.ts` 的 hook，这三个是揭示 / 新建会话前的编排，不对外下发
  */
 interface ExpansionCommands {
   /** 写到展开，已经生效展开的不重复写 */
@@ -208,6 +220,12 @@ interface ExpansionValue {
 
 /** 平铺列表不渲染时交出的空行集，恒定同一份引用，避免每次渲染换新数组 */
 const EMPTY_ROWS: readonly SessionRow[] = []
+
+/** 一个还没有会话的工作区：序列按 id 取行时缺格落到这一份，同样要恒定同一份引用 */
+const EMPTY_SESSION_ROWS: readonly SessionRow[] = []
+
+/** 一个还没有会话分组的工作区，理由同上 */
+const EMPTY_GROUPS: readonly Group[] = []
 
 /** 不做就地置顶时的空名次表，恒定同一份引用 */
 const NO_PINS: ReadonlyMap<string, number> = new Map()
@@ -238,7 +256,7 @@ function useRegionSources(props: WorkspaceGroupsProps): RegionSources {
   const workspaces = useWorkspaces((state) => state.items) as readonly WorkspaceView[]
   // 归档集是注册表全局的，归档会话仍留在工作区的 sessionIds 里，必须显式过滤，否则已归档的会话会继续出现在列表里
   const archivedSessionIds = useWorkspaces((state) => state.archivedSessionIds) as readonly string[]
-  // 置顶集合同样是注册表全局的，最近置顶在最前；它与 items / archivedSessionIds 在同一次快照里
+  // 置顶集合同样是注册表全局的，最近置顶在最前，它与 items / archivedSessionIds 在同一次快照里
   // 缺格时按空表读：这一格拿不到就抛错的话，整片区域（对照模式下还包括承载它的右侧栏）会一起打挂
   const pinnedSessionIds =
     (useWorkspaces((state) => state.pinnedSessionIds) as readonly string[] | undefined) ?? []
@@ -304,6 +322,7 @@ const EMPTY_SNAPSHOT: WorkspaceGroupsSnapshot = {
   workspaceGroups: [],
   picker: EMPTY_PICKER_STATE,
   nested: true,
+  orderSlots: {},
   pinnedVisibleCount: DEFAULT_PINNED_VISIBLE_COUNT,
   pinnedLimit: DEFAULT_PINNED_LIMIT,
 }
@@ -344,9 +363,19 @@ function useSnapshotFeed(
   const apply = useCallback(
     (action: Promise<WorkspaceGroupsSnapshot>) => {
       void action.then(
-        (next) => setSnapshot(normalizeSnapshot(next)),
+        (next) => {
+          const normalized = normalizeSnapshot(next)
+          debugWarn('snapshot applied', {
+            groups: normalized.workspaceGroups.map(
+              (group) => group.id + '[' + group.workspaceIds.join('|') + ']',
+            ),
+          })
+          setSnapshot(normalized)
+        },
         (reason: unknown) => {
-          console.error('workspace-plus: group change failed', reason)
+          // 写入被宿主拒绝时界面已经画过落点，用户看到的是「拖了没反应」
+          // 这一条不受调试开关管：它标记的就是「本该落下去却没落下」的分叉
+          debugWarn('group change failed', reason)
           reload()
         },
       )
@@ -377,10 +406,11 @@ function useRegionLayout(
   )
 
   /**
-   * workspaceId → 工作区视图
+   * workspaceId -> 工作区视图
    *
    * 根节点按 id 排布（分组里记的也是 id），渲染每行时都要按 id 取回视图
-   * 流式期间每次活动都会重渲染整片区域，逐个 `find` 会让这一层退化成与工作区数平方成正比。索引只随工作区快照重建一次
+   * 流式期间每次活动都会重渲染整片区域，逐个 `find` 会让这一层退化成与工作区数平方成正比
+   * 索引只随工作区快照重建一次
    */
   const workspaceById = useMemo(() => {
     const index = new Map<string, WorkspaceView>()
@@ -400,7 +430,7 @@ function useRegionLayout(
   )
 
   /**
-   * workspaceId → 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里
+   * workspaceId -> 它所属的虚拟工作区分组 id，空串表示不在任何虚拟工作区里
    *
    * 虚拟工作区归属由根节点布局交出，那一层已经把「哪些工作区在哪个虚拟分组里」算过一遍
    */
@@ -439,8 +469,8 @@ function useRegionLayout(
    * 开启嵌套时每一段只列该容器里的顶层工作区，被嵌套的那些在父工作区体内渲染
    * 关掉时每个工作区都散回自己那个虚拟分组（或根节点），与没有这个特性时逐行一致
    */
-  const rootLayout = useMemo(
-    () => buildRootLayout(workspaceIds, snapshot.workspaceGroups, nesting),
+  const listing = useMemo(
+    () => listRoot({ workspaceIds, virtualGroups: snapshot.workspaceGroups ?? [], nesting }),
     [workspaceIds, snapshot.workspaceGroups, nesting],
   )
 
@@ -451,8 +481,8 @@ function useRegionLayout(
    * 开启嵌套时子工作区也列出并按层级缩进，它们可能已被置顶，不列出来那些记录就成了指向不存在条目的死条目
    */
   const pickerEntries = useMemo(
-    () => rootPickerEntries(rootLayout, workspaceById, snapshot.nested ? nesting : undefined),
-    [rootLayout, workspaceById, nesting, snapshot.nested],
+    () => rootPickerEntries(listing, workspaceById, snapshot.nested ? nesting : undefined),
+    [listing, workspaceById, nesting, snapshot.nested],
   )
   const picker = useMemo(
     () => pickerSections(pickerEntries, snapshot.picker),
@@ -461,7 +491,8 @@ function useRegionLayout(
   /**
    * 当前聚焦的条目
    *
-   * 解析不到（聚焦的条目已经被删掉或解散）时当作没有聚焦，记录比列表活得久，直接按那个地址过滤会让列表整片空掉，而第二行还写着一个已经不存在的名字
+   * 解析不到（聚焦的条目已经被删掉或解散）时当作没有聚焦
+   * 记录比列表活得久，直接按那个地址过滤会让列表整片空掉，而第二行还写着一个已经不存在的名字
    */
   const resolvedFocus = resolveFocus(pickerEntries, snapshot.picker.focused)
   const currentFocus = resolvedFocus?.label ?? labels.picker.all
@@ -470,9 +501,9 @@ function useRegionLayout(
    *
    * 聚焦一个工作区分组时列表里不再重复渲染组头（第二行已经写着组名），因此这一层只交出组内工作区
    */
-  const listLayout = useMemo(
-    () => focusedLayout(rootLayout, pickerEntries, snapshot.picker.focused),
-    [rootLayout, pickerEntries, snapshot.picker.focused],
+  const focusedListing = useMemo(
+    () => focusListing(listing, resolvedFocus?.address ?? ALL_ENTRIES),
+    [listing, resolvedFocus],
   )
   const focused = resolvedFocus !== undefined
 
@@ -496,11 +527,12 @@ function useRegionLayout(
     pathOfWorkspace,
     virtualOfWorkspace,
     nesting,
-    rootLayout,
+    listing,
     pickerEntries,
     picker,
     currentFocus,
-    listLayout,
+    resolvedFocus,
+    focusedListing,
     focused,
     groupedChildLabels,
   }
@@ -564,7 +596,8 @@ function useRegionUiState(): RegionUiState {
 /**
  * 把 store 座位的三层折叠态与层级推导演成读、取反与写入口
  *
- * 三份记录只装「用户显式选过的展开态」，键缺席表示用户从未碰过这一层，缺省由结构现推（无父工作区展开、会话分组折叠…），因此读之前一律先归一到空记录
+ * 三份记录只装「用户显式选过的展开态」，键缺席表示用户从未碰过这一层
+ * 缺省由结构现推（没有父工作区的展开、会话分组折叠…），因此读之前一律先归一到空记录
  * 写入口都是显式赋值（`set…(…)`）而不是取反：取反要先读出当前生效值，而那个值依赖默认推导
  * 生效判据是「用户显式选择 + 结构默认」的合成，因此工作区层要 `nesting`、另两层只要记录
  * @param props - 区域 props，只用它的 store 座位两格
@@ -580,7 +613,8 @@ function useExpansionValue(props: WorkspaceGroupsProps, nesting: Nesting): Expan
   /**
    * 面向所有消费方的读数与取反
    *
-   * 依赖列的是输入（记录、setter 与层级推导）而不是函数名：函数在内部定义，将来加一层只需补进这里，不会出现「加了函数忘了补依赖」那种静默持有旧闭包的情形
+   * 依赖列的是输入（记录、setter 与层级推导）而不是函数名：函数在内部定义
+   * 新增一层折叠态时只需补进这里，不会出现「加了函数忘了补依赖」那种静默持有过时闭包的情形
    * 工作区层的默认按结构分层：没有父工作区的（含末尾「未分组」桶的哨兵空串）默认展开，子工作区默认折叠
    * 判据是 `ancestorsOf` 的长度而不是官方那套「有孩子就展开」——`repo/src` 有父工作区也有子工作区，这里折叠、官方展开
    */
@@ -613,7 +647,7 @@ function useExpansionValue(props: WorkspaceGroupsProps, nesting: Nesting): Expan
    * 把某一层写到展开，除非它已经显式展开
    *
    * 揭示与新建会话前都走它：这两处要的是「展开」这个结果，而不是「写一条记录」
-   * 判据看的是**记录**而不是生效值：默认折叠的层（子工作区、会话分组）靠这条把缺席的键补上，缺了它就看不见目标行
+   * 判据看的是记录而不是生效值：默认折叠的层（子工作区、会话分组）靠这条把缺席的键补上，缺了它就看不见目标行
    * 已经显式为 `true` 的层跳过，它的生效态本就是展开，重复写只会多一条无用的键
    */
   const commands = useMemo((): ExpansionCommands => {
@@ -731,7 +765,7 @@ function useSearchResults(
    * 本包把展开状态放在浏览器本地 store 里，因此在打开前直接写那几份记录
    *
    * 判据是「除非显式展开，否则写展开」而不是官方那套「只在显式为 false 时才写」
-   * 官方默认「有孩子就展开」，缺席通常已经展开；本包对子工作区与会话分组的默认是折叠，缺席必须被补上
+   * 官方默认「有孩子就展开」，缺席通常已经展开，本包对子工作区与会话分组的默认是折叠，缺席必须被补上
    *
    * 清掉查询还有一层意义：结果列表随即被常规列表取代，标记的那一行才真的存在
    */
@@ -742,7 +776,7 @@ function useSearchResults(
       expansion.expandWorkspace(UNGROUPED_KEY)
     } else {
       // 工作区本身可能还躺在一个收起的工作区分组里，与外层两层一样要先展开，否则揭示的那一行落在看不见的地方
-      const rootGroupId = virtualWorkspaceIdOf(layout.rootLayout.groups, workspaceId)
+      const rootGroupId = layout.listing.groupOf.get(workspaceId) ?? ''
       if (rootGroupId !== '') expansion.expandVirtualWorkspace(rootGroupId)
       // 工作区自己可能是嵌在父工作区体内的子工作区，从根节点那一层起逐层展开它所有的祖先
       // 只展开它自己会让那一行落在收起的父工作区撑开体里，用户看不到它
@@ -776,7 +810,7 @@ interface WorkspaceAdoption {
  *
  * 采纳之后紧接着会在新工作区里开一个新会话并打开它，而聚焦把列表收窄到那一片
  * 新工作区落在被聚焦范围之外时那条会话行谁也看不到，因此先按 {@link adoptionVisibility} 判一次
- * 聚焦虚拟工作区时把它放进那个分组，它当场成为那一片的成员；聚焦真实工作区时没有能替用户做的写入，问一句要不要改换聚焦对象
+ * 聚焦虚拟工作区时把它放进那个分组，它当场成为那一片的成员，聚焦真实工作区时没有能替用户做的写入，问一句要不要改换聚焦对象
  */
 function useWorkspaceAdoption(
   props: WorkspaceGroupsProps,
@@ -789,7 +823,7 @@ function useWorkspaceAdoption(
 ): WorkspaceAdoption {
   // 普通函数而不是 `useCallback`：它的身份从没被观察过
   // 它只落到 `AddWorkspaceActions.onAdopted` 上，被 `AddWorkspaceControl` 在采纳成功后调一次
-  // 那个组件不是 `memo`，也没有依赖数组；两个被 `memo` 包住的行组件都不收它，因此缓存它没有收益
+  // 那个组件不是 `memo`，也没有依赖数组，两个被 `memo` 包住的行组件都不收它，因此缓存它没有收益
   const onWorkspaceAdopted = (workspaceId: string, path: string, name: string): void => {
     const visibility = adoptionVisibility({
       focused: snapshot.picker.focused,
@@ -810,7 +844,7 @@ function useWorkspaceAdoption(
     }
     if (visibility.kind === 'join-virtual') {
       // 分组归属是这一层本地的状态，因此必须收下宿主回的整份快照
-      // 丢掉它会让新工作区归属于旧的快照，界面看起来像「加进去了但列表里没有」
+      // 丢掉它会让新工作区落在一份过时的快照上，界面看起来像「加进去了但列表里没有」
       apply(props.moveWorkspace(workspaceId, visibility.groupId))
       // 用户可能把那个分组合起来过，显式写展开，否则新工作区落在收起的组里
       expansion.expandVirtualWorkspace(visibility.groupId)
@@ -826,7 +860,9 @@ function useWorkspaceAdoption(
   /**
    * 提交一次「是否聚焦到新工作区」
    *
-   * 选「聚焦」时先把新工作区与它的父工作区链展开，再改聚焦：聚焦之后列表只列它自己，而它按路径有自己的父工作区、默认折叠，不展开的话紧接着打开的新会话仍落在看不见的撑开体里
+   * 选「聚焦」时先把新工作区与它的父工作区链展开，再改聚焦
+   * 聚焦之后列表只列它自己，而它按路径有自己的父工作区、默认折叠
+   * 不展开的话紧接着打开的新会话仍落在看不见的撑开体里
    * 选「取消」时什么都不做——用户已经知道那条会话不在视野内
    * @param focus - 为真表示把视图聚焦到新工作区
    */
@@ -854,6 +890,14 @@ interface RegionGroupActions {
   commitWorkspaceDelete: () => void
   createSessionIn: (workspaceId: string, groupId: string) => void
   selectSessionGroup: (workspaceId: string, sessionId: string, id: string) => void
+  /**
+   * 把一个会话分组挪到同工作区的另一个分组之前
+   *
+   * `beforeGroupId` 为 undefined 表示挪到末尾
+   */
+  moveGroupBefore: (workspaceId: string, groupId: string, beforeGroupId: string | undefined) => void
+  /** 写置顶段的手动顺序，空表表示清掉这一格 */
+  setPinnedOrder: (order: readonly string[]) => void
 }
 
 /**
@@ -869,10 +913,9 @@ function useRegionGroupActions(
   expansion: ExpansionCommands,
   apply: (action: Promise<WorkspaceGroupsSnapshot>) => void,
 ): RegionGroupActions {
-  const { createGroup, renameGroup, deleteGroup, moveSession, moveWorkspace, createVirtualWorkspace,
-    renameVirtualWorkspace, deleteVirtualWorkspace, forgetWorkspace, renameWorkspace,
-    deleteWorkspace, focusEntry, startSession } = props
-
+  const { createGroup, renameGroup, deleteGroup, moveSession, moveGroupBefore, moveWorkspace,
+    createVirtualWorkspace, renameVirtualWorkspace, deleteVirtualWorkspace, forgetWorkspace,
+    renameWorkspace, deleteWorkspace, focusEntry, startSession, setSegmentOrder } = props
   /** 提交建组或改名，空名与取消都不写 */
   const commitGroupNameDraft = (): void => {
     const draft = ui.overlay
@@ -948,18 +991,20 @@ function useRegionGroupActions(
     // 不经过 `apply`，改名不动分组元数据，官方控制器返回的是工作区视图而不是分组快照
     // `apply` 因此只收「回整份快照」的改动。失败仍要留下痕迹
     void renameWorkspace(draft.workspaceId, name).catch((reason: unknown) => {
-      console.error('workspace-plus: workspace rename failed', reason)
+      debugWarn('workspace rename failed', { workspaceId: draft.workspaceId, reason })
     })
   }
 
   /**
    * 删除工作区
    *
-   * 先删注册再清分组元数据：工作区没了，它名下的会话分组与根节点归属记录都再也不会被渲染，留着就是读不到的记录
+   * 先删注册再清分组元数据：工作区没了，它名下的会话分组与根节点归属记录都再也不会被渲染
+   * 留着就是读不到的记录
    * 反过来的话，清理成功而删工作区失败会把分组提前丢掉
    * 两处清理由既有的 `deleteGroup` / `forgetWorkspace` 承担，不新增宿主接口
    *
-   * 每一步都回整份快照，取最后一步的那份即可，删工作区本身不动分组元数据，因此最终状态就是最后一次清理的结果（没有分组可清时退回删工作区前的本地值）
+   * 每一步都回整份快照，取最后一步的那份即可，删工作区本身不动分组元数据
+   * 因此最终状态就是最后一次清理的结果，没有分组可清时退回删工作区前的本地值
    */
   const commitWorkspaceDelete = (): void => {
     const draft = ui.overlay
@@ -985,6 +1030,8 @@ function useRegionGroupActions(
    * 建好之后无条件把会话摆到本次创建指定的位置：`groupId` 为空串表示工作区行的 `+`，会话归入未归组区
    * 这一步不能只在指定了分组时做——官方会复用该工作区已有的空白会话，那条会话可能正留在某个分组里
    * 复用时不把它摘出来就会停在原分组
+   *
+   * 会话在新段里的位置由渲染侧的默认序决定，因此这里不带位次
    * @param groupId - 新会话要归入的分组，空串表示归入未归组区
    */
   const createSessionIn = (workspaceId: string, groupId: string): void => {
@@ -1021,6 +1068,34 @@ function useRegionGroupActions(
     [apply, moveSession],
   )
 
+  /**
+   * 分组排序的落点提交
+   *
+   * `beforeGroupId` 由落点换算给出，`undefined` 表示挪到末尾
+   *
+   * 是 `useCallback` 而不是每次渲染新建：它会随排序接线传到每一个分组头
+   * 而行级与头级的 memo 都按引用比对，每渲染新建一个会让整片分组的接线失效
+   */
+  const moveGroupOrdered = useCallback(
+    (workspaceId: string, groupId: string, beforeGroupId: string | undefined): void => {
+      apply(moveGroupBefore(workspaceId, groupId, beforeGroupId))
+    },
+    [apply, moveGroupBefore],
+  )
+
+  /**
+   * 置顶段的手动顺序写回
+   *
+   * 段键只有置顶区这一格用得到，因此收在这里、不外露给调用方
+   * 是 `useCallback`：它会随置顶行的拖拽计划到达每一行，行级 memo 按引用比对
+   */
+  const setPinnedOrder = useCallback(
+    (order: readonly string[]): void => {
+      apply(setSegmentOrder(PINNED_SLOT_KEY, order))
+    },
+    [apply, setSegmentOrder],
+  )
+
   return {
     commitGroupNameDraft,
     commitGroupDelete,
@@ -1030,6 +1105,8 @@ function useRegionGroupActions(
     commitWorkspaceDelete,
     createSessionIn,
     selectSessionGroup,
+    moveGroupBefore: moveGroupOrdered,
+    setPinnedOrder,
   }
 }
 
@@ -1042,6 +1119,24 @@ interface RegionNestActions {
   selectParentGroup: (workspaceId: string, id: string) => void
   requestNestedToggle: () => void
   commitNestedOff: () => void
+  /**
+   * 把一个工作区分组挪到根节点的另一个分组之前
+   *
+   * `beforeGroupId` 为 undefined 表示挪到末尾
+   */
+  moveVirtualWorkspaceBefore: (groupId: string, beforeGroupId: string | undefined) => void
+  /** 把一个工作区移入 / 移出虚拟工作区分组，空串表示移出到根节点 */
+  moveWorkspaceToGroup: (workspaceId: string, groupId: string) => void
+  /**
+   * 把一个工作区挪到注册表里的另一个工作区之前
+   *
+   * 工作区类段落的顺序唯一来自注册表序，改归属是 {@link RegionNestActions.moveWorkspaceToGroup} 的事
+   */
+  moveWorkspaceInOrder: (workspaceId: string, beforeWorkspaceId: string | undefined) => void
+  /** 把一个工作区连同它名下的子工作区放进某个祖先工作区的会话分组 */
+  nestWorkspaceInto: (workspaceId: string, parentId: string, groupId: string) => void
+  /** 解除一个工作区的嵌套归属 */
+  unnestWorkspace: (workspaceId: string) => void
 }
 
 /**
@@ -1057,7 +1152,8 @@ function useRegionNestActions(
   ui: RegionUiState,
   apply: (action: Promise<WorkspaceGroupsSnapshot>) => void,
 ): RegionNestActions {
-  const { moveWorkspace, nestWorkspaces, unnestWorkspaces, setNested } = props
+  const { moveWorkspace, insertWorkspaceBefore, moveVirtualWorkspaceBefore,
+    nestWorkspaces, unnestWorkspaces, setNested } = props
 
   /**
    * header 入口：新建一个工作区分组
@@ -1075,7 +1171,7 @@ function useRegionNestActions(
    * 工作区行「移动到…」子菜单与「移出工作区分组」一级项的选中项
    *
    * 三个分支：新建一个分组并把该工作区放进去、移出当前分组
-   * 或移入 `vw:<id>` 指名的分组。与 `selectSessionGroup` 一样是 `useCallback`：
+   * 或移入 `vw:<id>` 指名的分组。与 `selectSessionGroup` 一样是 `useCallback`
    * 它会随菜单上下文传到每一行，行级 memo 按引用比对
    */
   const selectVirtualWorkspace = useCallback(
@@ -1110,15 +1206,85 @@ function useRegionNestActions(
     ).filter((candidate) => layout.nesting.bindingOf(candidate) !== undefined)
 
   /**
-   * 把一个工作区（连同它名下的子工作区）放进某个祖先工作区的会话分组
+   * 把一个工作区（连同它名下的子工作区）挪到另一处
    *
-   * 父工作区由选中那个分组决定，不是自动取最近祖先，放进谁的分组谁就是父工作区
+   * 目的地由调用方指名：换一个虚拟分组、进某个会话分组、或两件一起做
+   * 要走哪几笔由 {@link planWorkspaceMove} 按来源与目的地的差算，这里只按它给的名单依次写
    *
-   * 归属记在子工作区自己的记录上，因此这里交出的是要写归属的那批 id：
-   * 工作区自己不写（它是被放进分组的那一个），它名下的子工作区要一并跟随，否则层级会在分组边界上断开
+   * 会话分组那一笔排在虚拟分组之后：一条归属只在父子两边同处一个虚拟分组时才生效
+   * 顺序反过来会先落一条无效归属再改它，中间那一段窗口里界面读作「进了分组但没进分组」
    *
-   * 分两次写，先把它放进分组，再把跟随的子工作区放进去
-   * 第二次失败时会留下「父工作区已进组、子工作区还在外面」的状态——那是可恢复的，下次再移一次即可，不必为此加补偿事务
+   * 会话语义上「进某个分组」也必然意味着「进那一片」，因此拖动与菜单两个入口走的是同一条路
+   *
+   * 每一步都要走 `apply`，它把宿主回的整份快照写进本地状态
+   * 直接 `void nestWorkspaces(...)` 会把那次写入的结果丢掉，界面因此停在旧快照上
+   * 归属其实已经落盘，看起来却像「移入没有生效」
+   *
+   * 中途失败时会留下「虚拟分组已改、会话分组还没写」的状态——那是可恢复的，下次再移一次即可，不必为此加补偿事务
+   * @param workspaceId - 被挪动的工作区
+   * @param target - 目的地
+   */
+  const moveWorkspaceTo = useCallback(
+    (workspaceId: string, target: WorkspaceMoveTarget): void => {
+      // 整块子树跟着走：已经放进别处分组的后代留在原地会让层级在分组边界上断开
+      // 未放进任何分组的那些由路径推导自动跟随，不必写
+      const followers = groupedDescendantsOf(workspaceId)
+      const plan = planWorkspaceMove({
+        workspaceId,
+        target,
+        followers,
+        scopeOf: layout.virtualOfWorkspace,
+        bindingOf: (id) => layout.nesting.bindingOf(id),
+      })
+      // 每一笔都回一份整快照，最后交出去的是最后一笔的那一份
+      // 丢掉中间结果再拿闭包里那份旧快照去替换状态，界面会停在改动之前
+      // 写入其实已经落盘，看起来却像「拖了没反应」
+      const run = async (): Promise<WorkspaceGroupsSnapshot> => {
+        let next = snapshot
+        for (const entry of plan.reslotted) {
+          next = await moveWorkspace(entry.workspaceId, entry.scope)
+        }
+        if (plan.unnested.length > 0) next = await unnestWorkspaces(plan.unnested)
+        const nest = target.nest
+        if (plan.nested.length > 0 && nest !== undefined) {
+          next = await nestWorkspaces(plan.nested, nest.workspaceId, nest.groupId)
+        }
+        return next
+      }
+      apply(run())
+    },
+    [
+      apply,
+      moveWorkspace,
+      nestWorkspaces,
+      unnestWorkspaces,
+      layout.virtualOfWorkspace,
+      layout.nesting,
+      layout.workspaceIds,
+      layout.pathOfWorkspace,
+    ],
+  )
+
+  /**
+   * 把一个工作区放进某个祖先工作区的会话分组
+   *
+   * 父工作区由调用方指名，不是自动取最近祖先，放进谁的分组谁就是父工作区
+   */
+  const nestWorkspaceInto = useCallback(
+    (workspaceId: string, parentId: string, groupId: string): void => {
+      moveWorkspaceTo(workspaceId, {
+        scope: layout.virtualOfWorkspace(parentId),
+        nest: { workspaceId: parentId, groupId },
+      })
+    },
+    [moveWorkspaceTo, layout.virtualOfWorkspace],
+  )
+
+  /**
+   * 菜单里「移动到分组…」子菜单的选中项
+   *
+   * 两个分支：移出当前分组，或移入 `pg:<父工作区>:<分组>` 指名的分组
+   * 与 {@link nestWorkspaceInto} 落到同一件事上——拖拽入组与菜单入组是同一条写入，只是锚点来源不同
    */
   const selectParentGroup = useCallback(
     (workspaceId: string, id: string): void => {
@@ -1128,28 +1294,50 @@ function useRegionNestActions(
       }
       const target = parseParentGroupId(id)
       if (target === undefined) return
-      // 整棵子树跟着走，保持层级关系，父工作区进哪个分组，它名下已经放进别处分组的子工作区一并换过去
-      // 未放进任何分组的那些由路径推导自动跟随，不必写
-      // 两步分开写，因此父工作区已进组、子工作区还留在原组是一段可恢复的中间态——下次移一次即可
-      const followers = groupedDescendantsOf(workspaceId)
-      // 每一步都要走 `apply`，它把宿主回的整份快照写进本地状态
-      // 直接 `void nestWorkspaces(...)` 会把那次写入的结果丢掉，界面因此停在旧快照上——
-      // 归属其实已经落盘，看起来却像「移入没有生效」
-      apply(
-        nestWorkspaces([workspaceId], target.parentId, target.groupId).then((next) =>
-          followers.length === 0
-            ? next
-            : nestWorkspaces(followers, target.parentId, target.groupId),
-        ),
-      )
+      nestWorkspaceInto(workspaceId, target.parentId, target.groupId)
     },
-    [apply, nestWorkspaces, layout.workspaceIds, layout.pathOfWorkspace, layout.virtualOfWorkspace, layout.nesting],
+    [apply, unnestWorkspaces, nestWorkspaceInto],
+  )
+
+  /**
+   * 拖拽移出：解除一个工作区的嵌套归属，它退回按 cwd 路径推导的位置
+   */
+  const unnestWorkspace = useCallback(
+    (workspaceId: string): void => {
+      apply(unnestWorkspaces([workspaceId]))
+    },
+    [apply, unnestWorkspaces],
+  )
+
+  /**
+   * 拖拽移入 / 移出虚拟工作区分组
+   *
+   * 与菜单里那条入口落到同一个宿主方法上：拖到分组上读作移入，拖到根节点那一片读作移出
+   * 空串在宿主那一侧表示移出，与菜单里「移出工作区分组」交出的是同一个值
+   */
+  const moveWorkspaceToGroup = useCallback(
+    (workspaceId: string, groupId: string): void => {
+      moveWorkspaceTo(workspaceId, { scope: groupId })
+    },
+    [moveWorkspaceTo],
+  )
+
+  /**
+   * 拖拽换位：写官方注册表序，组内、同层子工作区与根节点平铺段共用这一格
+   *
+   * 官方 `insertBefore` 自带乐观更新与对账，不回快照，因此不走 `apply`
+   */
+  const moveWorkspaceInOrder = useCallback(
+    (workspaceId: string, beforeWorkspaceId: string | undefined): void => {
+      void insertWorkspaceBefore(workspaceId, beforeWorkspaceId)
+    },
+    [insertWorkspaceBefore],
   )
 
   /**
    * 视图选项里的嵌套开关
    *
-   * 开启直接写；关闭只在真的会把某个子工作区解除嵌套时才过二次确认，并把那批工作区逐个列出来
+   * 开启直接写，关闭只在真的会把某个子工作区解除嵌套时才过二次确认，并把那批工作区逐个列出来
    * 没有任何子工作区归组时关掉它只影响按路径推导的展示层级，当场生效即可
    * 这一层是「用户点了一下」与「真的写盘」之间的分派，真正的写入在 {@link commitNestedOff}
    *
@@ -1174,12 +1362,29 @@ function useRegionNestActions(
     apply(setNested(false))
   }
 
+  /**
+   * 根节点分组排序的落点提交
+   *
+   * 同 {@link RegionGroupActions.moveGroupBefore} 的取舍，这一份作用于根节点那一层
+   */
+  const moveVirtualWorkspaceOrdered = useCallback(
+    (groupId: string, beforeGroupId: string | undefined): void => {
+      apply(moveVirtualWorkspaceBefore(groupId, beforeGroupId))
+    },
+    [apply, moveVirtualWorkspaceBefore],
+  )
+
   return {
     startVirtualWorkspaceCreate,
     selectVirtualWorkspace,
     selectParentGroup,
     requestNestedToggle,
     commitNestedOff,
+    moveVirtualWorkspaceBefore: moveVirtualWorkspaceOrdered,
+    moveWorkspaceToGroup,
+    moveWorkspaceInOrder,
+    nestWorkspaceInto,
+    unnestWorkspace,
   }
 }
 
@@ -1279,7 +1484,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   /**
    * 列表就绪时摘掉工作区层里已经失效的键
    *
-   * 守卫不能省：`pending` 期间 `items` 是空的，据它清理会把用户的全部工作区展开记录清光（官方那条 `workspacePhase !== 'ready'` 防的就是这个）
+   * 守卫不能省：`pending` 期间 `items` 是空的，据它清理会把用户的全部工作区展开记录清光
+   * 官方那条 `workspacePhase !== 'ready'` 防的就是这个
    *
    * 会话分组与工作区分组两层不在这里清：它们没有对应的就绪信号（`SnapshotFeed` 初值与拉取失败降级值是同一份空快照形状）
    * 而失效的键只是几十字节的垃圾，用户永远看不到——键不再对应任何渲染对象
@@ -1310,9 +1516,24 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const nestActions = useRegionNestActions(props, snapshot, layout, ui, apply)
   const pickerActions = useRegionPickerActions(props, snapshot, ui, apply)
 
-  // 量出区域右缘到窗口右缘的距离，据此决定悬停卡片是否要翻向左侧——
+  // 量出区域右缘到窗口右缘的距离，据此决定悬停卡片是否要翻向左侧
   // 对照模式下区域挂右侧栏、贴着窗口右缘，官方卡片固定向右展开会开到屏幕外
   const flipRef = useFlipMarker()
+
+  /**
+   * 区域根节点，交给拖拽机制当范围
+   *
+   * 两种引用形状在这里合流：`useFlipMarker` 按节点变化重跑量测，因此只收回调
+   * 手势层要的是随时可读的当前节点，因此是 `RefObject`
+   */
+  const dndRegion = useRef<HTMLElement | null>(null)
+  const attachRoot = useCallback(
+    (node: HTMLElement | null) => {
+      dndRegion.current = node
+      flipRef(node)
+    },
+    [flipRef],
+  )
 
   // 文案表与翻译函数合成一个稳定的 value：行级 memo 按引用比对 props，每次渲染新建会让每一行都判定为变过
   const locale: RegionLocale = useMemo(() => ({ t, labels }), [t, labels])
@@ -1331,49 +1552,68 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     )
   }
 
-  const rowsByWorkspace = groupSessionsByWorkspace(
-    sessions,
-    workspaces,
-    archivedSessionIds,
-    statusSnapshot,
+  /**
+   * 一个工作区名下的会话行
+   *
+   * 缓存的是投影结果，行对象本身由 `toSessionRow` 按摘要缓存，这里省下的是遍历与分桶
+   * 身份还牵着下游：它经 `rowsOf` 进行序列的依赖列，每渲染新建一份会让序列每渲染重算一次
+   */
+  const rowsByWorkspace = useMemo(
+    () => groupSessionsByWorkspace(sessions, workspaces, archivedSessionIds, statusSnapshot),
+    [sessions, workspaces, archivedSessionIds, statusSnapshot],
   )
+
   // 不属于任何工作区的会话，只有存在时才渲染末尾的「未分组」区段
   // 聚焦时整段不出现（`focusedLayout` 只交出被聚焦的那一片），因此这里也不必为它留位
   // 就地置顶在下面按名次表处理，这里先取列表原序
-  const strayRows = straySessions(sessions, workspaces, archivedSessionIds, statusSnapshot)
+  const strayRows = useMemo(
+    () => straySessions(sessions, workspaces, archivedSessionIds, statusSnapshot),
+    [sessions, workspaces, archivedSessionIds, statusSnapshot],
+  )
   const searching = search.normalized !== ''
 
   /**
-   * 会话 id → 它所属的工作区 id，无所属的会话不在其中
+   * 会话 id -> 它所属的工作区 id，无所属的会话不在其中
    *
    * 平铺列表按聚焦范围过滤时要用它：只有归属能回答「这一行属于哪一片内容」
    * 索引一次建好，逐行去各工作区的名单里找会退化成与工作区数平方成正比
    */
-  const workspaceOfSession = ((): Map<string, string> => {
+  const workspaceOfSession = useMemo((): ReadonlyMap<string, string> => {
     const index = new Map<string, string>()
     for (const [workspaceId, rows] of rowsByWorkspace) {
       for (const row of rows) index.set(row.id, workspaceId)
     }
     return index
-  })()
+  }, [rowsByWorkspace])
 
   /**
    * 置顶区里的行
    *
-   * 顺序直接沿用官方集合（最近置顶在最前），只滤掉不可见的那些
+   * 顺序取官方集合与置顶段顺序位合成后的结果，只滤掉不可见的那些
    * 两种溢出给法与就地置顶的名次表都从这一份派生，不各算一遍
    */
   const pinned = useMemo(
     () =>
-      pinnedEntries(
-        pinnedSessionIds,
-        sessions,
-        archivedSessionIds,
-        workspaceOfSession,
-        currentSessionId,
-        statusSnapshot,
+      reconcilePinned(
+        snapshot.orderSlots[PINNED_SLOT_KEY],
+        pinnedEntries(
+          pinnedSessionIds,
+          sessions,
+          archivedSessionIds,
+          workspaceOfSession,
+          currentSessionId,
+          statusSnapshot,
+        ),
       ),
-    [pinnedSessionIds, sessions, archivedSessionIds, workspaceOfSession, currentSessionId, statusSnapshot],
+    [
+      snapshot.orderSlots,
+      pinnedSessionIds,
+      sessions,
+      archivedSessionIds,
+      workspaceOfSession,
+      currentSessionId,
+      statusSnapshot,
+    ],
   )
 
   /** 置顶集合的原始 id 表，行上的图钉按钮据此判断自己那一格是否已置顶 */
@@ -1387,12 +1627,60 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    *
    * `pinnedOptions.scope === 'inline'` 时才交出它，否则是一张空表
    * 空表下比较器与不置顶时同序，三种段落因此共用同一个比较器
-   * 名次按官方集合的位置算，最近置顶的排最前
+   * 名次取置顶区那一份渲染序里的位置，两个表面因此读同一份顺序
    */
   const pinRanksByScope = useMemo(
     () => (pinnedOptions.scope === 'inline' ? pinRanks(pinned) : NO_PINS),
     [pinnedOptions.scope, pinned],
   )
+
+  /**
+   * 置顶段全量顺序的最新一份，供拖拽计划的构造器读取
+   *
+   * 置顶顺序每次渲染都是新数组，放进依赖列会让构造器每渲染换一次引用
+   * 构造器在 `dragstart` 当刻读它，依赖列只留真正稳定的那一格
+   * 与会话分组、工作区分组两处的排序接线同一取舍
+   */
+  const dragPinnedOrder = useRef<readonly string[]>([])
+  dragPinnedOrder.current = pinned.map((entry) => entry.id)
+
+  /**
+   * 拖起一条置顶行时的计划
+   *
+   * 置顶段与组内段共用同一套 `rows` 档换算
+   * 落点由最近的那一行算前后半，换算在构造那一刻绑定的整段顺序上做，被裁在可见高度之外的行因此不动
+   *
+   * 提交写的是整份换算结果，而不是只交一个锚点
+   * 宿主手里的官方集合没有算上顺序位，只交锚点会让接管那一次与用户看见的顺序不一致
+   *
+   * 是 `useCallback` 而不是每次渲染新建：它会随行级 memo 的比对走，每渲染新建一个会让整片置顶行重渲染
+   */
+  const buildPinnedDragPlan = useCallback(
+    (sessionId: string) =>
+      stretchDragPlan({
+        source: { kind: 'session', id: sessionId },
+        zoneKey: PINNED_KEY,
+        // 顺序取这一份渲染序：它是顺序位与官方集合合成后的结果，接管因此零跳变
+        order: dragPinnedOrder.current,
+        movingId: sessionId,
+        commit: (order) => groupActions.setPinnedOrder(order),
+      }),
+    [groupActions.setPinnedOrder],
+  )
+
+  /**
+   * 清掉置顶段的手动顺序
+   *
+   * 空表即整格删除，置顶区因此回到官方集合序，面板尾部那条动作只在这一格非空时露面
+   * 与拖拽走同一个写入方法，清空与接管不会各写一套
+   */
+  const restorePinnedOrder = useCallback(
+    () => groupActions.setPinnedOrder([]),
+    [groupActions.setPinnedOrder],
+  )
+
+  /** 置顶段是否真有手动顺序，空表与缺格同义，两者都不构成「可以恢复」 */
+  const pinnedReorderable = (snapshot.orderSlots[PINNED_SLOT_KEY]?.length ?? 0) > 0
 
   /**
    * 会话折叠的输入：始终展示并占额度的行 id
@@ -1412,7 +1700,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    * 这一段的成员不属于任何工作区
    * 只把已置顶的行提到最前，其余维持会话列表原序
    */
-  const stray = frontPinnedRows(strayRows, pinRanksByScope)
+  const stray = useMemo(
+    () => frontPinnedRows(strayRows, pinRanksByScope),
+    [strayRows, pinRanksByScope],
+  )
 
   /**
    * 是否还能新增置顶
@@ -1433,14 +1724,18 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     // 只有取消的正是当前打开的那一条时才接续，否则用户在看别处，替他换会话是打断
     if (removedId !== currentSessionId) return undefined
     // 顺序按取消之后的集合算，不能用取消前的快照取相邻项
+    // 与置顶区读同一份顺序位：取消置顶后接着打开的那一条，就是界面上紧接着上来的那一条
     const nextIds = pinnedSessionIds.map(String).filter((id) => id !== removedId)
-    const next = pinnedEntries(
-      nextIds,
-      sessions,
-      archivedSessionIds,
-      workspaceOfSession,
-      currentSessionId,
-      statusSnapshot,
+    const next = reconcilePinned(
+      snapshot.orderSlots[PINNED_SLOT_KEY],
+      pinnedEntries(
+        nextIds,
+        sessions,
+        archivedSessionIds,
+        workspaceOfSession,
+        currentSessionId,
+        statusSnapshot,
+      ),
     )[0]
     if (next !== undefined) return () => openSession(next.id)
     // 一条不剩：把聚焦切回「全部」，并保持当前会话的打开状态（不导航、不关闭）
@@ -1453,7 +1748,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    * 切换一条会话的置顶
    *
    * 上限只拦新增，已置顶的照常可以取消
-   * 取消的正是当前打开的会话时，接着打开下一条；一条不剩则把聚焦切回「全部」
+   * 取消的正是当前打开的会话时，接着打开下一条，一条不剩则把聚焦切回「全部」
    */
   const toggleSessionPin = useCallback(
     (sessionId: string) => {
@@ -1464,7 +1759,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
         .setSessionPinned(sessionId, !unpinning)
         .then(() => followUp?.())
         .catch((reason: unknown) => {
-          console.error('workspace-plus: pin change failed', reason)
+          debugWarn('pin change failed', { sessionId, unpinning, reason })
         })
     },
     [pinnedIds, canPin, props.setSessionPinned],
@@ -1482,9 +1777,69 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
       : flatRowsInFocus(
           flatSessionRows(sessions, archivedSessionIds, statusSnapshot),
           workspaceOfSession,
-          focusedWorkspaceIds(layout.rootLayout, layout.pickerEntries, snapshot.picker.focused),
+          focusedWorkspaceIds(layout.listing, layout.resolvedFocus?.address ?? ALL_ENTRIES),
         ).sort((a, b) => compareSessionRowsWithPins(pinRanksByScope, a, b))
 
+  /**
+   * 会话行排序的比较器
+   *
+   * 身份要稳定：它既进序列的依赖列，又经 `scope` 下发给每个行组件的归组上下文
+   * 每渲染新建一份会让序列每渲染重算一次、整片列表的行级 memo 一起失效
+   */
+  const compareRows = useCallback(
+    (a: SessionRow, b: SessionRow) => compareSessionRowsWithPins(pinRanksByScope, a, b),
+    [pinRanksByScope],
+  )
+
+  const rowsOf = useCallback(
+    (workspaceId: string) => rowsByWorkspace.get(workspaceId) ?? EMPTY_SESSION_ROWS,
+    [rowsByWorkspace],
+  )
+  const groupsOf = useCallback(
+    (workspaceId: string) => snapshot.byWorkspace[workspaceId] ?? EMPTY_GROUPS,
+    [snapshot.byWorkspace],
+  )
+  // 展开态是这一层的内存记录：写入换一份新记录，读入口因此跟着它走
+  const isScopeExpanded = useCallback(
+    (ref: SessionScopeRef) => ui.sessionScopes[sessionScopeKey(ref)] === true,
+    [ui.sessionScopes],
+  )
+
+  /**
+   * 整片区域的行序列
+   *
+   * 由这一层算一次，渲染与拖拽都读它：前者按行画，后者按行装配查询索引
+   * 布局是输入而不是被重算——这一层只决定「按什么顺序、露不露面」
+   */
+  const outline = useOutline({
+    // 聚焦已由这一层裁过：序列与列表因此列的是同一批工作区，拖拽的落点范围也由它界定
+    workspaceIds: layout.workspaceIds,
+    virtualGroups: snapshot.workspaceGroups ?? [],
+    rowsOf,
+    groupsOf,
+    nesting: layout.nesting,
+    // 解析过的地址：记录比列表活得久，指向已消失对象时当作没有聚焦
+    focused: layout.resolvedFocus?.address ?? ALL_ENTRIES,
+    isScopeExpanded,
+    alwaysVisibleSessionIds,
+    now,
+    stray,
+    compareRows,
+  })
+
+  /**
+   * 序列上的查询表：容器归属、同层兄弟与拖拽认的祖先
+   *
+   * 它不引入任何新位置：每一项都能在行上直接读到，因此拖拽的落点范围恒等于渲染范围
+   * cwd 只在「可能挪到哪儿」那一步用到，那是路径事实，不在这条序列上
+   */
+  const index = useMemo(
+    () =>
+      indexOutline(outline.rows, {
+        pathOf: (workspaceId: string) => layout.workspaceById.get(workspaceId)?.path,
+      }),
+    [outline.rows, layout.workspaceById],
+  )
   const session: SessionRowScope = {
     currentSessionId,
     official,
@@ -1525,11 +1880,13 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     edits,
     commands,
     rowsByWorkspace,
+    outline,
+    index,
     currentSessionId,
     home,
     session,
     // 三段共用同一个比较器：不置顶时名次为空表，比较结果与不置顶时相同
-    compareRows: (a, b) => compareSessionRowsWithPins(pinRanksByScope, a, b),
+    compareRows,
     alwaysVisibleSessionIds,
   }
 
@@ -1582,8 +1939,13 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
       <LocalViewOptionsProvider value={localViewOptions}>
         <SessionScopesProvider value={sessionScopes}>
         <ExpansionProvider value={expansion.read}>
-        {/* 指示器样式挂在根节点上，列表里每一行读同一个值，不必逐行下发 */}
-        <div className={styles.root} ref={flipRef} data-wg-indicator={indicator}>
+        {/* 拖拽机制挂在根节点上：计划、监听与落点标记都不进 React 状态，
+            这一层因此只是把 `beginDrag` 与两个属性助手交给下面的行与区域容器 */}
+        <DndProvider region={dndRegion}>
+        {/* 指示器样式挂在根节点上，列表里每一行读同一个值，不必逐行下发
+            根节点同时交给拖拽机制当范围：侧边栏与对照 tab 双开时两边共享同一个 document，
+            手势层靠它只认自己这一片里的拖放事件 */}
+        <div className={styles.root} ref={attachRoot} data-wg-indicator={indicator}>
           <RegionHeaderArea
             layout={layout}
             overlays={headerOverlays}
@@ -1591,6 +1953,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             searching={searching}
             nestingEnabled={snapshot.nested}
             onToggleNested={nestActions.requestNestedToggle}
+            pinnedReorderable={pinnedReorderable}
+            onRestorePinnedOrder={restorePinnedOrder}
             focusedKey={snapshot.picker.focused}
             addWorkspace={addWorkspace}
             search={search}
@@ -1606,6 +1970,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             official={official}
             onOpenSession={openSession}
             statuses={statusSnapshot}
+            zoneKey={PINNED_KEY}
+            buildDragPlan={buildPinnedDragPlan}
           />
           <RegionListArea
             searching={searching}
@@ -1628,6 +1994,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             actions={dialogActions}
           />
         </div>
+        </DndProvider>
         </ExpansionProvider>
         </SessionScopesProvider>
       </LocalViewOptionsProvider>

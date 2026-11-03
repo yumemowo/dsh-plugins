@@ -5,9 +5,9 @@
  * 渲染由 `Menu` 原语负责，开合状态由持有锚点的行组件负责
  *
  * 条目 id 一律是字符串（官方原语的契约），选中回调据此分派
- * 需要表达「对哪个对象的什么操作」时，把标识拼进字符串，由本模块解析回来:
- *   - `pg:` 已做到构造与解析各只一处（`buildParentGroupMenuItem` / `parseParentGroupId`）
- *   - `vw:` 目前只有构造在这里，解析由消费侧按前缀切分，改动时两处都要看
+ * 需要表达「对哪个对象的什么操作」时，把标识拼进字符串，由本模块解析回来：
+ *   - `pg:` 构造与解析各只一处（`buildParentGroupMenuItem` / `parseParentGroupId`）
+ *   - `vw:` 只有构造在这里，解析由消费侧按前缀切分，改动时两处都要看
  */
 import {
   IconArchiveOutlineRegular,
@@ -24,13 +24,13 @@ import type { ReactNode } from 'react'
 import type { MenuActionItem, MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconVirtualWorkspace16 } from './icons.tsx'
 import type { OfficialSessionLabels } from './official.ts'
-import type { GroupSection, VirtualWorkspaceSection } from './data/types.ts'
+
 import styles from './menus.module.css'
 
 /**
  * 给带二级菜单的一级项补一个行尾箭头
  *
- * 官方 `Menu` 的项只有「前导图标 → 文案 → 尾部选中标记」三个槽，没有表达「悬停展开二级菜单」的槽位
+ * 官方 `Menu` 的项只有「前导图标 -> 文案 -> 尾部选中标记」三个槽，没有表达「悬停展开二级菜单」的槽位
  * 只给 `aria-haspopup` / `aria-expanded` 这类无障碍信号，箭头因此塞进 `label` 里
  * 由 `.menuLabel` 两端对齐推到行尾
  *
@@ -49,10 +49,34 @@ function submenuParentLabel(label: string, entries: readonly MenuActionItem[]): 
   )
 }
 
+/** 菜单里一个分组只需要身份与名字 */
+export interface MenuGroup {
+  id: string
+  label: string
+}
+
+/**
+ * 比较两份分组名单是否表示同一件事
+ *
+ * 供行级 memo 的比较器使用：菜单只消费 id 与名字，会话数变了不影响菜单
+ */
+export function sameMenuGroups(
+  a: readonly MenuGroup[] | undefined,
+  b: readonly MenuGroup[] | undefined,
+): boolean {
+  if (a === b) return true
+  if (a === undefined || b === undefined) return false
+  if (a.length !== b.length) return false
+  return a.every((group, index) => {
+    const other = b[index]
+    return other !== undefined && group.id === other.id && group.label === other.label
+  })
+}
+
 /** 会话「更多操作」菜单里分组项的选项集 */
 export interface GroupMenuInput {
-  /** 按工作区视图顺序排列的全部分组（未过滤） */
-  sections: readonly GroupSection[]
+  /** 按视图顺序排列的全部分组（未过滤） */
+  sections: readonly MenuGroup[]
   /** 目标会话当前所属分组 id，空串表示未归组 */
   currentGroupId: string
   /** 「移动到…」一级项文案，省略号表示点下去还要选一个目标 */
@@ -242,7 +266,7 @@ export const WORKSPACE_MENU_SEPARATOR = {
 /**
  * 工作区行菜单里进父工作区分组那一项的选项集
  *
- * 与虚拟工作区分组那一项是两个层级的概念，因此各占一个一级项：
+ * 与虚拟工作区分组那一项是两个层级的概念，因此各占一个一级项
  * 这一项进的是父工作区体内的某个会话分组，那一项进的是根节点的虚拟工作区分组
  * @see WorkspaceMenuInput.virtualWorkspaceGrouping
  */
@@ -341,7 +365,7 @@ export function buildParentGroupMenuItem(input: ParentGroupMenuInput): MenuActio
  */
 export interface VirtualWorkspaceMenuInput {
   /** 根节点上的全部分组，按创建顺序 */
-  sections: readonly VirtualWorkspaceSection[]
+  sections: readonly MenuGroup[]
   /** 该工作区当前所属的工作区分组 id，空串表示未归组 */
   currentGroupId: string
   /**
@@ -360,8 +384,8 @@ export interface VirtualWorkspaceMenuInput {
 /**
  * 工作区行「移动到…」子菜单里「移入某个工作区分组」的条目 id 前缀，后面跟分组 id
  *
- * 与 `rootEntry.ts` 的 `addressKey()` 为工作区分组交出的字符串字面相同，但互不相干：
- * 这一个只活在菜单打开期间，选中即弃；那一个由 `RootEntryAddress` 派生，供 React 的 `key` 用
+ * 与 `rootEntry.ts` 的 `addressKey()` 为工作区分组交出的字符串字面相同，但互不相干
+ * 这一个只活在菜单打开期间，选中即弃，那一个由 `RootEntryAddress` 派生，供 React 的 `key` 用
  * 改动其中之一不必跟着改另一个
  */
 export const VIRTUAL_WORKSPACE_PREFIX = 'vw:'
@@ -369,13 +393,13 @@ export const VIRTUAL_WORKSPACE_PREFIX = 'vw:'
 /**
  * 父工作区体内某个分组的条目 id 前缀，后面跟 `<父工作区 id>:<分组 id>`
  *
- * 两个 id 拼成一个字符串是为了满足官方 Menu 原语的契约：条目只有 `id: string`，
+ * 两个 id 拼成一个字符串是为了满足官方 Menu 原语的契约：条目只有 `id: string`
  * 选中回调也是 `(id: string) => void`，本次选择的目标只能编码进字符串
  *
  * 与 `rootEntry.ts` 的 `RootEntryAddress` 是两回事：那里用带 `kind` 标签的对象承载类别
  *
  * 分隔符沿用 `:`：工作区 id 是宿主生成的 UUID，分组 id 由本包生成（`g…`），两者都不含冒号
- * 若将来某一方的 id 可能含冒号，这里要换成不会出现在 id 里的分隔符，否则 `parseParentGroupId` 会切错位
+ * 某一方的 id 一旦可能含冒号，这里就要换成不会出现在 id 里的分隔符，否则 `parseParentGroupId` 会切错位
  */
 export const PARENT_GROUP_PREFIX = 'pg:'
 
@@ -412,7 +436,7 @@ export const VIRTUAL_WORKSPACE_ITEM = {
 /**
  * 构造工作区行菜单里的「移动到…」一级项
  *
- * 二级子菜单的顺序固定为「新建 → 各分组」，建造型操作排在最前（与工作区菜单里「新建分组」在前同一取舍）
+ * 二级子菜单的顺序固定为「新建 -> 各分组」，建造型操作排在最前（与工作区菜单里「新建分组」在前同一取舍）
  * 一级项本身不禁用——即便一个分组都没有，它下面也有「新建」可点
  * @returns 可放进 Menu items 的一级项
  */
@@ -470,8 +494,9 @@ function newSessionItem(label: string): MenuActionItem {
 /**
  * 构造工作区「更多操作」菜单的条目
  *
- * 顺序是「新建分组 → 重命名 → 移动到分组 → 移出分组 → 移动到… → 移出工作区分组 → 删除」
+ * 顺序是「新建分组 -> 重命名 -> 移动到分组 -> 移出分组 -> 移动到… -> 移出工作区分组 -> 删除」
  * 前两项是建造与自身属性，两组归类操作夹在中间，删除收尾
+ * 手动顺序的恢复入口不在这里：工作区侧没有顺序位，置顶段那一格归视图选项面板
  *
  * 每个块之间画一条分隔线，两组归类操作进的是两个层级的容器（父工作区体内的会话分组 / 根节点的虚拟工作区分组）
  * 它们的一级项文案又只差一个词，不分开读起来像同一个动作的两条路径
@@ -517,7 +542,7 @@ export function buildWorkspaceMenuItems(input: WorkspaceMenuInput): readonly Men
 /**
  * 把行内菜单条目补成右键菜单条目
  *
- * 右键是行内操作位的捷径，因此条目集合与分派都必须一致，差别只有一条：
+ * 右键是行内操作位的捷径，因此条目集合与分派都必须一致，差别只有一条
  * 「新建会话」在行内是 `+` 按钮，菜单里没有对应项，右键时补在最前——它是该行最高频的建造动作，正因如此才占着行内位置
  *
  * 只在真的有新建入口时补，未分组桶的工作区行没有可建会话的工作区归属，那时补一项就是点不动的死按钮

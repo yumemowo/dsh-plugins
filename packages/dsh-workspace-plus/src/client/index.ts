@@ -1,7 +1,7 @@
 /**
  * 工作区分组插件的浏览器半边
  *
- * 注册进侧边栏 shell 的 `sidebar.workspaces` 区域。该插槽是 `single` 类型：
+ * 注册进侧边栏 shell 的 `sidebar.workspaces` 区域。该插槽是 `single` 类型
  * 同一优先级重复注册会抛错，且数值更低的优先级渲染。官方 ui-workspace 用默认优先级 0，本包以 `priority: -1` 成为渲染者
  *
  * 本包自己不声明任何子插槽：`sidebar.workspaces.directoryFlow` 已被 ui-workspace 声明
@@ -60,6 +60,8 @@ const EMPTY_SNAPSHOT: WorkspaceGroupsSnapshot = {
   workspaceGroups: [],
   picker: EMPTY_PICKER_STATE,
   nested: true,
+  // 空表即「每一段都没有手动顺序」，界面因此按时间序渲染
+  orderSlots: {},
   pinnedVisibleCount: DEFAULT_PINNED_VISIBLE_COUNT,
   pinnedLimit: DEFAULT_PINNED_LIMIT,
 }
@@ -327,7 +329,10 @@ export function apply(ctx: Context): void {
         renameGroup: async () => EMPTY_SNAPSHOT,
         deleteGroup: async () => EMPTY_SNAPSHOT,
         moveSession: async () => EMPTY_SNAPSHOT,
+        setSegmentOrder: async () => EMPTY_SNAPSHOT,
+        moveGroupBefore: async () => EMPTY_SNAPSHOT,
         createVirtualWorkspace: async () => EMPTY_SNAPSHOT,
+        moveVirtualWorkspaceBefore: async () => EMPTY_SNAPSHOT,
         renameVirtualWorkspace: async () => EMPTY_SNAPSHOT,
         deleteVirtualWorkspace: async () => EMPTY_SNAPSHOT,
         moveWorkspace: async () => EMPTY_SNAPSHOT,
@@ -338,6 +343,7 @@ export function apply(ctx: Context): void {
         focusEntry: async () => EMPTY_SNAPSHOT,
         togglePinned: async () => EMPTY_SNAPSHOT,
         setSessionPinned: async () => {},
+        insertWorkspaceBefore: async () => {},
         renameWorkspace: async () => {},
         deleteWorkspace: async () => {},
         // 会话控制器缺失时退回线上契约里那个固定值（见 RegionActions）
@@ -379,8 +385,18 @@ export function apply(ctx: Context): void {
       deleteGroup: (workspaceId, groupId) => callSnapshot('deleteGroup', [workspaceId, groupId]),
       // 选择器用空串表示「不属于任何分组」，宿主接口用 null 表达同一含义
       moveSession: (workspaceId, sessionId, groupId) =>
-        callSnapshot('moveSession', [workspaceId, sessionId, groupId === '' ? null : groupId]),
+        callSnapshot('moveSession', [
+          workspaceId,
+          sessionId,
+          groupId === '' ? null : groupId,
+        ]),
+      setSegmentOrder: (key, order) => callSnapshot('setSegmentOrder', [key, order]),
+      // 锚点传的是实参本身而不是空串的转换：缺席表示「挪到末尾」，与空串是同形但不同义的两种读法
+      moveGroupBefore: (workspaceId, groupId, beforeGroupId) =>
+        callSnapshot('moveGroupBefore', [workspaceId, groupId, beforeGroupId]),
       createVirtualWorkspace: (name) => callSnapshot('createVirtualWorkspace', [name]),
+      moveVirtualWorkspaceBefore: (groupId, beforeGroupId) =>
+        callSnapshot('moveVirtualWorkspaceBefore', [groupId, beforeGroupId]),
       renameVirtualWorkspace: (groupId, name) =>
         callSnapshot('renameVirtualWorkspace', [groupId, name]),
       deleteVirtualWorkspace: (groupId) => callSnapshot('deleteVirtualWorkspace', [groupId]),
@@ -401,6 +417,11 @@ export function apply(ctx: Context): void {
         }
         if (pinned) await workspaces.pinSession(sessionId as never)
         else await workspaces.unpinSession(sessionId as never)
+      },
+      // 工作区换位直接走官方工作区控制器的 `insertBefore`，不另造 RPC
+      // 它自带乐观更新与对账（`lib/client.js` 的 `installOrder`），结果经官方快照推送回来，本包不接返回值
+      insertWorkspaceBefore: async (workspaceId: string, beforeWorkspaceId: string | undefined) => {
+        await workspaces.insertBefore(workspaceId as never, beforeWorkspaceId as never)
       },
       // 工作区自身的改名与删除直接走官方工作区控制器，不另造 RPC，删除只移除注册，文件夹与会话记录都由宿主保留
       renameWorkspace: (workspaceId, title) =>

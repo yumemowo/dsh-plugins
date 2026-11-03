@@ -9,7 +9,7 @@
  * 开启嵌套时，放进分组或父工作区体内的子工作区也一并列出，它们可能已被置顶或最近使用过，不列出来那些记录就成了指向不存在条目的死条目
  * 它们按 `depth` 缩进，层级因此在菜单里也读得出来
  */
-import type { RootLayout } from './types.ts'
+import type { RootListing } from './outline.ts'
 import { isAncestorPath } from './nest.ts'
 import type { Nesting } from './nest.ts'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -46,7 +46,7 @@ export interface PickerEntry {
  * 「全部」分区因此与用户刚才在列表里看到的那一屏逐行对应
  */
 export function rootPickerEntries(
-  layout: RootLayout,
+  listing: RootListing,
   workspaceById: ReadonlyMap<string, WorkspaceView>,
   nesting?: Nesting | undefined,
 ): PickerEntry[] {
@@ -82,7 +82,7 @@ export function rootPickerEntries(
     for (const workspaceId of ids) visit(workspaceId, base)
   }
 
-  for (const section of layout.groups) {
+  for (const section of listing.groups) {
     // 虚拟工作区分组只列它自己，它名下的成员不在菜单里单独出现
     // 聚焦这个分组与聚焦它名下的某个成员是同一片内容，列出成员只会让菜单多出一层
     // 与列表重复的层级（组内父工作区与子工作区在列表里照常渲染，只是不在这里各占一行）
@@ -99,7 +99,7 @@ export function rootPickerEntries(
 
   // 未归入任何虚拟工作区的那些按嵌套层级展开，父工作区在 0 层，子工作区按层级往下缩进
   // 菜单里只有这一段按层级展开，虚拟工作区分组由分组名一个条目代表（见上面的注释）
-  pushTree(layout.loose, 0)
+  pushTree(listing.loose, 0)
   return entries
 }
 
@@ -162,53 +162,22 @@ export function pickerSections(
 }
 
 /**
- * 聚焦生效后的列表切分
- *
- * 三种结果对应两类聚焦对象，聚焦工作区分组时只留组内工作区，且不再重复渲染组头
- * 第二行已经写着组名，根节点那层再出现一次就是同一个名字并排两次
- *
- * 聚焦一个工作区时只留它自己
- *
- * 没有聚焦、或聚焦的条目已经不在了，都原样返回传入的布局——后者不能退化成空列表，否则第二行写着「全部工作区」而列表整片是空的
- * @param layout - 未聚焦时的根节点布局
- * @param entries - 菜单条目，聚焦对象必须是其中之一才算数
- * @returns 要渲染的分组段与独立工作区
- */
-export function focusedLayout(
-  layout: RootLayout,
-  entries: readonly PickerEntry[],
-  focused: RootEntryAddress,
-): RootLayout {
-  const entry = resolveFocus(entries, focused)
-  if (entry === undefined) return layout
-  if (entry.kind === 'virtual') {
-    return {
-      groups: [],
-      // 列出该分组的顶层，被嵌套的成员由父工作区带出来，不由这一段直接列
-      loose: layout.groups.find((group) => group.id === entry.id)?.roots ?? [],
-    }
-  }
-  return { groups: [], loose: [entry.id] }
-}
-
-/**
  * 当前聚焦允许出现的工作区
  *
- * 平铺列表不分段，只能按工作区归属过滤，因此这里交出的是归属而不是 {@link focusedLayout} 那种渲染层级
+ * 平铺列表不分段，只能按工作区归属过滤，因此这里交出的是归属而不是渲染层级
  * 聚焦一个工作区分组时组内被嵌套的成员也算在内：平铺下它们与顶层成员同属这片内容
- * @param layout - 未聚焦时的根节点布局
- * @param entries - 菜单条目，聚焦对象必须是其中之一才算数
- * @returns 允许出现的工作区 id，无聚焦或聚焦已失效时为 undefined，表示「全部」
+ * @param listing - 未聚焦时的根节点布局
+ * @param focused - 当前生效的聚焦地址，须是调用方已经解析过的
+ * @returns 允许出现的工作区 id，无聚焦时为 undefined，表示「全部」
  */
 export function focusedWorkspaceIds(
-  layout: RootLayout,
-  entries: readonly PickerEntry[],
+  listing: RootListing,
   focused: RootEntryAddress,
 ): readonly string[] | undefined {
-  const entry = resolveFocus(entries, focused)
-  if (entry === undefined) return undefined
-  if (entry.kind === 'workspace') return [entry.id]
-  return layout.groups.find((group) => group.id === entry.id)?.workspaceIds ?? []
+  if (focused.kind === 'all') return undefined
+  // 聚焦的条目由调用方先解析过：它是不是菜单条目、还在不在，只有菜单那一层知道
+  if (focused.kind === 'workspace') return [focused.id]
+  return listing.groups.find((group) => group.id === focused.id)?.members
 }
 
 /**

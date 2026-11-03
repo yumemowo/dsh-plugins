@@ -76,7 +76,7 @@ describe('deriveNesting', () => {
     expect(nesting.containerOf('w2')).toEqual({ kind: 'root' })
     expect(nesting.containerOf('w3')).toEqual({ kind: 'root' })
     expect(nesting.rootsOf(nesting.containers.root)).toEqual(['w1', 'w4'])
-    // 段内层级与「整棵子树」都由这一份索引给出，父带出子，子再带出孙
+    // 段内层级与「整棵子树」都由这一份索引给出，父工作区带出子工作区，子工作区再带出孙辈
     expect(nesting.childIdsOf('w1')).toEqual(['w2'])
     expect(nesting.childIdsOf('w2')).toEqual(['w3'])
     expect(nesting.ancestorsOf('w1')).toEqual([])
@@ -179,7 +179,7 @@ describe('deriveNesting', () => {
   })
 
   it('ignores a binding whose parent is not a real ancestor', () => {
-    // 归属记的是父，但路径上并不是父子，这种元数据不能生效，否则树会自相矛盾
+    // 归属记的是父工作区，但路径上两者并不是祖先关系，这种元数据不能生效，否则树会自相矛盾
     const nesting = deriveNesting(
       input({
         workspaceIds: ['w1', 'w4'],
@@ -357,7 +357,7 @@ describe('descendantsOf', () => {
 
     expect(nesting.containers.virtualOf('wg-empty')).toEqual({
       kind: 'virtual',
-      groupId: 'wg-empty',
+      id: 'wg-empty',
     })
     expect(nesting.rootsOf(nesting.containers.virtualOf('wg-empty'))).toEqual([])
     expect(nesting.rootsOf(nesting.containers.root)).toEqual([])

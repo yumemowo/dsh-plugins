@@ -28,11 +28,28 @@
     "recent": [{ "kind": "virtual", "id": "wg1" }, { "kind": "workspace", "id": "w_def" }],
     "pinned": [{ "kind": "virtual", "id": "wg1" }]
   },
-  "nested": true
+  "nested": true,
+  "orderSlots": { "pinned": ["s_2", "s_1"] }
 }
 ```
 
 三份记录存的是**根节点条目地址**（见 `src/rootEntry.ts`），每条带一个 `kind` 标签：工作区与工作区分组的 id 由不同生成器产出但仍可能撞值，只存 id 会让一条记录在两种含义之间摇摆。`kind: "all"` 是第三种取值，表示「不聚焦」这件事本身，因此它并列建模而不是拿空串这类哨兵值冒充一个 id。`all` 只会出现在 `focused` 里：它不对应任何条目，写进 `recent` 只会占掉一格、白挤掉一条真实历史。`recent` 存的是**完整的使用历史**（上限 20 条），比菜单里展示的 5 条长——置顶区的排序按它取次序，只留展示用的那几条会让第 6 次之后用过的条目在置顶区里彼此「一样近」。
+
+## 置顶段的手动顺序
+
+置顶区在用户没拖过时必须保持官方集合的默认序（最近置顶在最前），拖过之后又要切到手动序。因此它的顺序**不**寄存在别处，而是另存一格：
+
+`orderSlots` 是「段键 → 该段成员 id 的手动顺序」，**缺一格表示该段按默认序渲染**。今天只有置顶区用这一格，键是 `pinned`（`PINNED_SLOT_KEY`，与合成逻辑同处 `src/client/data/pinned.ts`）。宿主不解析这个键，只当一格存储用。
+
+- **接管**：用户第一次在置顶区完成锚点投放时，客户端把「落点换算后的全量新顺序」整份写入该槽位。新顺序是从当时渲染序算出来的，因此接管瞬间显示零跳变——手动序从默认序里长出来，而不是替掉它。
+- **渲染**：有槽位时按 `reconcilePinned(slot, entries)` 合成——槽位里仍是成员的按槽位序，不在槽位里的成员（新置顶的会话）按官方集合的位置接在后面，槽位里已不在成员集里的 id（取消置顶、归档）静默丢弃。没有槽位时按官方集合序，与引入这一格之前逐项相同。取消置顶不写回槽位，因此重新置顶时那条会话会回到原来摆过的位次。
+- **置顶段的两个消费者**：`pinned` 槽位只此一份顺序，置顶区按它渲染，分组内就地置顶段的名次（`pinRanks`）也从同一份合成结果取，两个表面因此永不打架。
+
+写入方法只有 `setSegmentOrder(key, order)` 一个：写一份槽位，与现状相同时不写盘，空表即整格删掉。视图选项面板那一条「恢复默认置顶顺序」写的就是空表，读侧因此回到「缺一格」分支，与从未拖过逐项相同。
+
+**会话段曾经也用它。** 组内段与未归组段各有一格（`group/<workspaceId>/<groupId>`、`loose/<workspaceId>`），随会话排序能力的撤回去掉：会话行拖拽只剩归组与移出，段内没有位次可言。旧数据不做正式迁移：撤回会话段排序时，拖拽功能尚未在生产环境中使用过，无需为旧键补守护或兼容代码。读取侧不再认这两类键，写入侧也不清理。
+
+`orderSlots` 与 `picker` / `nested` 同一取舍地落在 v1 之内可加：它的取值形态是可加的那一类（字符串数组，不是带标签的对象），旧文件缺这一格时按 schema 默认值读成空表，因此没有升版本号。
 
 ## 嵌套归属
 
@@ -86,11 +103,11 @@
 
 新工作区不会默认落进任何会话分组——分组总是要显式移动进去，因此这条路径不涉及分组层的展开。
 
-上面的展开规则只看拓扑，与当前是否聚焦无关。**但聚焦会影响新工作区可不可见**，因此采纳路径还有一步「先让它可见」——它可能改分组归属、也可能只是改浏览器的折叠记录，见[子工作区嵌套](sub-workspace-nesting.md#新增工作区的可见性)。放进被聚焦的虚拟工作区分组是这条路上唯一一次写分组归属，它同样收下宿主回的整份快照；那一次写入之后展开与聚焦都不必再改，它已经是那一片的成员。
+上面的展开规则只看拓扑，与当前是否聚焦无关。**但聚焦会影响新工作区可不可见**，因此采纳路径还有一步「先让它可见」——它可能改分组归属、也可能只是改浏览器的折叠记录，见[子工作区嵌套](sub-workspace-nesting.md#新增工作区时先让它可见)。放进被聚焦的虚拟工作区分组是这条路上唯一一次写分组归属，它同样收下宿主回的整份快照；那一次写入之后展开与聚焦都不必再改，它已经是那一片的成员。
 
 ## 版本策略
 
-两者都在 v1 之内可加：旧文件没有 global 时按 schema 的初值读，**global 里缺哪一格就按 schema 的默认值读**（`picker` 三格都带默认值、`nested` 缺省为 `true`；表记录里的 `nesting` 缺省为 `null`），没有这张表时按空表读。没有升版本号——存储后端对 `single` 布局是精确版本读取，升版本会让既有文件直接 `version-mismatch`，而这里并不需要迁移。
+两者都在 v1 之内可加：旧文件没有 global 时按 schema 的初值读，**global 里缺哪一格就按 schema 的默认值读**（`picker` 三格都带默认值、`nested` 缺省为 `true`、`orderSlots` 缺省为空表；表记录里的 `nesting` 缺省为 `null`），没有这张表时按空表读。没有升版本号——存储后端对 `single` 布局是精确版本读取，升版本会让既有文件直接 `version-mismatch`，而这里并不需要迁移。
 
 **`picker` 三格的取值形态是不可加的那一类，改它就等于不兼容既有文件。** 它是带 `kind` 标签的对象，不是「类别编码进字符串前缀、再靠解析拿回来」的拼串：后端按 schema 校验整份记录且没有迁移机制，形状对不上会让整个域打不开（`invalid-record`），而不是退化成空记录。对象形态让三个消费面（宿主服务、线上 codec、存储 schema）共用同一个形状，`all` 这类不指向任何对象的取值也能与另两类并列建模。**改动时手工迁移 `$DSH_HOME/storages/workspace_plus.json` 的 `picker` 三格，或删掉该槽位让它退回空列表初值。**
 
@@ -108,8 +125,7 @@ global 槽位的字段名是精确匹配的：后端按 schema 校验整份记�
 
 ## 变更回整份快照
 
-每个变更方法都回整份快照：`createGroup` / `renameGroup` / `deleteGroup` / `moveSession` / `createVirtualWorkspace` / `renameVirtualWorkspace` / `deleteVirtualWorkspace` / `moveWorkspace` / `nestWorkspaces` / `unnestWorkspaces` / `setNested` / `forgetWorkspace` / `focusEntry` / `togglePinned` 的返回值都是变更后的完整快照（`byWorkspace` + `nesting` + `workspaceGroups` + `picker` + `nested`），调用方直接替换本地状态，不必再拉一次——既少一次往返，也让「改动已生效、本地状态还是旧的」这段空档消失。
-
+每个变更方法都回整份快照：`createGroup` / `renameGroup` / `deleteGroup` / `moveSession` / `setSegmentOrder` / `createVirtualWorkspace` / `renameVirtualWorkspace` / `deleteVirtualWorkspace` / `moveWorkspace` / `nestWorkspaces` / `unnestWorkspaces` / `setNested` / `forgetWorkspace` / `focusEntry` / `togglePinned` 的返回值都是变更后的完整快照（`byWorkspace` + `nesting` + `workspaceGroups` + `picker` + `nested` + `orderSlots`），调用方直接替换本地状态，不必再拉一次——既少一次往返，也让「改动已生效、本地状态还是旧的」这段空档消失。
 `nestWorkspaces` 收一批 id 而不是一个：把工作区放进分组时，它名下已经放进别处分组的子工作区要一并改写归属，否则层级会在分组边界上断开。这批 id 由客户端按 `cwd` 算出——宿主只看得到 id，看不到路径。
 
 区域组件的 `apply` 因此只收这类回快照的动作；工作区改名走官方控制器、返回的是工作区视图而不是分组快照，所以不经 `apply`，失败单独记一条日志。

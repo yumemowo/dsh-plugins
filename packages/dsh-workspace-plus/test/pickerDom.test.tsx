@@ -5,19 +5,17 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
-import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
-import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { shellSeats } from './support/dndDom.ts'
 import { viewModeProps } from './viewMode-stub.ts'
 import { ALL_ENTRIES, virtualAddress, workspaceAddress } from '../src/rootEntry.ts'
 import type { RootEntryAddress } from '../src/rootEntry.ts'
 
 /**
- * 对话框要用真实 DOM 断言
- * 而共享替身把官方 `Modal` / `Button` / `Input` 一律渲染成 `null`（见 `primitives-stub.mjs`）
- * jsdom 里因此读不到它们。这里为本文件换一份 渲染进 DOM 的最小实现：
- * 只多出「对话框内容可见」这一件事，其余（图标、菜单）仍与共享替身一致
- * 其它测试文件不受影响
+ * 对话框要用真实 DOM 断言，而共享替身把官方 `Modal` / `Button` / `Input` 一律渲染成 `null`
+ * 见 `primitives-stub.mjs`，jsdom 里因此读不到它们
+ * 这里为本文件换一份渲染进 DOM 的最小实现，只多出「对话框内容可见」这一件事
+ * 其余（图标、菜单）仍与共享替身一致，其它测试文件不受影响
  */
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
   const base = (await importOriginal()) as Record<string, unknown>
@@ -52,7 +50,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
  * 工作区下拉菜单与聚焦列表的真实 DOM
  *
  * 菜单面板 portal 到 `document.body`，而列表在容器里
- * 聚焦后的「根节点不再重复渲染组头」「未分组区段整段隐藏」两条都只能按真实 DOM 断言——
+ * 聚焦后的「根节点不再重复渲染组头」「未分组区段整段隐藏」两条都只能按真实 DOM 断言
  * 元素树里看不出 portal 与容器的区别，选择器写错时界面只是「菜单不见了」
  * 不会有任何报错
  */
@@ -93,6 +91,9 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     renameGroup: async () => snapshot(),
     deleteGroup: async () => snapshot(),
     moveSession: async () => snapshot(),
+    setSegmentOrder: async () => snapshot(),
+    moveGroupBefore: async () => snapshot(),
+    moveVirtualWorkspaceBefore: async () => snapshot(),
     createVirtualWorkspace: async () => snapshot(),
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),
@@ -104,27 +105,11 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
     setSessionPinned: async () => {},
+    insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
-    searchResultLimit: 20,
-    t: regionTranslate(),
-    tWorkspace: workspaceTranslate(),
-    tSidebar: sidebarTranslate(),
+    ...shellSeats(),
     ...viewModeProps(),
-    official: () => ({
-      renameSession: async () => {},
-      forkSession: () => {},
-      archiveSession: async () => {},
-      labels: officialSessionLabels(workspaceTranslate()),
-      relativeTime: (updatedAt: number, now: number) =>
-        timeLabel(updatedAt, now, workspaceTranslate()),
-    }),
-    addWorkspace: () => ({
-      createWorkspace: async (path: string) => ({ workspaceId: `w-${path}`, title: path }),
-      startSession: () => {},
-      occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
-      labels: officialAddLabels(workspaceTranslate()),
-    }),
     ...overrides,
   }
 }
@@ -223,9 +208,9 @@ function dialogCheckbox(): HTMLInputElement {
 /**
  * 点下对话框里的确认按钮
  *
- * 取页脚最后一个按钮：
+ * 取页脚最后一个按钮
  * 两个对话框都把「翻页脚最后一格」留给确认，命名框是 `variant="primary"`
- * 删除框是带 `dangerAction` 的 outline，因此按位置取比按样式取更稳——
+ * 删除框是带 `dangerAction` 的 outline，因此按位置取比按样式取更稳
  * 删除框那两个按钮的 variant 恰好相同
  */
 function confirmDialog(): void {
@@ -246,7 +231,7 @@ function rowLabels(): string[] {
 
 /**
  * 面板 portal 到 `document.body`，而用例中途失败时它会被留在文档里
- * 污染后续用例的全局查询。收尾按「先卸载、再清残留」：
+ * 污染后续用例的全局查询。收尾按「先卸载、再清残留」
  * 根节点必须在 React 还认领它那份 DOM 时卸载
  * 直接清空 body 会让 portal 组件在卸载时抛错
  */
@@ -274,8 +259,8 @@ describe('workspace picker in a real DOM', () => {
     )
     expect(trigger?.querySelector('.headerFocus')?.textContent).toBe('全部工作区')
 
-    // 箭头不是独立按钮，它就是这块按钮自己的开合指示。整块标题下因此一个按钮都没有——
-    // 这一条正是「两行合成一个按钮」最容易退回两处可点区域的地方
+    // 箭头不是独立按钮，它就是这块按钮自己的开合指示。整块标题下因此一个按钮都没有
+    // 两行合成一个按钮之后，这里正是最容易退回两处可点区域的地方
     expect(container.querySelectorAll('.headerTitle button')).toHaveLength(0)
     // 上行是「文字 + 箭头」两个节点。测试替身把官方图标渲染成文本节点
     // 因此这里数的是子节点而不是元素：箭头被删掉时这一条会失败
@@ -735,7 +720,7 @@ describe('workspace picker in a real DOM', () => {
     })
     await openMenu(container)
 
-    // 按元素身份取序列：
+    // 按元素身份取序列
     // 同一个工作区可能同时出现在「最近使用」与「全部」两栏（标签文本因此会重复）
     // 按文本查位置会命中前面那一条
     const rows = Array.from(document.body.querySelectorAll<HTMLElement>('.pickerRow'))

@@ -61,6 +61,7 @@
 | 会话状态点 | `StateDot`（运行态画追光方阵，其余画圆点；颜色由原语的主题规则给出） |
 | 视图选项面板里的嵌套开关 | `IconWorkspaceTreeOutlineRegular`（官方「按工作区树分组」那一项的字形） |
 | 视图选项面板里的两条展示方式 | `IconFolderCloseRegular` / `IconFlatListOutlineRegular`（官方「按工作区」与「单列表」同字形）；选中标记用 `IconCheckOutlineRegular` |
+| 视图选项面板尾部的「恢复默认置顶顺序」 | `IconRefreshOutlineRegular`（官方重置类动作共用的字形）；措辞参照官方「恢复默认」一族的动词，不照抄「手动排序」——那是排序方式的一个取值，不是回到默认序的动作 |
 | 展示方式 / 指示器 / 三层折叠态的状态与持久化 | `defineStore`（`@deepseek-ai/dsh-client-store`，与官方 `groupBy` 同一引擎；组件读 `useStore`、写 `actions`） |
 | 行尾相对时间 | `relativeTime`（官方 `timeLabel` 用的同一个分桶函数，文案走官方语言包） |
 | 「添加工作区」入口提示 | `Tooltip`（与官方 header 同一 `delayMs` 与展开方向） |

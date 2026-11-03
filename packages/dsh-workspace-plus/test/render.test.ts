@@ -8,8 +8,9 @@ import type { WorkspaceSectionProps } from '../src/client/views/WorkspaceSection
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
-import { compareSessionRows } from '../src/client/data/sessions.ts'
+import type { OutlineRow } from '../src/client/data/outline.ts'
 import { RegionLocaleProvider } from '../src/client/hooks/useLocale.ts'
+import { DndProvider } from '../src/client/hooks/useDnd.ts'
 import { regionLabels } from '../src/client/labels.ts'
 import { regionTranslate, sidebarTranslate, translateWith, workspaceTranslate } from './locale-stub.ts'
 import { menuLabelArrow, menuLabelText } from './menu-label.ts'
@@ -18,6 +19,7 @@ import { ExpansionProvider } from '../src/client/hooks/useExpansion.ts'
 import { SessionScopesProvider } from '../src/client/hooks/useSessionScopes.ts'
 import type { SessionScopes } from '../src/client/hooks/useSessionScopes.ts'
 import type { Expansion } from '../src/client/hooks/useExpansion.ts'
+import type { DragPlan } from '../src/client/data/dnd/protocol.ts'
 import { viewModeProps } from './viewMode-stub.ts'
 
 /**
@@ -53,9 +55,9 @@ const dispatcher = {
  * 够用于「渲染一次看结构」的断言
  * 需要界面先经过一次异步加载（例如分组元数据要先 `loadGroups` 落地才会出现分组行）时就用这一份
  *
- * 状态按组件类型分桶、游标在每次调用组件前归零，与 React 的「hook 按调用顺序
- * 游标按组件实例归零」一致，否则父组件与子组件会共用同一批槽位
- * 状态在第二次渲染时串位。同一类型的多个实例因此共用一份状态——
+ * 状态按组件类型分桶、游标在每次调用组件前归零，与 React 的「hook 按调用顺序、游标按组件实例归零」一致
+ * 不这么做的话父组件与子组件会共用同一批槽位，状态在第二次渲染时串位
+ * 同一类型的多个实例因此共用一份状态
  * 本测试里的行组件都停在初始态（菜单未开、无改名草稿），这个简化不影响断言
  */
 function renderingDispatcher(): {
@@ -225,7 +227,7 @@ function render(
         else out.menus.push(el)
         return
       }
-      // 悬停卡片的替身只渲染锚点那一半，正文留在 props 上。收下卡片后仍要走进锚点：
+      // 悬停卡片的替身只渲染锚点那一半，正文留在 props 上。收下卡片后仍要走进锚点
       // 行本身与行上的菜单都在里面，否则这些结构会整段读不到
       if (
         el.props.content !== undefined &&
@@ -424,7 +426,7 @@ function menuItems(out: { menus: unknown[] }): string[][] {
 /**
  * 在一条行上触发一次右键
  *
- * 行是宿主元素，处理函数直接挂在它的 props 上，事件按真实 `contextmenu` 的形状造：
+ * 行是宿主元素，处理函数直接挂在它的 props 上，事件按真实 `contextmenu` 的形状造
  * 带指针坐标，并记录 preventDefault / stopPropagation 是否被调用
  * 缺省坐标 (0,0) 模拟键盘（菜单键）触发的右键
  * @param row - 行元素（工作区行头、分组行头或会话行）
@@ -469,15 +471,6 @@ function contextMenuAnchorRect(out: { contextMenus?: unknown[] }): unknown {
 }
 
 /**
- * 一个会话行的元素，供右键测试直接渲染一行
- *
- * 直接渲染单行而不是整片区域，测试替身按组件类型给状态分桶
- * 同一类型的多个实例共用一份状态，整片列表里所有会话行会一起"被右键"
- * @param options.official - 是否给官方三项操作，false 时该行完全没有菜单
- * @param options.grouping - 归组上下文，缺省表示该行没有分组可归
- * @param options.groupSections - 可移入的分组，只给 `grouping` 为真时有意义
- */
-/**
  * 把一个组件元素包进文案提供者
  *
  * 叶子组件通过 `useLocale()` 取文案，直接渲染叶子（不走区域容器）时那一层要自己补上
@@ -487,7 +480,8 @@ function withLocale(node: ReactElement): ReactElement {
   const t = regionTranslate()
   return React.createElement(RegionLocaleProvider, {
     value: { t, labels: regionLabels(t, workspaceTranslate(), sidebarTranslate()) },
-    children: node,
+    // 行与分组头都用 `useDnd()` 取拖拽属性助手，单独渲染一个组件时也要有这一层
+    children: React.createElement(DndProvider, { children: node }),
   })
 }
 
@@ -505,7 +499,7 @@ function sessionScopesStub(overrides: Partial<SessionScopes> = {}): SessionScope
 /**
  * 折叠态提供者的一份替身
  *
- * 读与取反现在走 `useExpansion()`，直接渲染叶子（不走区域容器）时那一层要自己补上
+ * 读与取反走 `useExpansion()`，直接渲染叶子（不走区域容器）时那一层要自己补上
  * 缺省全部按折叠回答：本文件关心的是撑开结构，不是开合语义（那些在 nestingDom / viewMode 里验）
  */
 function expansionStub(overrides: Partial<Expansion> = {}): Expansion {
@@ -520,6 +514,15 @@ function expansionStub(overrides: Partial<Expansion> = {}): Expansion {
   }
 }
 
+/**
+ * 一个会话行的元素，供右键测试直接渲染一行
+ *
+ * 直接渲染单行而不是整片区域：测试替身按组件类型给状态分桶
+ * 同一类型的多个实例共用一份状态，整片列表里所有会话行会一起「被右键」
+ * @param options.official - 是否给官方三项操作，false 时该行完全没有菜单
+ * @param options.grouping - 归组上下文，缺省表示该行没有分组可归
+ * @param options.groupSections - 可移入的分组，只给 `grouping` 为真时有意义
+ */
 function sessionRowNode(options: {
   official?: boolean
   grouping?: boolean
@@ -556,22 +559,42 @@ function sessionRowNode(options: {
             sections: options.groupSections ?? [],
             currentGroupId: '',
             onSelectGroup: () => {},
+            buildDragPlan: (): DragPlan => ({ source: { kind: 'session', id: 's1' }, areas: [] }),
           },
         }
       : {}),
   }))
 }
 
+/** 一个会话分组的 header 行，测试按它渲染分组 */
+function groupHeadRow(count = 0, key = 'group/w1/g1'): OutlineRow {
+  return {
+    key,
+    kind: 'groupHead',
+    parent: undefined,
+    container: { kind: 'group', workspaceId: 'w1', groupId: 'g1' },
+    workspaceId: 'w1',
+    depth: 1,
+    groupId: 'g1',
+    label: '前端',
+    count,
+    total: count,
+    hiddenCount: 0,
+    scopeExpanded: false,
+  }
+}
+
 /** 一个分组行的元素，供右键测试直接渲染一行 */
 function groupRowNode(onCreateSession?: () => void): unknown {
   return withLocale(React.createElement(GroupSection, {
-    section: { id: 'g1', label: '前端', sessions: [] },
+    head: groupHeadRow(),
+    workspaceId: 'w1',
+    hasBody: false,
     expanded: false,
     onToggle: () => {},
     onRename: () => {},
     onDelete: () => {},
     ...(onCreateSession === undefined ? {} : { onCreateSession }),
-    renderChildWorkspace: () => null,
     children: null,
   }))
 }
@@ -579,7 +602,7 @@ function groupRowNode(onCreateSession?: () => void): unknown {
 /**
  * 收集容器行的行尾操作结构
  *
- * 「分组行与工作区行同形」是本包的核心承诺，因此断言落在结构上：
+ * 「分组行与工作区行同形」是本包的核心承诺，因此断言落在结构上
  * 两者都必须有 `...` 菜单锚点与 `+` 按钮，且都在 `.rowActions` 容器里
  */
 function rowActionShape(out: { menus: unknown[]; buttons?: unknown[]; containers?: unknown[] }): {
@@ -595,7 +618,11 @@ function rowActionShape(out: { menus: unknown[]; buttons?: unknown[]; containers
 }
 
 /** 渲染一个分组行并返回可断言的操作结构 */
-function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, expanded = true) {
+function renderGroupRow(
+  onCreateSession?: () => void,
+  sessionCount = 0,
+  expanded = true,
+) {
   const out = {
     menus: [] as unknown[],
     text: [] as string[],
@@ -609,25 +636,14 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, expanded
   render(
     withLocale(
       React.createElement(GroupSection, {
-        section: {
-          id: 'g1',
-          label: '前端',
-          sessions: Array.from({ length: sessionCount }, (_, index) => ({
-            id: `s${index}`,
-            title: `会话 ${index}`,
-            blank: false,
-            running: false,
-            runningSubagentCount: 0,
-            completed: false,
-            updatedAt: 0,
-          })),
-        },
+        head: groupHeadRow(sessionCount),
+        workspaceId: 'w1',
+        hasBody: sessionCount > 0,
         expanded,
         onToggle: () => {},
         onRename: () => {},
         onDelete: () => {},
         ...(onCreateSession === undefined ? {} : { onCreateSession }),
-        renderChildWorkspace: () => null,
         children: null,
       }),
     ),
@@ -635,6 +651,7 @@ function renderGroupRow(onCreateSession?: () => void, sessionCount = 0, expanded
   )
   return out
 }
+
 
 /** 渲染一个工作区区块并返回可断言的撑开结构 */
 function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
@@ -668,21 +685,15 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
       onRename: () => {},
       onDelete: () => {},
     },
-    layout: { groups: [], loose, children: [] },
-    depth: 0,
-    // 名次为空表时这个比较器与 `compareSessionRows` 同序，断言因此与没有置顶时相同
-    compareRows: compareSessionRows,
-    // 空名单：一条始终展示的行也没有，折叠额度按普通行算
-    alwaysVisibleSessionIds: new Set(),
-    now: 0,
-    revealSessionId: undefined,
-    groupActions: {
-      onRename: () => {},
-      onDelete: () => {},
-      onCreateSession: () => {},
-    },
-    renderSession: (row) => React.createElement('span', { key: row.id, className: 'row' }, row.title),
-    renderChildWorkspace: () => null,
+    head: workspaceHeadRow(loose.length),
+    hasBody: loose.length > 0,
+    children:
+      loose.length === 0
+        ? null
+        : [
+            React.createElement('div', { key: 'sessions', className: 'sessions' },
+              loose.map((row) => React.createElement('span', { key: row.id, className: 'row' }, row.title))),
+          ],
   }
   const out = {
     menus: [] as unknown[],
@@ -709,6 +720,21 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
   return out
 }
 
+/** 一个工作区 header 行，测试按它渲染区块 */
+function workspaceHeadRow(looseCount = 0): OutlineRow {
+  return {
+    key: 'workspace/w1',
+    kind: 'workspaceHead',
+    parent: undefined,
+    container: { kind: 'root' },
+    workspaceId: 'w1',
+    depth: 0,
+    total: looseCount,
+    hiddenCount: 0,
+    scopeExpanded: false,
+  }
+}
+
 /** 撑开体的展开态：类名里带 expandOpen 即为展开 */
 function isOpen(body: unknown): boolean {
   const className = (body as { props: Record<string, unknown> }).props['className']
@@ -730,6 +756,8 @@ function props(
     startReturns?: string | undefined
     /** 记录 moveSession 的三元调用 */
     moves?: [string, string, string][]
+    /** 记录分组排序的三元调用，第一个实参为空串表示根节点那一层 */
+    orders?: [string, string, string][]
     /** 搜索结果的条数上限，缺省取官方契约值 20 */
     searchResultLimit?: number
     /** 分组元数据，缺省给一个空组 */
@@ -754,8 +782,8 @@ function props(
    *
    * 逐行各调一次 `Date.now()` 会让两行的 `updatedAt` 有约 0.2% 的概率落在相邻的两个毫秒里（实测 20 万次里跨了 364 次）
    * 搜索结果按 `updatedAt` 倒序，那两行又都命中同一个查询词
-   * 于是哪一行排在前面随运行而变——
-   * 断言路径分段的那条用例会偶发地拿到没有分组的那一行。固定基准后排序完全确定
+   * 于是哪一行排在前面随运行而变，断言路径分段的那条用例会偶发地拿到没有分组的那一行
+   * 固定基准后排序完全确定
    */
   const now = options.updatedAt ?? Date.now() - 300_000
   const byId: Record<string, unknown> = {
@@ -832,6 +860,19 @@ function props(
       options.moves?.push([workspaceId, sessionId, groupId])
       return snapshot()
     },
+    setSegmentOrder: async () => snapshot(),
+    moveGroupBefore: async (
+      workspaceId: string,
+      groupId: string,
+      beforeGroupId: string | undefined,
+    ) => {
+      options.orders?.push([workspaceId, groupId, beforeGroupId ?? ''])
+      return snapshot()
+    },
+    moveVirtualWorkspaceBefore: async (groupId: string, beforeGroupId: string | undefined) => {
+      options.orders?.push(['', groupId, beforeGroupId ?? ''])
+      return snapshot()
+    },
     createVirtualWorkspace: async (name: string) => {
       options.onCreateVirtualWorkspace?.(name)
       // 与宿主一致：新分组追加在末尾，调用方据此取回它的 id
@@ -860,6 +901,7 @@ function props(
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
     setSessionPinned: async () => {},
+    insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     // 结果条数上限来自官方会话控制器的线上契约值
@@ -1173,7 +1215,7 @@ describe('WorkspaceGroupsRegion render', () => {
     const without = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), without)
 
-    // 空白行没有会话可重命名或归档。官方连省略号都不渲染，本包同样收掉：
+    // 空白行没有会话可重命名或归档。官方连省略号都不渲染，本包同样收掉
     // 多出这条占位行后菜单数不变（工作区行、既有会话行、未分组桶各一）
     expect(menuItems(withBlank)).toEqual(menuItems(without))
     expect(menuItems(withBlank)).toContainEqual([
@@ -1240,7 +1282,7 @@ describe('WorkspaceGroupsRegion render', () => {
   })
 
   it('keeps the closed group sessions mounted so the body can shrink', () => {
-    // 收起靠的是撑开体把轨道收成 0 高，而不是把组内会话卸载掉——
+    // 收起靠的是撑开体把轨道收成 0 高，而不是把组内会话卸载掉
     // 卸载了就没有可收回的内容，收缩动作也就无从播起
     const closed = renderGroupRow(() => {}, 2, false)
     const opened = renderGroupRow(() => {}, 2, true)
@@ -1283,6 +1325,14 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(group.containers).toBe(1)
     expect(group.menuAnchors).toBe(1)
     expect(group.plusButtons).toBe(1)
+  })
+
+  it('offers the group row the same two management entries on every group', () => {
+    // 会话排序撤回之后，分组行不再有「清除手动顺序」这一项
+    const out = renderGroupRow(() => {})
+
+    expect(menuItems(out)).toEqual([['rename', 'delete']])
+    expect(menuLabels(out)).toEqual(['重命名', '删除分组'])
   })
 
   it('leaves row actions with an accessible label but no native tooltip', () => {
@@ -1348,7 +1398,7 @@ describe('WorkspaceGroupsRegion render', () => {
       out,
     )
 
-    // 工作区行的 `+` 指的是「未归组的新会话」。官方会复用该工作区已有的空白会话——
+    // 工作区行的 `+` 指的是「未归组的新会话」。官方会复用该工作区已有的空白会话
     // 那条会话可能是在某个分组里建的，这里必须显式把它移出分组
     // 否则它仍会留在那个分组里
     rowButtons(out)
@@ -1491,7 +1541,7 @@ describe('WorkspaceGroupsRegion render', () => {
   })
 
   it('keeps row visibility off any class the renderer could lose', () => {
-    // 透明只由「所在撑开体还没展开」这一条结构条件决定，行上不得再出现别的显隐状态：
+    // 透明只由「所在撑开体还没展开」这一条结构条件决定，行上不得再出现别的显隐状态
     // 靠回调补类的那种显隐会在主线程被长任务占住时丢失，且补不回来
     const out = { menus: [] as unknown[], text: [] as string[], rows: [] as unknown[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
@@ -1640,7 +1690,7 @@ describe('WorkspaceGroupsRegion render', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    // 新分组由宿主建在末尾，确认后把发起这次新建的工作区移进那个新分组：
+    // 新分组由宿主建在末尾，确认后把发起这次新建的工作区移进那个新分组
     // 这就是「建组 + 移入」压成一步，与 header 入口建空分组的分工差别所在
     expect(moves).toEqual([['w1', 'wgn']])
   })
@@ -1679,7 +1729,7 @@ describe('WorkspaceGroupsRegion render', () => {
 /**
  * 悬停详情卡片
  *
- * 与官方 ui-workspace 的两张卡片对齐：
+ * 与官方 ui-workspace 的两张卡片对齐
  * 工作区那张是「名称 / 目录路径 / 创建时刻」并复制完整路径
  * 会话那张是「完整标题 / 相对时间 / 逐条状态」并复制标题
  * 卡片外框与浮出时机属官方 HoverCard 原语，这里只断言本包传下去的内容与开关
@@ -1708,7 +1758,7 @@ describe('hover cards', () => {
    * 一张卡片是给哪种行挂的
    *
    * 锚点就是那行本身，因此按行类名认，卡片按文档序发出，工作区行在会话行之前
-   * 会话行的锚点是一整个行组件（行本身由它渲染），类名要穿过它才读得到；
+   * 会话行的锚点是一整个行组件（行本身由它渲染），类名要穿过它才读得到
    * 那一层的 `sessionId` 足以认出它是会话行，不必再把它渲染一遍
    */
   function anchorClass(card: unknown): string {
@@ -1818,7 +1868,7 @@ describe('hover cards', () => {
     const base = props(true)
     render(React.createElement(WorkspaceGroupsRegion, base), out)
 
-    // 未分组桶不是真实工作区（没有目录与创建时刻），官方在那里同样不给卡片：
+    // 未分组桶不是真实工作区（没有目录与创建时刻），官方在那里同样不给卡片
     // 工作区行有两行（真实工作区 + 未分组桶），卡片却只有一张
     const workspaceCards = out.cards.filter((c) => anchorClass(c).startsWith('workspaceHead'))
     expect(workspaceCards).toHaveLength(1)

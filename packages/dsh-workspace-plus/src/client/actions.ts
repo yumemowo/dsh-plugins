@@ -151,8 +151,34 @@ export interface RegionActions {
     sessionId: string,
     groupId: GroupChoice,
   ) => Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 写某一段的手动顺序
+   *
+   * 顺序是该段成员的完整名单，缺成员由渲染侧按默认序接在后面
+   */
+  setSegmentOrder: (key: string, order: readonly string[]) => Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把一个会话分组挪到同工作区的另一个分组之前
+   *
+   * `beforeGroupId` 为 undefined 表示挪到末尾
+   * 锚点资格由宿主复核，锚点已不是同层成员时按无操作返回整份快照
+   */
+  moveGroupBefore: (
+    workspaceId: string,
+    groupId: string,
+    beforeGroupId: string | undefined,
+  ) => Promise<WorkspaceGroupsSnapshot>
   /** 在根节点新建工作区分组，返回替换用的完整快照 */
   createVirtualWorkspace: (name: string) => Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把一个工作区分组挪到根节点的另一个分组之前
+   *
+   * `beforeGroupId` 为 undefined 表示挪到末尾，资格复核同 {@link RegionActions.moveGroupBefore}
+   */
+  moveVirtualWorkspaceBefore: (
+    groupId: string,
+    beforeGroupId: string | undefined,
+  ) => Promise<WorkspaceGroupsSnapshot>
   /** 重命名工作区分组，返回替换用的完整快照 */
   renameVirtualWorkspace: (groupId: string, name: string) => Promise<WorkspaceGroupsSnapshot>
   /** 删除工作区分组，组内工作区回到未归组，返回替换用的完整快照 */
@@ -199,6 +225,16 @@ export interface RegionActions {
    * @param pinned - 目标状态，true 表示置顶
    */
   setSessionPinned: (sessionId: string, pinned: boolean) => Promise<void>
+  /**
+   * 把一个工作区挪到注册表里的另一个工作区之前
+   *
+   * 走官方工作区控制器的 `insertBefore`，不另造 RPC
+   * 工作区类段落的顺序唯一来自注册表序，组内换位、同层子工作区换位与根节点平铺段换位都落到这一格
+   * 官方这个方法自带乐观更新与对账，返回值不接，顺序由官方快照的推送到达
+   *
+   * @param beforeWorkspaceId - 锚点工作区，undefined 表示挪到注册表末尾
+   */
+  insertWorkspaceBefore: (workspaceId: string, beforeWorkspaceId: string | undefined) => Promise<void>
   /** 重命名工作区 */
   renameWorkspace: (workspaceId: string, title: string) => Promise<void>
   /** 删除工作区注册，文件夹与会话记录保留 */

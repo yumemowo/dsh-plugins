@@ -11,15 +11,18 @@
  * 搜索展开时标题向左收拢淡出、右侧入口组整体向右收拢淡出，与官方 `.sectionLabelHidden` / `.headerActionsHidden` 同一取舍
  * 它们都整体移出，而不是留在原地把搜索框挤窄
  *
- * 左侧标题是上下两行：上行是「工作区」这一层级的名字，它自带一个下拉菜单入口（箭头紧跟文字其后）；下行是当前聚焦的工作区或工作区分组
- * 两行都由这一行的定高承担——36px 是官方给单行标题的量，两行各 20px 行高放不下，因此宽栏这一层把高度放开到内容
+ * 左侧标题是上下两行：上行是「工作区」这一层级的名字，自带一个下拉菜单入口（箭头紧跟文字其后）
+ * 下行是当前聚焦的工作区或工作区分组
+ * 两行都由这一行的定高承担：36px 是官方给单行标题的量，两行各 20px 行高放不下
+ * 因此宽栏这一层把高度放开到内容
  *
  * 两张浮层面板（视图选项、选择器）也挂在 `RegionHeaderArea` 这一层，并分别在搜索展开时收起
  * 搜索会顶掉标题与入口组，面板若还开着就悬在一片与它无关的结果列表上
-
+ *
  * 窄栏由 `RegionRailHeader` 渲染：官方 rail 下这些入口不是并排的一行
  * section header 里只留建造型入口，36px 一个，与「新建工作区分组」并列
- * 搜索是它们下方独立的一个 36px 块（官方 rail 下那条搜索规则自带 `margin: 0 0 12px`），标题与视图选项在窄栏都不渲染
+ * 搜索是它们下方独立的一个 36px 块（官方 rail 下那条搜索规则自带 `margin: 0 0 12px`）
+ * 标题与视图选项在窄栏都不渲染
  */
 import type { ReactElement, RefObject } from 'react'
 import type { AddWorkspaceActions } from '../actions.ts'
@@ -84,6 +87,10 @@ interface RegionHeaderAreaProps {
   searching: boolean
   nestingEnabled: boolean
   onToggleNested: () => void
+  /** 置顶段当前是否真有手动顺序，决定面板尾部那条「恢复默认顺序」是否渲染 */
+  pinnedReorderable: boolean
+  /** 清掉置顶段的手动顺序，置顶区回到官方集合序 */
+  onRestorePinnedOrder: () => void
   /** 当前聚焦条目的地址，菜单按它标出选中项 */
   focusedKey: RootEntryAddress
   /** 解析出来的「添加工作区」服务面，缺省时该入口不渲染 */
@@ -155,6 +162,8 @@ export function RegionHeaderArea(props: RegionHeaderAreaProps): ReactElement {
         open={viewOptionsOpen && !props.searching}
         triggerRef={props.overlays.viewOptions.triggerRef}
         nesting={{ enabled: props.nestingEnabled, onToggle: props.onToggleNested }}
+        pinnedReorderable={props.pinnedReorderable}
+        onRestorePinnedOrder={props.onRestorePinnedOrder}
         onClose={props.overlays.viewOptions.onClose}
       />
       <WorkspacePickerMenu

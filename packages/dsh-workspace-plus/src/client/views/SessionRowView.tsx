@@ -9,7 +9,8 @@
  * 行尾在操作位之前放官方风格的相对时间，悬停时让位给操作位（与官方同为 CSS 切换）
  * `action` 缺省时不渲染行尾操作位——未分组桶里的会话不属于任何工作区，没有可用的归组操作
  *
- * 状态位与相对时间由调用方算好传进来，两者都必须是内容稳定的值（时间文案的精度是分钟级），因此既能参与行级 memo 的比对，又能在任何一次区域重渲染时刷新
+ * 状态位与相对时间由调用方算好传进来，两者都必须是内容稳定的值（时间文案的精度是分钟级）
+ * 因此既能参与行级 memo 的比对，又能在任何一次区域重渲染时刷新
  * 不要在行内按渲染当刻取时间：被 memo 挡下的行不会重算，文案会停住
  *
  * `reveal` 为真的那一行在挂载后把自己滚进可视区并回报一次（官方 `SessionNodeItem` 的 `onReveal` 就是这条路径）
@@ -20,10 +21,11 @@
 import { memo, useEffect, useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { IconPinFillRegular, IconPinOutlineRegular, StateDot } from '../runtime.ts'
-import { handleRowKeyDown } from './components/rowKeyboard.ts'
+import { RowHeadShell } from './components/RowHeadShell.tsx'
 import { sameSessionStatus } from '../data/status.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useLocalViewOptions } from '../hooks/useLocalViewOptions.ts'
+import type { DragStartEvent } from '../hooks/useDnd.ts'
 import type { RowContextMenuEvent } from './components/RowContextMenu.tsx'
 import type { SessionStatus } from '../data/status.ts'
 import styles from './components/rows.module.css'
@@ -90,11 +92,38 @@ export interface SessionRowViewProps {
   /**
    * 这一行上是否有面板开着（行内 `...` 菜单或右键菜单）
    *
-   * 两种面板都 portal 到 body，行外面看不到它们；置顶区借这一格判断「指针是不是还在预览区附近」
+   * 两种面板都 portal 到 body，行外面看不到它们，置顶区借这一格判断「指针是不是还在预览区附近」
    * 面板开着时它不能收回（见 PinnedSection 样式表里那条 `:has` 规则）
    * 缺省表示该行不涉及面板
    */
   panelOpen?: boolean | undefined
+  /**
+   * 这一行是否正被拖动
+   *
+   * 画淡由行自己置：整条拖拽路径零次 React 重渲染，画淡只影响这一行，它是唯一一处付得起重渲染的地方
+   */
+  dragging?: boolean | undefined
+  /**
+   * 拖起这一行
+   *
+   * 与 `onContextMenu` 同理，由持有分组上下文的组件下发
+   */
+  onDragStart?: ((event: DragStartEvent) => void) | undefined
+  /** 拖拽结束（放开或取消），清掉画淡与手势层的监听 */
+  onDragEnd?: (() => void) | undefined
+  /**
+   * 这一行是否可以拖起
+   *
+   * 缺省表示不可拖：平铺列表与「未分组」桶里的行没有可落的容器，空白占位行也没有可搬的位置
+   */
+  draggable?: boolean | undefined
+  /**
+   * 参照行 id 写到元素上的那个属性
+   *
+   * 可作 before / after 参照物的行才有，缺省表示这一行不做参照物（平铺列表与空白占位行）
+   * 与行上的 `draggable` 同生共死，因此两者一起判等，不必逐格比它内部那个键
+   */
+  rowIdAttribute?: Record<string, string> | undefined
 }
 
 /**
@@ -127,8 +156,13 @@ function SessionRowViewImpl({
   canPin = true,
   clipped = false,
   panelOpen = false,
+  dragging = false,
+  draggable = false,
+  rowIdAttribute,
   onTogglePin,
   onContextMenu,
+  onDragStart,
+  onDragEnd,
   onOpenSession,
   onReveal,
 }: SessionRowViewProps): ReactElement {
@@ -173,21 +207,26 @@ function SessionRowViewImpl({
   // 行是一条带（外层）与一颗药丸（内层）：带承担与上一行之间的间距，指针落在哪一像素都归属于某一行
   // 菜单开合标记、悬停卡片都由组装它的 SessionRowItem 负责
   return (
-    <div
-      ref={rowRef}
+    <RowHeadShell
+      elementRef={rowRef}
       className={styles.row}
-      // 状态色底与选中加深都由样式表按它选档，行组件不感知配色
-      data-wg-state={status?.state ?? 'idle'}
-      // 参与所在撑开体的逐个淡入，序号由撑开体按文档序下发
-      data-wg-stagger=""
-      data-wg-clipped={clipped ? '' : undefined}
-      // 面板开合标在行自己身上：置顶区用 `:has()` 从段里反向读它，真值因此只有行上这一处
-      data-wg-panel-open={panelOpen ? '' : undefined}
-      role="button"
-      tabIndex={0}
-      onClick={open}
-      onKeyDown={(event) => handleRowKeyDown(event, open)}
+      dragging={dragging}
+      activate={open}
       onContextMenu={onContextMenu}
+      menu={null}
+      // 可作 before / after 参照物的行把自己那一格 id 写在元素上，命中层据此认出参照行
+      rowAttribute={rowIdAttribute}
+      // 会话行是自己拼的那几格：归组那个落点不需要排序计划，因此可拖与排序计划无关
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      // 状态色底与选中加深都由样式表按它选档，行组件不感知配色
+      // 面板开合标在行自己身上：置顶区用 `:has()` 从段里反向读它，真值因此只有行上这一处
+      dataProps={{
+        'data-wg-state': status?.state ?? 'idle',
+        'data-wg-clipped': clipped ? '' : undefined,
+        'data-wg-panel-open': panelOpen ? '' : undefined,
+      }}
     >
       <span className={clsx(styles.rowSurface, selected && styles.rowSelected)}>
         {status && <StatusIndicator status={status} />}
@@ -199,7 +238,7 @@ function SessionRowViewImpl({
         {actionSlot}
         {pin}
       </span>
-    </div>
+    </RowHeadShell>
   )
 }
 
@@ -220,6 +259,11 @@ function sameRowViewProps(prev: SessionRowViewProps, next: SessionRowViewProps):
     prev.canPin === next.canPin &&
     prev.clipped === next.clipped &&
     prev.panelOpen === next.panelOpen &&
+    prev.dragging === next.dragging &&
+    prev.draggable === next.draggable &&
+    prev.rowIdAttribute === next.rowIdAttribute &&
+    prev.onDragStart === next.onDragStart &&
+    prev.onDragEnd === next.onDragEnd &&
     prev.onTogglePin === next.onTogglePin &&
     prev.action === next.action &&
     prev.onContextMenu === next.onContextMenu &&
@@ -231,7 +275,7 @@ function sameRowViewProps(prev: SessionRowViewProps, next: SessionRowViewProps):
 /**
  * 裹上 memo 的会话行
  *
- * 流式期间每次活动都会重渲染整片区域，未变的行若跟着重算，长列表就会在每次活动
- * 时付出与行数成正比的代价
+ * 流式期间每次活动都会重渲染整片区域，未变的行若跟着重算
+ * 长列表就会在每次活动时付出与行数成正比的代价
  */
 export const SessionRowView = memo(SessionRowViewImpl, sameRowViewProps)

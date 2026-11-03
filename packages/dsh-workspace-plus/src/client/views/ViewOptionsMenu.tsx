@@ -1,14 +1,15 @@
 /**
  * header 里「视图选项」那个按钮打开的自绘弹出菜单
  *
- * 官方原语 `Menu` 的条目只有「前导图标 → 文案 → 尾部选中标记」三个槽，表达不了「一个开关」
+ * 官方原语 `Menu` 的条目只有「前导图标 -> 文案 -> 尾部选中标记」三个槽，表达不了「一个开关」
  * 因此照官方菜单面板的外观与交互约定自绘一份，规矩与 `WorkspacePickerMenu` 同一套：
  * 贴触发器下缘展开、放不下翻到上方、两个方向都夹进窗口、指针离开延迟关闭、点外/Escape 关闭、方向键在条目间移动
  *
  * 面板是不透明浮层，底色与描边必须用官方菜单面板那套 token（见样式表），否则 token 名写错时面板会变透明而界面不会报错
  *
- * 内容分两组：上面是展示方式（两条互斥的可选项，行尾以勾标记当前值），下面是子工作区嵌套开关
- * 两组之间用一条分隔线隔开，与官方把「分组方式」和「排序方式」分成两段的做法一致
+ * 内容自上而下是四组「标题 + 两条互斥可选项」（展示方式、指示器、置顶溢出、置顶显示）、子工作区嵌套开关，以及一条清掉置顶手动顺序的动作
+ * 相邻两块之间用一条分隔线隔开，与官方把「分组方式」和「排序方式」分成两段的做法一致
+ * 动作行只在置顶区真有手动顺序时出现：没有可恢复的顺序时，那一行摆在那里点不动
  */
 import { createPortal } from 'react-dom'
 import type { ReactElement, RefObject } from 'react'
@@ -22,6 +23,7 @@ import {
   IconFolderCloseRegular,
   IconPinFillRegular,
   IconPinOutlineRegular,
+  IconRefreshOutlineRegular,
   IconWorkspaceTreeOutlineRegular,
   Switch,
 } from '../runtime.ts'
@@ -91,6 +93,14 @@ export interface ViewOptionsMenuProps {
     enabled: boolean
     onToggle: () => void
   }
+  /**
+   * 置顶段有没有手动顺序
+   *
+   * 没有时尾部那条动作不渲染：没有可恢复的顺序，摆一条点不动的行只会让用户去猜它为什么没用
+   */
+  pinnedReorderable: boolean
+  /** 清掉置顶段的手动顺序，置顶区回到官方集合序 */
+  onRestorePinnedOrder: () => void
   onClose: () => void
 }
 
@@ -98,6 +108,8 @@ export function ViewOptionsMenu({
   open,
   triggerRef,
   nesting,
+  pinnedReorderable,
+  onRestorePinnedOrder,
   onClose,
 }: ViewOptionsMenuProps): ReactElement | null {
   const { labels } = useLocale()
@@ -222,6 +234,27 @@ export function ViewOptionsMenu({
           onChange={() => nesting.onToggle()}
         />
       </div>
+      {pinnedReorderable ? (
+        <>
+          <div className={styles.viewSeparator} role="separator" />
+          {/* 清掉置顶段的手动顺序：它是一个动作，不是一组可选值，因此不带分组标题
+              ——标题会让它看起来与上面四组同形，而这里选不出任何值
+              点完收起面板：这条行随即消失，留着一个焦点已经落空的面板只让人多按一次 Escape */}
+          <button
+            type="button"
+            className={styles.viewOptionRow}
+            onClick={() => {
+              onRestorePinnedOrder()
+              onClose()
+            }}
+          >
+            <span className={styles.viewOptionIcon}>
+              <IconRefreshOutlineRegular />
+            </span>
+            <span className={styles.viewOptionLabel}>{labels.pinOrder.restore}</span>
+          </button>
+        </>
+      ) : null}
     </div>,
     document.body,
   )

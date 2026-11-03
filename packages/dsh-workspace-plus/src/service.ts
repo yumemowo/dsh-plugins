@@ -9,6 +9,7 @@ import type {
   WorkspaceGroupsSnapshot,
   WorkspaceNesting,
 } from './spec.ts'
+import { placeAt } from './order.ts'
 import { normalizePickerState, withFocus, withPinnedToggled, withoutEntry } from './pickerState.ts'
 import { virtualAddress, workspaceAddress } from './rootEntry.ts'
 import type { RootEntryAddress } from './rootEntry.ts'
@@ -23,14 +24,63 @@ export interface WorkspaceGroupsService {
   renameGroup(workspaceId: string, groupId: string, name: string): Promise<WorkspaceGroupsSnapshot>
   /** 删除会话分组，组内会话回到未分组，放进它的子工作区解除嵌套，会话本身不受影响 */
   deleteGroup(workspaceId: string, groupId: string): Promise<WorkspaceGroupsSnapshot>
-  /** 把会话移入分组，`groupId` 为 null 表示移出到未分组 */
-  moveSession(workspaceId: string, sessionId: string, groupId: string | null): Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把会话移入分组，`groupId` 为 null 表示移出到未分组
+   *
+   * 一条会话至多属于一个分组，移入时自动从原分组摘除
+   * 只改归属：会话在段内的位置由渲染侧的默认序决定
+   * @param workspaceId - 会话所属工作区
+   * @param sessionId - 被挪动的会话
+   * @param groupId - 目标分组 id，null 表示未归组
+   */
+  moveSession(
+    workspaceId: string,
+    sessionId: string,
+    groupId: string | null,
+  ): Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 写某一段的手动顺序
+   *
+   * 宿主不解析键的形状，只当一格存储用，用到它的只有置顶段
+   * 顺序与现状相同时不写盘，空顺序整格删掉，两者都收在同一个判断里
+   * @param key - 段键
+   * @param order - 该段成员的完整顺序，缺席的成员由渲染侧按默认序接在后面
+   */
+  setSegmentOrder(key: string, order: readonly string[]): Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把一个会话分组挪到同工作区的另一个分组之前
+   *
+   * 分组数组兼顺序，数组序即界面序
+   * `beforeGroupId` 缺省表示挪到末尾
+   *
+   * 锚点资格在这里复核：锚点必须仍是该工作区的其他分组，拖拽期间快照被别处改过时按无操作返回，不抛错
+   * 顺序没有变化的也按无操作返回，不写盘
+   * @param workspaceId - 分组在这个工作区里排序
+   * @param groupId - 被挪动的分组
+   * @param beforeGroupId - 挪到哪个分组之前，缺省表示挪到末尾
+   */
+  moveGroupBefore(
+    workspaceId: string,
+    groupId: string,
+    beforeGroupId?: string | undefined,
+  ): Promise<WorkspaceGroupsSnapshot>
   /** 在根节点新建一个工作区分组 */
   createVirtualWorkspace(name: string): Promise<WorkspaceGroupsSnapshot>
   /** 重命名工作区分组 */
   renameVirtualWorkspace(groupId: string, name: string): Promise<WorkspaceGroupsSnapshot>
   /** 删除工作区分组，组内工作区回到未分组，工作区本身不受影响 */
   deleteVirtualWorkspace(groupId: string): Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 把一个工作区分组挪到根节点的另一个工作区分组之前
+   *
+   * 资格复核与无操作取舍同 {@link WorkspaceGroupsService.moveGroupBefore}
+   * @param groupId - 被挪动的分组
+   * @param beforeGroupId - 挪到哪个分组之前，缺省表示挪到末尾
+   */
+  moveVirtualWorkspaceBefore(
+    groupId: string,
+    beforeGroupId?: string | undefined,
+  ): Promise<WorkspaceGroupsSnapshot>
   /**
    * 把工作区移入分组，`groupId` 为 null 表示移出到未分组
    *
@@ -88,6 +138,48 @@ function newVirtualWorkspaceId(): string {
   return `wg${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
 }
 
+/** 一次换位的结果：把换算交回的 id 序列换回原对象 */
+type ReorderResult<T> =
+  | { kind: 'placed'; order: T[] }
+  | { kind: 'unchanged' }
+  | { kind: 'unknown'; reason: 'source' | 'anchor' }
+
+/**
+ * 把一段带 id 的成员按换位换算重排
+ *
+ * 换算本身在 {@link placeAt} 里，与拖拽计划用的是同一份实现
+ * 这里只做「字符串序列 <-> 带 id 的对象序列」之间的适配：换算只认 id，而这一层交出去的是整份对象
+ * 写入时需要它们原本的字段
+ * @param items - 当前顺序
+ * @param movingId - 被挪动的成员
+ * @param beforeId - 挪到哪个成员之前，缺省表示挪到末尾
+ * @returns 新顺序、无变化、或对不上
+ */
+function reorderById<T extends { id: string }>(
+  items: readonly T[],
+  movingId: string,
+  beforeId: string | undefined,
+): ReorderResult<T> {
+  const byId = new Map(items.map((item) => [item.id, item]))
+  const placement = placeAt(
+    items.map((item) => item.id),
+    movingId,
+    beforeId === undefined ? { kind: 'end' } : { kind: 'before', id: beforeId },
+  )
+  if (placement.kind !== 'placed') return placement
+  // 换算结果里只留下仍然认得的成员：它按传入序列交集而来，因此每一项都能查回原对象
+  const order = placement.order.flatMap((id) => {
+    const found = byId.get(id)
+    return found === undefined ? [] : [found]
+  })
+  return { kind: 'placed', order }
+}
+
+/** 两份顺序是否逐位相同，用来把一次没有改变任何位置的写入挡在盘外 */
+function sameOrder(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, index) => id === b[index])
+}
+
 /**
  * 打开持久化域并构造服务
  *
@@ -100,6 +192,16 @@ export async function createWorkspaceGroupsService(
   ctx: Context,
   pinnedConfig?: WorkspacePlusConfig | undefined,
 ): Promise<WorkspaceGroupsService> {
+  // 宿主侧日志出口。停用中：这些日志经 `ctx.logger` 打出后没有出口能看见
+  // 要让它们出现得由本插件自己注册一个 exporter。恢复时连同下面各处调用一起放开
+  //
+  // const logInfo = (message: string): void => {
+  //   ctx.logger?.info?.(message)
+  // }
+  // const logWarn = (message: string): void => {
+  //   ctx.logger?.error?.(message)
+  // }
+
   const domain = await ctx.storageDomain.open(workspaceGroupsSpec)
   ctx.effect(() => () => domain.close(), 'workspace-plus: domain close')
   const table = domain.table('by_workspace')
@@ -137,6 +239,8 @@ export async function createWorkspaceGroupsService(
       picker: normalizePickerState(global.picker),
       // 同样补格，旧 global 里没有这一格，直接交给渲染侧会得到 undefined
       nested: global.nested !== false,
+      // 这一格由 schema 的默认值补齐，旧 global 里没有它时读到的就是空表
+      orderSlots: global.orderSlots,
       ...pinnedSettings(),
     }
   }
@@ -210,13 +314,19 @@ export async function createWorkspaceGroupsService(
    * @param patch - 要改的格，其余原样保留
    */
   async function writeTree(
-    patch: Partial<{ virtualWorkspaces: VirtualWorkspace[]; picker: PickerSnapshot; nested: boolean }>,
+    patch: Partial<{
+      virtualWorkspaces: VirtualWorkspace[]
+      picker: PickerSnapshot
+      nested: boolean
+      orderSlots: Record<string, string[]>
+    }>,
   ): Promise<WorkspaceGroupsSnapshot> {
     const global = tree.get()
     await tree.set({
       virtualWorkspaces: patch.virtualWorkspaces ?? global.virtualWorkspaces,
       picker: patch.picker ?? normalizePickerState(global.picker),
       nested: patch.nested ?? global.nested !== false,
+      orderSlots: patch.orderSlots ?? global.orderSlots,
     })
     return snapshot()
   }
@@ -233,6 +343,24 @@ export async function createWorkspaceGroupsService(
    */
   function savePicker(picker: PickerSnapshot): Promise<WorkspaceGroupsSnapshot> {
     return writeTree({ picker })
+  }
+
+  /**
+   * 写回一段的手动顺序
+   *
+   * `order` 为空时整格删掉而不是留一份空数组，因为两者在渲染侧是同一件事（这一段没有手动顺序）
+   * 留空数组只会让 global 里堆出越来越多的空槽
+   * @param key - 段键
+   * @param order - 该段成员的完整顺序
+   */
+  function saveSegmentOrder(
+    key: string,
+    order: readonly string[],
+  ): Promise<WorkspaceGroupsSnapshot> {
+    const slots = { ...tree.get().orderSlots }
+    if (order.length === 0) delete slots[key]
+    else slots[key] = [...order]
+    return writeTree({ orderSlots: slots })
   }
 
   /**
@@ -299,16 +427,65 @@ export async function createWorkspaceGroupsService(
       }))
       if (groupId !== null) {
         const target = groups.find((group) => group.id === groupId)
-        if (target === undefined) throw new Error(`unknown group "${groupId}" in workspace "${workspaceId}"`)
+        if (target === undefined) {
+          // 与 moveWorkspace 同一形态：写入被拒而界面已经画过落点，抛错之前先留痕
+          // logWarn(
+          //   `workspace-plus: moveSession 拒绝写入，分组不存在 workspace=${workspaceId} ` +
+          //     `sessionId=${sessionId} groupId=${groupId}`,
+          // )
+          // logWarn(
+          //   `workspace-plus: 现有分组=${groups.map((group) => group.id).join(',') || '(none)'}`,
+          // )
+          throw new Error(`unknown group "${groupId}" in workspace "${workspaceId}"`)
+        }
         target.sessionIds.push(sessionId)
       }
       return save(workspaceId, groups)
+    },
+
+    async setSegmentOrder(key, order) {
+      const slot = tree.get().orderSlots[key]
+      // 写一份与现状相同的顺序不该在盘上留下一次改动，与分组排序对相邻位空操作的取舍一致
+      // 这一支本该到不了：客户端那边的换位换算已经把无变化的落点判掉了，走到这里说明它漏判了一次
+      if (slot !== undefined && sameOrder(slot, order)) {
+        // logWarn(`workspace-plus: setSegmentOrder 顺序与现状逐位相同，跳过写入 key=${key} 成员=${order.length}`)
+        return snapshot()
+      }
+      return saveSegmentOrder(key, order)
+    },
+
+    async moveGroupBefore(workspaceId, groupId, beforeGroupId) {
+      const reorder = reorderById(groupsOf(workspaceId), groupId, beforeGroupId)
+      if (reorder.kind === 'unknown') {
+        // 两侧数据已经不同步：客户端拿的是一份旧快照，或分组在别处被删
+        // 写入被跳过而界面已经画过落点，用户看到的就是「拖了没反应」，因此这一条必须留痕
+        // logWarn(
+        //   `workspace-plus: moveGroupBefore 换位对不上 workspace=${workspaceId} groupId=${groupId} ` +
+        //     `beforeGroupId=${beforeGroupId ?? '(end)'} 原因=${reorder.reason}`,
+        // )
+        return snapshot()
+      }
+      // 无变化时连写都不发：拖到自己的相邻位不该在盘上留下一次改动
+      return reorder.kind === 'placed' ? save(workspaceId, reorder.order) : snapshot()
     },
 
     async createVirtualWorkspace(name) {
       const groups = treeGroups()
       groups.push({ id: newVirtualWorkspaceId(), name, workspaceIds: [] })
       return saveTree(groups)
+    },
+
+    async moveVirtualWorkspaceBefore(groupId, beforeGroupId) {
+      const reorder = reorderById(treeGroups(), groupId, beforeGroupId)
+      if (reorder.kind === 'unknown') {
+        // 同 moveGroupBefore：跳过写入而界面已经画过落点，这一条必须留痕
+        // logWarn(
+        //   `workspace-plus: moveVirtualWorkspaceBefore 换位对不上 groupId=${groupId} ` +
+        //     `beforeGroupId=${beforeGroupId ?? '(end)'} 原因=${reorder.reason}`,
+        // )
+        return snapshot()
+      }
+      return reorder.kind === 'placed' ? saveTree(reorder.order) : snapshot()
     },
 
     async renameVirtualWorkspace(groupId, name) {
@@ -335,10 +512,25 @@ export async function createWorkspaceGroupsService(
       }))
       if (groupId !== null) {
         const target = groups.find((group) => group.id === groupId)
-        if (target === undefined) throw new Error(`unknown workspace group "${groupId}"`)
+        if (target === undefined) {
+          // 客户端拿着一个服务端已经没有的分组 id 时走到这里（分组在别处被删、或两边快照不同步）
+          // 写入被拒绝而界面已经画过落点，用户看到的就是「拖了没反应」，因此这一条必须留痕
+          // logWarn(
+          //   `workspace-plus: moveWorkspace 拒绝写入，分组不存在 workspace=${workspaceId} groupId=${groupId}`,
+          // )
+          // logWarn(`workspace-plus: 现有分组=${groups.map((group) => group.id).join(',') || '(none)'}`)
+          throw new Error(`unknown workspace group "${groupId}"`)
+        }
         target.workspaceIds.push(workspaceId)
       }
-      return saveTree(groups)
+      const saved = await saveTree(groups)
+      // logInfo(
+      //   `workspace-plus: moveWorkspace 写入完成 workspace=${workspaceId} groupId=${groupId ?? '(root)'} ` +
+      //     `分组状态=${saved.workspaceGroups
+      //       .map((group) => `${group.id}[${group.workspaceIds.join('|')}]`)
+      //       .join(' ') || '(none)'}`,
+      // )
+      return saved
     },
 
     async nestWorkspaces(workspaceIds, parentWorkspaceId, groupId) {
@@ -384,6 +576,7 @@ export async function createWorkspaceGroupsService(
         virtualWorkspaces: global.virtualWorkspaces,
         picker: normalizePickerState(global.picker),
         nested: enabled,
+        orderSlots: global.orderSlots,
       })
       for (const entry of cleared) {
         await saveRecord(entry.childId, entry.groups, null)

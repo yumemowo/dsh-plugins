@@ -9,22 +9,17 @@ import {
   SessionHoverContent,
   WorkspaceHoverContent,
 } from '../src/client/views/components/HoverCards.tsx'
-import {
-  officialAddLabels,
-  officialSessionLabels,
-  timeLabel,
-} from '../src/client/official.ts'
-import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { shellSeats } from './support/dndDom.ts'
 import { viewModeProps } from './viewMode-stub.ts'
 
 /**
  * 悬停卡片的真实 DOM 冒烟
  *
  * `render.test.ts` 用自制 dispatcher 直接调用函数组件，卡片替身只渲染锚点
- * 因此看不到包一层之后行在 DOM 里的实际位置。这里用真 `react-dom` 渲染一遍
- * 断言两件只有真实渲染才暴露的事：卡片确实浮出来了
- * 以及多出来的那层包装没有破坏行的结构（行的定位、层级缩进与淡入标记都还在）
+ * 因此看不到包一层之后行在 DOM 里的实际位置
+ * 这里用真 `react-dom` 渲染一遍，断言两件只有真实渲染才暴露的事：卡片确实浮出来了
+ * 多出来的那层包装也没有破坏行的结构（行的定位、层级缩进与淡入标记都还在）
  *
  * 本包其余测试仍跑 node 环境，原语替身见 vitest.config.ts 的 alias
  */
@@ -66,6 +61,9 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     renameGroup: async () => snapshot(),
     deleteGroup: async () => snapshot(),
     moveSession: async () => snapshot(),
+    setSegmentOrder: async () => snapshot(),
+    moveGroupBefore: async () => snapshot(),
+    moveVirtualWorkspaceBefore: async () => snapshot(),
     createVirtualWorkspace: async () => snapshot(),
     renameVirtualWorkspace: async () => snapshot(),
     deleteVirtualWorkspace: async () => snapshot(),
@@ -77,27 +75,11 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     focusEntry: async () => snapshot(),
     togglePinned: async () => snapshot(),
     setSessionPinned: async () => {},
+    insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
-    searchResultLimit: 20,
-    t: regionTranslate(),
-    tWorkspace: workspaceTranslate(),
-    tSidebar: sidebarTranslate(),
+    ...shellSeats(),
     ...viewModeProps(),
-    official: () => ({
-      renameSession: async () => {},
-      forkSession: () => {},
-      archiveSession: async () => {},
-      labels: officialSessionLabels(workspaceTranslate()),
-      relativeTime: (updatedAt: number, now: number) =>
-        timeLabel(updatedAt, now, workspaceTranslate()),
-    }),
-    addWorkspace: () => ({
-      createWorkspace: async (path: string) => ({ workspaceId: `w-${path}`, title: path }),
-      startSession: () => {},
-      occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
-      labels: officialAddLabels(workspaceTranslate()),
-    }),
     ...overrides,
   }
 }
@@ -210,7 +192,7 @@ describe('hover cards in a real DOM', () => {
   it('leaves the workspace row in place inside its section', async () => {
     const container = await mount()
 
-    // 工作区行同样被包了一层，但它必须仍是工作区区块的第一个子项：
+    // 工作区行同样被包了一层，但它必须仍是工作区区块的第一个子项
     // `.workspace > * + *` 那份 2px 间距靠的就是这个位置
     const workspace = container.querySelector('.workspace') as HTMLElement
     const head = container.querySelector('.workspaceHead') as HTMLElement

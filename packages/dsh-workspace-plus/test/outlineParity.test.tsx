@@ -7,10 +7,11 @@ import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import { buildOutline } from '../src/client/data/outline.ts'
 import type { OutlineRow } from '../src/client/data/outline.ts'
-import { buildLayout, buildRootLayout } from '../src/client/data/layout.ts'
+import { ALL_ENTRIES, virtualAddress } from '../src/rootEntry.ts'
+import type { RootEntryAddress } from '../src/rootEntry.ts'
 import { deriveNesting } from '../src/client/data/nest.ts'
 import { compareSessionRows } from '../src/client/data/sessions.ts'
-import type { SessionRow, WorkspaceLayout } from '../src/client/data/types.ts'
+import type { SessionRow } from '../src/client/data/types.ts'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
@@ -19,10 +20,11 @@ import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
 /**
  * outline 与真实渲染的对拍
  *
- * 同一份快照下，outline 里会话行的先后必须与 DOM 里行的先后一致，题头行的条数也要一致
+ * 同一份快照下，outline 里会话行的先后必须与 DOM 里行的先后一致， header 行的条数也要一致
  * 顺序错了界面会错位而类型看不出来，只能靠这条对拍兜
  *
- * 价值在渲染改吃 outline 之前：那之后两边同源，对拍就退化成自证
+ * 两条链路的输入是同一份夹具：序列由 outline.ts 摊出来，DOM 由区域组件渲染出来
+ * 覆盖的是「两边对同一份快照得出同一份顺序」，两边各自的推导细节不在它的射程里
  */
 
 const CREATED = new Date(2026, 0, 1).toISOString()
@@ -114,17 +116,24 @@ function sessionSource(): WorkspaceGroupsProps['useSessions'] {
   return ((select: (s: unknown) => unknown) => select(state)) as never
 }
 
-/** 一份分组元数据：一个会话分组在 ws-1 体内，一个工作区分组收着 ws-1 与 ws-2 */
-function storedSnapshot(): ReturnType<typeof snapshot> {
+/**
+ * 一份分组元数据：一个会话分组在 ws-1 体内，一个工作区分组收着 ws-1 与 ws-2
+ * @param focused - 当前聚焦的条目地址，缺省是「全部工作区」
+ */
+function storedSnapshot(focused: RootEntryAddress = ALL_ENTRIES): ReturnType<typeof snapshot> {
   return snapshot({
     byWorkspace: { 'ws-1': [{ id: GROUP_ID, name: '分组甲', sessionIds: ['a0'] }] },
     workspaceGroups: [{ id: VIRTUAL_ID, name: '工作区分组甲', workspaceIds: ['ws-1', 'ws-2'] }],
+    picker: { focused, recent: [], pinned: [] },
   })
 }
 
-/** 区域的注入面 */
-function props(): WorkspaceGroupsProps {
-  const stored = storedSnapshot()
+/**
+ * 区域的注入面
+ * @param focused - 当前聚焦的条目地址，缺省是「全部工作区」
+ */
+function props(focused: RootEntryAddress = ALL_ENTRIES): WorkspaceGroupsProps {
+  const stored = storedSnapshot(focused)
   return {
     wide: true,
     expandSidebar: () => {},
@@ -153,6 +162,11 @@ function props(): WorkspaceGroupsProps {
     focusEntry: async () => stored,
     togglePinned: async () => stored,
     setSessionPinned: async () => {},
+    // 顺序位与换位的四个写入面：这份夹具只验行序，不碰拖拽提交
+    setSegmentOrder: async () => stored,
+    moveGroupBefore: async () => stored,
+    moveVirtualWorkspaceBefore: async () => stored,
+    insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
     searchResultLimit: 20,
@@ -177,13 +191,18 @@ function props(): WorkspaceGroupsProps {
   }
 }
 
-/** 挂载区域并等分组元数据落地 */
-async function mount(): Promise<{ container: HTMLElement; root: ReturnType<typeof createRoot> }> {
+/**
+ * 挂载区域并等分组元数据落地
+ * @param focused - 当前聚焦的条目地址，缺省是「全部工作区」
+ */
+async function mount(
+  focused: RootEntryAddress = ALL_ENTRIES,
+): Promise<{ container: HTMLElement; root: ReturnType<typeof createRoot> }> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   await act(async () => {
-    root.render(React.createElement(WorkspaceGroupsRegion, props()))
+    root.render(React.createElement(WorkspaceGroupsRegion, props(focused)))
   })
   await act(async () => {
     await Promise.resolve()
@@ -215,8 +234,12 @@ function listOf(container: HTMLElement): Element | null {
  *
  * 布局、嵌套推导与三层折叠态的默认值都照区域组件那几处抄：这一份要复现的是「渲染输入」，而不是另起一套
  * 会话区段的展开态默认是收起，与 useSessionScopes 一致
+ *
+ * 聚焦那一格照渲染那条链走：区域组件喂给序列的是裁剪过的布局，夹具也必须先裁再算
+ * 否则这里测的是一份界面上并不存在的序列
+ * @param focused - 当前聚焦的条目地址，缺省是「全部工作区」
  */
-function outlineRows(): OutlineRow[] {
+function outlineRows(focused: RootEntryAddress = ALL_ENTRIES): OutlineRow[] {
   const groups = [{ id: VIRTUAL_ID, name: '工作区分组甲', workspaceIds: ['ws-1', 'ws-2'] }]
   const virtualOf = (workspaceId: string): string =>
     workspaceId === 'ws-1' || workspaceId === 'ws-2' ? VIRTUAL_ID : ''
@@ -229,35 +252,15 @@ function outlineRows(): OutlineRow[] {
     groupIdsOf: (workspaceId) => new Set(workspaceId === 'ws-1' ? [GROUP_ID] : []),
   })
 
-  const layouts = new Map<string, WorkspaceLayout>()
-  const layoutOf = (workspaceId: string): WorkspaceLayout => {
-    const cached = layouts.get(workspaceId)
-    if (cached !== undefined) return cached
-    const built = buildLayout(
-      rowsOf(workspaceId),
-      workspaceId === 'ws-1' ? [{ id: GROUP_ID, name: '分组甲', sessionIds: ['a0'] }] : [],
-      (groupId) => nesting.groupedChildIdsOf(workspaceId, groupId),
-      nesting.looseChildIdsOf(workspaceId),
-    )
-    layouts.set(workspaceId, built)
-    return built
-  }
-
   return buildOutline({
-    rootLayout: buildRootLayout(WORKSPACE_IDS, groups, nesting),
-    workspaceLayoutOf: layoutOf,
-    depthOf: (workspaceId) => nesting.levelOf(workspaceId),
-    containers: {
-      root: nesting.containers.root,
-      virtualOf: nesting.containers.virtualOf,
-      groupOf: nesting.containers.groupOf,
-    },
-    expansion: {
-      // 工作区层的默认按结构分层：没有父工作区的展开，子工作区折叠
-      isWorkspaceExpanded: (key) => nesting.ancestorsOf(key).length === 0,
-      isVirtualWorkspaceExpanded: () => true,
-      isGroupExpanded: () => false,
-    },
+    workspaceIds: WORKSPACE_IDS,
+    virtualGroups: groups,
+    rowsOf,
+    groupsOf: (workspaceId) =>
+      workspaceId === 'ws-1' ? [{ id: GROUP_ID, name: '分组甲', sessionIds: ['a0'] }] : [],
+    nesting,
+    // 与区域组件同一条链：先把地址解析成菜单条目，解析不到当作没有聚焦
+    focused,
     isScopeExpanded: () => false,
     alwaysVisibleSessionIds: new Set<string>(),
     now: NOW,
@@ -270,20 +273,7 @@ function outlineRows(): OutlineRow[] {
       completed: false,
       updatedAt: (SUMMARIES[id] as { updatedAt: number }).updatedAt,
     })),
-    hideStray: false,
     compareRows: compareSessionRows,
-    keys: {
-      workspaceHead: (id) => 'workspaceHead/' + id,
-      workspaceBody: (id) => 'workspaceBody/' + id,
-      workspaceRegion: (id) => 'workspaceRegion/' + id,
-      sessionGroupHead: (w, g) => 'groupHead/' + w + '/' + g,
-      sessionGroupZone: (w, g) => 'sessionGroup/' + w + '/' + g,
-      sessionGroupRegion: (w, g) => 'sessionGroupRegion/' + w + '/' + g,
-      virtualHead: (id) => 'virtualWorkspaceHead/' + id,
-      virtualBody: (id) => 'virtualWorkspaceBody/' + id,
-      virtualRegion: (id) => 'virtualRegion/' + id,
-      loose: (id) => 'loose/' + id,
-    },
   })
 }
 
@@ -324,10 +314,36 @@ describe('outline 与渲染对拍', () => {
         row.kind === 'strayHead',
     ).length
 
-    // 四种题头行在 DOM 上落在 .workspaceHead 或 .groupHead 上（工作区分组头两个类都带）
+    // 四种 header 行在 DOM 上落在 .workspaceHead 或 .groupHead 上（工作区分组头两个类都带）
     const fromDom = list.querySelectorAll('.workspaceHead, .groupHead').length
 
     expect(fromOutline).toBe(fromDom)
+
+    await act(async () => root.unmount())
+  })
+
+  it('crops the sequence to the focused workspace just like the list', async () => {
+    // 聚焦一个工作区分组之后列表里不再有组头：那一片只剩组内的工作区
+    //
+    // 这条守的是「聚焦后的布局算出来的序列」本身（没有组头、 header 数与 DOM 一致）
+    // 不是「区域组件喂进去的是哪一份布局」——序列与夹具在这里同源，那一处改错它看不见
+    const focused = virtualAddress(VIRTUAL_ID)
+    const { container, root } = await mount(focused)
+    const list = listOf(container)
+    if (list === null) throw new Error('区域列表没有渲染')
+
+    const fromOutline = outlineRows(focused).filter(
+      (row) =>
+        row.kind === 'workspaceHead' ||
+        row.kind === 'groupHead' ||
+        row.kind === 'virtualHead' ||
+        row.kind === 'strayHead',
+    ).length
+
+    // 守一手：这一屏确实还有 header 行，否则下面那条断言在「两边都空」时会假通过
+    expect(fromOutline).toBeGreaterThan(0)
+    expect(fromOutline).toBe(list.querySelectorAll('.workspaceHead, .groupHead').length)
+    expect(outlineRows(focused).some((row) => row.kind === 'virtualHead')).toBe(false)
 
     await act(async () => root.unmount())
   })

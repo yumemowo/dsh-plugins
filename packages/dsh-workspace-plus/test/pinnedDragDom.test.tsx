@@ -1,0 +1,475 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it } from 'vitest'
+import * as React from 'react'
+import { act } from 'react'
+import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
+import { band, fire, flush, mountRegion, regionProps, summary, zone } from './support/dndDom.ts'
+import { snapshot } from './snapshot-stub.ts'
+import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
+
+/**
+ * 置顶区拖拽的真实 DOM
+ *
+ * 置顶区的顺序是三份来源合成的（官方置顶集合、本包顺序位、段内名次）
+ * 算错时界面上不会报错，只表现为「拖完位置没变」或「拖一条别的跟着动」
+ * 因此逐条断言交给宿主的顺序位写入，以及界面上那几行到底排成了什么顺序
+ *
+ * jsdom 不实现 `DataTransfer`（用例里用最小替身），也不做布局（`getBoundingClientRect()` 恒为全零）
+ * 因此命中走事件目标向上找标记元素，前后半由用例显式替身参照行的矩形带
+ *
+ * 造事件、造矩形带、挂载区域这些每个 DOM 测试都要的东西在 `./support/dndDom.ts`
+ */
+
+/** 置顶集合，两条以便段内换位能真的换出位次 */
+const PINNED_IDS = ['session-1', 'session-2']
+
+/** 被放进会话分组的会话，就地置顶段的名次要从这一段的渲染序上读 */
+const GROUP_IDS = ['session-1', 'session-2', 'session-3']
+
+/** 全新置顶的一条，用来验证顺序位之外的成员接在后面 */
+const LATE_ID = 'session-4'
+
+const ALL_IDS = [...GROUP_IDS, LATE_ID]
+
+/** 工作区快照 */
+function workspaceState(pinned: readonly string[]): Record<string, unknown> {
+  return {
+    items: [
+      {
+        workspaceId: 'ws-1',
+        path: '/tmp/ws-1',
+        title: 'ws-1',
+        sessionIds: ALL_IDS,
+        createdAt: new Date(2026, 0, 1).toISOString(),
+        updatedAt: new Date(2026, 0, 1).toISOString(),
+      },
+    ],
+    archivedSessionIds: [],
+    pinnedSessionIds: pinned,
+    phase: 'ready',
+  }
+}
+
+/** 会话快照 */
+function sessionState(): Record<string, unknown> {
+  const byId: Record<string, unknown> = {}
+  // 时间序与官方集合顺序刻意相反，两个顺序因此可区分
+  for (const [index, id] of ALL_IDS.entries()) byId[id] = summary(id, 10_000 - index * 1_000)
+  return { ids: ALL_IDS, byId, phase: 'ready' }
+}
+
+/**
+ * 区域 props
+ * @param slots - 收到的手动顺序写入，逐条记下段键与整份顺序
+ * @param options - 置顶集合与置顶段的顺序位，缺省表示官方集合只有两条、没有手动顺序
+ */
+function props(
+  slots: [string, readonly string[]][],
+  options: {
+    pinned?: readonly string[] | undefined
+    orderSlots?: Record<string, string[]> | undefined
+    store?: ReturnType<typeof viewModeStoreStub> | undefined
+  } = {},
+): ReturnType<typeof regionProps> {
+  const state = workspaceState(options.pinned ?? PINNED_IDS)
+  const sessions = sessionState()
+  const stored = snapshot({
+    byWorkspace: {
+      'ws-1': [{ id: 'group-a', name: '分组甲', sessionIds: GROUP_IDS }],
+    },
+    orderSlots: options.orderSlots ?? {},
+  })
+  return regionProps({
+    useWorkspaces: ((select: (s: unknown) => unknown) => select(state)) as never,
+    useSessions: ((select: (s: unknown) => unknown) => select(sessions)) as never,
+    loadGroups: async () => stored,
+    createGroup: async () => stored,
+    renameGroup: async () => stored,
+    deleteGroup: async () => stored,
+    moveSession: async () => stored,
+    setSegmentOrder: async (key: string, order: readonly string[]) => {
+      slots.push([key, order])
+      return stored
+    },
+    moveGroupBefore: async () => stored,
+    moveVirtualWorkspaceBefore: async () => stored,
+    createVirtualWorkspace: async () => stored,
+    renameVirtualWorkspace: async () => stored,
+    deleteVirtualWorkspace: async () => stored,
+    moveWorkspace: async () => stored,
+    nestWorkspaces: async () => stored,
+    unnestWorkspaces: async () => stored,
+    setNested: async () => stored,
+    forgetWorkspace: async () => stored,
+    focusEntry: async () => stored,
+    togglePinned: async () => stored,
+    // 就地置顶那一档才把名次交给分组内的比较器
+    ...storeViewModeProps(options.store ?? inlineScope()),
+  })
+}
+
+/** 就地置顶那一档的 store：名次交给分组内的比较器，而不是跟着官方集合走 */
+function inlineScope() {
+  const store = viewModeStoreStub()
+  store.setPinned({ scope: 'inline' })
+  return store
+}
+
+/** 挂载区域并交出容器、收到的顺序位写入与重渲染入口 */
+async function mount(
+  options: {
+    pinned?: readonly string[] | undefined
+    orderSlots?: Record<string, string[]> | undefined
+    store?: ReturnType<typeof viewModeStoreStub> | undefined
+  } = {},
+): Promise<{
+  container: HTMLElement
+  root: Awaited<ReturnType<typeof mountRegion>>['root']
+  slots: [string, readonly string[]][]
+  /** 带着新的顺序位重渲染，模拟宿主回了整份快照 */
+  rerender: (orderSlots: Record<string, string[]>) => Promise<void>
+}> {
+  const slots: [string, readonly string[]][] = []
+  const { container, root } = await mountRegion(props(slots, options))
+  const draw = async (
+    next: {
+      pinned?: readonly string[] | undefined
+      orderSlots?: Record<string, string[]> | undefined
+      store?: ReturnType<typeof viewModeStoreStub> | undefined
+    },
+  ): Promise<void> => {
+    await act(async () => {
+      root.render(
+        React.createElement(WorkspaceGroupsRegion, props(slots, next)),
+      )
+    })
+    await flush()
+  }
+  return {
+    container,
+    root,
+    slots,
+    rerender: (orderSlots) => draw({ ...options, store: options.store, orderSlots }),
+  }
+}
+
+/** 一条置顶行 */
+function pinnedRow(container: HTMLElement, id: string): HTMLElement {
+  const found = container.querySelector<HTMLElement>(`.pinScroll [data-wg-dnd-row="${id}"]`)
+  if (found === null) throw new Error(`no pinned row for "${id}"`)
+  return found
+}
+
+/** 置顶区里的会话行，按真实渲染的先后 */
+function pinnedRows(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>('.pinScroll > .row'))
+}
+
+/** 一行里渲染出来的会话标题 */
+function titleOf(row: HTMLElement): string {
+  return row.querySelector('.rowTitle')?.textContent ?? ''
+}
+
+/** 置顶区里的会话标题，按真实渲染的先后 */
+function pinnedTitles(container: HTMLElement): string[] {
+  return pinnedRows(container).map(titleOf)
+}
+
+/** 分组内那一段的会话标题，按真实渲染的先后 */
+function groupTitles(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll<HTMLElement>('.groupBody .row')).map(titleOf)
+}
+
+afterEach(() => {
+  document.body.replaceChildren()
+})
+
+describe('dragging a pinned row', () => {
+  it('writes the pinned slot with the whole converted order', async () => {
+    // 顺序位写整份而不是只交一个锚点：官方集合没有算上顺序位
+    // 只交锚点会让接管的那一次与用户当时看见的顺序不一致
+    const { container, root, slots } = await mount()
+    // 官方集合顺序是 session-1、session-2，两条摆在不同的高度上
+    band(pinnedRow(container, 'session-1'), 0)
+    band(pinnedRow(container, 'session-2'), 20)
+
+    fire(pinnedRow(container, 'session-2'), 'dragstart')
+    // 指针落在 session-1 的上半，读作插到它之前
+    fire(pinnedRow(container, 'session-1'), 'dragover', 2)
+    fire(pinnedRow(container, 'session-1'), 'drop', 2)
+    await flush()
+
+    expect(slots).toEqual([['pinned', ['session-2', 'session-1']]])
+    await act(async () => root.unmount())
+  })
+
+  it('marks the anchor row it was dropped on', async () => {
+    // 置顶段的每一行自己就是一处落点单位（它们没有单位标记）：线画在参照行身上
+    // 画在段容器上会跑到整段的上边或下边
+    const { container, root } = await mount()
+    band(pinnedRow(container, 'session-1'), 0)
+    band(pinnedRow(container, 'session-2'), 20)
+    const anchor = pinnedRow(container, 'session-1')
+    const stretch = zone(container, 'pinned')
+
+    fire(pinnedRow(container, 'session-2'), 'dragstart')
+    fire(anchor, 'dragover', 2)
+
+    expect(anchor.getAttribute('data-wg-drop')).toBe('before')
+    expect(stretch.getAttribute('data-wg-drop')).toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('draws one line for a seam from above or below alike', async () => {
+    // 一处缝从上面看是前一条的下半、从下面看是后一条的上半：屏幕上是同一处空白
+    // 因此必须落在同一个像素位置、给同一个标记。后者天然画在下一条的上缘
+    // 前者交给它代言，「之后」因此读作下一条的「之前」
+    const { container, root } = await mount({ pinned: [...PINNED_IDS, 'session-3'] })
+    band(pinnedRow(container, 'session-1'), 0)
+    band(pinnedRow(container, 'session-2'), 20)
+    band(pinnedRow(container, 'session-3'), 40)
+
+    fire(pinnedRow(container, 'session-3'), 'dragstart')
+
+    // 从上面靠近：指针在 session-2 的上半，交回「session-2 之前」
+    fire(pinnedRow(container, 'session-2'), 'dragover', 22)
+    const fromAbove = [...container.querySelectorAll('[data-wg-drop]')].map((element) => [
+      element.getAttribute('data-wg-drop'),
+      element.getAttribute('data-wg-dnd-row'),
+    ])
+    // 从下面靠近：指针在 session-1 的下半，交回「session-1 之后」
+    // 同一处缝，读数必须逐字相同
+    fire(pinnedRow(container, 'session-1'), 'dragover', 8)
+    const fromBelow = [...container.querySelectorAll('[data-wg-drop]')].map((element) => [
+      element.getAttribute('data-wg-drop'),
+      element.getAttribute('data-wg-dnd-row'),
+    ])
+
+    expect(fromAbove).toEqual([['before', 'session-2']])
+    expect(fromAbove).toEqual(fromBelow)
+    await act(async () => root.unmount())
+  })
+
+  it('reads the spacing a pinned row carries as that row own band', async () => {
+    // 置顶段那 2px 也挂在后一条带的上内边距里（见 PinnedSection.module.css）
+    // 两条带因此严丝合缝。指针停在那段间距里命中的就是后一条带本身，读作「排到它之前」
+    const { container, root } = await mount({ pinned: [...PINNED_IDS, 'session-3'] })
+    band(pinnedRow(container, 'session-1'), 0, 34)
+    band(pinnedRow(container, 'session-2'), 34, 34)
+    band(pinnedRow(container, 'session-3'), 68, 34)
+
+    fire(pinnedRow(container, 'session-3'), 'dragstart')
+    // session-2 是一条从 34 起的带，它自己承担的那 2px 落在 34..36
+    fire(pinnedRow(container, 'session-2'), 'dragover', 35)
+
+    expect([...container.querySelectorAll('[data-wg-drop]')].map((element) => [
+      element.getAttribute('data-wg-drop'),
+      element.getAttribute('data-wg-dnd-row'),
+    ])).toEqual([['before', 'session-2']])
+    await act(async () => root.unmount())
+  })
+
+  it('keeps the seam off the row it is dragging', async () => {
+    // 下一条正是被拖走的那一条时，那一处是原地投放：它画淡着，线抢过去只会一起淡掉
+    // 缝因此留在前一条的下缘，位置一样，仍然是同一条线
+    const { container, root } = await mount()
+    band(pinnedRow(container, 'session-1'), 0)
+    band(pinnedRow(container, 'session-2'), 20)
+
+    fire(pinnedRow(container, 'session-2'), 'dragstart')
+    fire(pinnedRow(container, 'session-1'), 'dragover', 8)
+
+    expect(container.querySelectorAll('[data-wg-drop]')).toHaveLength(1)
+    expect(pinnedRow(container, 'session-1').getAttribute('data-wg-drop')).toBe('after')
+
+    fire(pinnedRow(container, 'session-2'), 'dragover', 22)
+    expect(container.querySelectorAll('[data-wg-drop]')).toHaveLength(0)
+    await act(async () => root.unmount())
+  })
+
+  it('writes nothing when a row lands on its own row', async () => {
+    // 来源自己那一行仍在计划里，拖到它头上由换算判出顺序没变，因此不写盘
+    const { container, root, slots } = await mount()
+    band(pinnedRow(container, 'session-1'), 0)
+
+    fire(pinnedRow(container, 'session-1'), 'dragstart')
+    fire(pinnedRow(container, 'session-1'), 'dragover', 2)
+    fire(pinnedRow(container, 'session-1'), 'drop', 2)
+    await flush()
+
+    expect(slots).toEqual([])
+    await act(async () => root.unmount())
+  })
+
+  it('writes nothing when a row lands on the neighbour it already sits next to', async () => {
+    // 相邻位是「拖动发生了、顺序没变」：换算判出逐位相同，盘上因此不留改动
+    const { container, root, slots } = await mount()
+    band(pinnedRow(container, 'session-1'), 0)
+    band(pinnedRow(container, 'session-2'), 20)
+
+    // 官方集合里 session-2 已在 session-1 之后，把它拖到 session-1 之后即回到原位
+    fire(pinnedRow(container, 'session-2'), 'dragstart')
+    fire(pinnedRow(container, 'session-1'), 'dragover', 8)
+    fire(pinnedRow(container, 'session-1'), 'drop', 8)
+    await flush()
+
+    expect(slots).toEqual([])
+    await act(async () => root.unmount())
+  })
+
+  it('leaves the row unstyled as dragged until the drag ends', async () => {
+    const { container, root } = await mount()
+    const dragged = pinnedRow(container, 'session-1')
+
+    fire(dragged, 'dragstart')
+    expect(dragged.hasAttribute('data-wg-dragging')).toBe(true)
+
+    fire(dragged, 'dragend')
+    expect(dragged.hasAttribute('data-wg-dragging')).toBe(false)
+    await act(async () => root.unmount())
+  })
+
+  it('marks every pinned row draggable and names its row id', async () => {
+    // 可拖是这一段接排序的前提：少了 `draggable`，拖起事件根本不会派发
+    const { container, root } = await mount()
+
+    expect(pinnedRow(container, 'session-1').getAttribute('draggable')).toBe('true')
+    expect(pinnedRow(container, 'session-2').getAttribute('draggable')).toBe('true')
+    // 整段共用一格区域键，行自己带参照行标记
+    expect(zone(container, 'pinned')).not.toBeNull()
+    await act(async () => root.unmount())
+  })
+})
+
+describe('the pinned order both surfaces read', () => {
+  it('keeps the official set order while the pinned stretch has no slot', async () => {
+    // 旧数据零变化：没有顺序位时置顶区与分组内就地置顶段的先后都与引入这一片之前逐项相同
+    const { container, root } = await mount()
+
+    expect(pinnedTitles(container)).toEqual(['会话 session-1', '会话 session-2'])
+    // 分组内：置顶段按官方集合的位置在前，其后是未置顶的 session-3
+    expect(groupTitles(container)).toEqual([
+      '会话 session-1',
+      '会话 session-2',
+      '会话 session-3',
+    ])
+    await act(async () => root.unmount())
+  })
+
+  it('follows the slot in the pinned area and in the inline pinned stretch alike', async () => {
+    // 一份顺序两个消费者：置顶区按它渲染，分组内就地置顶的名次从同一份取，两个表面因此永不打架
+    const { container, root } = await mount({ orderSlots: { pinned: ['session-2', 'session-1'] } })
+
+    expect(pinnedTitles(container)).toEqual(['会话 session-2', '会话 session-1'])
+    // 名次跟着换：session-2 取得更小的名次，排在 session-1 之前
+    expect(groupTitles(container)).toEqual([
+      '会话 session-2',
+      '会话 session-1',
+      '会话 session-3',
+    ])
+    await act(async () => root.unmount())
+  })
+
+  it('appends a newly pinned member after the ones the slot names', async () => {
+    // 新置顶的会话不在顺序位里，接在手动排过的那些之后，而不是插到它们中间
+    // 也不落回官方集合的最前——那会让用户刚排好的顺序被打断
+    const { container, root } = await mount({
+      pinned: ['session-4', 'session-1', 'session-2'],
+      orderSlots: { pinned: ['session-2', 'session-1'] },
+    })
+
+    expect(pinnedTitles(container)).toEqual([
+      '会话 session-2',
+      '会话 session-1',
+      '会话 session-4',
+    ])
+    await act(async () => root.unmount())
+  })
+
+  it('drops a slot id that is no longer pinned', async () => {
+    // 取消置顶会在顺序位里留下已经不作数的 id，它不该在界面上占位
+    const { container, root } = await mount({
+      pinned: ['session-1'],
+      orderSlots: { pinned: ['session-2', 'session-1'] },
+    })
+
+    expect(pinnedTitles(container)).toEqual(['会话 session-1'])
+    await act(async () => root.unmount())
+  })
+
+  it('offers no way back to the default order while the slot is absent', async () => {
+    // 没有手动顺序时置顶区本来就按官方集合序渲染，摆一条「恢复」只会让用户去猜它为什么点不动
+    const { container, root } = await mount()
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.headerAction[aria-label="视图选项"]')?.click()
+    })
+
+    const rows = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.viewOptionRow'))
+    expect(rows.map((row) => row.querySelector('.viewOptionLabel')?.textContent)).not.toContain(
+      '恢复默认置顶顺序',
+    )
+    await act(async () => root.unmount())
+  })
+
+  it('restores the default order from the view options panel', async () => {
+    // 手动顺序的唯一出口：清掉那一格，置顶区随之回到官方集合序（最近置顶在最前）
+    const { container, root, slots, rerender } = await mount({
+      orderSlots: { pinned: ['session-2', 'session-1'] },
+    })
+    expect(pinnedTitles(container)).toEqual(['会话 session-2', '会话 session-1'])
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.headerAction[aria-label="视图选项"]')?.click()
+    })
+    const restore = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>('.viewOptionRow'),
+    ).find((row) => row.querySelector('.viewOptionLabel')?.textContent === '恢复默认置顶顺序')
+    expect(restore).toBeDefined()
+
+    await act(async () => restore?.click())
+    // 空表即整格删除，与拖拽接管走同一个写入方法
+    expect(slots).toEqual([['pinned', []]])
+    // 点完收起面板：这一行随即消失，它的可停点也不会留在文档里
+    expect(document.body.querySelector('.viewMenu')).toBeNull()
+
+    // 宿主回的整份快照把顺序位收走之后，置顶区回到官方集合序
+    await rerender({})
+    expect(pinnedTitles(container)).toEqual(['会话 session-1', '会话 session-2'])
+    await act(async () => root.unmount())
+  })
+
+  it('carries a drag through the written slot into both surfaces', async () => {
+    // 端到端：拖一次置顶行、把宿主回的整份快照喂回去，两个表面的先后都要跟着换
+    // 这一段把「落点换算」「顺序位写入」「reconcile 进渲染」「名次联动」四处串起来
+    const { container, root, slots, rerender } = await mount()
+    expect(pinnedTitles(container)).toEqual(['会话 session-1', '会话 session-2'])
+    expect(groupTitles(container)).toEqual([
+      '会话 session-1',
+      '会话 session-2',
+      '会话 session-3',
+    ])
+
+    band(pinnedRow(container, 'session-1'), 0)
+    band(pinnedRow(container, 'session-2'), 20)
+    fire(pinnedRow(container, 'session-2'), 'dragstart')
+    fire(pinnedRow(container, 'session-1'), 'dragover', 2)
+    fire(pinnedRow(container, 'session-1'), 'drop', 2)
+    await flush()
+
+    // 宿主收到的就是这次拖拽换算出的整份顺序
+    expect(slots).toEqual([['pinned', ['session-2', 'session-1']]])
+    const [key, order] = slots[0] as [string, readonly string[]]
+
+    // 把宿主回的整份快照喂回去：置顶区与分组内就地置顶段要一起换过来
+    await rerender({ [key]: [...order] })
+
+    expect(pinnedTitles(container)).toEqual(['会话 session-2', '会话 session-1'])
+    expect(groupTitles(container)).toEqual([
+      '会话 session-2',
+      '会话 session-1',
+      '会话 session-3',
+    ])
+    await act(async () => root.unmount())
+  })
+})

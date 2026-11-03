@@ -11,16 +11,17 @@
  * 新建中（空白）会话行没有会话可操作，与官方一样整条行都不挂菜单，那条行只是「准备开始一个新会话」的占位，对它重命名或归档都无从谈起
  *
  * 置顶区里的行也走这一个组件：那些行只给官方操作块，也不给卡片
+ * 它们的拖拽计划单独经 `dragPlan` 给，没有归组上下文
  *
  * 菜单开合状态收敛在本组件内：行组件在 map 回调里生成，把 useState 留在行内会让每行无条件多挂一组 hook 状态，独立组件则按需挂载
  * 重命名对话框也留在这里——只有真正打开过的行才付出这份状态
  */
-import { memo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
 import { HoverCard, IconEllipsisOutlineRegular, Menu } from '../runtime.ts'
 import { buildSessionMenuItems } from '../menus.tsx'
 import type { SessionPinMenuInput } from '../menus.tsx'
-import { sameGroupSections } from '../data/layout.ts'
+import { sameMenuGroups } from '../menus.tsx'
 import { sameSessionStatus, sameSessionStatuses } from '../data/status.ts'
 import { SessionRowView } from './SessionRowView.tsx'
 import type { SessionRowViewProps } from './SessionRowView.tsx'
@@ -28,9 +29,14 @@ import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { SessionHoverContent } from './components/HoverCards.tsx'
 import { NameDialog } from './components/dialogs/NameDialog.tsx'
 import { useLocale } from '../hooks/useLocale.ts'
+import { useDnd, useRowDragging } from '../hooks/useDnd.ts'
+import type { DragStartEvent } from '../hooks/useDnd.ts'
+import { rowIdProps } from '../data/dnd/protocol.ts'
+import type { DragPlan } from '../data/dnd/protocol.ts'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { SessionStatus } from '../data/status.ts'
-import type { GroupSection, SessionRow } from '../data/types.ts'
+import type { MenuGroup } from '../menus.tsx'
+import type { SessionRow } from '../data/types.ts'
 import rowsStyles from './components/rows.module.css'
 import menusStyles from '../menus.module.css'
 
@@ -43,7 +49,7 @@ export interface SessionGroupingContext {
   /** 该会话所在的工作区，归组动作要用它定位 */
   workspaceId: string
   /** 该会话所在工作区的全部分组 */
-  sections: readonly GroupSection[]
+  sections: readonly MenuGroup[]
   /** 目标会话当前所属分组 id，空串表示未归组 */
   currentGroupId: string
   /**
@@ -52,12 +58,19 @@ export interface SessionGroupingContext {
    * 接收工作区与会话 id 而不是提前绑定：这个动作由区域组件缓存，因此对所有行是同一个引用，行自己在组件内把 id 绑上去
    */
   onSelectGroup: (workspaceId: string, sessionId: string, id: string) => void
+  /**
+   * 拖起这一条会话时的计划
+   *
+   * 收会话 id 而不是提前绑定：区域组件把同一个构造器交给它名下所有行，行自己在组件内把 id 绑上去
+   * 该构造器由 `useCallback` 稳定，因此这个字段对所有行是同一个引用
+   */
+  buildDragPlan: (sessionId: string) => DragPlan
 }
 
 /**
  * 本组件自己算、因此不收的几格
  *
- * `sessionId` 由 `row` 派生；`action` 与 `onContextMenu` 就是下面那两个面板本身，调用方给不了
+ * `sessionId` 由 `row` 派生，`action` 与 `onContextMenu` 就是下面那两个面板本身，调用方给不了
  * `panelOpen` 同理：它由这两个面板的开合状态算出来，收下来既会被覆盖、又让调用方以为它说了算
  */
 type ComputedHere = 'sessionId' | 'action' | 'onContextMenu' | 'panelOpen'
@@ -77,7 +90,7 @@ export interface SessionRowCardInput {
    * 与行首那枚指示器分开传：行上空闲不画指示器，卡片里却要像官方一样把「空闲」也列出来
    */
   statuses?: readonly SessionStatus[] | undefined
-  /** 可复制的内容，取会话标题；缺省表示卡片只读（新建中的空白行） */
+  /** 可复制的内容，取会话标题，缺省表示卡片只读（新建中的空白行） */
   copy?: string | undefined
 }
 
@@ -85,6 +98,14 @@ export interface SessionRowItemProps extends Omit<SessionRowViewProps, ComputedH
   row: SessionRow
   /** 归组上下文，缺省时菜单里没有归组项 */
   grouping?: SessionGroupingContext | undefined
+  /**
+   * 拖起这一条会话时的计划构造器
+   *
+   * 与 `grouping.buildDragPlan` 是同一种东西，来源不同：那一格随归组上下文一起给，这一格单独给
+   * 置顶区里的行没有归组上下文，但仍是置顶那一段的成员，因此另开一格
+   * 两格都在时以归组上下文为准，列表里的行走的都是它
+   */
+  dragPlan?: ((sessionId: string) => DragPlan) | undefined
   /** 官方会话操作，缺省时菜单里没有官方操作块 */
   official?: OfficialSessionActions | undefined
   /** 悬停卡片，缺省表示这一行不挂卡片 */
@@ -120,17 +141,18 @@ function sameGrouping(
   if (
     a.workspaceId !== b.workspaceId ||
     a.currentGroupId !== b.currentGroupId ||
-    a.onSelectGroup !== b.onSelectGroup
+    a.onSelectGroup !== b.onSelectGroup ||
+    a.buildDragPlan !== b.buildDragPlan
   ) {
     return false
   }
-  return sameGroupSections(a.sections, b.sections)
+  return sameMenuGroups(a.sections, b.sections)
 }
 
 /**
  * 比较两张悬停卡片是否表示同一件事
  *
- * 卡片对象每次渲染新建，`statuses` 又是新数组，因此按内容比；不给卡片是稳定的一种状态
+ * 卡片对象每次渲染新建，`statuses` 又是新数组，因此按内容比，不给卡片是稳定的一种状态
  */
 function sameCard(
   a: SessionRowCardInput | undefined,
@@ -162,6 +184,7 @@ function sameRowItemProps(prev: SessionRowItemProps, next: SessionRowItemProps):
     prev.onOpenSession === next.onOpenSession &&
     prev.onReveal === next.onReveal &&
     prev.official === next.official &&
+    prev.dragPlan === next.dragPlan &&
     sameCard(prev.card, next.card) &&
     sameGrouping(prev.grouping, next.grouping)
   )
@@ -170,11 +193,13 @@ function sameRowItemProps(prev: SessionRowItemProps, next: SessionRowItemProps):
 function SessionRowItemView({
   row,
   grouping,
+  dragPlan,
   official,
   card,
   ...rowProps
 }: SessionRowItemProps): ReactElement {
   const { labels } = useLocale()
+  const { dndRowProps } = useDnd()
   const [menuOpen, setMenuOpen] = useState(false)
   const [renameDraft, setRenameDraft] = useState<string | null>(null)
 
@@ -228,6 +253,38 @@ function SessionRowItemView({
   // 两种面板任一开着都算「行上有面板」，卡片与行尾锚点的显隐都据它让位
   const panelOpen = menuOpen || contextMenu.open
 
+  /**
+   * 拖拽那几格
+   *
+   * 记忆一份：这几格含闭包与新建的对象，不记的话每次渲染都是一份新引用
+   * 依赖只列真正会变的：会话 id、计划构造器与那三个稳定入口
+   *
+   * 构造器取归组上下文那一格，没有它时取置顶区单独给的那一格
+   * 两处都给不出计划的行不挂 `draggable`，因此拖不动
+   * 空白占位行不参与：它只是「准备开始一个新会话」，没有可搬的位置
+   */
+  const buildPlan = grouping?.buildDragPlan ?? dragPlan
+  const drag = useRowDragging()
+  const dnd = useMemo(
+    () => (buildPlan === undefined || row.blank ? null : dndRowProps(row.id, () => buildPlan(row.id))),
+    [dndRowProps, buildPlan, row.blank, row.id],
+  )
+  const dragProps = useMemo(() => {
+    if (dnd === null) return {}
+    return {
+      draggable: dnd.draggable,
+      rowIdAttribute: rowIdProps(dnd.rowId),
+      onDragStart: (event: DragStartEvent) => {
+        drag.onDragStart()
+        dnd.onDragStart(event)
+      },
+      onDragEnd: () => {
+        drag.onDragEnd()
+        dnd.onDragEnd()
+      },
+    }
+  }, [dnd, drag.onDragStart, drag.onDragEnd])
+
   const shownTitle = rowProps.title ?? labels.newSession
   // 条目为空时连锚点按钮一起不渲染，不留点不动的省略号
   const hasMenu = items.length > 0
@@ -236,6 +293,9 @@ function SessionRowItemView({
     <SessionRowView
       {...rowProps}
       sessionId={row.id}
+      // 拖拽那几格整体交给行外壳：它渲染行元素，本组件只按「有没有分组可归」决定给不给
+      {...dragProps}
+      dragging={drag.dragging}
       // 面板开合下发给行：置顶区靠行上的标记判断浮出要不要留住（两种面板都 portal 到 body）
       panelOpen={panelOpen}
       onContextMenu={contextMenu.onContextMenu}
