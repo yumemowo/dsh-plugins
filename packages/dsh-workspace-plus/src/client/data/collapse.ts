@@ -47,6 +47,22 @@ export const COLLAPSED_SESSION_LIMIT_MIN = 3
 /** 「最近用过」的窗口长度 */
 export const RECENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000
 
+/** 判据基准时刻的分辨率 */
+export const RECENT_CLOCK_STEP_MS = 60 * 60 * 1000
+
+/**
+ * 把渲染当刻的时刻收成判据的基准时刻
+ *
+ * 判据只问「窗口内用过没有」，因此它不需要逐次渲染都换一个值
+ * 向下取整到 {@link RECENT_CLOCK_STEP_MS}：同一段内的多次渲染读到同一个基准时刻
+ * 调用方的缓存因此能命中
+ * 偏差方向是偏宽松的，某一行跨过窗口线之后最多再过一段才被算作「太久没用」，不会提前消失
+ * @param now - 渲染当刻的时刻
+ */
+export function recentClockAt(now: number): number {
+  return Math.floor(now / RECENT_CLOCK_STEP_MS) * RECENT_CLOCK_STEP_MS
+}
+
 /** 折叠结果 */
 export interface CollapsedSessionRows {
   /** 折叠态下要展示的行，顺序与传入的 rows 一致 */

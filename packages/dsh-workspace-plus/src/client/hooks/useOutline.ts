@@ -6,8 +6,13 @@
  *
  * 与容器里那份布局同一取舍：输入都是快照与偏好，`useMemo` 按输入列
  * 因此流式期间的重渲染不会重算
+ *
+ * 依赖列按值比对，任何一格每渲染换一次身份都会让缓存整片失效，而界面只表现为卡顿
+ * 函数与数组由调用方用 `useCallback` / `useMemo` 稳定
+ * `now` 由这里按小时归一（见 {@link useOutline}）
  */
 import { useMemo } from 'react'
+import { recentClockAt } from '../data/collapse.ts'
 import { buildOutline } from '../data/outline.ts'
 import type { OutlineInput, OutlineRow } from '../data/outline.ts'
 
@@ -29,12 +34,17 @@ const EMPTY: Outline = { rows: [], owners: new Map() }
 
 /**
  * 算一次行序列
+ *
+ * `now` 在这里按小时归一后再进依赖列：它只用于窗口判据，渲染当刻那个逐毫秒变化的时刻放进去
+ * 会让缓存每渲染失效一次，而算出来的结果在同一个小时里完全相同
+ * 其余各格是快照、偏好与稳定引用的回调，由调用方负责保持身份
  * @param source - 见 {@link OutlineInput}
  * @returns 整条序列与按段切好的索引
  */
 export function useOutline(source: OutlineInput): Outline {
+  const recentNow = recentClockAt(source.now)
   return useMemo(
-    () => outlineOf(source),
+    () => outlineOf({ ...source, now: recentNow }),
     [
       source.workspaceIds,
       source.virtualGroups,
@@ -44,7 +54,7 @@ export function useOutline(source: OutlineInput): Outline {
       source.focused,
       source.isScopeExpanded,
       source.alwaysVisibleSessionIds,
-      source.now,
+      recentNow,
       source.stray,
       source.compareRows,
     ],

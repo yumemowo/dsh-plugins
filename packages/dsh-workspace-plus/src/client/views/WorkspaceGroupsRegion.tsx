@@ -62,7 +62,7 @@ import type { RegionLabels } from '../labels.ts'
 import type { RegionTranslate } from '../locales.ts'
 import { PARENT_GROUP_ITEM, VIRTUAL_WORKSPACE_ITEM, VIRTUAL_WORKSPACE_PREFIX, parseParentGroupId } from '../menus.tsx'
 import { DEFAULT_PINNED_LIMIT, DEFAULT_PINNED_VISIBLE_COUNT, normalizeSnapshot } from '../remote.ts'
-import type { WorkspaceGroupsSnapshot } from '../remote.ts'
+import type { Group, WorkspaceGroupsSnapshot } from '../remote.ts'
 import { ALL_ENTRIES, sameAddress, virtualAddress, workspaceAddress } from '../../rootEntry.ts'
 import type { RootEntryAddress } from '../../rootEntry.ts'
 import { PINNED_SLOT_KEY } from '../data/pinned.ts'
@@ -75,6 +75,7 @@ import type { Expansion } from '../hooks/useExpansion.ts'
 import { SessionScopesProvider } from '../hooks/useSessionScopes.ts'
 import type { SessionScopes } from '../hooks/useSessionScopes.ts'
 import { sessionScopeKey } from '../data/collapse.ts'
+import type { SessionScopeRef } from '../data/collapse.ts'
 import { DndProvider } from '../hooks/useDnd.ts'
 import { LocalViewOptionsProvider } from '../hooks/useLocalViewOptions.ts'
 import type { LocalViewOptions } from '../hooks/useLocalViewOptions.ts'
@@ -219,6 +220,12 @@ interface ExpansionValue {
 
 /** 平铺列表不渲染时交出的空行集，恒定同一份引用，避免每次渲染换新数组 */
 const EMPTY_ROWS: readonly SessionRow[] = []
+
+/** 一个还没有会话的工作区：序列按 id 取行时缺格落到这一份，同样要恒定同一份引用 */
+const EMPTY_SESSION_ROWS: readonly SessionRow[] = []
+
+/** 一个还没有会话分组的工作区，理由同上 */
+const EMPTY_GROUPS: readonly Group[] = []
 
 /** 不做就地置顶时的空名次表，恒定同一份引用 */
 const NO_PINS: ReadonlyMap<string, number> = new Map()
@@ -1545,17 +1552,24 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     )
   }
 
-  const rowsByWorkspace = groupSessionsByWorkspace(
-    sessions,
-    workspaces,
-    archivedSessionIds,
-    statusSnapshot,
+  /**
+   * 一个工作区名下的会话行
+   *
+   * 缓存的是投影结果，行对象本身由 `toSessionRow` 按摘要缓存，这里省下的是遍历与分桶
+   * 身份还牵着下游：它经 `rowsOf` 进行序列的依赖列，每渲染新建一份会让序列每渲染重算一次
+   */
+  const rowsByWorkspace = useMemo(
+    () => groupSessionsByWorkspace(sessions, workspaces, archivedSessionIds, statusSnapshot),
+    [sessions, workspaces, archivedSessionIds, statusSnapshot],
   )
 
   // 不属于任何工作区的会话，只有存在时才渲染末尾的「未分组」区段
   // 聚焦时整段不出现（`focusedLayout` 只交出被聚焦的那一片），因此这里也不必为它留位
   // 就地置顶在下面按名次表处理，这里先取列表原序
-  const strayRows = straySessions(sessions, workspaces, archivedSessionIds, statusSnapshot)
+  const strayRows = useMemo(
+    () => straySessions(sessions, workspaces, archivedSessionIds, statusSnapshot),
+    [sessions, workspaces, archivedSessionIds, statusSnapshot],
+  )
   const searching = search.normalized !== ''
 
   /**
@@ -1564,13 +1578,13 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    * 平铺列表按聚焦范围过滤时要用它：只有归属能回答「这一行属于哪一片内容」
    * 索引一次建好，逐行去各工作区的名单里找会退化成与工作区数平方成正比
    */
-  const workspaceOfSession = ((): Map<string, string> => {
+  const workspaceOfSession = useMemo((): ReadonlyMap<string, string> => {
     const index = new Map<string, string>()
     for (const [workspaceId, rows] of rowsByWorkspace) {
       for (const row of rows) index.set(row.id, workspaceId)
     }
     return index
-  })()
+  }, [rowsByWorkspace])
 
   /**
    * 置顶区里的行
@@ -1686,7 +1700,10 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
    * 这一段的成员不属于任何工作区
    * 只把已置顶的行提到最前，其余维持会话列表原序
    */
-  const stray = frontPinnedRows(strayRows, pinRanksByScope)
+  const stray = useMemo(
+    () => frontPinnedRows(strayRows, pinRanksByScope),
+    [strayRows, pinRanksByScope],
+  )
 
   /**
    * 是否还能新增置顶
@@ -1764,6 +1781,31 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
         ).sort((a, b) => compareSessionRowsWithPins(pinRanksByScope, a, b))
 
   /**
+   * 会话行排序的比较器
+   *
+   * 身份要稳定：它既进序列的依赖列，又经 `scope` 下发给每个行组件的归组上下文
+   * 每渲染新建一份会让序列每渲染重算一次、整片列表的行级 memo 一起失效
+   */
+  const compareRows = useCallback(
+    (a: SessionRow, b: SessionRow) => compareSessionRowsWithPins(pinRanksByScope, a, b),
+    [pinRanksByScope],
+  )
+
+  const rowsOf = useCallback(
+    (workspaceId: string) => rowsByWorkspace.get(workspaceId) ?? EMPTY_SESSION_ROWS,
+    [rowsByWorkspace],
+  )
+  const groupsOf = useCallback(
+    (workspaceId: string) => snapshot.byWorkspace[workspaceId] ?? EMPTY_GROUPS,
+    [snapshot.byWorkspace],
+  )
+  // 展开态是这一层的内存记录：写入换一份新记录，读入口因此跟着它走
+  const isScopeExpanded = useCallback(
+    (ref: SessionScopeRef) => ui.sessionScopes[sessionScopeKey(ref)] === true,
+    [ui.sessionScopes],
+  )
+
+  /**
    * 整片区域的行序列
    *
    * 由这一层算一次，渲染与拖拽都读它：前者按行画，后者按行装配查询索引
@@ -1773,16 +1815,16 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     // 聚焦已由这一层裁过：序列与列表因此列的是同一批工作区，拖拽的落点范围也由它界定
     workspaceIds: layout.workspaceIds,
     virtualGroups: snapshot.workspaceGroups ?? [],
-    rowsOf: (workspaceId) => rowsByWorkspace.get(workspaceId) ?? [],
-    groupsOf: (workspaceId) => snapshot.byWorkspace[workspaceId] ?? [],
+    rowsOf,
+    groupsOf,
     nesting: layout.nesting,
     // 解析过的地址：记录比列表活得久，指向已消失对象时当作没有聚焦
     focused: layout.resolvedFocus?.address ?? ALL_ENTRIES,
-    isScopeExpanded: (ref) => ui.sessionScopes[sessionScopeKey(ref)] === true,
+    isScopeExpanded,
     alwaysVisibleSessionIds,
     now,
     stray,
-    compareRows: (a, b) => compareSessionRowsWithPins(pinRanksByScope, a, b),
+    compareRows,
   })
 
   /**
@@ -1844,7 +1886,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     home,
     session,
     // 三段共用同一个比较器：不置顶时名次为空表，比较结果与不置顶时相同
-    compareRows: (a, b) => compareSessionRowsWithPins(pinRanksByScope, a, b),
+    compareRows,
     alwaysVisibleSessionIds,
   }
 

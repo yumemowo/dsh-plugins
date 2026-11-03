@@ -40,6 +40,12 @@
 
 三个数字都在 `src/client/data/collapse.ts`（`COLLAPSED_SESSION_LIMIT_MAX` / `COLLAPSED_SESSION_LIMIT_MIN` / `RECENT_WINDOW_MS`），改数字要改代码、重新构建客户端产物。
 
+判据的基准时刻不像行尾相对时间那样逐次渲染现取：
+`recentClockAt` 先把它向下取整到整小时（`RECENT_CLOCK_STEP_MS`）再交给折叠。
+窗口是 3 天，一小时的粒度不影响它判对哪一条；
+而逐毫秒变化的时刻会让行序列的缓存每次重渲染都失效
+（见[渲染性能](render-performance.md#会跟着时钟变的那一格)）。
+
 ## 与置顶的配合
 
 置顶会话在「置顶区 + 分组内」显示方式下（视图选项里的 `置顶区 + 分组内`）**始终全部展示并占额度**：
