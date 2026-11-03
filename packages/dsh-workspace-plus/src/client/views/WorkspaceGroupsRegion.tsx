@@ -49,19 +49,7 @@ import {
   straySessions,
 } from '../data/sessions.ts'
 import { frontPinnedRows, pinRanks, pinnedEntries, reconcilePinned } from '../data/pinned.ts'
-import {
-  PINNED_KEY,
-  groupHeadKey,
-  looseKey,
-  sessionGroupRegionKey,
-  sessionGroupZoneKey,
-  virtualRegionKey,
-  virtualWorkspaceBodyKey,
-  virtualWorkspaceHeadKey,
-  workspaceBodyKey,
-  workspaceHeadKey,
-  workspaceRegionKey,
-} from '../data/dnd/protocol.ts'
+import { PINNED_KEY } from '../data/dnd/protocol.ts'
 import { useOutline } from '../hooks/useOutline.ts'
 import { stretchDragPlan } from '../data/dnd/plan.ts'
 import { debugWarn } from '../utils/debug.ts'
@@ -1795,18 +1783,6 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     now,
     stray,
     compareRows: (a, b) => compareSessionRowsWithPins(pinRanksByScope, a, b),
-    keys: {
-      workspaceHead: workspaceHeadKey,
-      workspaceBody: workspaceBodyKey,
-      workspaceRegion: workspaceRegionKey,
-      sessionGroupHead: groupHeadKey,
-      sessionGroupZone: sessionGroupZoneKey,
-      sessionGroupRegion: sessionGroupRegionKey,
-      virtualHead: virtualWorkspaceHeadKey,
-      virtualBody: virtualWorkspaceBodyKey,
-      virtualRegion: virtualRegionKey,
-      loose: looseKey,
-    },
   })
 
   /**

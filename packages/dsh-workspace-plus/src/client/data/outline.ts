@@ -59,10 +59,6 @@ export interface OutlineRow {
   workspaceId: string
   /** 缩进层级，与 `nest` 的 `levelOf` 同值 */
   depth: number
-  /** 这一行在 DOM 上占的那几格区域键 */
-  zoneKeys: readonly string[]
-  /** 落点单位标识，没有独立单位时为 undefined */
-  regionKey: string | undefined
   /** 会话行与溢出按钮服务的那一段，别的种类为 undefined */
   scope?: SessionScopeRef | undefined
   /** 会话行的会话 id，别的种类为 undefined */
@@ -140,19 +136,6 @@ export interface OutlineInput {
   stray: readonly SessionRow[]
   /** 会话行的排序比较器，与渲染用的是同一个 */
   compareRows: (a: SessionRow, b: SessionRow) => number
-  /** 区域键的写法，由调用方交出：这一层不拼键，只把键记在行上 */
-  keys: {
-    workspaceHead: (workspaceId: string) => string
-    workspaceBody: (workspaceId: string) => string
-    workspaceRegion: (workspaceId: string) => string
-    sessionGroupHead: (workspaceId: string, groupId: string) => string
-    sessionGroupZone: (workspaceId: string, groupId: string) => string
-    sessionGroupRegion: (workspaceId: string, groupId: string) => string
-    virtualHead: (groupId: string) => string
-    virtualBody: (groupId: string) => string
-    virtualRegion: (groupId: string) => string
-    loose: (workspaceId: string) => string
-  }
 }
 
 // ── 根节点这一层 ──
@@ -366,8 +349,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       container,
       workspaceId,
       depth,
-      zoneKeys: [input.keys.workspaceHead(workspaceId), input.keys.workspaceBody(workspaceId)],
-      regionKey: input.keys.workspaceRegion(workspaceId),
       total: split.loose.length,
     })
 
@@ -389,11 +370,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
         container: groupContainer,
         workspaceId,
         depth,
-        zoneKeys: [
-          input.keys.sessionGroupHead(workspaceId, group.id),
-          input.keys.sessionGroupZone(workspaceId, group.id),
-        ],
-        regionKey: input.keys.sessionGroupRegion(workspaceId, group.id),
         groupId: group.id,
         label: group.label,
         count: group.rows.length,
@@ -411,7 +387,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       container,
       workspaceId,
       depth,
-      input.keys.loose(workspaceId),
     )
 
     if (!hasBody) {
@@ -421,8 +396,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
         container,
         workspaceId,
         depth,
-        zoneKeys: [],
-        regionKey: undefined,
       })
     }
     owner = outer
@@ -441,7 +414,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
     container: ContainerNode,
     workspaceId: string,
     depth: number,
-    zoneKey?: string,
     presorted = false,
   ): void {
     const sorted = presorted ? [...all] : [...all].sort(input.compareRows)
@@ -455,8 +427,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
         container,
         workspaceId,
         depth,
-        zoneKeys: zoneKey === undefined ? [] : [zoneKey],
-        regionKey: undefined,
         scope,
         sessionId: row.id,
         row,
@@ -469,8 +439,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
         container,
         workspaceId,
         depth,
-        zoneKeys: [],
-        regionKey: undefined,
         scope,
         hiddenCount: collapsed.hiddenCount,
         scopeExpanded: expanded,
@@ -487,8 +455,6 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       container: containers.root,
       workspaceId: '',
       depth: 0,
-      zoneKeys: [input.keys.virtualHead(section.id), input.keys.virtualBody(section.id)],
-      regionKey: input.keys.virtualRegion(section.id),
       groupId: section.id,
       label: section.label,
       count: section.members.length,
@@ -511,12 +477,10 @@ export function buildOutline(input: OutlineInput): OutlineRow[] {
       container: containers.root,
       workspaceId: '',
       depth: 0,
-      zoneKeys: [],
-      regionKey: undefined,
       total: input.stray.length,
     })
     // 「未分组」桶的次序在容器那一层已经定好（置顶提前、其余维持列表原序），这里不再重排
-    addSessions({ kind: 'stray' }, input.stray, containers.root, '', 0, undefined, true)
+    addSessions({ kind: 'stray' }, input.stray, containers.root, '', 0, true)
     owner = undefined
   }
 

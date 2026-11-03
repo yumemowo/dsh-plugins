@@ -6,18 +6,6 @@ import { indexOutline } from '../../src/client/data/dnd/outlineIndex.ts'
 import type { OutlineIndex } from '../../src/client/data/dnd/outlineIndex.ts'
 import { ALL_ENTRIES } from '../../src/rootEntry.ts'
 import type { RootEntryAddress } from '../../src/rootEntry.ts'
-import {
-  groupHeadKey,
-  looseKey,
-  sessionGroupRegionKey,
-  sessionGroupZoneKey,
-  virtualRegionKey,
-  virtualWorkspaceBodyKey,
-  virtualWorkspaceHeadKey,
-  workspaceBodyKey,
-  workspaceHeadKey,
-  workspaceRegionKey,
-} from '../../src/client/data/dnd/protocol.ts'
 
 /**
  * 按生产那条链装配一份索引
@@ -102,17 +90,5 @@ export function outlineRowsFrom(input: OutlineFixture): OutlineRow[] {
     now: 0,
     stray: [],
     compareRows: () => 0,
-    keys: {
-      workspaceHead: workspaceHeadKey,
-      workspaceBody: workspaceBodyKey,
-      workspaceRegion: workspaceRegionKey,
-      sessionGroupHead: groupHeadKey,
-      sessionGroupZone: sessionGroupZoneKey,
-      sessionGroupRegion: sessionGroupRegionKey,
-      virtualHead: virtualWorkspaceHeadKey,
-      virtualBody: virtualWorkspaceBodyKey,
-      virtualRegion: virtualRegionKey,
-      loose: looseKey,
-    },
   })
 }

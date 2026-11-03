@@ -4,7 +4,6 @@ import type { OutlineRow } from '../src/client/data/outline.ts'
 import type { ContainerNode } from '../src/client/data/nest.ts'
 import { dropAreasOf } from '../src/client/data/dnd/relations.ts'
 import type { OutlineIndex } from '../src/client/data/dnd/outlineIndex.ts'
-import { zoneKeysOf } from '../src/client/data/dnd/zones.ts'
 import type { NodeRef } from '../src/client/data/dnd/zones.ts'
 import { indexFrom, outlineRowsFrom } from './support/outlineFixture.ts'
 import { virtualAddress, workspaceAddress } from '../src/rootEntry.ts'
@@ -284,28 +283,6 @@ describe('the index and the row sequence', () => {
     }
 
     expect(new Set(index.allNodes().map((node) => node.kind + '/' + node.id))).toEqual(fromRows)
-  })
-
-  it('gives a row the zones the key rules name for its node', () => {
-    // 行上写着这一行占哪几格，命中层按同一批键把元素换算回身份，键的形状由 zones.ts 一处决定
-    // 两处对不上时指针落上去读不出节点，表现为「拖到这一片上没反应」
-    // 因此这里逐行把「行上那几格」与「键规则给这个节点算出的那几格」比一遍
-    for (const row of outlineRowsFrom(rich)) {
-      const expected =
-        row.kind === 'workspaceHead'
-          ? zoneKeysOf(ws(row.workspaceId))
-          : row.kind === 'virtualHead'
-            ? zoneKeysOf(vg(row.groupId ?? ''))
-            : row.kind === 'groupHead'
-              ? zoneKeysOf({ kind: 'group', workspaceId: row.workspaceId, groupId: row.groupId ?? '' })
-              : undefined
-      // 会话行与空态不带区域键，它们的落点身份是行自己，由命中层按行 id 认
-      if (expected === undefined) {
-        expect(row.zoneKeys).toEqual([])
-        continue
-      }
-      expect(row.zoneKeys, 'row "' + row.key + '" carries its own zones').toEqual(expected)
-    }
   })
 
   it('puts a child workspace in the container the sequence gives it', () => {

@@ -68,18 +68,6 @@ function fixture(overrides: Partial<OutlineInput> = {}): OutlineInput {
     now: NOW,
     stray: [],
     compareRows: (a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id),
-    keys: {
-      workspaceHead: (id) => 'workspaceHead/' + id,
-      workspaceBody: (id) => 'workspaceBody/' + id,
-      workspaceRegion: (id) => 'workspaceRegion/' + id,
-      sessionGroupHead: (w, g) => 'groupHead/' + w + '/' + g,
-      sessionGroupZone: (w, g) => 'sessionGroup/' + w + '/' + g,
-      sessionGroupRegion: (w, g) => 'sessionGroupRegion/' + w + '/' + g,
-      virtualHead: (id) => 'virtualWorkspaceHead/' + id,
-      virtualBody: (id) => 'virtualWorkspaceBody/' + id,
-      virtualRegion: (id) => 'virtualRegion/' + id,
-      loose: (id) => 'loose/' + id,
-    },
     ...overrides,
   }
 }

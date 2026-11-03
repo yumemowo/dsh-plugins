@@ -5,7 +5,8 @@
  * 同一个区域键在两种关系里可以是不同的大小——工作区标题行承接「移出分组」时只是那一行
  * 与它谈先后时却是整块工作区，因此单位另起一套命名空间
  *
- * 这里只答「叫什么」，不答「有哪些」：谁占哪几格由行自己带着，见 `data/outline.ts` 的 `OutlineRow`
+ * 这里只答「叫什么」，不答「有哪些」：谁占哪几格由各片按节点身份取
+ * 见 `dnd/plan.ts` 与 `dnd/relations.ts` 里的落点构造
  */
 import type { ContainerNode } from '../nest.ts'
 import type { DropUnit } from './protocol.ts'
@@ -149,59 +150,28 @@ export function areaShapeOf(node: NodeRef | ContainerNode): AreaShape {
   return { zones: zoneKeysOf(node), region: regionKeyOf(node), row: rowIdOf(node) }
 }
 
+/** 体内那几种键头，与 `bodyKeyOf` 里除根节点之外的各支一一对应 */
+const BODY_ZONE_HEADS: ReadonlySet<string> = new Set([
+  'workspaceBody',
+  'virtualWorkspaceBody',
+  'sessionGroup',
+  'loose',
+])
+
 /**
  * 这一格是不是某个容器的体内
  *
  * 体内那一格是「装东西的地方」：分组的组体、工作区与虚拟分组的体内。它与标题格的意义不同
  * 标题格是一个成员自己的位置，而体内那一格意味着指针进到了它里面
  * 「这一片只在同一层接」那条判定要用这一条
+ *
+ * 体内还是标题的分野整落在键头里，键尾那几个 id 与这个判断无关
+ * 因此这里只切一次前缀，不把键还原成节点身份
  * @param key - 区域键
  */
 export function isBodyZone(key: string): boolean {
-  const shape = nodeOfZoneKey(key)
-  return shape !== undefined && !shape.head && shape.node.kind !== 'root'
-}
-
-/**
- * 一个区域键属于哪个节点，以及这一格是不是标题格
- *
- * 检测层拿到的从来只是 DOM 上的两个值：区域键与行 id
- * 要把它们换回「一片」，就得知道这个键指的是谁
- * 键的形状由本模块一处决定，因此这条换算也放在这里，别处不许再解析一遍
- * @param key - 区域键
- * @returns 那个节点，以及这个键是不是它的标题格，认不出时 undefined
- */
-export function nodeOfZoneKey(
-  key: string,
-): { node: NodeRef | ContainerNode; head: boolean } | undefined {
-  const [head, first, second, third] = key.split('/')
-  switch (head) {
-    case 'workspaceHead':
-      return first === undefined ? undefined : { node: { kind: 'workspace', id: first }, head: true }
-    case 'workspaceBody':
-      return first === undefined ? undefined : { node: { kind: 'workspace', id: first }, head: false }
-    case 'virtualWorkspaceHead':
-      return first === undefined ? undefined : { node: { kind: 'virtual', id: first }, head: true }
-    case 'virtualWorkspaceBody':
-      return first === undefined ? undefined : { node: { kind: 'virtual', id: first }, head: false }
-    case 'groupHead':
-      return first === undefined || second === undefined
-        ? undefined
-        : { node: { kind: 'group', workspaceId: first, groupId: second }, head: true }
-    case 'sessionGroup':
-      return first === undefined || second === undefined
-        ? undefined
-        : { node: { kind: 'group', workspaceId: first, groupId: second }, head: false }
-    case 'loose':
-      return first === undefined ? undefined : { node: { kind: 'workspace', id: first }, head: false }
-    case 'root':
-      return { node: { kind: 'root' }, head: false }
-    default:
-      // 置顶区与其它自制键：它们不是节点，由计划自己声明
-      void second
-      void third
-      return undefined
-  }
+  const at = key.indexOf('/')
+  return at > 0 && BODY_ZONE_HEADS.has(key.slice(0, at))
 }
 
 /**

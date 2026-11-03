@@ -274,18 +274,6 @@ function outlineRows(focused: RootEntryAddress = ALL_ENTRIES): OutlineRow[] {
       updatedAt: (SUMMARIES[id] as { updatedAt: number }).updatedAt,
     })),
     compareRows: compareSessionRows,
-    keys: {
-      workspaceHead: (id) => 'workspaceHead/' + id,
-      workspaceBody: (id) => 'workspaceBody/' + id,
-      workspaceRegion: (id) => 'workspaceRegion/' + id,
-      sessionGroupHead: (w, g) => 'groupHead/' + w + '/' + g,
-      sessionGroupZone: (w, g) => 'sessionGroup/' + w + '/' + g,
-      sessionGroupRegion: (w, g) => 'sessionGroupRegion/' + w + '/' + g,
-      virtualHead: (id) => 'virtualWorkspaceHead/' + id,
-      virtualBody: (id) => 'virtualWorkspaceBody/' + id,
-      virtualRegion: (id) => 'virtualRegion/' + id,
-      loose: (id) => 'loose/' + id,
-    },
   })
 }
 

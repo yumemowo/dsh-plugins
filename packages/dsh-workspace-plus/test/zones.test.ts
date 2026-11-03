@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   bodyKeyOf,
   headKeyOf,
+  isBodyZone,
   looseZoneKeyOf,
   regionKeyOf,
   zoneKeysOf,
@@ -57,5 +58,21 @@ describe('zone keys', () => {
       'sessionGroupBlock/ws-1/g1',
     )
     expect(regionKeyOf({ kind: 'root' })).toBeUndefined()
+  })
+
+  it('tells body zones apart from head zones by the key head', () => {
+    // 「只在同一层接」那条判定只问这一格是不是容器体内，标题格与整块那一格都不算
+    const group = { kind: 'group', workspaceId: 'ws-1', groupId: 'g1' } as const
+    expect(isBodyZone(bodyKeyOf(ws('ws-1')))).toBe(true)
+    expect(isBodyZone(bodyKeyOf(vg('vg-1')))).toBe(true)
+    expect(isBodyZone(bodyKeyOf(group))).toBe(true)
+    expect(isBodyZone(looseZoneKeyOf('ws-1'))).toBe(true)
+
+    expect(isBodyZone(headKeyOf(ws('ws-1')))).toBe(false)
+    expect(isBodyZone(headKeyOf(vg('vg-1')))).toBe(false)
+    expect(isBodyZone(headKeyOf(group))).toBe(false)
+    expect(isBodyZone(regionKeyOf(ws('ws-1')))).toBe(false)
+    // 根节点那一片是全部「移出分组」的兜底，它不是任何容器的体内
+    expect(isBodyZone(bodyKeyOf({ kind: 'root' }))).toBe(false)
   })
 })

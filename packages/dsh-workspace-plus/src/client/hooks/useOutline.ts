@@ -47,7 +47,6 @@ export function useOutline(source: OutlineInput): Outline {
       source.now,
       source.stray,
       source.compareRows,
-      source.keys,
     ],
   )
 }
