@@ -70,6 +70,16 @@ const sessionIdsCodec = codec('SessionIds', () => z.array(z.string()))
 /** 根节点条目地址：工作区 / 工作区分组 / 「全部」三类共用一套带 `kind` 标签的取值（见 `rootEntry.ts`） */
 const entryAddressCodec = codec('RootEntryAddress', () => entryAddressSchema)
 
+/** 一帧写入信号：哪个域的哪张表、哪个键、什么操作 */
+const snapshotChangeCodec = codec('SnapshotChange', () =>
+  z.object({
+    domain: z.string(),
+    table: z.string(),
+    key: z.string(),
+    operation: z.enum(['put', 'deleted']),
+  }),
+)
+
 const PACKAGE = '@yumemowo/dsh-workspace-plus'
 const SERVICE = 'workspacePlus'
 
@@ -112,6 +122,28 @@ function direct(
       codec: parameter.codec,
     })),
     result: snapshotCodec,
+  }
+}
+
+/**
+ * 构造一条 stream 调用的描述
+ *
+ * 与 {@link direct} 的区别只有三处：标了 `mode`、声明取消形参、结果是逐帧的那一格
+ * 取消形参固定叫 `signal`，网关按这个约定把它注入到业务形参之后
+ * @param method - 宿主服务上的异步生成器方法名
+ * @param result - 每一帧的 codec
+ */
+function stream(method: string, result: unknown) {
+  return {
+    id: `${PACKAGE}#${SERVICE}/${method}`,
+    service: SERVICE,
+    namespace: SERVICE,
+    method,
+    mode: 'stream' as const,
+    invocation: { kind: 'direct' as const },
+    parameters: [],
+    cancellation: { parameter: 'signal' as const },
+    result,
   }
 }
 
@@ -182,6 +214,7 @@ export const TYPERT = {
     ]),
     direct('focusEntry', [{ name: 'address', codec: entryAddressCodec }]),
     direct('togglePinned', [{ name: 'address', codec: entryAddressCodec }]),
+    stream('followSnapshotChanges', snapshotChangeCodec),
   ],
   model: {
     services: [
@@ -293,6 +326,11 @@ export const TYPERT = {
             name: 'togglePinned',
             signature: 'togglePinned(address: RootEntryAddress): Promise<WorkspaceGroupsSnapshot>',
           },
+          {
+            kind: 'method',
+            name: 'followSnapshotChanges',
+            signature: 'followSnapshotChanges(signal: AbortSignal): AsyncIterable<SnapshotChange>',
+          },
         ],
         types: [
           { name: 'Group', declaration: 'export interface Group { id: string; name: string; sessionIds: string[] }' },
@@ -320,6 +358,11 @@ export const TYPERT = {
             name: 'WorkspaceGroupsSnapshot',
             declaration:
               'export interface WorkspaceGroupsSnapshot { byWorkspace: Record<string, Group[]>; nesting: Record<string, WorkspaceNesting>; workspaceGroups: VirtualWorkspace[]; picker: PickerSnapshot; nested: boolean; orderSlots: Record<string, string[]>; pinnedVisibleCount: number; pinnedLimit: number }',
+          },
+          {
+            name: 'SnapshotChange',
+            declaration:
+              "export interface SnapshotChange { domain: string; table: string; key: string; operation: 'put' | 'deleted' }",
           },
         ],
       },

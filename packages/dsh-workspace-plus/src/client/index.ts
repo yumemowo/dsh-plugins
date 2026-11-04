@@ -151,6 +151,8 @@ export function apply(ctx: Context): void {
       let disposed = false
       /** `$mount` 的卸载函数，挂载完成前一直是 undefined */
       let unmount: (() => Promise<void>) | undefined
+      /** 分叉落位那条流的退订函数，挂载完成前一直是 undefined */
+      let stopChanges: (() => void) | undefined
       void ctx.remote
         .$mount(REMOTE_CONTRIBUTION as never)
         .then((dispose) => {
@@ -165,6 +167,8 @@ export function apply(ctx: Context): void {
           // 服务键按 descriptor 的 namespace 注册（remote.<namespace>），不是包名
           // typert 网关以 namespace 归组安装方法表
           groupsApi = ctx.get(`remote.${SERVICE}`) as typeof groupsApi
+          // 命名空间挂上之后才能订这条流：方法表不在时它没有可调的入口
+          stopChanges = followSnapshotChanges()
           // 订阅者保持在册：连接重置时还要再通知一次，清掉就等于丢掉了重试入口
           announceReady()
         })
@@ -176,6 +180,8 @@ export function apply(ctx: Context): void {
       return () => {
         disposed = true
         groupsApi = undefined
+        stopChanges?.()
+        stopChanges = undefined
         // 卸载是异步的，调用方不必等它，但必须发起
         void unmount?.()
       }
@@ -218,6 +224,47 @@ export function apply(ctx: Context): void {
   }
 
   const loadGroups = (): Promise<WorkspaceGroupsSnapshot> => callSnapshot('list')
+
+  /**
+   * 订阅分组快照的写入通知
+   *
+   * 写在宿主侧，界面本地的状态只能靠它知道「该重拉一次」
+   * 宿主那侧的信号取自存储域写盘确认之后的 `domain/changed`，因此收到帧时快照已经是新的
+   *
+   * 帧里带着写入涉及的表与键，但今天只当刷新触发器用，位置与时序都以下一次快照为准
+   * 断线与重连交给网关的 `$stream`，这里不自己重试
+   */
+  const followSnapshotChanges = (): (() => void) => {
+    const api = groupsApi as
+      | { followSnapshotChanges?: (signal: AbortSignal) => AsyncIterable<unknown> }
+      | undefined
+    const open = api?.followSnapshotChanges
+    if (open === undefined) return () => {}
+    // 被动连接的客户端没有 $stream（交互等级不足），此时不订阅，界面靠 connection/reset 重拉
+    const openStream = (ctx.remote as { $stream?: unknown }).$stream
+    if (typeof openStream !== 'function') return () => {}
+    const stream = ctx.remote.$stream<unknown>({
+      name: 'workspace-plus snapshot changes',
+      open: (signal) => open(signal),
+      ended: () => new Error('workspace-plus snapshot change stream ended'),
+    })
+    void (async () => {
+      try {
+        for await (const frame of stream) {
+          // 帧只说明「某一笔写入落盘了」，内容仍以下一次快照为准
+          void frame
+          announceReady()
+        }
+      } catch (reason: unknown) {
+        // 流断掉不是致命错误：网关会重开，而重拉本身另有 connection/reset 兜底
+        ctx.logger.warn('workspace-plus: snapshot change stream failed')
+        ctx.logger.warn(reason)
+      }
+    })()
+    return () => {
+      void stream.dispose()
+    }
+  }
 
   /**
    * 官方会话操作的复用面

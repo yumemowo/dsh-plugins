@@ -13,6 +13,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { Config } from './config.ts'
 import type { WorkspacePlusConfig } from './config.ts'
 import { createWorkspaceGroupsService } from './service.ts'
+import { createSnapshotFeed } from './snapshotFeed.ts'
 import type { WorkspaceGroupsService } from './service.ts'
 
 /** 插件名，用于 fiber 诊断与日志前缀 */
@@ -41,8 +42,10 @@ export type { WorkspaceGroupsService } from './service.ts'
  * @param config - 已按 {@link Config} 校验过的行配置
  */
 export function apply(ctx: Context, config: WorkspacePlusConfig = Config({})): void {
+  // 快照的写入信号通道：写入侧（域变更订阅）与读取侧（服务方法）共用同一个实例
+  const feed = createSnapshotFeed()
   // 域打开是异步的，而 apply 是同步的，先提供一个转发到打开结果的外观对象，这样服务在 Cordis 眼里立即可用，调用方无需感知打开时序
-  const service = createWorkspaceGroupsService(ctx, config)
+  const service = createWorkspaceGroupsService(ctx, config, feed)
 
   const facade: WorkspaceGroupsService = {
     list: async () => (await service).list(),
@@ -70,6 +73,8 @@ export function apply(ctx: Context, config: WorkspacePlusConfig = Config({})): v
     forgetWorkspace: async (workspaceId) => (await service).forgetWorkspace(workspaceId),
     focusEntry: async (address) => (await service).focusEntry(address),
     togglePinned: async (address) => (await service).togglePinned(address),
+    // 直接走 feed：它与服务内部用的是同一个实例，不必等域打开
+    followSnapshotChanges: (signal) => feed.follow(signal),
   }
 
   // typert-loader 按这份绑定把 facade 的方法挂到网关上

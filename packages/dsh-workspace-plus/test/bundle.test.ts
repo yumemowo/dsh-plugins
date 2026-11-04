@@ -226,6 +226,19 @@ describe('typert codec contract', () => {
     }
   })
 
+  it('marks only the snapshot feed as a stream and leaves the rest unary', async () => {
+    // mode 只有两态：写了就必须是 'stream'，否则 loader 直接拒绝整份清单
+    // 反过来把一元方法误标成 stream 时网关会走 stream carrier，调用方拿到的是打开失败而非结果
+    const mod = await import('../src/typert.ts')
+    const manifest = (mod as { default?: unknown }).default as {
+      invocations: { method: string; mode?: string }[]
+    }
+
+    const streams = manifest.invocations.filter((invocation) => invocation['mode'] !== undefined)
+    expect(streams.map((invocation) => invocation.method)).toEqual(['followSnapshotChanges'])
+    for (const invocation of streams) expect(invocation['mode']).toBe('stream')
+  })
+
   it('materializes each codec once and yields a usable zod schema', async () => {
     const mod = await import('../src/typert.ts')
     const manifest = (mod as { default?: unknown }).default as {

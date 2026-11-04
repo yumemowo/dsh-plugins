@@ -11,6 +11,7 @@ src/
 ├── rootEntry.ts                根节点条目地址的形状与纯变换（宿主与浏览器共用）
 ├── pickerState.ts              菜单状态的形状与纯变换（同上，见 [数据存储](data-storage.md)）
 ├── order.ts                    一段顺序的换位换算（挪到某成员之前 / 之后 / 末尾，拖拽与宿主写入共用）
+├── snapshotFeed.ts             分组快照的写入信号通道（宿主落盘后推帧，浏览器据此重拉）
 └── client/
     ├── index.ts                插件入口：语言包注册、remote 挂载、插槽注册、对照开关
     ├── locales.ts              命名空间声明与中英字典（键名取官方叫法）

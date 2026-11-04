@@ -16,6 +16,15 @@ function createFakeContext(initialGlobal?: unknown): {
   records: Map<string, { groups: Group[] }>
   /** 落盘的那份 global（未解析的原始形状），读取时按真实 schema 解析 */
   readStored: () => unknown
+  /**
+   * 触发一次域写盘通知，模拟真域在落盘之后发的那一条
+   * @param change - 表、键与写入形态
+   * @param domain - 写入所属的域，缺省是本包那个
+   */
+  notifyChange: (
+    change: { table: string; key: string; operation: 'put' | 'deleted' },
+    domain?: string,
+  ) => void
 } {
   const records = new Map<string, { groups: Group[] }>()
 
@@ -43,6 +52,8 @@ function createFakeContext(initialGlobal?: unknown): {
     },
   }
 
+  const changeListeners: ((change: unknown) => void)[] = []
+
   const ctx = {
     storageDomain: {
       open: async (spec: unknown) => {
@@ -51,13 +62,25 @@ function createFakeContext(initialGlobal?: unknown): {
       },
     },
     effect: (install: () => () => void) => install(),
+    // 服务订阅域的写盘通知并把它转成信号；替身记下监听器，用例可以按需触发
+    on: (event: string, listener: (change: never) => void) => {
+      if (event === 'domain/changed') changeListeners.push(listener as (change: unknown) => void)
+      return () => {}
+    },
     logger: {
       error: () => {},
       info: () => {},
     },
   } as unknown as Context
 
-  return { ctx, records, readStored: () => stored }
+  return {
+    ctx,
+    records,
+    readStored: () => stored,
+    notifyChange: (change, domain = 'workspace_plus') => {
+      for (const listener of [...changeListeners]) listener({ domain, ...change })
+    },
+  }
 }
 
 describe('workspace groups service', () => {
@@ -360,6 +383,42 @@ describe('workspace groups service', () => {
  * 这一段固化它的几条结构约束：一个工作区至多属于一个分组、删除只解散分组
  * 工作区删除后归属记录被清掉
  */
+describe('snapshot change feed', () => {
+  it('republishes a write of its own domain', async () => {
+    // 信号取自域的写盘通知，因此它覆盖全部写入方：另一个标签页、HTTP API、以及宿主自己的落位
+    const { ctx, notifyChange } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const abort = new AbortController()
+    const iterator = service.followSnapshotChanges(abort.signal)[Symbol.asyncIterator]()
+
+    const pending = iterator.next()
+    notifyChange({ table: 'by_workspace', key: 'w1', operation: 'put' })
+
+    expect(await pending).toEqual({
+      done: false,
+      value: { domain: 'workspace_plus', table: 'by_workspace', key: 'w1', operation: 'put' },
+    })
+    abort.abort()
+  })
+
+  it('ignores a write of another domain', async () => {
+    // 转发别人的写入会让界面白重拉一次，而它读到的内容与手上那份完全相同
+    const { ctx, notifyChange } = createFakeContext()
+    const service = await createWorkspaceGroupsService(ctx)
+    const abort = new AbortController()
+    const iterator = service.followSnapshotChanges(abort.signal)[Symbol.asyncIterator]()
+
+    const pending = Promise.race([
+      iterator.next(),
+      new Promise((resolve) => setTimeout(() => resolve('timeout'), 50)),
+    ])
+    notifyChange({ table: 'by_workspace', key: 'w1', operation: 'put' }, 'workspace')
+
+    expect(await pending).toBe('timeout')
+    abort.abort()
+  })
+})
+
 describe('root-level workspace groups', () => {
   it('reports no workspace groups before anything is written', async () => {
     const { ctx } = createFakeContext()

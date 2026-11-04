@@ -10,6 +10,8 @@ import type {
   WorkspaceNesting,
 } from './spec.ts'
 import { placeAt } from './order.ts'
+import { createSnapshotFeed } from './snapshotFeed.ts'
+import type { SnapshotChange, SnapshotFeed } from './snapshotFeed.ts'
 import { normalizePickerState, withFocus, withPinnedToggled, withoutEntry } from './pickerState.ts'
 import { virtualAddress, workspaceAddress } from './rootEntry.ts'
 import type { RootEntryAddress } from './rootEntry.ts'
@@ -126,6 +128,14 @@ export interface WorkspaceGroupsService {
    * 切换一个根节点条目的置顶
    */
   togglePinned(address: RootEntryAddress): Promise<WorkspaceGroupsSnapshot>
+  /**
+   * 订阅分组快照的写入通知
+   *
+   * 写在宿主侧，已打开的界面否则要等下一次重连才看得见新内容
+   * 不重放历史：订阅之前界面已经自己拉过一次快照
+   * @param signal - 调用方的取消信号，中止后迭代结束
+   */
+  followSnapshotChanges(signal: AbortSignal): AsyncIterable<SnapshotChange>
 }
 
 /** 生成一个会话分组 id，同工作区内唯一即可，无需全局唯一 */
@@ -191,6 +201,7 @@ function sameOrder(a: readonly string[], b: readonly string[]): boolean {
 export async function createWorkspaceGroupsService(
   ctx: Context,
   pinnedConfig?: WorkspacePlusConfig | undefined,
+  feed: SnapshotFeed = createSnapshotFeed(),
 ): Promise<WorkspaceGroupsService> {
   // 宿主侧日志出口。停用中：这些日志经 `ctx.logger` 打出后没有出口能看见
   // 要让它们出现得由本插件自己注册一个 exporter。恢复时连同下面各处调用一起放开
@@ -204,6 +215,20 @@ export async function createWorkspaceGroupsService(
 
   const domain = await ctx.storageDomain.open(workspaceGroupsSpec)
   ctx.effect(() => () => domain.close(), 'workspace-plus: domain close')
+  // 每次落盘之后推一帧：存储域的 domain/changed 只在写盘确认之后发，订阅方重拉必定读到新内容
+  ctx.effect(
+    () =>
+      ctx.on('domain/changed', (change) => {
+        if (change.domain !== workspaceGroupsSpec.name) return
+        feed.publish({
+          domain: change.domain,
+          table: change.table,
+          key: change.key,
+          operation: change.operation,
+        })
+      }),
+    'workspace-plus: snapshot feed',
+  )
   const table = domain.table('by_workspace')
   const tree = domain.global
 
@@ -615,6 +640,10 @@ export async function createWorkspaceGroupsService(
 
     async togglePinned(address) {
       return savePicker(withPinnedToggled(normalizePickerState(tree.get().picker), address))
+    },
+
+    followSnapshotChanges(signal) {
+      return feed.follow(signal)
     },
   }
 }

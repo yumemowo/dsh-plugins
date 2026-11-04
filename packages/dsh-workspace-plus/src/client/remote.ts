@@ -91,6 +91,28 @@ const strList = (name: string) => codec(name, () => z.array(z.string()))
  */
 const optionalId = (name: string) => codec(name, () => z.union([z.undefined(), z.string()]))
 
+/**
+ * 构造一条 stream 调用描述
+ *
+ * 与 {@link descriptor} 的区别只有三处：标了 `mode`、声明取消形参、结果是逐帧的那一格
+ * 取消形参固定叫 `signal`，网关按这个约定把它注入到业务形参之后
+ * @param method - 宿主侧那个异步生成器方法名
+ * @param result - 每一帧的 codec
+ */
+function streamDescriptor(method: string, result: unknown): Record<string, unknown> {
+  return {
+    id: `${PACKAGE}#${SERVICE}/${method}`,
+    service: SERVICE,
+    namespace: SERVICE,
+    method,
+    mode: 'stream',
+    invocation: { kind: 'direct' },
+    parameters: [],
+    cancellation: { parameter: 'signal' },
+    result,
+  }
+}
+
 /** 构造一条 direct 调用描述，避免逐条重复 id/service/namespace */
 function descriptor(
   method: string,
@@ -178,6 +200,17 @@ export const REMOTE_CONTRIBUTION = {
     descriptor('togglePinned', [
       { name: 'address', codec: codec('RootEntryAddress', () => entryAddressSchema) },
     ]),
+    streamDescriptor(
+      'followSnapshotChanges',
+      codec('SnapshotChange', () =>
+        z.object({
+          domain: z.string(),
+          table: z.string(),
+          key: z.string(),
+          operation: z.enum(['put', 'deleted']),
+        }),
+      ),
+    ),
   ],
 }
 
