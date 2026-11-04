@@ -84,7 +84,7 @@ node scripts/probes/pin-hover.mjs
 
 | 约束 | 说明 |
 | --- | --- |
-| 用例名用小写、以第三人称动词开头的行为描述串 | `it('nests a child workspace inside its parent')`。本包 1108 条一律这个形态（全仓含 `dsh-hello` 的 8 条共 1116 条）：小写起首、`keeps` / `reports` / `leaves` 这类动词打头、不用 `should`。写新用例时照同一形态，不要换成 `Should_...` 之类 |
+| 用例名用小写、以第三人称动词开头的行为描述串 | `it('nests a child workspace inside its parent')`。本包 1116 条一律这个形态（全仓含 `dsh-hello` 的 8 条共 1124 条）：小写起首、`keeps` / `reports` / `leaves` 这类动词打头、不用 `should`。写新用例时照同一形态，不要换成 `Should_...` 之类 |
 | 断言 DOM 结构、样式选择器、交互路径的用例用真 `react-dom` | 文件头加 `// @vitest-environment jsdom`，照 `test/nestingDom.test.tsx` 的驱动方式 |
 | 单测 import 的是基线替身，有盲区 | 替身看不到真包导出表；那条链由 `test/bundle.test.ts` 补（按宿主的方式装载产物） |
 | 测试里 CSS 类名不哈希 | `vitest.config.ts` 的 `classNameStrategy: 'non-scoped'`，断言的是「哪个元素带哪条规则」 |
@@ -97,6 +97,7 @@ node scripts/probes/pin-hover.mjs
 | 不为「能抽」而抽 | 没有第二个消费方、又独占一份 interface 时，别只为分层好看去建间接层 |
 | 类型在生产侧可拆、在消费处收窄 | 判断「类型过大」看消费方实际用到的字段占比，不是「只多出一两个字段」就算合理 |
 | 文件行数不是问题，阅读成本才是 | 用 `// ── … ──` 分节标记把它压下去 |
+| 组件里的条件返回必须落在全部 hook 之后 | 两种形态调用的 hook 数量不同，切换那一刻抛「Rendered fewer hooks than expected」，插槽把这条注册判成崩溃并从渲染者里摘掉，界面换回官方组件、功能整片消失且不会自己回来。本包的宽栏与窄栏两支踩过这一条，见 `test/sidebarCollapseDom.test.tsx` |
 | 注释只写这段代码做了什么 | 不写设计决策的来龙去脉，不引用文档章节号或原文；命名已能表达语义的不写 |
 | 不用「父」「子」这类单字简写 | 写全「父工作区」「子工作区」。单字在无前置声明时让人卡壳，且 `父` 在本包还要区分「父工作区 / 父级元素 / 父插槽 / 父会话」，光看单字不知指哪个。沟通时省字造成的，不该留在注释里 |
 | 术语按**所属层面**选词，不混用 | 推导层说「容器 / 那一段 / 落在」，显示层才说「渲染 / 列表」。「渲染」只用于描述界面产出，不用来修饰纯数据推导 |

@@ -1603,20 +1603,6 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   // 文案表与翻译函数合成一个稳定的 value：行级 memo 按引用比对 props，每次渲染新建会让每一行都判定为变过
   const locale: RegionLocale = useMemo(() => ({ t, labels }), [t, labels])
 
-  // 窄栏，官方在这里也只留搜索与「添加工作区」两个入口（外加 shell 的展开入口）
-  if (!wide) {
-    return (
-      <RegionLocaleProvider value={locale}>
-        <RegionRailHeader
-          addWorkspace={addWorkspace}
-          search={search}
-          newVirtualWorkspace={{ onCreate: nestActions.startVirtualWorkspaceCreate }}
-        />
-        <WorkspaceRail label={labels.title} onExpand={expandSidebar} />
-      </RegionLocaleProvider>
-    )
-  }
-
   /**
    * 一个工作区名下的会话行
    *
@@ -2000,6 +1986,20 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
 
   // 同上：提交入口的字段名与这两个动作袋逐格同名
   const dialogActions: RegionDialogActions = { ...groupActions, ...nestActions, commitFocusNew }
+
+  // 窄栏，官方在这里也只留搜索与「添加工作区」两个入口（外加 shell 的展开入口）
+  if (!wide) {
+    return (
+      <RegionLocaleProvider value={locale}>
+        <RegionRailHeader
+          addWorkspace={addWorkspace}
+          search={search}
+          newVirtualWorkspace={{ onCreate: nestActions.startVirtualWorkspaceCreate }}
+        />
+        <WorkspaceRail label={labels.title} onExpand={expandSidebar} />
+      </RegionLocaleProvider>
+    )
+  }
 
   return (
     <RegionLocaleProvider value={locale}>
