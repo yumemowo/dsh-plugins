@@ -39,6 +39,7 @@ import { officialAddLabels, officialSessionLabels, timeLabel } from './official.
 import type { RegionActions, AddWorkspaceActions, OfficialSessionActions } from './actions.ts'
 import { directoryFlowOccupant, directoryFlowSource } from './directoryFlow.ts'
 import { hostInfoSource } from './hostInfo.ts'
+import { createCopyNotice } from './copyNotice.ts'
 import { WorkspaceGroupsRegion } from './views/WorkspaceGroupsRegion.tsx'
 import { createViewModeStore, sharedViewModeStore } from './store/viewMode.ts'
 
@@ -194,6 +195,14 @@ export function apply(ctx: Context): void {
   const tWorkspace = locale.bind('workspace')
   // 容器行右键菜单里的「新建会话」取官方 sidebar 新建按钮的动词短语，那个键在 `sidebar` 命名空间，绑定语义同上
   const tSidebar = locale.bind('sidebar')
+
+  /**
+   * 复制标识的通知源
+   *
+   * 三处复制共用它，因此同一时刻至多只有一条提示
+   * 失败文案在这里现取：绑定的翻译函数在调用时才读当前语言，切换语言后失败提示跟着变
+   */
+  const copyNotice = createCopyNotice(() => tWorkspace('toast.sessionIdCopyFailed'))
 
   const requireApi = (): Record<string, (...args: never[]) => Promise<never>> => {
     if (groupsApi === undefined) throw new Error('workspace-plus remote is not ready')
@@ -394,6 +403,7 @@ export function apply(ctx: Context): void {
         insertWorkspaceBefore: async () => {},
         renameWorkspace: async () => {},
         deleteWorkspace: async () => {},
+        copyNotice,
         // 会话控制器缺失时退回线上契约里那个固定值（见 RegionActions）
         searchResultLimit: 20,
         tWorkspace,
@@ -475,6 +485,8 @@ export function apply(ctx: Context): void {
       renameWorkspace: (workspaceId, title) =>
         workspaces.rename(workspaceId as never, title).then(() => undefined),
       deleteWorkspace: (workspaceId) => workspaces.delete(workspaceId as never),
+      // 复制只是一次剪贴板写入：它不读写任何界面状态，通知由订阅这份源的那一处渲染
+      copyNotice,
       // 结果条数上限直接读官方控制器上的那一格，不自己定一个数，它就是线上响应契约里的上限，官方改它时本包自动跟随
       searchResultLimit: sessions.searchResultLimit,
       tWorkspace,
@@ -499,7 +511,7 @@ export function apply(ctx: Context): void {
   // 本区域改挂进 DSH 原生右侧栏的一个 tab，好和官方渲染同屏比对
   if (COMPARE_MODE) {
     ctx.effect(
-      () => registerCompareTab(ctx, injected(), locale, viewModeStore),
+      () => registerCompareTab(ctx, injected(), locale, viewModeStore, copyNotice),
       'workspace-plus: compare tab',
     )
     return

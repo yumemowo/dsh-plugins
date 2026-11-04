@@ -20,13 +20,14 @@ src/
     ├── official.ts             官方 workspace 语言包与相对时间的复用面
     ├── directoryFlow.ts        官方 directoryFlow 洞的占用者读数（添加工作区的交互来源）
     ├── hostInfo.ts             宿主固定事实（home 目录）的读数（悬停卡片的路径缩写要用）
+    ├── copyNotice.ts           复制结果的通知源（React 之外的一份快照存储，见 [交互细节](ui-details.md)）
     ├── useFlipMarker.ts        量区域矩形、按需在 body 上挂浮层翻转标记
     ├── actions.ts              RegionActions / RegionDataHooks（组件与宿主的接口）
     ├── compare.tsx             对照模式：挂进原生右侧栏 tab
     ├── remote.ts               Remote 贡献声明与调用封装
     ├── runtime.ts              primitives 值导入的唯一出口（external）
     ├── icons.tsx               自绘图标（官方没有的字形；规范见 [自绘图标](custom-icons.md)）
-    ├── menus.tsx               菜单条目构造（工作区 / 分组 / 工作区分组行内菜单、右键菜单补全）
+    ├── menus.tsx               菜单条目构造（会话 / 工作区 / 分组 / 工作区分组行内菜单、右键菜单补全）
     ├── menus.module.css        菜单条目样式（文字 + 行尾箭头）
     ├── css-modules.d.ts        `.module.css` 的类名声明（由 scripts/gen-css-types.mjs 生成）
     ├── data/                   推导：快照与设置 → 布局 / 落点 / 写入名单，无 React、无 DOM
@@ -96,6 +97,7 @@ src/
     └── components/                 无状态、无特定业务状态的 tsx
         ├── ExpandableBody.tsx     撑开体（撑开/收回/行逐个淡入）
         ├── HoverCards.tsx          悬停卡片的正文（工作区那张与会话那张）
+        ├── CopyToast.tsx           复制结果的提示（订阅 copyNotice 源的唯一一处）
         ├── HoverCards.module.css   悬停卡片正文样式
         ├── rows.module.css         行结构共享样式（工作区/分组/会话/菜单条目行共用的一套）
         ├── RowContextMenu.tsx      行右键菜单（指针定位、与 `...` 菜单共用条目与分派）
@@ -114,6 +116,8 @@ src/
 状态的归属只有一处：搜索状态（查询 / 展开 / 聚焦时机 / 揭示标记）与两张面板的开合都收在同文件内的 `useRegionUiState`，由主组件持有并把状态与读写入口向下传。折叠态（工作区 / 会话分组 / 工作区分组三份）不逐层传：它是浏览器本地 store 里的值，由容器合成一次后放进 `useExpansion.ts` 的 provider，用到的地方自己 `useExpansion()` 取——与 `useLocalViewOptions.ts` 同一套做法。八个互斥浮层（三个草稿框、五个确认框）收在一个 `RegionOverlay` 可辨识联合里，因此「任意时刻至多开一个」由类型保证，而不是靠 `Modal` 挡住第二个入口。菜单开合留在持有行组件内（行内 `...` 菜单与右键菜单各一份，都由 `useRowContextMenu` 与行自己的 `useState` 持有）：行外壳不认识菜单，菜单展开期间那一档由锚点按钮自己的 `aria-expanded` 驱动样式，不必再往行上挂开合标记。搜索状态之所以不留在 header 内部：窄栏入口要触发宽栏输入框的聚焦，这一跨形态的联动需要一个共同宿主；选择器的开合同理——面板要读菜单的三个分区，而那些分区由区域组件从快照算出来。
 
 文案不下传：容器把本包翻译函数与投影后的文案表合成一个 `RegionLocale` 交给 `useLocale.ts` 的 `RegionLocaleProvider`，需要文案的组件用 `useLocale()` 自取，因此组件接口里没有 `t` / `labels` 这两格。浏览器内持久化状态收在 `store/`——插槽的 `store` 座位只接受一个 `StoreDecl`，而 `persist` 整份序列化状态，后续新增的本地状态要并进同一个状态对象（展示方式、指示器样式与三层折叠态现在共用它）。**这类状态一律不逐层传 props，统一经 provider + 具名 hook 取**：`useLocalViewOptions.ts` 装展示方式与指示器样式，`useExpansion.ts` 装三层折叠态。store 之外的状态仍按各渲染区实际消费的形状下发。
+
+复制那一格走另一条路（`copyNotice.ts`）：整份源随 inject 面下传，行只从它上面取 `copy`；需要共享的只有「刚才那次复制成没成」这一条事实，它落在 React 之外，全区域只有 `views/components/CopyToast.tsx` 一处订阅它。因此三处复制不会各自吐出一条提示，而复制这条路径本身不经过任何 hook。
 
 `WorkspaceGroupsRegion.tsx` 按「本文件的形状 / 数据源 / 快照 / 派生布局 / 交互状态 / 展开编排 / 命令 / 容器」分段，段间有 `// ── … ──` 分节标记。这些 hook 与容器同处一个文件，因为它们的消费方只有容器一处：`useRegionSources` 读全局数据源，`useSnapshotFeed` 管快照的加载与改动，`useRegionLayout` 把快照切成渲染布局，`useRegionUiState` 持有除折叠态外的全部交互状态，`useExpansionValue` 把 store 座位的三份折叠记录与层级推导演成读 / 取反 / 写入口（并摘掉失效键），与 `useLocalViewOptionsValue` 同构，两者各归「交互状态」那一段，命令再按对象分成 `useSearchResults`、`useWorkspaceAdoption`、`useRegionGroupActions`、`useRegionNestActions`、`useRegionPickerActions` 五个——搜索结果页与新增工作区的输入几乎不重叠，因此各成一个。命令之前另有「展开编排」一段，只放 `revealNewWorkspace`：它把「新工作区与它整条父链都要展开」这一串写入收成一处，服务的是聚焦切换而不是某一条命令。渲染按区域拆成 `RegionHeaderArea` / `RegionListArea` / `RegionDialogs` 三个模块，主组件只做装配与宽窄形态分派。Provider 的 value 由容器 `useMemo` 合成一次、宽窄两个渲染分支共用；不过只有真的被 `memo` 行组件消费的那几份才从中获益，哪些承重、哪些只是留余地见 [渲染性能与行级缓存](render-performance.md)。
 

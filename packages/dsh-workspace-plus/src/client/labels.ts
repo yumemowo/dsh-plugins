@@ -106,6 +106,10 @@ export interface RegionLabels {
   newVirtualWorkspaceMenu: string
   /** 工作区已归组时，「移动到…」下方那一项「移出工作区分组」的文案 */
   ungroupWorkspace: string
+  /** 工作区分组菜单里的「复制分组 ID」项 */
+  copyVirtualWorkspaceId: string
+  /** 复制工作区分组 id 成功后的提示 */
+  virtualWorkspaceIdCopied: string
   /** 工作区分组行「更多操作」按钮的无障碍标签，分组名由调用方传入 */
   virtualWorkspaceActions: (name: string) => string
   /** 重命名工作区分组对话框的标题 */
@@ -128,6 +132,10 @@ export interface RegionLabels {
   moveToGroup: string
   /** 「取消分组」一级菜单项文案 */
   ungroup: string
+  /** 会话分组菜单里的「复制分组 ID」项 */
+  copyGroupId: string
+  /** 复制会话分组 id 成功后的提示 */
+  groupIdCopied: string
   /** 会话状态位的无障碍文案 */
   status: SessionStatusLabels
   /** 工作区与会话行的悬停详情卡片文案 */
@@ -136,6 +144,12 @@ export interface RegionLabels {
   add: OfficialAddLabels
   /** 搜索入口、输入框与结果列表的文案 */
   search: OfficialSearchLabels
+  /**
+   * 写剪贴板失败时的提示
+   *
+   * 取官方 `toast.sessionIdCopyFailed`：它不点名对象，三处复制共用同一句
+   */
+  copyFailed: string
   /** 对照 tab 在原生右侧栏引导页里的一行说明 */
   compareTabDescription: string
   /** 工作区内没有任何会话时的占位文案 */
@@ -350,6 +364,8 @@ export function regionLabels(
     newVirtualWorkspace: t('newVirtualWorkspace'),
     newVirtualWorkspaceMenu: t('menu.newVirtualWorkspace'),
     ungroupWorkspace: t('ungroupWorkspace'),
+    copyVirtualWorkspaceId: t('copyVirtualWorkspaceId'),
+    virtualWorkspaceIdCopied: t('virtualWorkspaceIdCopied'),
     virtualWorkspaceActions: (name: string) => t('actions.virtualWorkspace.aria', { name }),
     renameVirtualWorkspace: t('renameVirtualWorkspace'),
     deleteVirtualWorkspace: t('deleteVirtualWorkspace'),
@@ -360,6 +376,8 @@ export function regionLabels(
     sessionActions: (name: string) => tw('actions.session.aria', { name }),
     moveToGroup: t('moveToGroup'),
     ungroup: t('ungroup'),
+    copyGroupId: t('copyGroupId'),
+    groupIdCopied: t('groupIdCopied'),
     status: {
       running: tw('status.running'),
       // 官方对单复数各有一条文案，中文两份相同，这里按 n 选键保持同一契约
@@ -377,6 +395,7 @@ export function regionLabels(
     compareTabDescription: t('compareTabDescription'),
     add: officialAddLabels(tw),
     search: officialSearchLabels(tw),
+    copyFailed: tw('toast.sessionIdCopyFailed'),
     empty: tw('empty.none'),
     // 官方在工作区列表上就是用这个键给会话那一段当标题的，本包不另造一份
     sessions: tw('section.sessions'),

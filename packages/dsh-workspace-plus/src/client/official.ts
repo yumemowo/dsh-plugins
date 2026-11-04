@@ -1,7 +1,7 @@
 /**
  * 官方 `workspace` 命名空间的复用面
  *
- * 会话的「重命名 / 分叉 / 归档」与行尾相对时间都取官方 `ui-workspace` 的既有实现
+ * 会话的「重命名 / 分叉 / 归档 / 复制 Session ID」与行尾相对时间都取官方 `ui-workspace` 的既有实现
  * 文案绑它的 `workspace` 语言包（`TranslateNS<'workspace'>` 还含 `common` 回退键）
  * 因此 `close` / `cancel` 这类通用词同样可解析
  * 动作调它的 `ctx.uiWorkspace` 服务与 `ctx.sessions` 绑定
@@ -21,7 +21,7 @@ export type WorkspaceTranslate = TranslateNS<'workspace'>
  */
 export type SidebarTranslate = TranslateNS<'sidebar'>
 
-/** 官方那四项会话操作与相关对话框的文案 */
+/** 官方那几项会话操作与相关对话框的文案 */
 export interface OfficialSessionLabels {
   /** 菜单里的「置顶会话」项，未置顶的行用它 */
   pin: string
@@ -37,6 +37,14 @@ export interface OfficialSessionLabels {
   fork: string
   /** 菜单里的「归档会话」项 */
   archive: string
+  /**
+   * 菜单里的「复制 Session ID」项
+   *
+   * 官方把它排在归档之后，本包照同一次序
+   */
+  copySessionId: string
+  /** 复制成功的提示，官方把它渲染成一条成功色的 toast */
+  sessionIdCopied: string
 }
 
 /** 官方 section header 与「添加工作区」流程的文案 */
@@ -143,6 +151,8 @@ export function officialSessionLabels(t: WorkspaceTranslate): OfficialSessionLab
     sessionNamePrompt: t('field.sessionName'),
     fork: t('menu.fork'),
     archive: t('menu.archiveSession'),
+    copySessionId: t('menu.sessionId'),
+    sessionIdCopied: t('toast.sessionIdCopied'),
   }
 }
 

@@ -13,6 +13,7 @@ import type { RootEntryAddress } from '../rootEntry.ts'
 import type { HostInfo } from './hostInfo.ts'
 import type { GroupChoice } from './data/types.ts'
 import type { OfficialAddLabels, OfficialSessionLabels, SidebarTranslate, WorkspaceTranslate } from './official.ts'
+import type { CopyNoticeHandle } from './copyNotice.ts'
 
 /** 工作区状态快照里区域用到的部分 */
 export interface WorkspaceState {
@@ -235,6 +236,13 @@ export interface RegionActions {
    * @param beforeWorkspaceId - 锚点工作区，undefined 表示挪到注册表末尾
    */
   insertWorkspaceBefore: (workspaceId: string, beforeWorkspaceId: string | undefined) => Promise<void>
+  /**
+   * 复制结果的通知源
+   *
+   * 复制动作与那条提示都从它上面取：行调它的 `copy`，提示那一处直接订阅它并在消失时调 `dismiss`
+   * 全区域只此一份，因此同一时刻至多只有一条提示
+   */
+  copyNotice: CopyNoticeHandle
   /** 重命名工作区 */
   renameWorkspace: (workspaceId: string, title: string) => Promise<void>
   /** 删除工作区注册，文件夹与会话记录保留 */

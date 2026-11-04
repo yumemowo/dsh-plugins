@@ -630,6 +630,7 @@ describe('menu on a pinned row', () => {
       'rename',
       'fork',
       'archive',
+      'copy-id',
     ])
     await act(async () => root.unmount())
   })
@@ -697,7 +698,7 @@ describe('menu on a pinned row', () => {
     })
 
     // 右键是行尾操作位的捷径，同一批条目因此在右键下也拿得到
-    expect(itemIds(row)).toEqual(['pin', 'rename', 'fork', 'archive'])
+    expect(itemIds(row)).toEqual(['pin', 'rename', 'fork', 'archive', 'copy-id'])
     await act(async () => root.unmount())
   })
 

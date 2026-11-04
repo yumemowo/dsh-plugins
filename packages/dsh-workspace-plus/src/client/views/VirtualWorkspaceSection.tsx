@@ -22,6 +22,8 @@ import { RowActions } from './RowActions.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { RowHeadShell } from './components/RowHeadShell.tsx'
 import { useLocale } from '../hooks/useLocale.ts'
+import type { CopyNoticeHandle } from '../copyNotice.ts'
+
 import { useOrderRow } from '../hooks/useDnd.ts'
 import { regionProps, virtualRegionKey, virtualWorkspaceHeadKey } from '../data/dnd/protocol.ts'
 import type { OrderDragging } from '../data/dnd/protocol.ts'
@@ -38,6 +40,8 @@ export interface VirtualWorkspaceSectionProps {
   onToggle: () => void
   onRename: () => void
   onDelete: () => void
+  /** 把分组 id 写进剪贴板 */
+  copyId: CopyNoticeHandle['copy']
   /**
    * 根节点工作区分组的排序接线
    *
@@ -64,6 +68,7 @@ export function VirtualWorkspaceSection({
   onToggle,
   onRename,
   onDelete,
+  copyId,
   orderDragging,
   bodyZone,
   children,
@@ -94,12 +99,14 @@ export function VirtualWorkspaceSection({
   const select = (id: string): void => {
     setMenuOpen(false)
     if (id === VIRTUAL_WORKSPACE_MENU.rename) onRename()
+    else if (id === VIRTUAL_WORKSPACE_MENU.copyId) copyId(groupId, labels.virtualWorkspaceIdCopied)
     else if (id === VIRTUAL_WORKSPACE_MENU.delete) onDelete()
   }
 
   const menuItems = buildVirtualWorkspaceMenuItems({
     // 菜单项用通用动词，只有对话框标题才点明对象（见 RegionDialogs）
     renameLabel: labels.rename,
+    copyIdLabel: labels.copyVirtualWorkspaceId,
     deleteLabel: labels.deleteVirtualWorkspace,
   })
 

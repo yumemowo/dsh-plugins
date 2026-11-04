@@ -4,7 +4,7 @@
  * 行本身就是 `SessionRowView`，本组件补的是「这一行能做什么」：
  *   - 行尾 `...` 菜单与行右键菜单，两者共用同一批条目与同一段分派，因此同一个 id 在两个入口下落到同一件事
  *   - 悬停卡片，整卡可点即复制标题
- * 菜单内容分两段：官方操作块（置顶 / 重命名 / 分叉 / 归档，转调官方控制器与官方服务）与一条分隔线之后的归组项
+ * 菜单内容分两段：官方操作块（置顶 / 重命名 / 分叉 / 归档 / 复制 Session ID，转调官方控制器与官方服务）与一条分隔线之后的归组项
  * 归组项只在有分组上下文的行上出现——「未分组」桶里的会话不属于任何工作区，没有分组可落，因此那些行只保留官方操作块
  * 宿主未提供官方服务时官方操作块整体隐藏，同样不留点不动的入口
  *
@@ -19,9 +19,8 @@
 import { memo, useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
 import { HoverCard, IconEllipsisOutlineRegular, Menu } from '../runtime.ts'
-import { buildSessionMenuItems } from '../menus.tsx'
+import { SESSION_COPY_ID, buildSessionMenuItems, sameMenuGroups } from '../menus.tsx'
 import type { SessionPinMenuInput } from '../menus.tsx'
-import { sameMenuGroups } from '../menus.tsx'
 import { sameSessionStatus, sameSessionStatuses } from '../data/status.ts'
 import { SessionRowView } from './SessionRowView.tsx'
 import type { SessionRowViewProps } from './SessionRowView.tsx'
@@ -33,6 +32,7 @@ import { useDnd, useRowDragging } from '../hooks/useDnd.ts'
 import type { DragStartEvent } from '../hooks/useDnd.ts'
 import { rowIdProps } from '../data/dnd/protocol.ts'
 import type { DragPlan } from '../data/dnd/protocol.ts'
+import type { CopyNoticeHandle } from '../copyNotice.ts'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { SessionStatus } from '../data/status.ts'
 import type { MenuGroup } from '../menus.tsx'
@@ -108,6 +108,8 @@ export interface SessionRowItemProps extends Omit<SessionRowViewProps, ComputedH
   dragPlan?: ((sessionId: string) => DragPlan) | undefined
   /** 官方会话操作，缺省时菜单里没有官方操作块 */
   official?: OfficialSessionActions | undefined
+  /** 把一个标识写进剪贴板 */
+  copyId: CopyNoticeHandle['copy']
   /** 悬停卡片，缺省表示这一行不挂卡片 */
   card?: SessionRowCardInput | undefined
 }
@@ -184,6 +186,7 @@ function sameRowItemProps(prev: SessionRowItemProps, next: SessionRowItemProps):
     prev.onOpenSession === next.onOpenSession &&
     prev.onReveal === next.onReveal &&
     prev.official === next.official &&
+    prev.copyId === next.copyId &&
     prev.dragPlan === next.dragPlan &&
     sameCard(prev.card, next.card) &&
     sameGrouping(prev.grouping, next.grouping)
@@ -195,6 +198,7 @@ function SessionRowItemView({
   grouping,
   dragPlan,
   official,
+  copyId,
   card,
   ...rowProps
 }: SessionRowItemProps): ReactElement {
@@ -243,6 +247,11 @@ function SessionRowItemView({
     if (id === 'archive') {
       // 归档会改写会话列表快照，本区域订阅着它，因此不需要手动刷新
       void official?.archiveSession(row.id)
+      return
+    }
+    if (id === SESSION_COPY_ID) {
+      // 复制的是会话 id 本身，不打开它，也不改动任何状态
+      if (official !== undefined) copyId(row.id, official.labels.sessionIdCopied)
       return
     }
     if (grouping !== undefined) grouping.onSelectGroup(grouping.workspaceId, row.id, id)

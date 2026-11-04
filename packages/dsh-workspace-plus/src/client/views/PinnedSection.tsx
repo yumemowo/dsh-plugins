@@ -38,6 +38,7 @@ import { useLocalViewOptions } from '../hooks/useLocalViewOptions.ts'
 import type { DragPlan } from '../data/dnd/protocol.ts'
 import { scrollProps } from '../data/dnd/protocol.ts'
 import { SessionRowItem } from './SessionRowItem.tsx'
+import type { CopyNoticeHandle } from '../copyNotice.ts'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { PinnedLabels, RegionLabels } from '../labels.ts'
 import styles from './PinnedSection.module.css'
@@ -71,6 +72,8 @@ export interface PinnedSectionProps {
   canPin: boolean
   /** 官方会话操作，缺省时行上不挂菜单 */
   official?: OfficialSessionActions | undefined
+  /** 把会话 id 写进剪贴板 */
+  copyId: CopyNoticeHandle['copy']
   onOpenSession: (sessionId: string) => void
   /** 会话行状态快照，与列表里的行取同一份 */
   statuses: SessionStatusSnapshot
@@ -132,6 +135,7 @@ export function PinnedSection({
   onTogglePin,
   canPin,
   official,
+  copyId,
   onOpenSession,
   statuses,
   zoneKey,
@@ -248,6 +252,7 @@ export function PinnedSection({
               onTogglePin={onTogglePin}
               canPin={canPin}
               official={official}
+              copyId={copyId}
               onOpenSession={onOpenSession}
               buildDragPlan={buildDragPlan}
             />
@@ -279,6 +284,7 @@ function PinnedRow({
   onTogglePin,
   canPin,
   official,
+  copyId,
   onOpenSession,
   buildDragPlan,
 }: {
@@ -290,6 +296,7 @@ function PinnedRow({
   onTogglePin: (sessionId: string) => void
   canPin: boolean
   official: OfficialSessionActions | undefined
+  copyId: CopyNoticeHandle['copy']
   onOpenSession: (sessionId: string) => void
   buildDragPlan: ((sessionId: string) => DragPlan) | undefined
 }): ReactElement {
@@ -302,6 +309,7 @@ function PinnedRow({
       selected={entry.current}
       status={view.dot}
       official={official}
+      copyId={copyId}
       pinned
       canPin={canPin}
       clipped={clipped}

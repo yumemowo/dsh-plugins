@@ -30,7 +30,7 @@
 
 分组行的 `...` 与工作区行一样是**管理操作菜单**，不承担建造型操作：「新建分组」属于工作区行，分组行的高频建造操作就是行内那枚新建会话按钮。
 
-**会话行尾的 `...` 打开会话操作菜单**：外观、位置与悬停行为都对齐官方，菜单里既有官方操作块（置顶 / 重命名 / 分叉 / 归档），也有本包的归组项（见本文「会话操作菜单」）。
+**会话行尾的 `...` 打开会话操作菜单**：外观、位置与悬停行为都对齐官方，菜单里既有官方操作块（置顶 / 重命名 / 分叉 / 归档 / 复制 Session ID），也有本包的归组项（见本文「会话操作菜单」）。
 
 **只有用户创建过分组，才会出现分组结构。** 没有分组时，会话直接平铺在工作区下，与原生列表一致；未归组的会话也平铺在工作区下，不会被塞进一个凭空造出来的「未分组」分组。
 
@@ -46,6 +46,7 @@
 | 官方 | 重命名 | 打开重命名对话框，提交走官方会话对象 |
 | 官方 | 分叉会话 | 官方 `ctx.uiWorkspace.forkSession`，分叉后打开子会话 |
 | 官方 | 归档会话 | 官方 `ctx.uiWorkspace.archiveSession` |
+| 官方 | 复制 Session ID | 官方的 `writeClipboard`，复制会话 id 本身，不打开它；成功与失败各弹一条提示 |
 | — | *分隔线* | 只在两段都存在时画 |
 | 本包 | 移动到… ▸ | 二级菜单列出该工作区的其他分组 |
 | 本包 | 取消分组 | 仅当会话已归组 |
@@ -54,15 +55,25 @@
 
 **官方操作块不抄官方实现，而是直接复用官方接口**（本仓库「优先复用官方既有接口」约定的延伸）：
 
-- 动作调用官方既有面 —— 分叉/归档走 `ctx.uiWorkspace` 服务，重命名走 `ctx.sessions.binding(id).session.rename()`。这三处正是官方会话菜单内部调的同一批接口，因此官方改行为时本包**自动跟随**，不需要重新对齐。
-- 文案与图标取官方 —— 绑官方 `workspace` 命名空间（`menu.pinSession` / `menu.unpinSession` / `rename` / `menu.fork` / `menu.archiveSession` / `rename.session.title` / `field.sessionName`），图标取 primitives 的 `IconPinOutlineRegular` / `IconPinFillRegular` / `IconEditOutlineRegular` / `IconBranchOutlineRegular` / `IconArchiveOutlineRegular`。重命名对话框的「取消 / 关闭」是通用词，走官方 `common` 命名空间的回退链。
+- 动作调用官方既有面 —— 分叉/归档走 `ctx.uiWorkspace` 服务，重命名走 `ctx.sessions.binding(id).session.rename()`，复制走 primitives 的 `writeClipboard`。这几处正是官方会话菜单内部调的同一批接口，因此官方改行为时本包**自动跟随**，不需要重新对齐。
+- 文案与图标取官方 —— 绑官方 `workspace` 命名空间（`menu.pinSession` / `menu.unpinSession` / `rename` / `menu.fork` / `menu.archiveSession` / `menu.sessionId` / `toast.sessionIdCopied` / `rename.session.title` / `field.sessionName`），图标取 primitives 的 `IconPinOutlineRegular` / `IconPinFillRegular` / `IconEditOutlineRegular` / `IconBranchOutlineRegular` / `IconArchiveOutlineRegular` / `IconCopyOutlineRegular`。重命名对话框的「取消 / 关闭」是通用词，走官方 `common` 命名空间的回退链。
 - **只在类型层依赖官方包**：`package.json` 把 `dsh-client-ui-workspace` 列为 peer + dev 依赖，但只 import type。因此官方一旦改键名或改服务签名，`tsc` 会直接报错，而不是运行期静默显示成原始键名。运行期产物里不含官方代码（bundle 的 `require` 仍只有 primitives / react / react/jsx-runtime）。
 
 「未分组」桶里的会话没有工作区归属、没有分组可落，因此那里只留官方操作块。宿主未加载官方 `ui-workspace` 时（本包的区域本来就依赖它供的 `useWorkspaces` 等全局 hook），官方操作块与行尾时间**整体不渲染**，不留点不动的死按钮。
 
 置顶区里的行也挂这套菜单，但只有官方操作块——那些会话可能不属于任何工作区，归组项无处落。它们不挂悬停卡片：已经钉在一段固定的区里，来源由位置说明（见[置顶会话的最终设计](session-pinning/design.md#行尾的图钉)）。
 
-置顶项**排在官方操作块的最前**（重命名之前），与官方 `PinSessionMenuItem` 在官方会话菜单里的次序一致。达到置顶上限时该项禁用，但已置顶的行不受影响：上限只拦新增，取消置顶始终可点。
+置顶项**排在官方操作块的最前**（重命名之前），「复制 Session ID」排在最后（归档之后），两处都与官方会话菜单里各该项的 `order` 一致。达到置顶上限时该项禁用，但已置顶的行不受影响：上限只拦新增，取消置顶始终可点。
+
+### 三处「复制 ID」共用一条提示
+
+会话行复制会话 id，两级分组头（会话分组与工作区分组）各复制分组 id。三处都走 primitives 的 `writeClipboard`，并按返回值弹一条 `Toast`：成功走 `tone: "success"`（原语自己画成功字形），失败挂 `IconWarningOutlineRegular`，与官方 `toast.sessionIdCopied` / `toast.sessionIdCopyFailed` 那两条同一做法。
+
+**分组这份文案是本包自有的**：官方只给会话那一条 `menu.sessionId`（「复制 Session ID」），分组这一层没有对应词。因此 `copyGroupId` / `copyVirtualWorkspaceId`（「复制分组 ID」）与 `groupIdCopied` / `virtualWorkspaceIdCopied`（「分组 ID 已复制」）进 `workspacePlus` 字典，形态照官方那条中英混排的样子写。失败那句反过来取官方 `toast.sessionIdCopyFailed`——它不点名对象（「复制失败，请重试」），三处共用一句，不另造同义键。
+
+**复制是纯调用，提示才需要共享。** 三处拿到的 `copy(text, successText)` 只是 `writeClipboard` 包一层，不读写任何界面状态，因此行组件不为它挂 hook、也不经 context 取。需要共享的只有「刚才那次成没成」这一条事实，它落在 React 之外的一份快照源里（`src/client/copyNotice.ts`，与官方 `ui-workspace` 的 `rowToast` 同一形态：一个存储加一个自增序号）。
+
+那份源整份随 inject 面下传（`RegionActions.copyNotice`），读与写都在它身上：行调它的 `copy`，**全区域只有 `views/components/CopyToast.tsx` 一处订阅它**，并在提示自己消失时调它的 `dismiss`。因此三个消费方各自存状态会同时吐出三条提示这件事不会发生，而代价只有一次：复制时那个订阅点重渲染，行本身不动。提示的 `key` 是那个自增序号，再复制一次即换一次挂载，否则新文案不会重放停留时长。
 
 ### 已打开的界面靠写入信号刷新
 
@@ -134,8 +145,9 @@
 | 行 | 右键菜单条目 |
 | --- | --- |
 | 工作区 | 新建会话 / 新建分组 / 重命名 / 移动到分组… / 移动到… / 删除工作区 |
-| 分组 | 新建会话 / 重命名分组 / 删除分组 |
-| 会话 | 置顶会话 / 重命名 / 分叉 / 归档（+ 移动到… / 取消分组） |
+| 分组 | 新建会话 / 重命名分组 / 复制分组 ID / 删除分组 |
+| 工作区分组 | 重命名工作区分组 / 复制分组 ID / 删除工作区分组 |
+| 会话 | 置顶会话 / 重命名 / 分叉 / 归档 / 复制 Session ID（+ 移动到… / 取消分组） |
 | 置顶区里的会话 | 与「会话」同一批官方操作（没有归组项） |
 
 容器行比 `...` 菜单**多一项「新建会话」**：在行内它对应那枚按钮，没有菜单形态，右键时补在最前，使右键能触达该行全部动作。那枚按钮本身不变，仍只以按钮形态存在。没有新建入口的行（如「未分组」桶的工作区行）不补这一项，否则就是个点不动的死按钮。
@@ -157,6 +169,8 @@
 | 删除工作区 / 分组 | 官方 `delete.workspace` / 本包 `deleteGroup` | `IconTrashOutlineRegular` |
 | 置顶会话 / 取消置顶 | 官方 `workspace` 的 `menu.pinSession` / `menu.unpinSession` | `IconPinOutlineRegular` / `IconPinFillRegular`（按是否已置顶取态） |
 | 分叉 / 归档 | 官方 `workspace` 的 `menu.fork` / `menu.archiveSession` | `IconBranchOutlineRegular` / `IconArchiveOutlineRegular` |
+| 复制 Session ID | 官方 `workspace` 的 `menu.sessionId` | `IconCopyOutlineRegular`（与官方那条同字形） |
+| 复制分组 ID | 本包 `copyGroupId` / `copyVirtualWorkspaceId` | `IconCopyOutlineRegular` |
 
 「新建会话」的文案取官方 `sidebar` 新建按钮的**动词短语** `session.new.label`，与行内那枚按钮的无障碍标签（官方 `actions.newSession.aria`，带对象名）分工不同：菜单项是一次性动作，读作动词短语，与「新建分组 / 重命名 / 删除工作区」一致。图标取官方 `IconNewChatOutlineRegular`（官方新建会话按钮的字形），与本包行内那枚按钮同一个字形；菜单里「新建分组」带的是 `+`，两项因此一眼可分。因此 `regionLabels` 多绑一个官方 `sidebar` 命名空间（`tSidebar`），与本包 `t`、官方 `workspace` 三个座位并列。
 

@@ -56,6 +56,8 @@ export const IconTrashOutlineRegular = icon('IconTrashOutlineRegular')
 export const IconPanelLeftOutlineRegular = icon('IconPanelLeftOutlineRegular')
 export const IconBranchOutlineRegular = icon('IconBranchOutlineRegular')
 export const IconArchiveOutlineRegular = icon('IconArchiveOutlineRegular')
+export const IconCopyOutlineRegular = icon('IconCopyOutlineRegular')
+export const IconWarningOutlineRegular = icon('IconWarningOutlineRegular')
 export const IconChevronRightOutlineRegular = icon('IconChevronRightOutlineRegular')
 export const IconChevronDownOutlineRegular = icon('IconChevronDownOutlineRegular')
 export const IconCheckOutlineRegular = icon('IconCheckOutlineRegular')
@@ -79,6 +81,26 @@ export const relativeTime = (from, to) => {
 
 /** 悬停提示替身：只渲染子节点，label 另行断言 */
 export const Tooltip = ({ children }) => children
+
+/**
+ * 提示条替身：只渲染文本，tone 与 icon 另行断言
+ *
+ * 真原语 portal 到 body 并自带计时器，node 环境两样都不存在
+ * 测试改为从元素 props 上读那几格（见 render.test.ts 的 `toasts` 分桶）
+ */
+export const Toast = ({ text }) => createElement('span', { 'data-wg-toast': '' }, text)
+
+/**
+ * 剪贴板替身
+ *
+ * 真实现走 `navigator.clipboard` 并退到 `document.execCommand`，node 环境两条路径都没有
+ * 这里把写进去的文本记在 `__clipboard` 上，并在 `__clipboardOk` 为假时回失败，
+ * 让「复制成功」与「复制失败」两条分支都能被驱动
+ */
+export const writeClipboard = async (text) => {
+  globalThis.__clipboard = text
+  return globalThis.__clipboardOk !== false
+}
 
 /**
  * 悬停卡片替身：只渲染锚点那一半，外面套一层行内盒
@@ -107,6 +129,8 @@ export default {
   StateDot,
   Switch,
   Tooltip,
+  Toast,
+  writeClipboard,
   HoverCard,
   relativeTime,
   IconFolderCloseRegular,
@@ -121,6 +145,8 @@ export default {
   IconPanelLeftOutlineRegular,
   IconBranchOutlineRegular,
   IconArchiveOutlineRegular,
+  IconCopyOutlineRegular,
+  IconWarningOutlineRegular,
   IconChevronRightOutlineRegular,
   IconChevronDownOutlineRegular,
   IconCheckOutlineRegular,

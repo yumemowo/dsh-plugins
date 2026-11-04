@@ -9,6 +9,7 @@ import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import type { OutlineRow } from '../src/client/data/outline.ts'
+import { copyAction, copySeats } from './copy-stub.ts'
 import { RegionLocaleProvider } from '../src/client/hooks/useLocale.ts'
 import { DndProvider } from '../src/client/hooks/useDnd.ts'
 import { regionLabels } from '../src/client/labels.ts'
@@ -541,6 +542,7 @@ function sessionRowNode(options: {
     title: '会话一',
     selected: false,
     onOpenSession: () => {},
+    copyId: copyAction(),
     ...(options.official === false
       ? {}
       : {
@@ -594,6 +596,7 @@ function groupRowNode(onCreateSession?: () => void): unknown {
     onToggle: () => {},
     onRename: () => {},
     onDelete: () => {},
+    copyId: copyAction(),
     ...(onCreateSession === undefined ? {} : { onCreateSession }),
     children: null,
   }))
@@ -643,6 +646,7 @@ function renderGroupRow(
         onToggle: () => {},
         onRename: () => {},
         onDelete: () => {},
+        copyId: copyAction(),
         ...(onCreateSession === undefined ? {} : { onCreateSession }),
         children: null,
       }),
@@ -842,6 +846,7 @@ function props(
       select(options.flowOccupied ?? true)) as never,
     useHostInfo: ((select: (info: { home: string | undefined }) => unknown) =>
       select({ home: options.home })) as never,
+    ...copySeats(),
     openSession: () => {},
     // startReturns 显式给了就用它（undefined 表示导航被取代），否则给一个 id
     startSession: async () =>
@@ -1086,7 +1091,8 @@ describe('WorkspaceGroupsRegion render', () => {
   it('gives the workspace group row its own rename and delete menu', async () => {
     const out = await renderRoot([{ id: 'wg1', name: '前端', workspaceIds: ['w1'] }])
 
-    expect(menuItems(out)).toContainEqual(['rename', 'delete'])
+    // 工作区分组行的管理菜单与工作区行同形：改名在前、复制 ID 居中、删除收尾
+    expect(menuItems(out)).toContainEqual(['rename', 'copy-id', 'delete'])
   })
 
   it('renders an ungrouped section only when a stray session exists', () => {
@@ -1119,6 +1125,7 @@ describe('WorkspaceGroupsRegion render', () => {
       'rename',
       'fork',
       'archive',
+      'copy-id',
       'separator',
       'group',
     ])
@@ -1194,7 +1201,7 @@ describe('WorkspaceGroupsRegion render', () => {
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
     // stray 会话没有分组可归，但官方操作块照常可用
-    expect(menuItems(out)).toContainEqual(['pin', 'rename', 'fork', 'archive'])
+    expect(menuItems(out)).toContainEqual(['pin', 'rename', 'fork', 'archive', 'copy-id'])
   })
 
   it('names the provisional blank session with the official fixed label', () => {
@@ -1231,6 +1238,7 @@ describe('WorkspaceGroupsRegion render', () => {
       'rename',
       'fork',
       'archive',
+      'copy-id',
       'separator',
       'group',
     ])
@@ -1314,9 +1322,9 @@ describe('WorkspaceGroupsRegion render', () => {
   it('keeps the group row actions in the same shape as the workspace row', () => {
     const out = renderGroupRow(() => {})
 
-    // 分组行的 `...` 收着删除与重命名，`+` 是行内新建会话——与工作区行同形
-    expect(menuItems(out)).toEqual([['rename', 'delete']])
-    expect(menuLabels(out)).toEqual(['重命名', '删除分组'])
+    // 分组行的 `...` 收着重命名、复制分组 ID 与删除，`+` 是行内新建会话——与工作区行同形
+    expect(menuItems(out)).toEqual([['rename', 'copy-id', 'delete']])
+    expect(menuLabels(out)).toEqual(['重命名', '复制分组 ID', '删除分组'])
     expect(actionLabels(out)).toEqual(['分组“前端”的操作'])
     expect(rowButtons(out).map((b) => b.label)).toEqual(['在“前端”中新建会话'])
 
@@ -1327,12 +1335,12 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(group.plusButtons).toBe(1)
   })
 
-  it('offers the group row the same two management entries on every group', () => {
+  it('offers the group row the same three management entries on every group', () => {
     // 会话排序撤回之后，分组行不再有「清除手动顺序」这一项
     const out = renderGroupRow(() => {})
 
-    expect(menuItems(out)).toEqual([['rename', 'delete']])
-    expect(menuLabels(out)).toEqual(['重命名', '删除分组'])
+    expect(menuItems(out)).toEqual([['rename', 'copy-id', 'delete']])
+    expect(menuLabels(out)).toEqual(['重命名', '复制分组 ID', '删除分组'])
   })
 
   it('leaves row actions with an accessible label but no native tooltip', () => {
@@ -1366,7 +1374,7 @@ describe('WorkspaceGroupsRegion render', () => {
 
     expect(rowActionShape(out).containers).toBe(1)
     expect(rowActionShape(out).plusButtons).toBe(0)
-    expect(menuItems(out)).toEqual([['rename', 'delete']])
+    expect(menuItems(out)).toEqual([['rename', 'copy-id', 'delete']])
   })
 
   it('builds the group session through the new-session button', () => {
@@ -1908,6 +1916,7 @@ describe('hover cards', () => {
       title: '会话一',
       selected: false,
       onOpenSession: () => {},
+      copyId: copyAction(),
       card: { statuses: [{ state: 'done', label: '空闲' }], time: '5分钟前' },
       official: {
         renameSession: async () => {},
@@ -1953,6 +1962,7 @@ describe('hover cards', () => {
       title: '会话一',
       selected: false,
       onOpenSession: () => {},
+      copyId: copyAction(),
       card: { time: '5分钟前' },
       official: {
         renameSession: async () => {},
@@ -2417,7 +2427,7 @@ describe('row context menu', () => {
     // 且没有行内新建入口可补，右键菜单与它的 `...` 菜单条目集合因此完全相同
     const { after } = rightClick(sessionRowNode(), 'row')
 
-    expect(menuIdsOf(openMenu(after))).toEqual(['rename', 'fork', 'archive'])
+    expect(menuIdsOf(openMenu(after))).toEqual(['rename', 'fork', 'archive', 'copy-id'])
   })
 
   it('leaves a row without a create entry with the plain row menu', () => {
@@ -2425,7 +2435,7 @@ describe('row context menu', () => {
     // 因此右键菜单退化成 `...` 菜单本身
     const { after } = rightClick(groupRowNode(), 'groupHead')
 
-    expect(menuIdsOf(openMenu(after))).toEqual(['rename', 'delete'])
+    expect(menuIdsOf(openMenu(after))).toEqual(['rename', 'copy-id', 'delete'])
   })
 
   it('routes the new-session entry to the row own create handler', () => {

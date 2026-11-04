@@ -76,7 +76,7 @@ describe('buildSessionMenuItems', () => {
   /** 官方三项操作的文案（取自官方 workspace 命名空间） */
   const official = officialSessionLabels(workspaceTranslate())
 
-  it('lists the official four actions before the package own group item', () => {
+  it('lists the official actions before the package own group item', () => {
     const items = buildSessionMenuItems({
       grouping: grouping(''),
       official,
@@ -84,15 +84,23 @@ describe('buildSessionMenuItems', () => {
     })
 
     // 官方操作块在前（它们作用于会话本身），分组项是叠加其上的归类操作
-    // 置顶在最前，与官方 `PinSessionMenuItem` 的 order 一致
+    // 置顶在最前、复制 Session ID 在最后，两处都与官方会话菜单的 order 一致
     expect(items.map((item) => (item as { id?: string }).id)).toEqual([
       'pin',
       'rename',
       'fork',
       'archive',
+      'copy-id',
       'separator',
       'group',
     ])
+  })
+
+  it('reads the copy item from the official session-id wording', () => {
+    const items = buildSessionMenuItems({ official })
+
+    const item = items.find((entry) => (entry as { id?: string }).id === 'copy-id')
+    expect(item).toMatchObject({ label: '复制 Session ID' })
   })
 
   it('offers the pin item only when the row can toggle its pin', () => {
@@ -103,6 +111,7 @@ describe('buildSessionMenuItems', () => {
       'rename',
       'fork',
       'archive',
+      'copy-id',
       'separator',
       'group',
     ])
@@ -158,6 +167,7 @@ describe('buildSessionMenuItems', () => {
       'rename',
       'fork',
       'archive',
+      'copy-id',
     ])
   })
 
@@ -674,12 +684,25 @@ describe('buildVirtualWorkspaceMenuItem', () => {
 })
 
 describe('buildVirtualWorkspaceMenuItems', () => {
-  const labels = { renameLabel: '重命名工作区分组', deleteLabel: '删除工作区分组' }
+  const labels = {
+    renameLabel: '重命名工作区分组',
+    copyIdLabel: '复制分组 ID',
+    deleteLabel: '删除工作区分组',
+  }
 
-  it('offers rename and delete in that order', () => {
+  it('offers rename, copy id and delete in that order', () => {
     const items = buildVirtualWorkspaceMenuItems(labels)
 
-    expect(items.map((item) => (item as { id?: string }).id)).toEqual(['rename', 'delete'])
+    // 复制不是破坏性操作，因此排在删除之前
+    expect(items.map((item) => (item as { id?: string }).id)).toEqual(['rename', 'copy-id', 'delete'])
+  })
+
+  it('gives the copy id item the official copy icon', () => {
+    const items = buildVirtualWorkspaceMenuItems(labels)
+    const icon = (items[1] as { icon?: { type: () => unknown } }).icon
+
+    // 与会话菜单那条「复制 Session ID」同一个字形
+    expect(icon?.type()).toBe('IconCopyOutlineRegular')
   })
 
   it('marks only the delete entry as dangerous', () => {
@@ -690,13 +713,13 @@ describe('buildVirtualWorkspaceMenuItems', () => {
 })
 
 describe('buildGroupMenuItems', () => {
-  const labels = { renameLabel: '重命名分组', deleteLabel: '删除分组' }
+  const labels = { renameLabel: '重命名分组', copyIdLabel: '复制分组 ID', deleteLabel: '删除分组' }
 
-  it('offers rename and delete in that order', () => {
+  it('offers rename, copy id and delete in that order', () => {
     const items = buildGroupMenuItems(labels)
 
-    // 与工作区菜单同形：改名在前、删除在后
-    expect(items.map((item) => (item as { id?: string }).id)).toEqual(['rename', 'delete'])
+    // 与工作区分组菜单逐项同形：改名在前、复制 ID 居中、删除收尾
+    expect(items.map((item) => (item as { id?: string }).id)).toEqual(['rename', 'copy-id', 'delete'])
   })
 
   it('marks only the delete entry as dangerous', () => {

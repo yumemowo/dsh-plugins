@@ -41,10 +41,13 @@ describe('locales', () => {
       'actions.group.aria',
       'actions.virtualWorkspace.aria',
       'compareTabDescription',
+      'copyGroupId',
+      'copyVirtualWorkspaceId',
       'delete.desc.group',
       'delete.desc.virtualWorkspace',
       'deleteGroup',
       'deleteVirtualWorkspace',
+      'groupIdCopied',
       'groupNamePrompt',
       'indicator.bar',
       'indicator.icon',
@@ -99,6 +102,7 @@ describe('locales', () => {
       'viewMode.label',
       'viewMode.workspace',
       'virtualWorkspaceEmpty',
+      'virtualWorkspaceIdCopied',
       'virtualWorkspaceNamePrompt',
     ])
   })
@@ -204,6 +208,9 @@ describe('regionLabels', () => {
     // 一级菜单项说「移动到…」，省略号表示点下去还要选一个目标
     expect(labels.moveToGroup).toBe('移动到…')
     expect(labels.ungroup).toBe('取消分组')
+    // 官方只给会话那一条「复制 Session ID」，分组这一层取本包命名空间
+    expect(labels.copyGroupId).toBe('复制分组 ID')
+    expect(labels.groupIdCopied).toBe('分组 ID 已复制')
   })
 
   it('keeps the virtual-workspace copy under its own keys', () => {
@@ -219,6 +226,8 @@ describe('regionLabels', () => {
       '删除工作区分组“g1”？组内工作区会移出分组，工作区本身不受影响。',
     )
     expect(labels.virtualWorkspaceActions('g1')).toBe('工作区分组“g1”的操作')
+    expect(labels.copyVirtualWorkspaceId).toBe('复制分组 ID')
+    expect(labels.virtualWorkspaceIdCopied).toBe('分组 ID 已复制')
   })
 
   it('keeps the nesting copy under its own keys', () => {

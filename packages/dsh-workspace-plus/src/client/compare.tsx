@@ -17,6 +17,7 @@ import type { RegionActions } from './actions.ts'
 import { NS } from './locales.ts'
 import { directoryFlowSource } from './directoryFlow.ts'
 import { hostInfoSource } from './hostInfo.ts'
+import type { CopyNoticeHandle } from './copyNotice.ts'
 import { WorkspaceGroupsRegion } from './views/WorkspaceGroupsRegion.tsx'
 import { IconWorkspaceTreeOutlineRegular } from './runtime.ts'
 import type { ViewModeStoreHandle } from './store/viewMode.ts'
@@ -56,6 +57,7 @@ function CompareTabBody(props: RegionProps): ReactElement {
  * @param ctx - 客户端根 context（本包自己的，已 inject `remote`）
  * @param actions - 区域的动作面
  * @param locale - 语言服务，用于标题与说明的 thunk
+ * @param copyNotice - 复制结果的通知源，与接替模式共用同一份（见 `copyNotice.ts`）
  * @returns 反注册回调
  */
 export function registerCompareTab(
@@ -63,6 +65,7 @@ export function registerCompareTab(
   actions: RegionActions,
   locale: LocaleRuntime,
   viewModeStore: ViewModeStoreHandle,
+  copyNotice: CopyNoticeHandle,
 ): () => void {
   // 宿主固定事实源在本包自己的 context 上起：`ctx.remote` 要求 remote 在 inject 列表里
   const remote = ctx.get('remote')
@@ -83,7 +86,7 @@ export function registerCompareTab(
         locale: NS,
         store: viewModeStore,
         // 右侧栏没有 shell 的折叠态：始终按宽栏渲染，展开请求是空操作
-        inject: () => ({ ...actions, wide: true as const, expandSidebar: noop, hooks }),
+        inject: () => ({ ...actions, copyNotice, wide: true as const, expandSidebar: noop, hooks }),
       },
       CompareTabBody as never,
     ),

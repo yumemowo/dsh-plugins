@@ -13,6 +13,7 @@ import { deriveNesting } from '../src/client/data/nest.ts'
 import { compareSessionRows } from '../src/client/data/sessions.ts'
 import type { SessionRow } from '../src/client/data/types.ts'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
+import { copySeats } from './copy-stub.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
 import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
@@ -143,6 +144,7 @@ function props(focused: RootEntryAddress = ALL_ENTRIES): WorkspaceGroupsProps {
     useDirectoryFlow: ((select: (occupied: boolean) => unknown) => select(true)) as never,
     useHostInfo: ((select: (info: { home: string | undefined }) => unknown) =>
       select({ home: '/tmp' })) as never,
+    ...copySeats(),
     openSession: () => {},
     startSession: async () => 'fresh',
     loadGroups: async () => stored,

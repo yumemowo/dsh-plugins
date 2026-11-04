@@ -13,6 +13,7 @@ import {
   IconArchiveOutlineRegular,
   IconBranchOutlineRegular,
   IconChevronRightOutlineRegular,
+  IconCopyOutlineRegular,
   IconEditOutlineRegular,
   IconNewChatOutlineRegular,
   IconPinFillRegular,
@@ -160,6 +161,7 @@ export function buildSessionMenuItems(input: SessionMenuInput): readonly MenuIte
       { id: 'fork', label: official.fork, icon: <IconBranchOutlineRegular /> },
       // 官方会话菜单的归档项传 size=14，照它取同一个值
       { id: 'archive', label: official.archive, icon: <IconArchiveOutlineRegular size={14} /> },
+      { id: SESSION_COPY_ID, label: official.copySessionId, icon: <IconCopyOutlineRegular /> },
     )
   }
 
@@ -176,31 +178,35 @@ export function buildSessionMenuItems(input: SessionMenuInput): readonly MenuIte
   return items
 }
 
+/** 会话菜单里「复制 Session ID」项的 id，构造与分派共用它 */
+export const SESSION_COPY_ID = 'copy-id'
+
 /** 会话分组菜单条目 id，与 `GroupSection` 的分派一一对应 */
 export const GROUP_MENU = {
   rename: 'rename',
   delete: 'delete',
+  copyId: 'copy-id',
 } as const
 
 /** 工作区分组菜单条目 id，与 `VirtualWorkspaceSection` 的分派一一对应 */
 export const VIRTUAL_WORKSPACE_MENU = {
   rename: 'rename',
   delete: 'delete',
+  copyId: 'copy-id',
 } as const
 
 /** 分组行「更多操作」菜单的条目文案 */
 export interface GroupRowMenuInput {
   /** 「重命名分组」项文案 */
   renameLabel: string
+  /** 「复制分组 ID」项文案 */
+  copyIdLabel: string
   /** 「删除分组」项文案 */
   deleteLabel: string
 }
 
 /**
  * 构造工作区分组行「更多操作」菜单的条目
- *
- * 与会话分组菜单逐项同形：重命名在前、删除在后、删除带 `danger`
- * 两者都是「重命名 / 解散这个容器」这一件事，只是容器的层级不同
  * @returns Menu items 列表
  */
 export function buildVirtualWorkspaceMenuItems(
@@ -208,6 +214,7 @@ export function buildVirtualWorkspaceMenuItems(
 ): readonly MenuItem[] {
   return [
     { id: VIRTUAL_WORKSPACE_MENU.rename, label: input.renameLabel, icon: <IconEditOutlineRegular /> },
+    { id: VIRTUAL_WORKSPACE_MENU.copyId, label: input.copyIdLabel, icon: <IconCopyOutlineRegular /> },
     {
       id: VIRTUAL_WORKSPACE_MENU.delete,
       label: input.deleteLabel,
@@ -220,13 +227,14 @@ export function buildVirtualWorkspaceMenuItems(
 /**
  * 构造分组行「更多操作」菜单的条目
  *
- * 与工作区菜单同形：重命名在前、删除在后，删除项带 `danger` 标记
+ * 与工作区菜单同形，删除项带 `danger` 标记
  * 分组没有建造型菜单项——「新建分组」属于工作区行，分组行的高频建造操作是行内 `+`（在该分组新建会话）
  * @returns Menu items 列表
  */
 export function buildGroupMenuItems(input: GroupRowMenuInput): readonly MenuItem[] {
   return [
     { id: GROUP_MENU.rename, label: input.renameLabel, icon: <IconEditOutlineRegular /> },
+    { id: GROUP_MENU.copyId, label: input.copyIdLabel, icon: <IconCopyOutlineRegular /> },
     { id: GROUP_MENU.delete, label: input.deleteLabel, icon: <IconTrashOutlineRegular />, danger: true },
   ]
 }

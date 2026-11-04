@@ -56,6 +56,9 @@
 | header 的添加工作区 / 搜索 / 视图选项 | `IconProjectAddOutlineRegular` / `IconSearchOutlineRegular` / `IconSlidersTwoOutlineRegular`（与官方 header 同字形）；搜索框的清除按钮用 `IconCloseFillRegular` |
 | header 的新建工作区分组、菜单里的工作区分组项 | **本包自绘** `IconVirtualWorkspace16`（见 [自绘图标](custom-icons.md)） |
 | 会话菜单的分叉 / 归档项 | `IconBranchOutlineRegular` / `IconArchiveOutlineRegular`（与官方会话菜单同字形） |
+| 三处「复制 ID」项与失败提示 | `IconCopyOutlineRegular` / `IconWarningOutlineRegular`（与官方会话菜单的「复制 Session ID」、官方失败类提示同字形） |
+| 复制与它的结果提示 | `writeClipboard` / `Toast`（官方会话菜单复制 Session ID 用的同一对；提示的 `tone: "success"` 也照它的取值） |
+| 复制结果的状态 | `createSnapshotStore`（官方 `ui-workspace` 存 `rowToast` 的同一原语：源建在 React 之外，只有一个宿主订阅它） |
 | 子菜单父项的行尾箭头 | `IconChevronRightOutlineRegular`（与 composer slash 菜单给「可进入目录」候选画的箭头同字形） |
 | 窄栏展开入口 | `IconPanelLeftOutlineRegular`（与官方侧栏折叠按钮同一字形） |
 | 会话状态点 | `StateDot`（运行态画追光方阵，其余画圆点；颜色由原语的主题规则给出） |
@@ -159,12 +162,14 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 
 悬停卡片的文案同样一个键都不用加：创建时刻取官方 `hover.created` + `date.ymd`，复制提示取 `common` 的通用词 `copy`、成功反馈取 `hover.copied`，卡片那份相对时间取 `time.ago`；会话卡片里「空闲」那一条取官方的 `status.idle`——行首不画点但卡片要把它列出来，那个词官方本来就有，不另造。
 
+会话菜单的「复制 Session ID」与它的成功提示也一个键都不加：取官方 `menu.sessionId` / `toast.sessionIdCopied`。反过来**分组那一份是本包自有的**——官方没有「复制分组 ID」这种说法。失败提示又回到官方：`toast.sessionIdCopyFailed`（「复制失败，请重试」）不点名对象，会话与两级分组的复制失败共用它，本包字典里不存副本。
+
 本包字典只剩官方没有对应词的键，按族归并如下：
 
 | 族 | 键 | 管什么 |
 | --- | --- | --- |
-| 会话分组 | `newGroup` `renameGroup` `deleteGroup` `groupNamePrompt` `delete.desc.group` `moveToGroup` `ungroup` `actions.group.aria` | 工作区内的会话分组：入口、建、改名、删除、移入 / 移出，以及分组行的无障碍标签 |
-| 工作区分组 | `newVirtualWorkspace` `menu.newVirtualWorkspace` `renameVirtualWorkspace` `deleteVirtualWorkspace` `virtualWorkspaceNamePrompt` `delete.desc.virtualWorkspace` `moveToVirtualWorkspace` `ungroupWorkspace` `virtualWorkspaceEmpty` `actions.virtualWorkspace.aria` | 根节点上的工作区分组：入口、建、改名、删除、移入 / 移出、空态与无障碍标签 |
+| 会话分组 | `newGroup` `renameGroup` `deleteGroup` `groupNamePrompt` `delete.desc.group` `moveToGroup` `ungroup` `copyGroupId` `groupIdCopied` `actions.group.aria` | 工作区内的会话分组：入口、建、改名、删除、移入 / 移出、复制 ID，以及分组行的无障碍标签 |
+| 工作区分组 | `newVirtualWorkspace` `menu.newVirtualWorkspace` `renameVirtualWorkspace` `deleteVirtualWorkspace` `virtualWorkspaceNamePrompt` `delete.desc.virtualWorkspace` `moveToVirtualWorkspace` `ungroupWorkspace` `copyVirtualWorkspaceId` `virtualWorkspaceIdCopied` `virtualWorkspaceEmpty` `actions.virtualWorkspace.aria` | 根节点上的工作区分组：入口、建、改名、删除、移入 / 移出、复制 ID、空态与无障碍标签 |
 | 子工作区嵌套 | `nested.setting` `nested.disable` `nested.disableTitle` `nested.disableDesc` `nested.disabledNote` `nested.reEnableHint` `nested.moveToGroup` `nested.ungroupChild` `nested.inGroup` `nested.groupEmpty` | 开关与它的关闭确认、移入 / 移出分组、父工作区标注、组内空态 |
 | 工作区选择器 | `picker.entry` `picker.change` `picker.all` `picker.recent` `picker.pinned` `picker.pin` `picker.unpin` `picker.rename` `picker.remove` `picker.followFocus` `picker.focusNewTitle` `picker.focusNewDesc` `picker.focusNewConfirm` | 面板入口与三个分区、条目行内的置顶 / 改名 / 删除、新增工作区时的聚焦确认 |
 | 展示方式 | `viewMode.label` `viewMode.workspace` `viewMode.flat` | 按工作区 / 平铺 |

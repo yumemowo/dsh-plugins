@@ -8,6 +8,7 @@ import type { RegionActions } from '../src/client/actions.ts'
 import { sidebarTranslate, translateFor, workspaceTranslate } from './locale-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
 import { createViewModeStore } from '../src/client/store/viewMode.ts'
+import { createCopyNotice } from '../src/client/copyNotice.ts'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { Context } from '@deepseek-ai/cordis'
 
@@ -39,6 +40,7 @@ function actions(): RegionActions {
     insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
+    copyNotice: createCopyNotice(() => '复制失败，请重试'),
     searchResultLimit: 20,
     tWorkspace: workspaceTranslate(),
     tSidebar: sidebarTranslate(),
@@ -156,6 +158,7 @@ function register(options: { present?: boolean } = {}) {
     actions(),
     locale.service,
     createViewModeStore(),
+    createCopyNotice(() => '复制失败，请重试'),
   )
   return { sidebar, locale, bodies }
 }
@@ -226,6 +229,7 @@ describe('registerCompareTab', () => {
         actions(),
         locale.service,
         createViewModeStore(),
+        createCopyNotice(() => '复制失败，请重试'),
       ),
     ).not.toThrow()
     expect(sidebar.types).toEqual([])
@@ -243,6 +247,7 @@ describe('registerCompareTab', () => {
       actions(),
       locale.service,
       createViewModeStore(),
+      createCopyNotice(() => '复制失败，请重试'),
     )
 
     expect(bodies).toHaveLength(1)

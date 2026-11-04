@@ -15,6 +15,7 @@ import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/cl
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import { useCallback, useMemo, useRef } from 'react'
 import type { ReactElement } from 'react'
+import type { CopyNoticeHandle } from '../copyNotice.ts'
 import type { OfficialSessionActions } from '../actions.ts'
 import { containsSession } from '../data/rows.ts'
 import { groupIdOfSession } from '../data/sessions.ts'
@@ -80,6 +81,8 @@ export interface SessionRowScope {
   statusSnapshot: SessionStatusSnapshot
   /** 行尾与卡片相对时间的基准时刻，渲染当刻取一次 */
   now: number
+  /** 把一个标识写进剪贴板，会话行复制自己的 id 时用它 */
+  copyId: CopyNoticeHandle['copy']
   revealSessionId: string | undefined
   acknowledgeReveal: (sessionId: string) => void
   openSession: (sessionId: string) => void
@@ -150,6 +153,8 @@ export interface RegionListCommands {
   nestWorkspaceInto: (workspaceId: string, parentId: string, groupId: string) => void
   /** 解除一个工作区的嵌套归属，它退回按 cwd 路径推导的位置 */
   unnestWorkspace: (workspaceId: string) => void
+  /** 把一个标识写进剪贴板，两级分组头复制分组 id 时用它 */
+  copyId: CopyNoticeHandle['copy']
 }
 
 /**
@@ -302,6 +307,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
             onDelete={() =>
               scope.edits.onDeleteVirtualWorkspace(row.groupId ?? '', row.label ?? '')
             }
+            copyId={scope.commands.copyId}
             orderDragging={virtualWorkspaceDragging}
             bodyZone={dndZoneProps(virtualWorkspaceBodyKey(row.groupId ?? ''))}
           >
@@ -679,6 +685,7 @@ function GroupNode({
       onRename={() => edits.onRenameGroup(workspaceId, groupId, label)}
       onDelete={() => edits.onDeleteGroup(workspaceId, groupId, label)}
       onCreateSession={() => commands.createSessionIn(workspaceId, groupId)}
+      copyId={commands.copyId}
       orderDragging={orderDragging}
     >
       {/* 组内同样是「子工作区 -> 会话」，先文件夹后文件，与父工作区体内同一顺序 */}
@@ -778,6 +785,7 @@ export function sessionRowElement(
       time={time}
       grouping={grouping}
       official={context.official}
+      copyId={context.copyId}
       // 宿主没加载官方 ui-workspace 时官方文案整体拿不到，浮出一个空壳不如不浮
       // 空白会话的标题是语言包的占位文案，不是会话内容，复制它没有意义
       card={

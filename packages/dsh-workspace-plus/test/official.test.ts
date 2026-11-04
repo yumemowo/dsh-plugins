@@ -24,7 +24,17 @@ describe('officialSessionLabels', () => {
       sessionNamePrompt: '会话名称',
       fork: '分叉会话',
       archive: '归档会话',
+      copySessionId: '复制 Session ID',
+      sessionIdCopied: 'Session ID 已复制',
     })
+  })
+
+  it('takes the copy menu item and its toast from the official session-id keys', () => {
+    // 官方会话菜单最后一项与它那条成功提示，本包逐键取用，不复制译文
+    const t = workspaceTranslate()
+
+    expect(t('menu.sessionId')).toBe('复制 Session ID')
+    expect(t('toast.sessionIdCopied')).toBe('Session ID 已复制')
   })
 })
 

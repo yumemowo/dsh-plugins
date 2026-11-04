@@ -1,7 +1,7 @@
 /**
  * 一个分组：可折叠的分组头（箭头、名称、会话数、`...` 菜单与 `+`）加组内会话行
  *
- * 分组头的行尾操作与工作区行同形，`...` 打开管理菜单（重命名 / 删除分组），`+` 在该分组新建会话
+ * 分组头的行尾操作与工作区行同形，`...` 打开管理菜单（重命名 / 复制分组 ID / 删除分组），`+` 在该分组新建会话
  * 分组没有折叠用的文件夹槽，也不像工作区行那样悬停时换图标，因此图标列只有箭头一个
  *
  * 「未分组」在工作区内部不是分组——未归组的会话由区域组件直接平铺，不经过这里
@@ -15,6 +15,8 @@ import { RowActions } from './RowActions.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { RowHeadShell } from './components/RowHeadShell.tsx'
 import { useLocale } from '../hooks/useLocale.ts'
+import type { CopyNoticeHandle } from '../copyNotice.ts'
+
 import { useDnd, useOrderRow } from '../hooks/useDnd.ts'
 import {
   groupHeadKey,
@@ -40,6 +42,8 @@ export interface GroupSectionProps {
   onDelete: () => void
   /** 在该分组新建会话，缺省表示该行不提供新建入口 */
   onCreateSession?: (() => void) | undefined
+  /** 把分组 id 写进剪贴板 */
+  copyId: CopyNoticeHandle['copy']
   /**
    * 同工作区分组的排序接线
    *
@@ -59,6 +63,7 @@ export function GroupSection({
   onRename,
   onDelete,
   onCreateSession,
+  copyId,
   orderDragging,
   children,
 }: GroupSectionProps): ReactElement {
@@ -94,12 +99,14 @@ export function GroupSection({
     setMenuOpen(false)
     if (id === ROW_MENU.newSession) onCreateSession?.()
     else if (id === GROUP_MENU.rename) onRename()
+    else if (id === GROUP_MENU.copyId) copyId(groupId, labels.groupIdCopied)
     else if (id === GROUP_MENU.delete) onDelete()
   }
 
   const menuItems = buildGroupMenuItems({
     // 菜单项用通用动词，只有对话框标题才点明对象（见 RegionDialogs）
     renameLabel: labels.rename,
+    copyIdLabel: labels.copyGroupId,
     deleteLabel: labels.deleteGroup,
   })
 

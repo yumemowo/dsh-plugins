@@ -77,6 +77,7 @@ import { PINNED_SLOT_KEY } from '../data/pinned.ts'
 import { useFlipMarker } from '../useFlipMarker.ts'
 import { UNGROUPED_KEY, expandedAt, indicatorOf, modeOf, pinnedOf, sessionGroupExpansionOf, sessionGroupKey, virtualExpansionOf, workspaceExpansionOf } from '../store/viewMode.ts'
 import type { SessionGroupRef, ViewModeStoreHandle } from '../store/viewMode.ts'
+import { CopyToast } from './components/CopyToast.tsx'
 import { RegionLocaleProvider } from '../hooks/useLocale.ts'
 import { ExpansionProvider } from '../hooks/useExpansion.ts'
 import type { Expansion } from '../hooks/useExpansion.ts'
@@ -1517,6 +1518,7 @@ function useRegionPickerActions(
 
 export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement | null {
   const { wide, expandSidebar, openSession, searchResultLimit, t } = props
+  const { copyNotice } = props
 
   const sources = useRegionSources(props)
   const { labels, workspaces, archivedSessionIds, pinnedSessionIds,
@@ -1914,6 +1916,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     pinnedSessionIds: pinnedIds,
     canPin,
     onTogglePin: toggleSessionPin,
+    copyId: copyNotice.copy,
   }
   // 列表侧收的是「编辑哪个对象」，浮层的形状因此不出这一层
   const edits: RegionListEdits = {
@@ -1934,7 +1937,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   }
 
   // 两袋动作的字段名与 `RegionListCommands` 逐格同名，直接合并后按消费方的窄形状读
-  const commands: RegionListCommands = { ...groupActions, ...nestActions }
+  // 复制不是「改分组」也不是「改嵌套」，但它同样随行下发，因此并在这里
+  const commands: RegionListCommands = { ...groupActions, ...nestActions, copyId: copyNotice.copy }
 
   // 递归层需要的布局与交互状态是整份 `layout` / `ui` 的子集，靠结构类型直接交给它们
   const scope: WorkspaceNodeScope = {
@@ -2031,6 +2035,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             onTogglePin={toggleSessionPin}
             canPin={canPin}
             official={official}
+            copyId={copyNotice.copy}
             onOpenSession={openSession}
             statuses={statusSnapshot}
             zoneKey={PINNED_KEY}
@@ -2045,6 +2050,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             flatRows={flatRows}
             stray={stray}
           />
+          {/* 复制结果的提示：全区域只有这一处订阅那个源，因此同一时刻至多一条 */}
+          <CopyToast source={copyNotice} />
           {/* 对话框挂在列表之外
             * 它们都是 portal 到 body 的浮层，放进 overflow
               容器只会多一层无用的裁剪上下文 */}

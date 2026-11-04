@@ -13,6 +13,7 @@ import * as React from 'react'
 import { WorkspaceGroupsRegion } from '../../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../../src/client/views/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../../src/client/official.ts'
+import { copySeats } from '../copy-stub.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from '../locale-stub.ts'
 import { snapshot } from '../snapshot-stub.ts'
 import { storeViewModeProps, viewModeStoreStub } from '../viewMode-stub.ts'
@@ -156,9 +157,10 @@ export function band(element: HTMLElement, top: number, height = 10): void {
  */
 export function shellSeats(): Pick<
   WorkspaceGroupsProps,
-  'searchResultLimit' | 't' | 'tWorkspace' | 'tSidebar' | 'official' | 'addWorkspace'
+  'searchResultLimit' | 't' | 'tWorkspace' | 'tSidebar' | 'official' | 'addWorkspace' | 'copyNotice'
 > {
   return {
+    ...copySeats(),
     searchResultLimit: 20,
     t: regionTranslate(),
     tWorkspace: workspaceTranslate(),
@@ -201,6 +203,7 @@ export function regionProps(overrides: Partial<WorkspaceGroupsProps> = {}): Work
     useDirectoryFlow: ((select: (occupied: boolean) => unknown) => select(true)) as never,
     useHostInfo: ((select: (info: { home: string | undefined }) => unknown) =>
       select({ home: '/tmp' })) as never,
+    ...copySeats(),
     openSession: () => {},
     startSession: async () => undefined,
     loadGroups: async () => snapshot(),

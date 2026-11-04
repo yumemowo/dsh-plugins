@@ -41,6 +41,7 @@ const { officialAddLabels, officialSessionLabels, timeLabel } = await import(
 )
 const { regionTranslate, sidebarTranslate, workspaceTranslate } = await import('./locale-stub.ts')
 const { snapshot } = await import('./snapshot-stub.ts')
+const { copySeats } = await import('./copy-stub.ts')
 const { storeViewModeProps, viewModeStoreStub } = await import('./viewMode-stub.ts')
 const { summary } = await import('./support/dndDom.ts')
 
@@ -92,6 +93,7 @@ const BASE = {
   useDirectoryFlow: ((select: (occupied: boolean) => unknown) => select(true)) as never,
   useHostInfo: ((select: (info: { home: string | undefined }) => unknown) =>
     select({ home: '/tmp' })) as never,
+  ...copySeats(),
   openSession: () => {},
   startSession: async () => undefined,
   loadGroups: async () => snapshot(),

@@ -111,6 +111,33 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   }) => ReactNode
 
   /**
+   * 一段时间后自行消失的一条提示
+   *
+   * `tone` 与 `icon` 二选一：`success` 由原语画成功字形，其余场合传 `icon` 指明语气
+   * `seq` 由调用方作为 `key` 给，换一条提示即换一次挂载，同一条不会叠两遍
+   */
+  export const Toast: (props: {
+    text: string
+    icon?: ReactNode
+    tone?: 'success'
+    /** 与某条控件对齐的锚点，缺省落在默认位置 */
+    anchor?: Element | null
+    /** 悬停之外的停留时长（ms） */
+    holdMs?: number
+    /** 文本之后的动作按钮 */
+    actions?: readonly { prefix?: string; label: string; onClick: () => void }[]
+    onDone: () => void
+  }) => ReactNode
+
+  /**
+   * 把一段文本写进剪贴板
+   *
+   * 走 `navigator.clipboard`，不可用时退回 `document.execCommand('copy')` 的隐藏 textarea 那条路径
+   * @returns 是否写成功，失败时由调用方决定怎么提示
+   */
+  export const writeClipboard: (text: string) => Promise<boolean>
+
+  /**
    * 开关原语，胶囊轨道 + 圆形滑块，整条控件是一个 `role="switch"` 的按钮
    *
    * 外观只由 `aria-checked` 决定，因此视觉状态与读屏状态不可能不一致
@@ -219,6 +246,10 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
   export const IconBranchOutlineRegular: IconComponent
   /** 官方会话菜单「归档」项用的图标 */
   export const IconArchiveOutlineRegular: IconComponent
+  /** 官方会话菜单「复制 Session ID」项用的图标 */
+  export const IconCopyOutlineRegular: IconComponent
+  /** 警告提示那条 Toast 的图标，官方失败类提示统一取它 */
+  export const IconWarningOutlineRegular: IconComponent
   /** 置顶按钮两态：钉身描边 / 填实 */
   export const IconPinOutlineRegular: IconComponent
   export const IconPinFillRegular: IconComponent

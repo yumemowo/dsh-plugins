@@ -49,6 +49,11 @@ function baselineModule(name: string): unknown {
       IconPanelLeftOutlineRegular: icon('panel-left'),
       IconBranchOutlineRegular: icon('branch'),
       IconArchiveOutlineRegular: icon('archive'),
+      IconCopyOutlineRegular: icon('copy'),
+      IconWarningOutlineRegular: icon('warning'),
+      // 复制与它的提示：官方会话菜单用的同一对原语
+      writeClipboard: async () => true,
+      Toast: nullComponent,
       IconChevronRightOutlineRegular: icon('chevron-right'),
       IconChevronDownOutlineRegular: icon('chevron-down'),
       IconCheckOutlineRegular: icon('check'),
