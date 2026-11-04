@@ -97,7 +97,6 @@ describe('locales', () => {
       'renameVirtualWorkspace',
       'ungroup',
       'ungroupWorkspace',
-      'unimplemented',
       'viewMode.flat',
       'viewMode.label',
       'viewMode.workspace',

@@ -160,8 +160,6 @@ export interface RegionLabels {
   expandSessions: (n: number) => string
   /** 同一个按钮在展开之后的文案 */
   collapseSessions: string
-  /** 列表底部的一行说明，列出本区域没有提供的几项能力 */
-  unimplemented: string
   /** 下拉菜单与 header 两行标题的文案 */
   picker: PickerLabels
   /** 子工作区嵌套的开关、提示与归组入口文案 */
@@ -402,7 +400,6 @@ export function regionLabels(
     // 溢出按钮与官方同一条：条数由调用方算出来传进去
     expandSessions: (n: number) => tw('sessions.expand', { n }),
     collapseSessions: tw('sessions.collapse'),
-    unimplemented: t('unimplemented'),
     picker: {
       // 官方没有「换一个工作区看」这件事的文案，入口与三个分区标题都取本包命名空间
       entry: t('picker.entry'),

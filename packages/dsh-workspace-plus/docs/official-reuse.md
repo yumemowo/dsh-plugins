@@ -174,7 +174,7 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 | 工作区选择器 | `picker.entry` `picker.change` `picker.all` `picker.recent` `picker.pinned` `picker.pin` `picker.unpin` `picker.rename` `picker.remove` `picker.followFocus` `picker.focusNewTitle` `picker.focusNewDesc` `picker.focusNewConfirm` | 面板入口与三个分区、条目行内的置顶 / 改名 / 删除、新增工作区时的聚焦确认 |
 | 展示方式 | `viewMode.label` `viewMode.workspace` `viewMode.flat` | 按工作区 / 平铺 |
 | 状态指示器 | `indicator.label` `indicator.icon` `indicator.bar` | 图标 / 色条 |
-| 对照模式与说明 | `compareTabDescription` `unimplemented` | 对照 tab 的描述、实验特性说明 |
+| 对照模式与说明 | `compareTabDescription` | 对照 tab 的描述、实验特性说明 |
 
 完整键集由 `labels.test.ts` 逐个列出，新增文案时那里会提醒重新确认它是否真的官方没有；本表只按族归并，不重复那份清单。
 

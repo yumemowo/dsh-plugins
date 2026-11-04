@@ -816,7 +816,6 @@ function RegionNotes({ nested }: { nested: boolean }): ReactElement {
           {`${labels.nested.disabledNote} ${labels.nested.reEnableHint}`}
         </div>
       )}
-      <div className={rowsStyles.note}>{labels.unimplemented}</div>
     </>
   )
 }
