@@ -11,6 +11,7 @@ src/
 ├── rootEntry.ts                根节点条目地址的形状与纯变换（宿主与浏览器共用）
 ├── pickerState.ts              菜单状态的形状与纯变换（同上，见 [数据存储](data-storage.md)）
 ├── order.ts                    一段顺序的换位换算（挪到某成员之前 / 之后 / 末尾，拖拽与宿主写入共用）
+├── forkPlacement.ts            分叉出的会话落回源会话所在的分组（判定与写入，见[界面细节](ui-details.md#分叉出的会话落在源会话的分组里)）
 ├── snapshotFeed.ts             分组快照的写入信号通道（宿主落盘后推帧，浏览器据此重拉）
 └── client/
     ├── index.ts                插件入口：语言包注册、remote 挂载、插槽注册、对照开关
@@ -127,7 +128,7 @@ src/
 
 | 产物 | 内容 |
 | --- | --- |
-| `lib/index.js` | 宿主半边：存储、服务、typert 绑定 |
+| `lib/index.js` | 宿主半边：存储、服务、typert 绑定、分叉落位 |
 | `lib/typert.js` | Host 面 Typert 清单，被 `typert-loader` 自动发现 |
 | `lib/client.js` | 浏览器半边，包成 `window.__ModuleLoader__.load({ id, factory })` |
 

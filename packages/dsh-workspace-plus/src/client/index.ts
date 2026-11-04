@@ -297,6 +297,7 @@ export function apply(ctx: Context): void {
         if (!result.ok) throw new Error(result.error.message)
       },
       // 官方菜单把 fork 的失败咽掉（分叉失败不该弹错），这里保持同一行为
+      // 只发起，落位由宿主半边在会话创建时写（见 `src/forkPlacement.ts`）
       forkSession: (sessionId) => {
         void uiWorkspace.forkSession(sessionId as never).catch(() => {})
       },
