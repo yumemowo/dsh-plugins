@@ -215,7 +215,7 @@ export async function createWorkspaceGroupsService(
 
   const domain = await ctx.storageDomain.open(workspaceGroupsSpec)
   ctx.effect(() => () => domain.close(), 'workspace-plus: domain close')
-  // 每次落盘之后推一帧：存储域的 domain/changed 只在写盘确认之后发，订阅方重拉必定读到新内容
+  // 每次落盘之后推一帧：存储域的 domain/changed 只在写盘确认之后发，订阅方 reload 必定读到新内容
   ctx.effect(
     () =>
       ctx.on('domain/changed', (change) => {

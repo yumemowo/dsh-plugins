@@ -280,16 +280,55 @@ export function flatRowsInFocus(
 }
 
 /**
+ * 找出「已归组、但所属工作区还没认领它」的会话
+ *
+ * 宿主分叉时会先建会话、再把它挂进工作区，而落位写在会话创建那一刻
+ * 因此挂载完成之前有一段空窗，分组元数据里已经有它，工作区的成员表里还没有
+ * 那段时间既不画进分组（还没归属），也不该画进末尾的未分组桶（它马上就有归属了）。画进去就是一闪
+ *
+ * 判据只认「记录里写着它属于某个工作区」
+ * 删工作区时 `forgetWorkspace` 会清掉那份记录
+ * 因此这一格不会把真的无所属会话长期藏起来
+ * @param grouped - 分组元数据里出现过的会话 id 集合
+ * @param workspaces - 当前工作区，成员表由它们给出
+ * @param sessions - 会话列表快照
+ * @returns 正在归位的会话 id 集合
+ */
+export function settlingSessionIds(
+  grouped: ReadonlySet<string>,
+  workspaces: readonly WorkspaceView[],
+  sessions: SessionListState,
+): ReadonlySet<string> {
+  const accounted = new Set<string>()
+  for (const workspace of workspaces) {
+    for (const id of workspace.sessionIds) accounted.add(String(id))
+  }
+  const byId = sessions.byId as Record<string, SessionSummary | undefined>
+  const settling = new Set<string>()
+  for (const id of grouped) {
+    // 成员表里已有它就谈不上归位，列表里没有它也无从渲染
+    if (accounted.has(id)) continue
+    if (byId[id] === undefined) continue
+    settling.add(id)
+  }
+  return settling
+}
+
+/**
  * 收集不属于任何工作区的会话行
  *
  * 删除工作区只移除注册，会话记录会原样保留，官方把这些无所属的会话收进末尾一个隐式的「未分组」区段
  * 这里取同一做法，避免删除工作区后会话在侧边栏彻底消失
+ *
+ * 跳过正在归位的那些，见 {@link settlingSessionIds}
+ * @param settling - 已归组但所属工作区尚未认领的会话，缺省表示不考虑这一段空窗
  */
 export function straySessions(
   sessions: SessionListState,
   workspaces: readonly WorkspaceView[],
   archivedSessionIds: readonly string[] = [],
   statuses: SessionStatusSnapshot = new Map(),
+  settling: ReadonlySet<string> = new Set(),
 ): SessionRow[] {
   const { byId, archived, current } = visibilityInput(sessions, archivedSessionIds)
 
@@ -307,6 +346,7 @@ export function straySessions(
     const key = String(id)
     const summary = byId[key]
     if (summary === undefined || accounted.has(key)) continue
+    if (settling.has(key)) continue
     if (!isSessionVisible(summary, current, archived)) continue
     rows.push(toSessionRow(sessions, statuses, summary))
   }

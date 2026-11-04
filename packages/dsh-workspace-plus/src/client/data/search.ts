@@ -99,6 +99,7 @@ function groupsOf(groups: readonly Group[]): Map<string, { id: string; name: str
  * @param query - 调用方输入，首尾空白忽略
  * @param limit - 结果条数上限
  * @param statuses - 统一状态快照，透传给行的投影
+ * @param settling - 已归组但所属工作区尚未认领的会话，这些不该出现在结果里
  * @returns 命中的结果页，查询为空时没有结果
  */
 export function searchSessions(
@@ -109,6 +110,7 @@ export function searchSessions(
   query: string,
   limit: number,
   statuses: SessionStatusSnapshot = new Map(),
+  settling: ReadonlySet<string> = new Set(),
 ): SessionSearchResult {
   const normalized = query.trim().toLowerCase()
   if (normalized === '') return { matches: [], hasMore: false }
@@ -134,7 +136,7 @@ export function searchSessions(
     }
   }
 
-  for (const row of straySessions(sessions, workspaces, archivedSessionIds, statuses)) {
+  for (const row of straySessions(sessions, workspaces, archivedSessionIds, statuses, settling)) {
     if (row.blank) continue
     if (!matchesQuery(row, undefined, normalized)) continue
     matches.push({ row })

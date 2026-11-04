@@ -127,10 +127,10 @@ export interface RegionActions {
   /** 读取分组快照 */
   loadGroups: () => Promise<WorkspaceGroupsSnapshot>
   /**
-   * 订阅数据面可重拉的时刻，返回反注册函数
+   * 订阅数据面可 reload 的时刻，返回反注册函数
    *
    * 本包 remote 命名空间挂载完成与官方 `connection/reset` 都会触发，可能触发多次
-   * @param listener - 可重拉时调用
+   * @param listener - 可 reload 时调用
    * @returns 反注册函数
    */
   onReady: (listener: () => void) => () => void

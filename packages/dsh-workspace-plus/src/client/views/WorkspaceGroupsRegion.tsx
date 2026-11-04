@@ -46,9 +46,17 @@ import {
   flatSessionRows,
   groupSessionsByWorkspace,
   mainSessionId,
+  settlingSessionIds,
   straySessions,
 } from '../data/sessions.ts'
 import { frontPinnedRows, pinRanks, pinnedEntries, reconcilePinned } from '../data/pinned.ts'
+import {
+  adoptWrite,
+  initialBookkeeping,
+  requestReload,
+  settleReload,
+} from '../data/snapshotState.ts'
+import type { SnapshotBookkeeping } from '../data/snapshotState.ts'
 import { PINNED_KEY } from '../data/dnd/protocol.ts'
 import { useOutline } from '../hooks/useOutline.ts'
 import { stretchDragPlan } from '../data/dnd/plan.ts'
@@ -331,8 +339,12 @@ const EMPTY_SNAPSHOT: WorkspaceGroupsSnapshot = {
  * 分组快照的加载与改动
  *
  * 宿主每个变更方法都回整份快照（见宿主 `service.ts`），直接采用它就不必再拉一次
- * 失败要留下痕迹：分组元数据的写入不可见，一次静默失败只会表现为「什么都没发生」
- * 界面与元数据的偏差却一直留着。失败时退回重拉一次，让本地状态与宿主对齐
+ *
+ * 快照有三个来源：就绪信号与推送触发的 reload 、写入方法的返回值、以及写入失败后的 reload 
+ * 它们并发到达，「谁可以覆盖谁」与「什么时候不必再发」的规则收在 `data/snapshotState.ts` 里
+ * 这里只把判定结果落到状态上
+ *
+ * 失败只留痕、不清空：之前拿到的那份仍是最后一次已知的好数据，清掉会让所有分组消失、会话退回未归组
  */
 function useSnapshotFeed(
   loadGroups: RegionActions['loadGroups'],
@@ -340,36 +352,68 @@ function useSnapshotFeed(
 ): SnapshotFeed {
   const [snapshot, setSnapshot] = useState<WorkspaceGroupsSnapshot>(EMPTY_SNAPSHOT)
 
-  const reload = useCallback(() => {
-    let cancelled = false
+  /** 调度记账，规则见 `data/snapshotState.ts` */
+  const bookkeeping = useRef<SnapshotBookkeeping>(initialBookkeeping())
+  /** 组件是否还在，卸载之后回来的响应不再落状态 */
+  const mounted = useRef(true)
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
+  /**
+   * 重新拉取 snapshot
+   *
+   * 已有在途时不并发第二次，只记下「落地后还要再来一次」——并发发出去的响应之间没有先后
+   * 谁先回来取决于网络，而它们各自都可能被当成最新的那份
+   */
+  const reload = useCallback(function issueReload(): void {
+    const requested = requestReload(bookkeeping.current)
+    bookkeeping.current = requested.state
+    if (requested.issue === undefined) return
+    const issue = requested.issue
     loadGroups()
       .then((next) => {
-        if (!cancelled) setSnapshot(normalizeSnapshot(next))
+        if (!mounted.current) return
+        const settled = settleReload(bookkeeping.current, issue)
+        bookkeeping.current = settled.state
+        if (settled.adopt) setSnapshot(normalizeSnapshot(next))
+        if (settled.followUp) issueReload()
       })
       .catch(() => {
-        if (!cancelled) setSnapshot(EMPTY_SNAPSHOT)
+        if (!mounted.current) return
+        // 失败同样要走一次落地：不结掉在途状态，之后的推送就再也发不出 reload 
+        const settled = settleReload(bookkeeping.current, issue)
+        bookkeeping.current = settled.state
+        debugWarn('snapshot reload failed')
+        if (settled.followUp) issueReload()
       })
-    return () => {
-      cancelled = true
-    }
   }, [loadGroups])
 
-  useEffect(() => reload(), [reload])
+  useEffect(() => {
+    reload()
+  }, [reload])
 
   // 首次拉取可能早于远程数据面就绪（requireApi 抛错被上面的 catch 吞掉）
-  // 就绪信号到达时重拉一次，否则已落盘的分组要等下一次改动才会出现
+  // 就绪信号到达时 reload 一次，否则已落盘的分组要等下一次改动才会出现
   useEffect(() => onReady(() => reload()), [onReady, reload])
 
   const apply = useCallback(
     (action: Promise<WorkspaceGroupsSnapshot>) => {
       void action.then(
         (next) => {
+          if (!mounted.current) return
           const normalized = normalizeSnapshot(next)
           debugWarn('snapshot applied', {
             groups: normalized.workspaceGroups.map(
               (group) => group.id + '[' + group.workspaceIds.join('|') + ']',
             ),
           })
+          // 写入的返回值比任何在途 reload 都新，采用它时把序号一并推进
+          bookkeeping.current = adoptWrite(bookkeeping.current)
           setSnapshot(normalized)
         },
         (reason: unknown) => {
@@ -732,6 +776,7 @@ function useSearchResults(
   expansion: ExpansionCommands,
   search: SearchState,
   ui: RegionUiState,
+  settling: ReadonlySet<string>,
 ): SearchResults {
   const { sessions, workspaces, archivedSessionIds, statusSnapshot } = sources
   const { searchResultLimit, openSession } = props
@@ -746,6 +791,7 @@ function useSearchResults(
         search.normalized,
         searchResultLimit,
         statusSnapshot,
+        settling,
       ),
     [
       sessions,
@@ -755,6 +801,7 @@ function useSearchResults(
       search.normalized,
       searchResultLimit,
       statusSnapshot,
+      settling,
     ],
   )
 
@@ -1478,6 +1525,22 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const { mode: viewMode, indicator, pinnedOptions } = localViewOptions
   const { snapshot, apply } = useSnapshotFeed(props.loadGroups, props.onReady)
   const layout = useRegionLayout(workspaces, snapshot, labels)
+
+  /**
+   * 已归组、但所属工作区还没认领的会话
+   *
+   * 宿主分叉时先建会话、后挂工作区，中间的这段时间它们既不属于任何工作区，又立刻就会有归属
+   * 画进末尾的未分组桶就是一闪，因此这一层把它们摘出来，渲染与搜索都跳过
+   */
+  const settling = useMemo(() => {
+    const grouped = new Set<string>()
+    for (const groups of Object.values(snapshot.byWorkspace)) {
+      for (const group of groups) {
+        for (const id of group.sessionIds) grouped.add(String(id))
+      }
+    }
+    return settlingSessionIds(grouped, workspaces, sessions)
+  }, [snapshot.byWorkspace, workspaces, sessions])
   const expansion = useExpansionValue(props, layout.nesting)
   const ui = useRegionUiState()
 
@@ -1507,7 +1570,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const now = Date.now()
 
   const { searchResult, openSearchResult } = useSearchResults(
-    props, sources, snapshot, layout, expansion.commands, search, ui,
+    props, sources, snapshot, layout, expansion.commands, search, ui, settling,
   )
   const { addWorkspace, commitFocusNew } = useWorkspaceAdoption(
     props, layout, snapshot, ui, expansion.commands, apply, sources.flowOccupied,
@@ -1567,8 +1630,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   // 聚焦时整段不出现（`focusedLayout` 只交出被聚焦的那一片），因此这里也不必为它留位
   // 就地置顶在下面按名次表处理，这里先取列表原序
   const strayRows = useMemo(
-    () => straySessions(sessions, workspaces, archivedSessionIds, statusSnapshot),
-    [sessions, workspaces, archivedSessionIds, statusSnapshot],
+    () => straySessions(sessions, workspaces, archivedSessionIds, statusSnapshot, settling),
+    [sessions, workspaces, archivedSessionIds, statusSnapshot, settling],
   )
   const searching = search.normalized !== ''
 

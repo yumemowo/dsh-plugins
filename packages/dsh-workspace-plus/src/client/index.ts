@@ -94,16 +94,16 @@ export function apply(ctx: Context): void {
   )
 
   /**
-   * 数据面可重拉的时刻
+   * 数据面可 reload 的时刻
    *
    * 两个来源合成一条信号，两者都会让此前的拉取以失败告终，而失败之后没有别的东西会重试
    * - 本包 remote 命名空间挂载完成，首次拉取常常早于它
    * - 官方 `connection/reset`，连接建立（含服务重启后的重连）才允许发起调用
    *
-   * 只挂「挂载完成」不够，连接未就绪时那次重拉同样失败，界面因此会停在空快照上
+   * 只挂「挂载完成」不够，连接未就绪时那次 reload 同样失败，界面因此会停在空快照上
    */
   const readyListeners = new Set<() => void>()
-  /** 广播一次可重拉信号，订阅者各自重新拉取 */
+  /** 广播一次可 reload 信号，订阅者各自重新拉取 */
   const announceReady = (): void => {
     for (const listener of [...readyListeners]) listener()
   }
@@ -116,7 +116,7 @@ export function apply(ctx: Context): void {
     }
   }
 
-  // 连接建立（含重连）时必须重拉：此前失败的拉取没有别的重试机会
+  // 连接建立（含重连）时必须 reload ：此前失败的拉取没有别的重试机会
   // 订阅在组件的 effect 之前注册，因此首帧那次失败必定能等到这里的补发
   ctx.effect(
     () =>
@@ -127,11 +127,11 @@ export function apply(ctx: Context): void {
   )
 
   /**
-   * 本包的行配置改动之后要重拉一次快照
+   * 本包的行配置改动之后要 reload 一次快照
    *
    * 两个可调项是 volatile 字段：改动走 Loader 的短路径，宿主不会重跑 apply，也就不会主动推新值过来
-   * 浏览器这一侧因此只有 `connection/reset` 才会重拉，改了设置页里的数字就要重连或刷新才看得见
-   * 订阅官方的 `settings/document-updated`，命中本包时重拉，与 `ui-settings` 自己的重读同一做法
+   * 浏览器这一侧因此只有 `connection/reset` 才会 reload ，改了设置页里的数字就要重连或刷新才看得见
+   * 订阅官方的 `settings/document-updated`，命中本包时 reload ，与 `ui-settings` 自己的重读同一做法
    *
    * 事件名取自官方转发白名单（`dsh-api-remotes` 的 `API_REMOTE_FORWARDED_EVENTS`），账本由宿主那一侧维护
    */
@@ -228,7 +228,7 @@ export function apply(ctx: Context): void {
   /**
    * 订阅分组快照的写入通知
    *
-   * 写在宿主侧，界面本地的状态只能靠它知道「该重拉一次」
+   * 写在宿主侧，界面本地的状态只能靠它知道「该 reload 一次」
    * 宿主那侧的信号取自存储域写盘确认之后的 `domain/changed`，因此收到帧时快照已经是新的
    *
    * 帧里带着写入涉及的表与键，但今天只当刷新触发器用，位置与时序都以下一次快照为准
@@ -240,7 +240,7 @@ export function apply(ctx: Context): void {
       | undefined
     const open = api?.followSnapshotChanges
     if (open === undefined) return () => {}
-    // 被动连接的客户端没有 $stream（交互等级不足），此时不订阅，界面靠 connection/reset 重拉
+    // 被动连接的客户端没有 $stream（交互等级不足），此时不订阅，界面靠 connection/reset  reload 
     const openStream = (ctx.remote as { $stream?: unknown }).$stream
     if (typeof openStream !== 'function') return () => {}
     const stream = ctx.remote.$stream<unknown>({
@@ -256,7 +256,7 @@ export function apply(ctx: Context): void {
           announceReady()
         }
       } catch (reason: unknown) {
-        // 流断掉不是致命错误：网关会重开，而重拉本身另有 connection/reset 兜底
+        // 流断掉不是致命错误：网关会重开，而 reload 本身另有 connection/reset 兜底
         ctx.logger.warn('workspace-plus: snapshot change stream failed')
         ctx.logger.warn(reason)
       }

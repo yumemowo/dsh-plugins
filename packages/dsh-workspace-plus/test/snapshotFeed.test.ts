@@ -5,7 +5,7 @@ import type { SnapshotChange } from '../src/snapshotFeed.ts'
 /**
  * 快照写入信号通道
  *
- * 它是「宿主写完了、已打开的界面据此重拉」的唯一通路
+ * 它是「宿主写完了、已打开的界面据此 reload 」的唯一通路
  * 订阅方收不到或收早了都不会报错：界面只是停在旧内容上，因此每一条都得单独钉住
  */
 
@@ -35,7 +35,7 @@ describe('snapshot feed', () => {
   })
 
   it('delivers nothing before a frame is published', async () => {
-    // 订阅之后不该凭空收到东西：界面拿到一帧就会重拉一次快照
+    // 订阅之后不该凭空收到东西：界面拿到一帧就会 reload 一次快照
     const feed = createSnapshotFeed()
     const abort = new AbortController()
     const iterator = feed.follow(abort.signal)[Symbol.asyncIterator]()
@@ -47,7 +47,7 @@ describe('snapshot feed', () => {
   })
 
   it('keeps every frame when several arrive in one subscription', async () => {
-    // 连着两次写入时两帧都要到：少一帧就少一次重拉，界面会停在只落了一笔的状态
+    // 连着两次写入时两帧都要到：少一帧就少一次 reload ，界面会停在只落了一笔的状态
     const feed = createSnapshotFeed()
     const abort = new AbortController()
     const iterator = feed.follow(abort.signal)[Symbol.asyncIterator]()

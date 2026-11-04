@@ -402,7 +402,7 @@ describe('snapshot change feed', () => {
   })
 
   it('ignores a write of another domain', async () => {
-    // 转发别人的写入会让界面白重拉一次，而它读到的内容与手上那份完全相同
+    // 转发别人的写入会让界面白 reload 一次，而它读到的内容与手上那份完全相同
     const { ctx, notifyChange } = createFakeContext()
     const service = await createWorkspaceGroupsService(ctx)
     const abort = new AbortController()

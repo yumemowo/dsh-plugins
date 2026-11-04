@@ -172,7 +172,7 @@ describe('host fork placement wiring', () => {
   })
 
   it('signals a finished placement through the snapshot feed', async () => {
-    // 已打开的界面靠这一帧知道该重拉：它由存储域的写盘通知转出来，因此到达时快照已是新的
+    // 已打开的界面靠这一帧知道该 reload ：它由存储域的写盘通知转出来，因此到达时快照已是新的
     const storage = storageStub({ 'ws-1': [{ id: 'group-a', name: '前端', sessionIds: ['source'] }] })
     const host = hostContext({ storage, sessionIds: ['source'] })
     apply(host.ctx)
@@ -194,13 +194,13 @@ describe('host fork placement wiring', () => {
     // 帧描述的是「哪条记录被写了」，not 某个分叉落了位：这条通道不认业务语义
     expect(frame.value.domain).toBe('workspace_plus')
     expect(frame.value.key).toBe('ws-1')
-    // 信号到达时写入已经落盘：收到的一侧此刻重拉就能读到新位置
+    // 信号到达时写入已经落盘：收到的一侧此刻 reload 就能读到新位置
     expect(storage.records.get('ws-1')?.groups[0]?.sessionIds).toEqual(['source', 'child'])
     abort.abort()
   })
 
   it('stays silent when nothing was written', async () => {
-    // 没有写入却推了一帧，界面会白重拉一次；判据没命中时必须安静
+    // 没有写入却推了一帧，界面会白 reload 一次；判据没命中时必须安静
     const storage = storageStub({ 'ws-1': [{ id: 'group-a', name: '前端', sessionIds: ['source'] }] })
     const host = hostContext({ storage, sessionIds: ['source'] })
     apply(host.ctx)

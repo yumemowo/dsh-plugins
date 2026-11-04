@@ -77,7 +77,7 @@ function fakeContext(options: { mount?: () => Promise<() => Promise<void>> } = {
   }
   const ctx = {
     get: (name: string) => services[name],
-    // apply 订阅 connection/reset 以在连接建立（含重连）后重拉，缺了它 apply 直接 TypeError
+    // apply 订阅 connection/reset 以在连接建立（含重连）后 reload ，缺了它 apply 直接 TypeError
     on: (event: string, listener: () => void) => {
       if (event === 'connection/reset') connectionListeners.push(listener)
       return () => {}
