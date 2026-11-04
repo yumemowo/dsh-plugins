@@ -47,13 +47,13 @@
 
 宿主侧 `dsh-client-hmr` 会轮询客户端 bundle 的 mtime，内容变了就推一帧 `rebuilt`，浏览器半边据此把本插件卸载再重载，因此通常不必手动刷新。本包为此必须让挂载期的资源与 fiber 严格成对：`ctx.remote.$mount` 的卸载函数要自己保管并在卸载时调用（见 `src/client/index.ts` 的挂载 effect）。丢掉它的话第二次挂载会撞上「方法已挂载」，分组读不出、写操作全抛错——热重载后表现成「插件整体失效」，只能靠刷新页面恢复。
 
-## 数据面重拉
+## 数据面 reload 
 
 分组元数据不在插槽快照里，得由本包自己去宿主拉。这条链上有两个失败窗口，缺任何一个都会让界面停在空快照上：
 
 | 窗口 | 现象 | 兜法 |
 | --- | --- | --- |
-| 区域挂载早于本包 remote 命名空间挂载完成 | `requireApi` 当场抛错 | 挂载完成时广播一次重拉 |
+| 区域挂载早于本包 remote 命名空间挂载完成 | `requireApi` 当场抛错 | 挂载完成时广播一次 reload  |
 | 连接尚未建立（页面刚打开、或 `dsh web` 重启后的重连） | 调用到传输层才失败 | 订阅官方 `connection/reset` |
 
 `connection/reset` 是官方给这件事的信号（`dsh-client-connection` 的文档原话是 wire-derived caches must repull），网关在每次连接建立时发出，重连也算。

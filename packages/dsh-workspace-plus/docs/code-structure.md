@@ -12,7 +12,7 @@ src/
 ├── pickerState.ts              菜单状态的形状与纯变换（同上，见 [数据存储](data-storage.md)）
 ├── order.ts                    一段顺序的换位换算（挪到某成员之前 / 之后 / 末尾，拖拽与宿主写入共用）
 ├── forkPlacement.ts            分叉出的会话落回源会话所在的分组（判定与写入，见[界面细节](ui-details.md#分叉出的会话落在源会话的分组里)）
-├── snapshotFeed.ts             分组快照的写入信号通道（宿主落盘后推帧，浏览器据此重拉）
+├── snapshotFeed.ts             分组快照的写入信号通道（宿主落盘后推帧，浏览器据此 reload ）
 └── client/
     ├── index.ts                插件入口：语言包注册、remote 挂载、插槽注册、对照开关
     ├── locales.ts              命名空间声明与中英字典（键名取官方叫法）
@@ -37,7 +37,8 @@ src/
     │   ├── search.ts           按标题搜索（查询净化、匹配、排序与截断）
     │   ├── pinned.ts           置顶集合的投影与合成（pinnedEntries、reconcilePinned、pinRanks、置顶段键）
     │   ├── picker.ts           下拉菜单的条目与分区（根节点条目、三个分区、聚焦裁剪与解析）
-    │   ├── sessions.ts         会话快照 → 渲染行（含可见性过滤、空白行命名、未分组收集）
+    │   ├── sessions.ts         会话快照 → 渲染行（含可见性过滤、空白行命名、未分组收集、归位中判定）
+    │   ├── snapshotState.ts    快照迁入的调度记账（发出 / 结账 / 写入作废，纯判定不碰 React）
     │   ├── collapse.ts         一个展示范围内折几条（五步判定、置顶与未空闲行，见 [会话折叠](session-collapse.md)）
     │   ├── outline.ts          分组元数据 → 行序列：根节点与工作区体内两层的切分、聚焦裁剪、顺序与归属；渲染按它逐层展开
     │   ├── dnd/                一条链路：拖拽从声明落点到写出顺序（见 [行拖拽](row-drag.md)）
