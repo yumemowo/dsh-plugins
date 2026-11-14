@@ -1451,6 +1451,31 @@ describe('client stylesheet', () => {
     }
   })
 
+  it('yields the submenu arrow to the host once the host draws its own', () => {
+    const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      selectors: (m[1] ?? '').split(',').map((s) => s.trim()),
+      body: m[2] ?? '',
+    }))
+
+    // dsh 0.2.2 起官方 MenuRow 自己给子菜单父项补行尾箭头，本包这一枚必须退场，否则一条目两个箭头
+    // 判据是「那一格已有字形」：官方那枚是本项的直接 svg 子节点，因此选 :has(> svg)
+    // 只在子菜单父项上生效，别的项没有这一档的唯一直接 svg 子节点
+    const suppress = rules.find(
+      (rule) =>
+        rule.selectors.some(
+          (s) =>
+            s.includes('.menuList') &&
+            s.includes("[aria-haspopup='menu']") &&
+            s.includes(':has(> svg)') &&
+            s.includes('.menuArrow'),
+        ),
+    )
+    expect(suppress).toBeDefined()
+    // 只藏不删：旧宿主没有官方箭头，那时这一条不匹配，本包的箭头照常显示
+    expect(suppress?.body).toMatch(/display:\s*none/)
+  })
+
   it('indents a pinned row past the status indicator like a list row', () => {
     const css = stripComments(readModuleCss('views/PinnedSection.module.css'))
     const indent = css.match(/\{[^{}]*--wg-row-start:\s*24px[^{}]*\}/)?.[0] ?? ''

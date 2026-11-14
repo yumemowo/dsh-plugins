@@ -59,7 +59,7 @@
 | 三处「复制 ID」项与失败提示 | `IconCopyOutlineRegular` / `IconWarningOutlineRegular`（与官方会话菜单的「复制 Session ID」、官方失败类提示同字形） |
 | 复制与它的结果提示 | `writeClipboard` / `Toast`（官方会话菜单复制 Session ID 用的同一对；提示的 `tone: "success"` 也照它的取值） |
 | 复制结果的状态 | `createSnapshotStore`（官方 `ui-workspace` 存 `rowToast` 的同一原语：源建在 React 之外，只有一个宿主订阅它） |
-| 子菜单父项的行尾箭头 | `IconChevronRightOutlineRegular`（与 composer slash 菜单给「可进入目录」候选画的箭头同字形） |
+| 子菜单父项的行尾箭头 | `IconChevronRightOutlineRegular`（与 composer slash 菜单给「可进入目录」候选画的箭头同字形；0.2.2 起宿主自己画了这一枚，本包的随即退场，见[界面细节](ui-details.md#工作区分组)与 `menus.module.css` 的 `.menuList` 规则） |
 | 窄栏展开入口 | `IconPanelLeftOutlineRegular`（与官方侧栏折叠按钮同一字形） |
 | 会话状态点 | `StateDot`（运行态画追光方阵，其余画圆点；颜色由原语的主题规则给出） |
 | 视图选项面板里的嵌套开关 | `IconWorkspaceTreeOutlineRegular`（官方「按工作区树分组」那一项的字形） |
