@@ -68,7 +68,7 @@
 | 展示方式 / 指示器 / 三层折叠态的状态与持久化 | `defineStore`（`@deepseek-ai/dsh-client-store`，与官方 `groupBy` 同一引擎；组件读 `useStore`、写 `actions`） |
 | 行尾相对时间 | `relativeTime`（官方 `timeLabel` 用的同一个分桶函数，文案走官方语言包） |
 | 「添加工作区」入口提示 | `Tooltip`（与官方 header 同一 `delayMs` 与展开方向） |
-| 行内 `...` 菜单与行右键菜单 | `Menu`（右键那份走它的 `getAnchorRect`，官方 `WorkspacePickFlow` 用的同一入口） |
+| 行内 `...` 菜单与行右键菜单 | `Menu`（右键那份两份定位 prop 都给：0.2.2 起用 `anchorPoint`，更早的宿主只认 `getAnchorRect`，见[界面细节](ui-details.md#行右键菜单)） |
 | 工作区行与会话行的悬停详情 | `HoverCard`（外框、浮出时机与复制反馈都由原语拥有，本包只组装正文） |
 
 原语的样式属于 ui-theme / ui-primitives：本包不为它们写颜色、阈值或高亮，只在各组件的 `.module.css` 里保留自己的布局约定。唯一的例外是悬停卡片正文那三档文字色（`.hover*`）：卡片底色由原语写死为深色，随主题翻转的色阶在上面读不出来，只能照官方 `ui-workspace` 的取值为卡片单独定色。

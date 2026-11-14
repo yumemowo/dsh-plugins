@@ -471,6 +471,14 @@ function contextMenuAnchorRect(out: { contextMenus?: unknown[] }): unknown {
   return menu?.props.getAnchorRect?.() ?? null
 }
 
+/** 从菜单元素上读新版原语要的定位点，菜单未打开时为 undefined */
+function contextMenuAnchorPoint(out: { contextMenus?: unknown[] }): unknown {
+  const menu = (out.contextMenus ?? [])[0] as
+    | { props: { anchorPoint?: unknown } }
+    | undefined
+  return menu?.props.anchorPoint
+}
+
 /**
  * 把一个组件元素包进文案提供者
  *
@@ -2392,6 +2400,8 @@ describe('row context menu', () => {
       right: 120,
       bottom: 240,
     })
+    // 同一份落点也要以新版原语的形状给出：dsh 0.2.2 起改读 anchorPoint，只给矩形会让面板落到视口原点
+    expect(contextMenuAnchorPoint({ contextMenus: [openMenu(after)] })).toEqual({ x: 120, y: 240 })
   })
 
   it('falls back to the row rect when the right click comes from the keyboard', () => {
@@ -2405,6 +2415,20 @@ describe('row context menu', () => {
       right: 40,
       bottom: 30,
     })
+    // 新版原语取矩形左上角当定位点，因此同样落在行旁
+    expect(contextMenuAnchorPoint({ contextMenus: [openMenu(after)] })).toEqual({ x: 4, y: 8 })
+  })
+
+  it('positions the panel for both the old and the new menu primitive', () => {
+    // 两份 prop 必须并存：各版本原语只认自己那一份，缺任一份都会让那一侧落到视口原点
+    const closed = rightClick(region(), 'workspaceHead')
+    const closedMenu = (closed.before.contextMenus ?? []).find(
+      (menu) => (menu as { props: { open: boolean } }).props.open === false,
+    )
+    expect(closedMenu).toBeDefined()
+    // 关着时两份都给 undefined / null：原语据此不渲染面板，也不会留一个停在旧落点的空面板
+    expect(contextMenuAnchorPoint({ contextMenus: [closedMenu] })).toBeUndefined()
+    expect(contextMenuAnchorRect({ contextMenus: [closedMenu] })).toBeNull()
   })
 
   it('keeps the row menu items and adds only the new-session entry', () => {

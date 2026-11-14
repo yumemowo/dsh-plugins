@@ -501,7 +501,15 @@ describe('client stylesheet', () => {
     // 原语根节点是 position: relative 的行内盒
     // 没有 DOM 子节点（面板 portal 到 body）。留在流里会成为一个空 flex 项
     // 行的 gap 照样算，标题与会话数会被推开
-    expect(root?.body).toMatch(/display:\s*contents/)
+    expect(root?.body).toMatch(/position:\s*absolute/)
+    expect(root?.body).toMatch(/width:\s*0/)
+    expect(root?.body).toMatch(/height:\s*0/)
+
+    // 反过来：绝不能靠「不生成盒子」摘出去
+    // dsh 0.2.2 起原语改用 CSS 锚点，锚点就写在这个根节点的 anchor-name 上
+    // 盒子不存在则锚点解析失败，面板退到视口原点（也就是这次修的错位）
+    expect(root?.body).not.toMatch(/display:\s*contents/)
+
     // 类名写两遍抬一次优先级，原语自己的单类规则谁后注入谁赢，先后不由本包决定
     expect(root).toBeDefined()
   })

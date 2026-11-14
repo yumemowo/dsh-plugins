@@ -49,7 +49,7 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     /**
      * 面板的定位矩形，只在 `portal` 下生效
      *
-     * 给了就按它定位，而不是去量锚点元素，右键菜单因此能落在指针处
+     * dsh 0.2.2 起原语不再读这个 prop，改用 `anchorPoint`；更早的宿主只认这个
      * 原语只读四条边，返回 null 表示本次没有可用的矩形，面板保持隐藏
      */
     getAnchorRect?: (() => {
@@ -58,6 +58,14 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
       right: number
       bottom: number
     } | null) | undefined
+    /**
+     * 面板的定位点，只在 `portal` 下生效
+     *
+     * 坐标与 `event.clientX` / `clientY` 同一套（客户端视口坐标系），调用方不要自行叠加视觉视口偏移
+     * 原语自己在打开与坐标变化时做 Safari 的视口换算
+     * dsh 0.2.2 起替代 `getAnchorRect`；更早的宿主不认识这个 prop
+     */
+    anchorPoint?: { x: number; y: number } | undefined
     /** 挂在原语根节点上的类名，根节点默认是行内盒，行内使用时靠它调整 */
     className?: string
     /**
