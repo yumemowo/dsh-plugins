@@ -61,7 +61,7 @@ pnpm run verify:mount  # 组装并启动一个包含各插件的临时 profile
 pnpm run check         # 以上全部，按顺序执行
 ```
 
-环境要求：Node.js ≥ 22.19、pnpm 11（`corepack enable pnpm`）。`pnpm run verify:mount` 还需要 PATH 中有 `dsh`。
+环境要求：Node.js ≥ 22.19、pnpm 11（`corepack enable pnpm`）。`pnpm run verify:mount` 还需要 PATH 中有 `dsh`（dsh 0.2.2 起要求 Node.js ≥ 24.9）。
 
 `verify:mount` 会把 `DSH_HOME` 指向 `.tmp/verify-home`，不影响真实的 `~/.dsh`。它校验的是构建产物：真实的 `dsh` 启动器能否解析插件入口与 patch、并接受配置 schema，这是单元测试覆盖不到的一环。
 
