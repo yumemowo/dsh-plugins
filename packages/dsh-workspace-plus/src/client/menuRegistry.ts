@@ -36,12 +36,31 @@ export interface RegistryResolution {
   dispose: () => void
 }
 
+/** 一条会话行的身份与它当前显示的标题 */
+export interface SessionMenuTarget {
+  readonly sessionId: string
+  readonly displayTitle: string
+}
+
+/**
+ * 一个工作区行的身份与它当前显示的标题
+ *
+ * 官方的同形取值是 `workspaceId` / `path` / `displayTitle`，其中 `path` 只有官方那两项的解析会读
+ * 本包自己执行那两项，因此这里只要身份与标题
+ */
+export interface WorkspaceMenuTarget {
+  readonly workspaceId: string
+  readonly displayTitle: string
+}
+
+/** 解析的对象：按 `kind` 区分是哪个目标种类 */
+export type MenuTarget =
+  | { readonly kind: 'session'; readonly value: SessionMenuTarget }
+  | { readonly kind: 'workspace'; readonly value: WorkspaceMenuTarget }
+
 /** 本模块用到的那部分注册表服务面 */
 export interface MenuRegistryFace {
-  resolve: (target: {
-    readonly kind: 'session'
-    readonly value: { readonly sessionId: string; readonly displayTitle: string }
-  }) => RegistryResolution
+  resolve: (target: MenuTarget) => RegistryResolution
 }
 
 /**
@@ -58,23 +77,19 @@ export function asMenuRegistry(candidate: unknown): MenuRegistryFace | undefined
   return typeof resolve === 'function' ? (candidate as MenuRegistryFace) : undefined
 }
 
-/** 解析的对象：一条会话行的身份与它当前显示的标题 */
-export interface SessionMenuTarget {
-  readonly sessionId: string
-  readonly displayTitle: string
-}
-
 /**
- * 为一条会话解析一次菜单
+ * 解析一次菜单
+ *
+ * 目标种类决定注册表把哪些 provider 的条目合进来：`session` 与 `workspace` 是两条独立的线
  * @param registry - 注册表服务
- * @param target - 被右键或被行尾按钮打开的会话
+ * @param target - 被右键或被行尾按钮打开的那一行
  * @returns 这次解析，调用方负责在卸载时释放
  */
-export function openSessionMenu(
+export function resolveMenu(
   registry: MenuRegistryFace,
-  target: SessionMenuTarget,
+  target: MenuTarget,
 ): RegistryResolution {
-  return registry.resolve({ kind: 'session', value: target })
+  return registry.resolve(target)
 }
 
 /** 菜单原语认识的一条可点条目 */

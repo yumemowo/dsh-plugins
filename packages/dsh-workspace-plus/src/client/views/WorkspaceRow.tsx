@@ -10,8 +10,8 @@
  * 悬停后浮出官方 `HoverCard`：卡片里是工作区名、目录路径（home 缩写）与绝对创建时刻，整卡可点即复制完整路径
  * 未分组桶不是真实工作区（没有目录与创建时刻），官方在那里同样不给卡片，因此 `hover` 缺省即整卡不渲染
  */
-import { useState } from 'react'
-import type { ReactElement } from 'react'
+import { useMemo, useState } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import {
   HoverCard,
   IconFolderCloseRegular,
@@ -24,6 +24,7 @@ import {
   VIRTUAL_WORKSPACE_ITEM,
   VIRTUAL_WORKSPACE_PREFIX,
   WORKSPACE_MENU,
+  WORKSPACE_MENU_OFFICIAL_IDS,
   buildRowContextMenuItems,
   buildWorkspaceMenuItems,
   parseParentGroupId,
@@ -32,6 +33,8 @@ import type { ParentGroupMenuInput, VirtualWorkspaceMenuInput } from '../menus.t
 import { RowActions } from './RowActions.tsx'
 import { WorkspaceHoverContent } from './components/HoverCards.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
+import { useRowMenu } from '../hooks/useRowMenu.ts'
+import type { MenuRegistryFace } from '../menuRegistry.ts'
 import { RowHeadShell } from './components/RowHeadShell.tsx'
 import { useLocale } from '../hooks/useLocale.ts'
 import type { DragStartEvent } from '../hooks/useDnd.ts'
@@ -99,6 +102,20 @@ export interface WorkspaceRowProps {
    * 未分组桶里的工作区行、以及被当纯展示渲染的行都属于这一档
    */
   dnd?: WorkspaceRowDnd | undefined
+  /**
+   * 官方右键菜单注册表，缺省表示宿主没装 `ui-context-menu`
+   *
+   * 第三方插件注册进 `workspace` 目标的条目靠它出现——那批条目本包自己做不出来
+   */
+  registry?: MenuRegistryFace | undefined
+  /** 按图标键取字形，注册表条目只给键 */
+  menuIcon?: ((key: string) => ReactNode) | undefined
+  /**
+   * 该工作区的身份，注册表解析时用
+   *
+   * 未分组桶不是真实工作区，没有身份可解析，那一行因此不接注册表
+   */
+  workspaceTarget?: { readonly workspaceId: string; readonly displayTitle: string } | undefined
 }
 
 /** 工作区标题行的拖拽接线，由 {@link WorkspaceSection} 从 `useOrderRow` 取下后原样摊进行里 */
@@ -133,6 +150,9 @@ export function WorkspaceRow({
   hoverCopy,
   virtualWorkspace,
   dnd,
+  registry,
+  menuIcon,
+  workspaceTarget,
 }: WorkspaceRowProps): ReactElement {
   const { labels } = useLocale()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -161,18 +181,61 @@ export function WorkspaceRow({
     }
   }
 
-  const menuItems = manageable
-    ? buildWorkspaceMenuItems({
-        newGroupLabel: labels.newGroup,
-        renameLabel: labels.rename,
-        deleteLabel: labels.deleteWorkspace,
-        // 没有移入入口的行（未分组桶）不出现这一项，否则是个点不动的死入口
-        virtualWorkspaceGrouping: onSelectVirtualWorkspace === undefined ? undefined : virtualWorkspace,
-        parentGrouping: onSelectParentGroup === undefined ? undefined : parentGroup,
-      })
-    : undefined
+  /**
+   * 本包自己实现的那几条
+   *
+   * 「重命名」与「删除工作区」官方也注册进 `workspace` 目标，但那两项的 `run` 只是往官方组件内部的
+   * `workspaceActionRequest` 写一次请求，执行者是官方 `WorkspaceBrowser` 里的对话框——本包接替了那个区域，
+   * 那份请求因此没人读。所以这两项由本包实现，注册表交来的同 id 条目在下面被排掉
+   */
+  const ownItems = useMemo(
+    () =>
+      manageable
+        ? buildWorkspaceMenuItems({
+            newGroupLabel: labels.newGroup,
+            renameLabel: labels.rename,
+            deleteLabel: labels.deleteWorkspace,
+            // 没有移入入口的行（未分组桶）不出现这一项，否则是个点不动的死入口
+            virtualWorkspaceGrouping:
+              onSelectVirtualWorkspace === undefined ? undefined : virtualWorkspace,
+            parentGrouping: onSelectParentGroup === undefined ? undefined : parentGroup,
+          })
+        : [],
+    [
+      manageable,
+      labels.newGroup,
+      labels.rename,
+      labels.deleteWorkspace,
+      onSelectVirtualWorkspace,
+      virtualWorkspace,
+      onSelectParentGroup,
+      parentGroup,
+    ],
+  )
+
+  /**
+   * 注册表那段
+   *
+   * 目标种类是 `workspace`，与会话行那条线各自独立：第三方插件按自己的需要注册到其中一边
+   * 官方那两项与本包实现重复，因此用 `excluded` 排掉，其余条目一律交给注册表执行
+   */
+  const target = useMemo(
+    () =>
+      workspaceTarget === undefined
+        ? { kind: 'workspace' as const, value: { workspaceId: '', displayTitle: title } }
+        : { kind: 'workspace' as const, value: workspaceTarget },
+    [workspaceTarget, title],
+  )
+  const rowMenu = useRowMenu(
+    registry,
+    menuIcon,
+    target,
+    ownItems,
+    WORKSPACE_MENU_OFFICIAL_IDS,
+  )
 
   // 没有新建入口时「新建会话」项不出现，右键菜单因此就是 `...` 菜单本身
+  const menuItems = rowMenu.items.length > 0 ? rowMenu.items : undefined
   const contextMenu = useRowContextMenu({
     items:
       menuItems === undefined
@@ -181,8 +244,16 @@ export function WorkspaceRow({
             menuItems,
             onCreateSession === undefined ? undefined : labels.newSessionItem,
           ),
-    onSelect: select,
-    enabled: menuItems !== undefined,
+    onSelect: (id) => {
+      setMenuOpen(false)
+      // 先执行再释放：注册表选中时会检查这次解析是否还有效，先释放就点不动了
+      rowMenu.select(id, select)
+      rowMenu.release()
+    },
+    // 条目可能来自按需解析的注册表，因此判据不是「眼下有没有条目」，而是「这一行能不能有菜单」
+    enabled: menuItems !== undefined || (registry !== undefined && workspaceTarget !== undefined),
+    onPrepare: rowMenu.prepare,
+    onClose: rowMenu.release,
   })
 
   const row = (
@@ -211,7 +282,11 @@ export function WorkspaceRow({
         <span className={styles.workspaceTitle}>{title}</span>
         <RowActions
           menuOpen={menuOpen}
-          onMenuOpen={setMenuOpen}
+          // 条目要等注册表解析过才有，因此开合前先解析一次：与右键路径同一个入口
+          onMenuOpen={(open) => {
+            if (open) rowMenu.prepare()
+            setMenuOpen(open)
+          }}
           onMenuSelect={select}
           menuItems={menuItems}
           actionsLabel={labels.workspaceActions(title)}

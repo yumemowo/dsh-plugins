@@ -211,6 +211,17 @@ export const WORKSPACE_MENU = {
   delete: 'delete',
 } as const
 
+/**
+ * 官方也注册进 `workspace` 目标、但本包自己实现的那两项
+ *
+ * 它们的 `run` 写进官方组件内部的请求源，执行者是官方 `WorkspaceBrowser` 里的对话框；
+ * 本包接替那个区域后没人读那份请求，因此这两项由本包实现，注册表交来的同 id 条目排掉
+ */
+export const WORKSPACE_MENU_OFFICIAL_IDS: readonly string[] = [
+  'rename',
+  'delete',
+]
+
 /** 工作区菜单里的分隔线 id，分块方案见 `buildWorkspaceMenuItems` */
 export const WORKSPACE_MENU_SEPARATOR = {
   parentGroup: 'separator-parent-group',

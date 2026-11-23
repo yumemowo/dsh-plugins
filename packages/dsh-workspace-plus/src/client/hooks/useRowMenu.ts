@@ -1,18 +1,26 @@
 /**
- * 一条会话行的菜单：官方注册表那段 + 本包自有的归组项
+ * 一行菜单上的官方注册表那段
+ *
+ * 行的种类不同，注册表按目标种类过滤 provider：会话行取 `session`，工作区行取 `workspace`
+ * 两边的装配过程一样，因此这里按目标种类参数化，两行各自只用传自己的身份
  *
  * 注册表的解析按需发生：行可能永远不被打开菜单，因此不在挂载期解析
  * 打开时解析一次，订阅它发布的变化（插件可能异步准备条目），关闭时释放
- * 注册表不在场时整段跳过，只用本包自有的条目——与改动前完全一致
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
-import { composeSessionMenu, openSessionMenu, registryMenuItems } from '../menuRegistry.ts'
-import type { MenuRegistryFace, RegistryActionView, RegistryMenuItem, RegistryResolution } from '../menuRegistry.ts'
+import { composeSessionMenu, registryMenuItems, resolveMenu } from '../menuRegistry.ts'
+import type {
+  MenuRegistryFace,
+  MenuTarget,
+  RegistryActionView,
+  RegistryMenuItem,
+  RegistryResolution,
+} from '../menuRegistry.ts'
 
 /** 本钩子交出的菜单面 */
-export interface SessionMenuHandle {
+export interface RowMenuHandle {
   /** 当前该渲染的条目：注册表那段在前，本包自有的接在后面 */
   items: readonly MenuItem[]
   /**
@@ -30,19 +38,21 @@ export interface SessionMenuHandle {
 }
 
 /**
- * 装配一条会话行的菜单
+ * 装配一行的菜单
  * @param registry - 官方菜单注册表，缺省表示宿主没装它
  * @param iconOf - 按图标键取字形，缺省时注册表条目只剩文字
- * @param target - 这一行的会话身份与当前标题
+ * @param target - 这一行的目标种类与身份
  * @param ownItems - 本包自有的条目，接在注册表那段之后
+ * @param excluded - 注册表交来但本包自己实现、不该重复出现的条目 id
  * @returns 菜单面
  */
-export function useSessionMenu(
+export function useRowMenu(
   registry: MenuRegistryFace | undefined,
   iconOf: ((key: string) => ReactNode) | undefined,
-  target: { readonly sessionId: string; readonly displayTitle: string },
+  target: MenuTarget,
   ownItems: readonly MenuItem[],
-): SessionMenuHandle {
+  excluded: readonly string[] = [],
+): RowMenuHandle {
   const resolution = useRef<RegistryResolution | null>(null)
   const unsubscribe = useRef<(() => void) | null>(null)
   const [views, setViews] = useState<readonly RegistryActionView[]>([])
@@ -59,7 +69,7 @@ export function useSessionMenu(
 
   const prepare = useCallback((): void => {
     if (registry === undefined || resolution.current !== null) return
-    const opened = openSessionMenu(registry, target)
+    const opened = resolveMenu(registry, target)
     resolution.current = opened
     const apply = (): void => { setViews(opened.source.getSnapshot()) }
     apply()
@@ -75,12 +85,15 @@ export function useSessionMenu(
     ownSelect(id)
   }, [views])
 
+  const shown = excluded.length === 0
+    ? views
+    : views.filter((view) => !excluded.includes(view.id))
   const registryItems: RegistryMenuItem[] = iconOf === undefined
-    ? registryMenuItems(views, () => null)
-    : registryMenuItems(views, iconOf)
+    ? registryMenuItems(shown, () => null)
+    : registryMenuItems(shown, iconOf)
 
   return {
-    items: composeSessionMenu(registryItems, ownItems as RegistryMenuItem[], views) as readonly MenuItem[],
+    items: composeSessionMenu(registryItems, ownItems as RegistryMenuItem[], shown) as readonly MenuItem[],
     select,
     prepare,
     release,
