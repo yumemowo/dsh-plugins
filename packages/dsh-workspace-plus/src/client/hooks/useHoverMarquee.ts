@@ -20,7 +20,7 @@ const PX_PER_MS = 0.03
 
 /** 一条行上跑马灯的进出入口，展开到行元素上 */
 export interface HoverMarquee {
-  /** 开始移出；触摸指针与本来就不溢出的文字什么也不做 */
+  /** 开始移出，触摸指针与本来就不溢出的文字什么也不做 */
   readonly onPointerEnter: (event: PointerEvent) => void
   /** 一步回原位 */
   readonly onPointerLeave: () => void
@@ -30,14 +30,14 @@ export interface HoverMarquee {
  * 把文字的滚动位置放好，并写下样式表读的两格淡出钩子
  *
  * `data-scrolled` 表示文字已离开起点（左缘淡出），`data-clipped` 表示右侧还有字没露出来（右缘淡出）
- * `data-marquee` 标记「正在移出」，由开始那一刻置上而不是等第一帧：省略号固在右缘，
- * 留在那儿会压在挪到中间的半截字身上，因此这一态一置上就得摘掉它
+ * `data-marquee` 标记「正在移出」，由开始那一刻置上而不是等第一帧
+ * 省略号固在右缘，留在那儿会压在挪到中间的半截字身上，因此这一态一置上就得摘掉它
  * @param text - 行上那个裁剪文字的元素
  * @param left - 滚动位置，CSS 像素
  * @param range - 这个元素的最大滚动距离，CSS 像素
  */
 function place(text: HTMLElement, left: number, range: number): void {
-  // jsdom 不实现 scrollTo；那里直接赋值同样是瞬时的，两条路径落在同一位置
+  // jsdom 不实现 scrollTo，那里直接赋值同样是瞬时的，两条路径落在同一位置
   if (typeof text.scrollTo === 'function') text.scrollTo({ left, behavior: 'instant' })
   else text.scrollLeft = left
   if (left > 0) text.dataset.scrolled = ''
@@ -61,7 +61,7 @@ function rest(text: HTMLElement): void {
 /**
  * 指针停在行上时把溢出的文字移出来
  *
- * 溢出不超过 {@link MIN_REVEAL_PX} 的不动——只被裁掉几个像素的文字挪一点点看起来像抖动，不像揭示
+ * 溢出不超过 {@link MIN_REVEAL_PX} 的不动，只被裁掉几个像素的文字挪一点点看起来像抖动，不像揭示
  * 减少动态效果时直接跳到最右端，不逐帧爬
  * @param text - 行上那个裁剪文字的引用
  * @param options.hold - 指针不在行上时也保持移出，用于行菜单开着的情形

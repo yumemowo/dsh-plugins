@@ -3,13 +3,13 @@ import type { MenuRegistryFace, MenuTarget } from '../../src/client/menuRegistry
 /**
  * 官方右键菜单注册表的替身
  *
- * rc.1 起官方 `ui-workspace` 把 `contextMenus` 声明为必需注入，它因此必然在场；
+ * rc.1 起官方 `ui-workspace` 把 `contextMenus` 声明为必需注入，它因此必然在场
  * 会话行与工作区行的官方条目都从它来，不用替身就只能测到本包自己那几条
  *
  * 形状照官方的解析结果：条目来自可订阅的源，选中按 id 交回给这次解析
  *
- * **条目 id 要按官方那样投影成 `<提供者 id>/<动作 id>`**，不能交裸的动作 id：
- * 官方 `resolve` 里做的是 `\`${encodeURIComponent(provider.id)}/${encodeURIComponent(action.id)}\``，
+ * 条目 id 要按官方那样投影成 `<提供者 id>/<动作 id>`，不能交裸的动作 id
+ * 官方 `resolve` 里做的是 `\`${encodeURIComponent(provider.id)}/${encodeURIComponent(action.id)}\``
  * 交裸 id 会让「按 id 排掉某一条」这类判断在真实宿主上一条都匹配不上，而测试照样全绿
  *
  * 选项：

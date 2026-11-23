@@ -4,11 +4,8 @@
  * 官方 `ui-workspace` 在 `sidebar.workspaces` 之下声明了几个行级子插槽（行首指示位、悬停卡片段、行尾操作按钮）
  * 本包接替父插槽只是不再渲染官方组件，那批声明仍在 ledger 里，别的插件的注册因此照旧落得进去
  *
- * 行尾图标位（`sidebar.session.row.trailing`）在 rc5 上还没有声明者，往它注册会抛「未声明」
- * 这里照样列出并渲染：宿主换到 alpha 时那一格已经有了声明，本包不用改
- *
- * **本包不能声明它们**：一个插槽只能有一个声明者，官方那条注册仍在，重复声明直接抛错（见 `test/slotDeclaration.test.ts`）
- * 而 `renderSlot` 只授权给自己 `children` 表里声明过的键，本包这张表因此是空的
+ * 本包不能声明它们：一个插槽只能有一个声明者，官方那条注册仍在，重复声明直接抛错（见 `test/slotDeclaration.test.ts`）
+ * `renderSlot` 只授权给自己 `children` 表里声明过的键，本包这张表因此是空的
  *
  * 于是这里走与 `directoryFlow.ts` 同一条路：从 ledger 的条目表里取出占用者，按渲染器传播 props 的同一套做法自己渲染
  *
@@ -30,7 +27,7 @@ import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 
 /** 行级子插槽的四个键，与官方声明的那几条同名 */
 export const ROW_SLOTS = {
-  /** 行首状态位；只在行自身的主状态是空闲时挂 */
+  /** 行首状态位，只在行自身的主状态是空闲时挂 */
   leading: 'sidebar.session.row.leading',
   /** 行尾时间与图钉之间的图标位 */
   trailing: 'sidebar.session.row.trailing',
@@ -85,7 +82,7 @@ function identity<T>(value: T): T {
  * 把一个可订阅源绑成选择器 hook
  *
  * 组件每次渲染都会调用这个 hook，因此同一份源必须交回同一个函数，否则每次渲染都是新 hook
- * 选择结果按「源快照 + 选择器身份」留在 ref 里：源没变就不重算，判等函数说没变就继续用旧值，
+ * 选择结果按「源快照 + 选择器身份」留在 ref 里：源没变就不重算，判等函数说没变就继续用旧值
  * 消费它的组件因此不会因为选择器每次交出新对象而重渲染
  * @param source - 可订阅源
  * @returns 选择器 hook
@@ -206,7 +203,7 @@ const localeCache = new WeakMap<LocaleRuntime, Map<string, unknown>>()
  * 源名到它的 hook prop 名
  *
  * 与渲染器同一条推导：首字母大写后加 `use` 前缀，因此 `catalog` 变成 `useCatalog`
- * 不直接 import 官方那个同名函数：`@deepseek-ai/dsh-client-ui-slots` 不在产物基线表里，
+ * 不直接 import 官方那个同名函数：`@deepseek-ai/dsh-client-ui-slots` 不在产物基线表里
  * 为了一行推导把它的核心打第二份进产物不值得
  * @param name - 注册时写的源名
  * @returns 组件上那一格 prop 的名字
@@ -281,7 +278,7 @@ class OccupantBoundary extends Component<{ slotKey: string; children?: ReactNode
  * @param key - 四个行级子插槽之一
  * @param owner - 这一格的主人数据，如 `{ sessionId }`
  * @param standard - 全局标准 hook（如 `useSessions`），与渲染器给每个插槽注册项的那一份同形
- * @returns 渲染好的节点；没有占用者时为 null
+ * @returns 渲染好的节点，没有占用者时为 null
  */
 export function renderRowSlot(
   slots: SlotRegistry,

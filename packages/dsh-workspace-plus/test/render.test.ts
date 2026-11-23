@@ -529,7 +529,7 @@ function expansionStub(overrides: Partial<Expansion> = {}): Expansion {
  *
  * 直接渲染单行而不是整片区域：测试替身按组件类型给状态分桶
  * 同一类型的多个实例共用一份状态，整片列表里所有会话行会一起「被右键」
- * 官方那五项会话操作由官方右键菜单注册表供，这里一律给一份注册表替身：
+ * 官方那五项会话操作由官方右键菜单注册表供，这里一律给一份注册表替身
  * rc.1 起官方 `ui-workspace` 把 `contextMenus` 声明为必需注入，它必然在场
  * @param options.registry - 给不给注册表，false 用于验证「注册表缺席时只剩本包归组项」
  * @param options.grouping - 归组上下文，缺省表示该行没有分组可归
@@ -1200,7 +1200,7 @@ describe('WorkspaceGroupsRegion render', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
-    // 官方那五项由官方右键菜单注册表供；本包任何一份菜单里都不该再出现它们的 id
+    // 官方那五项由官方右键菜单注册表供，本包任何一份菜单里都不该再出现它们的 id
     for (const ids of menuItems(out)) {
       for (const officialId of ['pin', 'fork', 'archive', 'copy-id']) {
         expect(ids).not.toContain(officialId)
@@ -1249,7 +1249,8 @@ describe('WorkspaceGroupsRegion render', () => {
     render(React.createElement(WorkspaceGroupsRegion, props(true)), without)
 
     // 多出这条占位行后右键菜单数不变：空白行一份都不贡献
-    // 两份分别是工作区行与归组会话行；未分组桶里那条没有归组项，区域这一层又没给注册表，因此它没有菜单
+    // 两份分别是工作区行与归组会话行
+    // 未分组桶里那条没有归组项，区域这一层又没给注册表，因此它没有菜单
     expect(withBlank.contextMenus).toHaveLength((without.contextMenus ?? []).length)
     expect(withBlank.contextMenus).toHaveLength(2)
   })

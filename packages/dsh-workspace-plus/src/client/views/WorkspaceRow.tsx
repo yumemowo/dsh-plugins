@@ -106,7 +106,7 @@ export interface WorkspaceRowProps {
   /**
    * 官方右键菜单注册表，缺省表示宿主没装 `ui-context-menu`
    *
-   * 第三方插件注册进 `workspace` 目标的条目靠它出现——那批条目本包自己做不出来
+   * 第三方插件注册进 `workspace` 目标的条目靠它出现，那批条目本包自己做不出来
    */
   registry?: MenuRegistryFace | undefined
   /** 按图标键取字形，注册表条目只给键 */
@@ -185,9 +185,9 @@ export function WorkspaceRow({
   /**
    * 本包自己实现的那几条
    *
-   * 「重命名」与「删除工作区」官方也注册进 `workspace` 目标，但那两项的 `run` 只是往官方组件内部的
-   * `workspaceActionRequest` 写一次请求，执行者是官方 `WorkspaceBrowser` 里的对话框——本包接替了那个区域，
-   * 那份请求因此没人读。所以这两项由本包实现，注册表交来的同 id 条目在下面被排掉
+   * 「重命名」与「删除工作区」官方也注册进 `workspace` 目标，`run` 只是往官方的 `workspaceActionRequest` 写一次请求
+   * 执行者是官方 `WorkspaceBrowser` 里的对话框，本包接替了那个区域，那份请求因此没人读
+   * 这两项因此由本包实现，注册表交来的同 id 条目在下面被排掉
    */
   const ownItems = useMemo(
     () =>

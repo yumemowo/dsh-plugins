@@ -263,7 +263,7 @@ function SessionRowItemView({
     setMenuOpen((open) => !open)
   }
 
-  // 条目要等注册表解析过才有，因此判据不是「眼下有没有条目」而是「这一行能不能有菜单」：
+  // 条目要等注册表解析过才有，因此判据不是「眼下有没有条目」而是「这一行能不能有菜单」
   // 注册表在场时它的条目按需解析，第一次右键必须被接住并顺手补齐，否则浏览器会弹出自己的菜单
   // 注册表不在场时只剩本包自有的那几个 id，一个都没有就让右键保持默认行为，不留一个空面板
   // 空白会话没有会话可操作，与官方对它不渲染省略号同一取舍
@@ -271,7 +271,7 @@ function SessionRowItemView({
     items,
     onSelect: select,
     enabled: !row.blank && (registry !== undefined || ownItems.length > 0),
-    // 两个面板共用同一次解析：右键打开的那次准备同样要在关掉时释放，
+    // 两个面板共用同一次解析：右键打开的那次准备同样要在关掉时释放
     // 否则解析一直挂到行被卸载，注册表那边也就一直认为这次解析还有人在用
     onPrepare: sessionMenu.prepare,
     onClose: sessionMenu.release,

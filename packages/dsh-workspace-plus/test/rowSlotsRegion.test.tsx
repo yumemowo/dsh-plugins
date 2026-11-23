@@ -16,7 +16,7 @@ import { viewModeProps } from './viewMode-stub.ts'
 /**
  * 行级子插槽的占用者经由区域渲染时不会崩
  *
- * 占用者按渲染器的约定读 `useCatalog` 这类**绑好的选择器**，而不是读源本身
+ * 占用者按渲染器的约定读 `useCatalog` 这类绑好的选择器，而不是读源本身
  * 本包自己渲染占用者时若把 `hooks` 隔间原样传下去，占用者拿到 undefined 就当函数调用
  * 这条用例照 Schedule 告警标记的真实形状走一遍区域，钉住「不崩、且画得出来」
  */
@@ -155,7 +155,7 @@ describe('a row slot occupant over the region', () => {
   })
 
   it('forwards every use* prop it is given, without a hand-written list', async () => {
-    // 全局标准 hook 有十几个且随宿主新增；名单式转发漏一个就崩，而漏的那个 tsc 看不见
+    // 全局标准 hook 有十几个且随宿主新增，名单式转发漏一个就崩，而漏的那个 tsc 看不见
     // 这里只验「按约定整体转发」这条机制本身：随便给一个本包不认识的 use*，占用者也拿得到
     const seen: Record<string, unknown> = {}
     const Probe = (props: Record<string, unknown>) => {

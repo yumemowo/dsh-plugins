@@ -113,7 +113,7 @@ export function buildGroupMenuItem(input: GroupMenuInput): MenuActionItem {
 /**
  * 构造会话「更多操作」菜单里本包自己的那一部分
  *
- * 只剩分组项：官方那几项（置顶 / 重命名 / 分叉 / 归档 / 复制 Session ID）由官方右键菜单注册表供，
+ * 只剩分组项：官方那几项（置顶 / 重命名 / 分叉 / 归档 / 复制 Session ID）由官方右键菜单注册表供
  * 本包把它们接在前面，见 {@link composeSessionMenu}
  * @returns Menu items 列表，没有分组上下文时为空
  */
@@ -214,11 +214,11 @@ export const WORKSPACE_MENU = {
 /**
  * 官方也注册进 `workspace` 目标、但本包自己实现的那两项
  *
- * 它们的 `run` 写进官方组件内部的请求源，执行者是官方 `WorkspaceBrowser` 里的对话框；
+ * 它们的 `run` 写进官方组件内部的请求源，执行者是官方 `WorkspaceBrowser` 里的对话框
  * 本包接替那个区域后没人读那份请求，因此这两项由本包实现，注册表交来的同源条目排掉
  *
- * 注册表把条目的 id 投影成 `<提供者 id>/<动作 id>`（见官方的 `project`），不是裸的动作 id：
- * 官方那两条的提供者 id 是 `workspace.rename` / `workspace.delete`，动作 id 是 `rename` / `delete`，
+ * 注册表把条目的 id 投影成 `<提供者 id>/<动作 id>`（见官方的 `project`），不是裸的动作 id
+ * 官方那两条的提供者 id 是 `workspace.rename` / `workspace.delete`，动作 id 是 `rename` / `delete`
  * 因此这里要写投影后的完整形式。用裸 id 会一条都匹配不上，菜单里就会同一件事出现两次
  */
 export const WORKSPACE_MENU_OFFICIAL_IDS: readonly string[] = [

@@ -72,7 +72,7 @@ describe('buildSessionMenuItems', () => {
   }
 
   it('offers only the group item, never the official actions', () => {
-    // 官方那五项由官方右键菜单注册表供，本包不再自己拼一份——两处都拼会让同一项出现两次
+    // 官方那五项由官方右键菜单注册表供，本包不再自己拼一份，两处都拼会让同一项出现两次
     const items = buildSessionMenuItems({ grouping: grouping('') })
 
     expect(items.map((item) => (item as { id?: string }).id)).toEqual(['group'])

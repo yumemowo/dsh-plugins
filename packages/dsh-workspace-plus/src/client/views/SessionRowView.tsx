@@ -204,7 +204,7 @@ function SessionRowViewImpl({
   const disarmRename = useRef(() => {
     renameArmed.current = false
   }).current
-  // 标题被格子裁掉时指针停在行上把它挪出来看全；行菜单开着时保持移出，指针移到面板上也不算离开
+  // 标题被格子裁掉时指针停在行上把它挪出来看全，行菜单开着时保持移出，指针移到面板上也不算离开
   const titleRef = useRef<HTMLSpanElement | null>(null)
   const marquee = useHoverMarquee(titleRef, { hold: panelOpen })
 
@@ -271,7 +271,7 @@ function SessionRowViewImpl({
       onPointerLeave={marquee.onPointerLeave}
     >
       <span className={clsx(styles.rowSurface, selected && styles.rowSelected)}>
-        {/* 行首那一格：有主状态时画状态位，空闲时才让给占用者——与官方同一条取舍，两者不共享同一格 */}
+        {/* 行首那一格：有主状态时画状态位，空闲时才让给占用者，与官方同一条取舍，两者不共享同一格 */}
         {status ? <StatusIndicator status={status} /> : leadingSlot}
         <span
           ref={titleRef}

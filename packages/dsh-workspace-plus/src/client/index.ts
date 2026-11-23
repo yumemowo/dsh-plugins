@@ -325,19 +325,6 @@ export function apply(ctx: Context): void {
     return value
   }
 
-  /**
-   * 「添加工作区」的复用面
-   *
-   * 采纳调官方工作区控制器的 `create`，选中后调官方 `uiWorkspace.startSession` 在新工作区里开会话
-   * 两处正是官方 WorkspaceBrowser 内部调的同一批接口
-   * picking 交互整段借用官方 `sidebar.workspaces.directoryFlow` 洞的占用者，本包接替父插槽并未清除官方那条注册
-   * 洞的声明与占用者因此都还在（见 `directoryFlow.ts`）
-   *
-   * 与 `officialActions` 同为延迟到渲染期的解析器。解析结果为空表示本包没读到占用者（宿主没装目录选择器插件）
-   * 此时入口按钮整体不渲染，不留点不动的死按钮
-   * @param onAdopted - 采纳成功后的回调，区域组件用它展开新工作区并判断该不该嵌进某个分组
-   * @returns 添加工作区的动作，控制器或洞占用者缺失时为 undefined
-   */
   /** 官方右键菜单注册表的解析器，宿主没装它时返回 undefined（见 RegionActions.menuRegistry） */
   const menuRegistry = menuRegistryActions(ctx)
   /** 注册表条目的图标键 -> 字形，字形由官方那个 keyed 插槽的占用者渲染 */
@@ -356,6 +343,19 @@ export function apply(ctx: Context): void {
     has: (key: string, id: string) => rowSlotHas(ctx.slots, key, id),
   })
 
+  /**
+   * 「添加工作区」的复用面
+   *
+   * 采纳调官方工作区控制器的 `create`，选中后调官方 `uiWorkspace.startSession` 在新工作区里开会话
+   * 两处正是官方 WorkspaceBrowser 内部调的同一批接口
+   * picking 交互整段借用官方 `sidebar.workspaces.directoryFlow` 洞的占用者，本包接替父插槽并未清除官方那条注册
+   * 洞的声明与占用者因此都还在（见 `directoryFlow.ts`）
+   *
+   * 与 `officialActions` 同为延迟到渲染期的解析器。解析结果为空表示本包没读到占用者（宿主没装目录选择器插件）
+   * 此时入口按钮整体不渲染，不留点不动的死按钮
+   * @param onAdopted - 采纳成功后的回调，区域组件用它展开新工作区并判断该不该嵌进某个分组
+   * @returns 添加工作区的动作，控制器或洞占用者缺失时为 undefined
+   */
   const addWorkspaceActions = (
     onAdopted: AddWorkspaceActions['onAdopted'],
   ): AddWorkspaceActions | undefined => {

@@ -162,7 +162,7 @@ describe('renderRowSlot inject binding', () => {
   })
 
   it('forwards the global standard hooks the renderer would supply', async () => {
-    // 官方行内按钮先问 useSessionAccess 再决定渲不渲染；不转交它拿到 undefined 就当函数调
+    // 官方行内按钮先问 useSessionAccess 再决定渲不渲染，不转交它拿到 undefined 就当函数调
     const received: Record<string, unknown> = {}
     const Occupant = (props: Record<string, unknown>) => {
       received['useSessionAccess'] = props['useSessionAccess']
@@ -211,7 +211,7 @@ describe('renderRowSlot inject binding', () => {
   })
 
   it('contains a crashing occupant without taking the row with it', async () => {
-    // 渲染器给每个注册项包一层崩溃隔离；本包自己渲染时同样需要
+    // 渲染器给每个注册项包一层崩溃隔离，本包自己渲染时同样需要
     // 否则一个第三方占用者写坏就让整片列表崩掉，而界面上只表现为「列表没了」
     const Broken = () => {
       throw new TypeError('boom')

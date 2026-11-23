@@ -666,7 +666,7 @@ describe('menu on a pinned row', () => {
   })
 
   it('hands a pinned row pin item back to the registry', async () => {
-    // 置顶区里的行本已置顶，注册表交来的那一项落到取消置顶；本包只把 id 交回去
+    // 置顶区里的行本已置顶，注册表交来的那一项落到取消置顶，本包只把 id 交回去
     const executed: string[] = []
     const { container, root } = await mount({ menuRegistry: registryStub({ run: (id) => executed.push(id) }) })
     const row = pinnedRows(container)[0] as HTMLElement

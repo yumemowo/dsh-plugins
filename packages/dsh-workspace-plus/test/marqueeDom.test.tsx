@@ -153,7 +153,7 @@ describe('useHoverMarquee', () => {
     await tick()
     expect(title.scrollLeft).toBeGreaterThan(0)
     expect(title.scrollLeft).toBeLessThan(60)
-    // 已经把起点甩在身后，左缘因此淡出；右边还有字没露出来，右缘也淡
+    // 已经把起点甩在身后，左缘因此淡出，右边还有字没露出来，右缘也淡
     expect(title.dataset.scrolled).toBe('')
     expect(title.dataset.clipped).toBe('')
   })

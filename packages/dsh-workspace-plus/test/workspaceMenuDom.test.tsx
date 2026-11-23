@@ -16,7 +16,7 @@ import { viewModeProps } from './viewMode-stub.ts'
  * 官方 `ui-workspace` 往 `workspace` 目标注册了两项（重命名 / 删除），第三方插件也可能注册进这个目标
  * 本包接替了那个区域，必须自己解析一次那类目标，否则第三方注册进来的条目永远不会出现
  *
- * 官方那两项的 `run` 写进官方组件内部的请求源，执行者是官方 `WorkspaceBrowser` 里的对话框——
+ * 官方那两项的 `run` 写进官方组件内部的请求源，执行者是官方 `WorkspaceBrowser` 里的对话框
  * 本包接替区域后那份请求没人读，因此它们由本包实现，注册表交来的同 id 条目排掉
  */
 

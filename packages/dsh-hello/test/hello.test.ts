@@ -37,10 +37,9 @@ async function mountHello(config?: HelloConfig) {
 /**
  * 一个最小的工具执行器替身
  *
- * rc.1 起 `ctx.tools.execute` 只是把整批调用转给「当前装配里的执行器」，
- * 那个执行器由部署侧提供；单独挂 `dsh-tools` 时它不在场，execute 会抛
- * `ToolExecutorUnavailableError`。这个替身只做本用例要验的那一段：
- * 按显示定义校验参数、调工具、把返回值铺成一条文本结果
+ * rc.1 起 `ctx.tools.execute` 只是把整批调用转给「当前装配里的执行器」，那个执行器由部署侧提供
+ * 单独挂 `dsh-tools` 时那个执行器不在场，execute 会抛 `ToolExecutorUnavailableError`
+ * 这个替身只做本用例要验的那一段：按显示定义校验参数、调工具、把返回值铺成一条文本结果
  * @param tools - 当前可见的工具定义
  * @returns 可直接交给 `ctx.tools.setExecutor` 的执行器
  */

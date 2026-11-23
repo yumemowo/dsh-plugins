@@ -68,8 +68,8 @@ describe('client dependency declarations', () => {
   })
 
   it('keeps that package out of peerDependencies', () => {
-    // 官方 70 个客户端包里 69 个只声明 cordis 一个 peer；宿主判定兼容时只看 engines.dsh，
-    // 多写一条 peer 只会让每个用户装完看到一条永远不满足的 warn
+    // 官方 70 个客户端包里 69 个只声明 cordis 一个 peer
+    // 宿主判定兼容时只看 engines.dsh，多写一条 peer 只会让每个用户装完看到一条永远不满足的 warn
     expect(manifest.peerDependencies?.['@deepseek-ai/dsh-client-ui-context-menu']).toBeUndefined()
   })
 

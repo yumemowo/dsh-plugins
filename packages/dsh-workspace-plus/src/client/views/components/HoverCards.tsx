@@ -91,7 +91,7 @@ export function SessionHoverContent({
   return (
     <div className={styles.hoverContent} ref={tagCard}>
       <div className={styles.hoverTitle}>{title}</div>
-      {/* 行上看不到会话在哪个目录里工作，卡片补上；与工作区卡片同一档排版 */}
+      {/* 行上看不到会话在哪个目录里工作，卡片补上，与工作区卡片同一档排版 */}
       {path === undefined ? null : <div className={styles.hoverPath}>{path}</div>}
       {time === undefined ? null : <div className={styles.hoverTime}>{time}</div>}
       {extra}
