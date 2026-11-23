@@ -171,6 +171,46 @@ describe('compare tab service reads', () => {
     expect(container.querySelector('.root')).not.toBeNull()
   })
 
+  it('renders the tab body with every global standard hook the renderer supplies', async () => {
+    // 渲染器给插槽注册项的全局标准 hook 有十几个，且随宿主新增
+    // 区域把它们按命名约定整体转交给行级子插槽的占用者，因此这一层只要有就都得在
+    const { bodies } = register()
+    const body = bodies[0]
+    if (body === undefined) throw new Error('compare tab body was not registered')
+
+    const injected = body.inject?.() ?? {}
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const useAccess = (): boolean => true
+    const useKeyed = (select: (value: never) => unknown): unknown => select({} as never)
+
+    await act(async () => {
+      root.render(
+        React.createElement(body.component as never, {
+          ...injected,
+          t: translateFor('workspacePlus'),
+          useWorkspaces: workspacesSelector,
+          useSessions: sessionsSelector,
+          useSessionStatus: emptySelector,
+          useSessionAccess: useAccess,
+          useSessionRetainInfo: useKeyed,
+          useWorkspaceAccess: useAccess,
+          useRemoteAccess: useAccess,
+          useContextMenu: () => ({ getTriggerProps: () => ({}) }),
+          usePanelInfo: emptySelector,
+          useDirectoryFlow: falseSelector,
+          useHostInfo: emptySelector,
+          ...copySeats(),
+          ...viewModeProps(),
+        }),
+      )
+    })
+
+    // 多出这批 prop 不影响区域正常挂载
+    expect(container.querySelector('.root')).not.toBeNull()
+  })
+
   it('passes the injected face through unchanged for the region to consume', () => {
     const { bodies } = register()
     const injected = bodies[0]?.inject?.() ?? {}

@@ -42,14 +42,16 @@
 
 ## 行级子插槽：借官方声明的那几格，自己渲染占用者
 
-官方 `ui-workspace` 注册 `sidebar.workspaces` 时一并声明了四个行级子插槽：
+官方 `ui-workspace` 注册 `sidebar.workspaces` 时一并声明了几个行级子插槽：
 
-| 子插槽 | 位置 |
-| --- | --- |
-| `sidebar.session.row.leading` | 行首状态位那一格，只在行自身的主状态是空闲时交给它 |
-| `sidebar.session.row.trailing` | 行尾时间与图钉之间的图标位 |
-| `sidebar.session.row.hover` | 悬停卡片里时间与状态之间那一段 |
-| `sidebar.workspaces.session.row.action` | 行尾 `...` 之后的悬停按钮 |
+| 子插槽 | 位置 | 声明方 |
+| --- | --- | --- |
+| `sidebar.session.row.leading` | 行首状态位那一格，只在行自身的主状态是空闲时交给它 | rc5、alpha |
+| `sidebar.session.row.hover` | 悬停卡片里时间与状态之间那一段 | rc5、alpha |
+| `sidebar.workspaces.session.row.action` | 行尾 `...` 之后的悬停按钮 | rc5、alpha |
+| `sidebar.session.row.trailing` | 行尾时间与图钉之间的图标位 | 只有 alpha |
+
+最后一行在本仓库钉的 rc5 上**没有声明**，往它注册会抛 `slot "..." is not declared`；本包照样把它列进 `ROW_SLOTS` 并渲染，宿主换到 alpha 时那一格自然就活了。
 
 它们正是 Schedule 告警标记、子代理面板等插件落地的位置。本包接替父插槽后官方那条注册仍在 ledger 里，**声明因此仍然有效**——但它不再渲染，那几格上的占用者也就无处可去。
 
@@ -61,10 +63,24 @@
 | --- | --- |
 | 取占用者 | `slots.entriesOfSlot(key)`，渲染期读，因此晚于本包加载的插件也认得 |
 | inject 面 | 按注册时那个稳定函数缓存整个注册生命周期，与渲染器一致 |
+| `hooks` 隔间 | **绑成 `use<Name>` 选择器**，不把源本身传出去（见下） |
+| `keyedHooks` 隔间 | 绑成按键选择器，三种调用形态都认 |
 | `t` 座位 | 占用者声明了 `locale` 时按命名空间 bind，绑定结果在调用时才读当前语言 |
+| 全局标准 hook | 区域把 props 上所有 `use*` 整体转交，不列名单 |
 | owner | 只交 `{ sessionId }`，与官方那四个子的 owner 同形 |
+| 崩溃隔离 | 每个占用者各包一层，抛错只换掉它自己那一格 |
 
-三处与真渲染器的差距，都只影响个别占用者：占用者自己再调 `renderSlot` 会抛错（它没有声明权）、`store` 座位不装配、标准 hook 不注入。
+### 三件必须照渲染器做、少一件就崩的事
+
+这几条都踩过，症状统一是 `slot entry crashed in '<插槽名>': TypeError ... is not a function`——错误里那个插槽名是**最近一层**官方 boundary 的名字（对照模式下就是 `sidebar.right.pane.tab`），不是真正出事的子插槽，因此看名字会找错地方。
+
+**一、`hooks` 隔间里的东西不是源，是绑好的选择器。** 渲染器把 `inject().hooks` 的每一项按 `use<Name>` 换成选择器再交给组件（`bindInjectSources`）。占用者的代码是 `useCatalog(selector)` 这种形态：把源原样传过去，它拿到的对象不可调用，当场抛 `is not a function`。Schedule 的告警标记正是这么崩的。
+
+**二、全局标准 hook 有十几个，且随宿主新增。** `useSessions` / `useSessionStatus` / `useSessionAccess` / `useSessionRetainInfo` / `useWorkspaceAccess` / `useRemoteAccess` / `useContextMenu` / `usePanelInfo` / `useResource` / `useConversation` / `useInput` … 官方行内那两枚按钮（归档、置顶）都先用 `useSessionAccess` 问一次再决定渲不渲染。**因此区域按命名约定整体转交**：props 里所有 `use` 开头的都过去。名单式转发漏一个就崩一条插槽，而漏掉的那个在 `tsc` 里完全看不见。
+
+**三、每个占用者要各包一层崩溃隔离。** 渲染器给每个注册项一个 `SlotErrorBoundary`，抛错只把那格换成空占位。没有这层时一个第三方占用者写坏会顺着 React 树往上冒，一路冒到最近一层官方 boundary——也就是开头那条日志里的 `sidebar.right.pane.tab`，表现成「整个区域没了」。
+
+一处与真渲染器的差距仍在：占用者自己再调 `renderSlot` 会抛错（它没有声明权），这类占用者只能由官方组件渲染。
 
 ## 会话菜单：借官方的注册表，面板仍由本包渲染
 

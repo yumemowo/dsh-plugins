@@ -18,7 +18,7 @@ import type { ReactElement, ReactNode } from 'react'
 import type { CopyNoticeHandle } from '../copyNotice.ts'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { MenuRegistryFace } from '../menuRegistry.ts'
-import type { RowSlotFace } from '../rowSlots.ts'
+import type { RowSlotFace, StandardHooks } from '../rowSlots.ts'
 import { containsSession } from '../data/rows.ts'
 import { groupIdOfSession } from '../data/sessions.ts'
 import type { Outline } from '../hooks/useOutline.ts'
@@ -91,6 +91,13 @@ export interface SessionRowScope {
   menuIcon: ((key: string) => ReactNode) | undefined
   /** 四个行级子插槽的读取面，缺省表示宿主没声明它们 */
   rowSlots: RowSlotFace | undefined
+  /**
+   * 交给子插槽占用者的全局标准 hook
+   *
+   * 官方那些行内按钮（归档、置顶）先问 `useSessionAccess` 再决定渲不渲染
+   * 不转交的话占用者拿到 undefined 就当函数调，插槽整条崩掉
+   */
+  standardHooks: StandardHooks
   /** 把一个标识写进剪贴板，会话行复制自己的 id 时用它 */
   copyId: CopyNoticeHandle['copy']
   revealSessionId: string | undefined
@@ -798,6 +805,7 @@ export function sessionRowElement(
       registry={context.registry}
       menuIcon={context.menuIcon}
       rowSlots={context.rowSlots}
+      standardHooks={context.standardHooks}
       copyId={context.copyId}
       // 宿主没加载官方 ui-workspace 时官方文案整体拿不到，浮出一个空壳不如不浮
       // 空白会话的标题是语言包的占位文案，不是会话内容，复制它没有意义

@@ -106,6 +106,20 @@ export interface RegionDataHooks {
    * 连接重置时重新读，同样经 inject 面的 `hooks` 隔间绑成选择器
    */
   useHostInfo: (selector: (info: HostInfo) => unknown) => unknown
+  /**
+   * 当前对端能不能对这个会话调某个动作
+   *
+   * 官方行内的归档与置顶按钮、双击改名都先用它问一次；本包把行级子插槽的占用者渲染出来时，
+   * 要把这份标准 hook 一并交给它们，否则占用者拿到 undefined 就会崩
+   * 缺省表示宿主没装 ui-session，那时占用者自己会退化
+   */
+  useSessionAccess?: ((sessionId: string, action: string) => boolean) | undefined
+  /**
+   * 一个会话当前被几方持有
+   *
+   * 与 {@link useSessionAccess} 同属渲染器的全局标准 hook，占用者可能要用
+   */
+  useSessionRetainInfo?: ((selector: (info: unknown) => unknown) => unknown) | undefined
 }
 
 /** 区域组件需要的动作 */

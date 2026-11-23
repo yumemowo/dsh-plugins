@@ -86,6 +86,7 @@ import type { SessionScopes } from '../hooks/useSessionScopes.ts'
 import { sessionScopeKey } from '../data/collapse.ts'
 import type { SessionScopeRef } from '../data/collapse.ts'
 import { DndProvider } from '../hooks/useDnd.ts'
+import { useStandardHooks } from '../hooks/useStandardHooks.ts'
 import { LocalViewOptionsProvider } from '../hooks/useLocalViewOptions.ts'
 import type { LocalViewOptions } from '../hooks/useLocalViewOptions.ts'
 import type { RegionLocale } from '../hooks/useLocale.ts'
@@ -1523,6 +1524,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
   const sources = useRegionSources(props)
   const { labels, workspaces, archivedSessionIds, pinnedSessionIds,
     sessions, statusSnapshot, home, official } = sources
+
+  const standardHooks = useStandardHooks(props)
   const localViewOptions = useLocalViewOptionsValue(props)
   const { mode: viewMode, indicator, pinnedOptions } = localViewOptions
   const { snapshot, apply } = useSnapshotFeed(props.loadGroups, props.onReady)
@@ -1901,6 +1904,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     registry: props.menuRegistry?.(),
     menuIcon: props.menuIcon,
     rowSlots: props.rowSlots?.(),
+    standardHooks,
     revealSessionId: ui.revealSessionId,
     acknowledgeReveal: ui.acknowledgeReveal,
     openSession,
@@ -2043,6 +2047,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             registry={props.menuRegistry?.()}
             menuIcon={props.menuIcon}
             rowSlots={props.rowSlots?.()}
+            standardHooks={standardHooks}
             copyId={copyNotice.copy}
             onOpenSession={openSession}
             statuses={statusSnapshot}

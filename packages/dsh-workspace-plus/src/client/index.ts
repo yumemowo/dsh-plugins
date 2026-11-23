@@ -41,7 +41,7 @@ import { directoryFlowOccupant, directoryFlowSource } from './directoryFlow.ts'
 import { menuRegistryActions } from './menuRegistrySource.ts'
 import { menuIconOf } from './menuIcon.ts'
 import { renderRowSlot, rowSlotOccupied } from './rowSlots.ts'
-import type { RowSlotFace, RowSlotOwner } from './rowSlots.ts'
+import type { RowSlotFace, RowSlotOwner, StandardHooks } from './rowSlots.ts'
 import { hostInfoSource } from './hostInfo.ts'
 import { createCopyNotice } from './copyNotice.ts'
 import { WorkspaceGroupsRegion } from './views/WorkspaceGroupsRegion.tsx'
@@ -350,7 +350,8 @@ export function apply(ctx: Context): void {
    * 占用者声明了命名空间才需要语言服务那一格，绑定结果在调用时才读当前语言
    */
   const rowSlotFace = (): RowSlotFace => ({
-    render: (key: string, owner: RowSlotOwner) => renderRowSlot(ctx.slots, locale, key, { ...owner }),
+    render: (key: string, owner: RowSlotOwner, standard?: StandardHooks) =>
+      renderRowSlot(ctx.slots, locale, key, { ...owner }, standard),
     occupied: (key: string) => rowSlotOccupied(ctx.slots, key),
   })
 

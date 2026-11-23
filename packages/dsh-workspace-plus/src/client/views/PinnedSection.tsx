@@ -41,7 +41,7 @@ import { SessionRowItem } from './SessionRowItem.tsx'
 import type { CopyNoticeHandle } from '../copyNotice.ts'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { MenuRegistryFace } from '../menuRegistry.ts'
-import type { RowSlotFace } from '../rowSlots.ts'
+import type { RowSlotFace, StandardHooks } from '../rowSlots.ts'
 import type { PinnedLabels, RegionLabels } from '../labels.ts'
 import styles from './PinnedSection.module.css'
 import clsx from 'clsx'
@@ -80,6 +80,8 @@ export interface PinnedSectionProps {
   menuIcon?: ((key: string) => ReactNode) | undefined
   /** 四个行级子插槽的读取面，缺省表示宿主没声明它们 */
   rowSlots?: RowSlotFace | undefined
+  /** 交给行级子插槽占用者的全局标准 hook */
+  standardHooks?: StandardHooks | undefined
   /** 把会话 id 写进剪贴板 */
   copyId: CopyNoticeHandle['copy']
   onOpenSession: (sessionId: string) => void
@@ -146,6 +148,7 @@ export function PinnedSection({
   registry,
   menuIcon,
   rowSlots,
+  standardHooks,
   copyId,
   onOpenSession,
   statuses,
@@ -266,6 +269,7 @@ export function PinnedSection({
               registry={registry}
               menuIcon={menuIcon}
               rowSlots={rowSlots}
+              standardHooks={standardHooks}
               copyId={copyId}
               onOpenSession={onOpenSession}
               buildDragPlan={buildDragPlan}
@@ -301,6 +305,7 @@ function PinnedRow({
   registry,
   menuIcon,
   rowSlots,
+  standardHooks,
   copyId,
   onOpenSession,
   buildDragPlan,
@@ -316,6 +321,7 @@ function PinnedRow({
   registry: MenuRegistryFace | undefined
   menuIcon: ((key: string) => ReactNode) | undefined
   rowSlots: RowSlotFace | undefined
+  standardHooks: StandardHooks | undefined
   copyId: CopyNoticeHandle['copy']
   onOpenSession: (sessionId: string) => void
   buildDragPlan: ((sessionId: string) => DragPlan) | undefined
@@ -332,6 +338,7 @@ function PinnedRow({
       registry={registry}
       menuIcon={menuIcon}
       rowSlots={rowSlots}
+      standardHooks={standardHooks}
       copyId={copyId}
       pinned
       canPin={canPin}

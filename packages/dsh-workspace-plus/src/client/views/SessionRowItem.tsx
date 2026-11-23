@@ -28,7 +28,7 @@ import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { useSessionMenu } from '../hooks/useSessionMenu.ts'
 import type { MenuRegistryFace } from '../menuRegistry.ts'
 import { ROW_SLOTS } from '../rowSlots.ts'
-import type { RowSlotFace } from '../rowSlots.ts'
+import type { RowSlotFace, StandardHooks } from '../rowSlots.ts'
 import { SessionHoverContent } from './components/HoverCards.tsx'
 import { NameDialog } from './components/dialogs/NameDialog.tsx'
 import { useLocale } from '../hooks/useLocale.ts'
@@ -117,6 +117,8 @@ export interface SessionRowItemProps extends Omit<SessionRowViewProps, ComputedH
    * 由区域在渲染期闭合，占用者可能晚于本包加载
    */
   rowSlots?: RowSlotFace | undefined
+  /** 交给行级子插槽占用者的全局标准 hook，缺省表示宿主没提供 */
+  standardHooks?: StandardHooks | undefined
   /** 归组上下文，缺省时菜单里没有归组项 */
   grouping?: SessionGroupingContext | undefined
   /**
@@ -210,6 +212,7 @@ function sameRowItemProps(prev: SessionRowItemProps, next: SessionRowItemProps):
     prev.registry === next.registry &&
     prev.menuIcon === next.menuIcon &&
     prev.rowSlots === next.rowSlots &&
+    prev.standardHooks === next.standardHooks &&
     prev.copyId === next.copyId &&
     prev.dragPlan === next.dragPlan &&
     sameCard(prev.card, next.card) &&
@@ -227,6 +230,7 @@ function SessionRowItemView({
   registry,
   menuIcon,
   rowSlots,
+  standardHooks,
   ...rowProps
 }: SessionRowItemProps): ReactElement {
   const { labels } = useLocale()
@@ -367,7 +371,7 @@ function SessionRowItemView({
   // 行尾那组悬停按钮：别的插件注册进行尾操作位的按钮挂在这里，排在省略号之后
   const rowActions = row.blank || rowSlots === undefined
     ? undefined
-    : rowSlots.render(ROW_SLOTS.action, { sessionId: row.id })
+    : rowSlots.render(ROW_SLOTS.action, { sessionId: row.id }, standardHooks)
 
   const line = (
     <SessionRowView
@@ -382,8 +386,8 @@ function SessionRowItemView({
       // 双击标题是重命名的第二个入口，与菜单项落到同一个对话框
       onRenameRequest={renameRequest}
       // 行首与行尾的占用者：空白会话那两格本来就是空的，不挂
-      leadingSlot={row.blank || rowSlots === undefined ? undefined : rowSlots.render(ROW_SLOTS.leading, { sessionId: row.id })}
-      trailingSlot={row.blank || rowSlots === undefined ? undefined : rowSlots.render(ROW_SLOTS.trailing, { sessionId: row.id })}
+      leadingSlot={row.blank || rowSlots === undefined ? undefined : rowSlots.render(ROW_SLOTS.leading, { sessionId: row.id }, standardHooks)}
+      trailingSlot={row.blank || rowSlots === undefined ? undefined : rowSlots.render(ROW_SLOTS.trailing, { sessionId: row.id }, standardHooks)}
       quickActions={rowActions}
       action={
         hasMenu ? (
@@ -437,7 +441,7 @@ function SessionRowItemView({
               time={card.time}
               statuses={card.statuses ?? (rowProps.status === undefined ? [] : [rowProps.status])}
               // 悬停卡片里时间与状态之间那一段，由占用者自己决定要不要画
-              extra={rowSlots === undefined ? undefined : rowSlots.render(ROW_SLOTS.hover, { sessionId: row.id })}
+              extra={rowSlots === undefined ? undefined : rowSlots.render(ROW_SLOTS.hover, { sessionId: row.id }, standardHooks)}
             />
           }
           // 行内 `...` 菜单与行右键菜单开着时都让位，否则同一处会叠两层浮层
