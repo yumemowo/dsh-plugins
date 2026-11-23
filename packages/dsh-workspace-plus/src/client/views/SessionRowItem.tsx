@@ -25,6 +25,7 @@ import { SessionRowView } from './SessionRowView.tsx'
 import type { SessionRowViewProps } from './SessionRowView.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { useRowMenu } from '../hooks/useRowMenu.ts'
+import { sessionTarget } from '../menuRegistry.ts'
 import type { MenuRegistryFace } from '../menuRegistry.ts'
 import { ROW_SLOTS } from '../rowSlots.ts'
 import type { RowSlotFace, StandardHooks } from '../rowSlots.ts'
@@ -246,7 +247,7 @@ function SessionRowItemView({
   }
 
   // 注册表在场时它那段条目由注册表执行，本包自己的那几个 id 交给 ownSelect
-  const sessionMenu = useRowMenu(registry, menuIcon, { kind: 'session', value: { sessionId: row.id, displayTitle: row.title } }, ownItems)
+  const sessionMenu = useRowMenu(registry, menuIcon, sessionTarget(row.id, row.title), ownItems)
   const items = row.blank ? [] : sessionMenu.items
 
   const select = (id: string): void => {

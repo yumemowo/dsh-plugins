@@ -34,7 +34,8 @@ import { RowActions } from './RowActions.tsx'
 import { WorkspaceHoverContent } from './components/HoverCards.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { useRowMenu } from '../hooks/useRowMenu.ts'
-import type { MenuRegistryFace, WorkspaceMenuTarget } from '../menuRegistry.ts'
+import { workspaceTarget as workspaceTargetOf } from '../menuRegistry.ts'
+import type { MenuRegistryFace, WorkspaceTargetInput } from '../menuRegistry.ts'
 import { RowHeadShell } from './components/RowHeadShell.tsx'
 import { useLocale } from '../hooks/useLocale.ts'
 import type { DragStartEvent } from '../hooks/useDnd.ts'
@@ -115,7 +116,7 @@ export interface WorkspaceRowProps {
    *
    * 未分组桶不是真实工作区，没有身份可解析，那一行因此不接注册表
    */
-  workspaceTarget?: WorkspaceMenuTarget | undefined
+  workspaceTarget?: WorkspaceTargetInput | undefined
 }
 
 /** 工作区标题行的拖拽接线，由 {@link WorkspaceSection} 从 `useOrderRow` 取下后原样摊进行里 */
@@ -220,11 +221,7 @@ export function WorkspaceRow({
    * 官方那两项与本包实现重复，因此用 `excluded` 排掉，其余条目一律交给注册表执行
    */
   const target = useMemo(
-    () =>
-      ({
-        kind: 'workspace' as const,
-        value: workspaceTarget ?? { workspaceId: '', path: '', displayTitle: title },
-      }),
+    () => workspaceTargetOf(workspaceTarget ?? { workspaceId: '', path: '', displayTitle: title }),
     [workspaceTarget, title],
   )
   const rowMenu = useRowMenu(

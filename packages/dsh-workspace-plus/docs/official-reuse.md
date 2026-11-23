@@ -155,7 +155,9 @@ const id = `${encodeURIComponent(action.provider.id)}/${encodeURIComponent(actio
 
 官方那两条的提供者是 `workspace.rename` / `workspace.delete`，动作 id 是 `rename` / `delete`，投影后因此是 `workspace.rename/rename` 与 `workspace.delete/delete`。**按裸 id 排一条都匹配不上**，同一件事就会在菜单里出现两次（官方那条点了没反应、本包那条正常）。
 
-同一个目标上还有别的提供者，它们不可省：官方生态里 `open-in-app` 注册了 `open-in-app.workspace`（`order: 200`），交出的就是「在文件夹显示」那一条，按 `path` 去 stat 目录再唤起文件管理器。因此 `WorkspaceMenuTarget` 必须带 `path`，缺了它会静默退化成一个禁用项。
+同一个目标上还有别的提供者，它们不可省：官方生态里 `open-in-app` 注册了 `open-in-app.workspace`（`order: 200`），交出的就是「在文件夹显示」那一条，按 `path` 去 stat 目录再唤起文件管理器。因此目标必须带 `path`，缺了它会静默退化成一个禁用项。
+
+这一点由类型来守：目标的全部字段取自官方 `ContextMenuTargetMap`（本包不自带一份），官方那条 `workspace` 声明把 `path` 定成必填，少给一个字段 tsc 就报 `Property 'path' is missing`。因此 `ui-context-menu` 是本包的依赖（`devDependencies`，只取类型），但不是 `peerDependencies`——官方 70 个客户端包里 69 个都只声明 cordis 一个 peer，靠 `dsh.client.inject` 表达加载顺序，本包跟随这个做法。
 
 官方 `ui-workspace` 把 `contextMenus` 声明为必需注入，因此装了它的宿主必然有这个服务；万一不在场，本包只留自己的那几条，不留点不动的死按钮。
 

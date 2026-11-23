@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { asMenuRegistry, composeSessionMenu, registryMenuItems, separatorBeforeAt } from '../src/client/menuRegistry.ts'
+import { composeSessionMenu, registryMenuItems, separatorBeforeAt, sessionTarget, workspaceTarget } from '../src/client/menuRegistry.ts'
 import type { RegistryActionView } from '../src/client/menuRegistry.ts'
 
 /**
@@ -14,18 +14,28 @@ function view(id: string, extra: Partial<RegistryActionView> = {}): RegistryActi
   return { id, label: id.toUpperCase(), ...extra }
 }
 
-describe('asMenuRegistry', () => {
-  it('accepts an object that can resolve a target', () => {
-    const registry = { resolve: () => ({}) }
-    expect(asMenuRegistry(registry)).toBe(registry)
+describe('sessionTarget', () => {
+  it('carries the row identity and its current title', () => {
+    expect(sessionTarget('s1', '标题')).toEqual({
+      kind: 'session',
+      value: { sessionId: 's1', displayTitle: '标题' },
+    })
+  })
+})
+
+describe('workspaceTarget', () => {
+  it('keeps every field the registry providers read', () => {
+    // path 不是可省的：官方的 open-in-app 那条按它 stat 目录
+    expect(workspaceTarget({ workspaceId: 'w1', path: '/tmp/w', displayTitle: '工作区' })).toEqual({
+      kind: 'workspace',
+      value: { workspaceId: 'w1', path: '/tmp/w', displayTitle: '工作区' },
+    })
   })
 
-  it('rejects a missing or malformed service', () => {
-    // 宿主没装 ui-context-menu 时 ctx.get 返回 undefined，本包此时走静态条目那条路
-    expect(asMenuRegistry(undefined)).toBeUndefined()
-    expect(asMenuRegistry(null)).toBeUndefined()
-    expect(asMenuRegistry({})).toBeUndefined()
-    expect(asMenuRegistry({ resolve: 'nope' })).toBeUndefined()
+  it('leaves no field for a provider to guess', () => {
+    const target = workspaceTarget({ workspaceId: 'w1', path: '/tmp/w', displayTitle: '工作区' })
+
+    expect(Object.keys(target.value).sort()).toEqual(['displayTitle', 'path', 'workspaceId'])
   })
 })
 

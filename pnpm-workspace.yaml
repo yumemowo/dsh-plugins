@@ -31,6 +31,9 @@ catalog:
   '@deepseek-ai/dsh-client-ui-session': ^0.2.2-rc.1
   '@deepseek-ai/dsh-client-ui-sidebar': ^0.2.2-rc.1
   '@deepseek-ai/dsh-client-ui-slots': ^0.2.2-rc.1
+  # 只取类型：本包自己渲染菜单面板，但要按官方注册表的条目形状读它交来的动作，
+  # 并借官方对 `ContextMenuTargetMap` 的增强盯住目标字段（workspace 那条少了 path 会静默退化）。
+  '@deepseek-ai/dsh-client-ui-context-menu': ^0.2.2-rc.1
   # 只取类型：本包复用官方 workspace 语言包与 ctx.uiWorkspace 服务，
   # 需要官方的命名空间声明与动作契约，运行期由宿主解析、不打进产物。
   '@deepseek-ai/dsh-client-ui-workspace': ^0.2.2-rc.1

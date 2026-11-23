@@ -3,9 +3,10 @@
  *
  * 那个服务由 `ui-context-menu` 提供，加载顺序不受本包约束，因此在渲染期解析而不是在 inject 里读一次
  * 解析结果按服务身份缓存：这一格会传进行级 memo 的比对，每次渲染新建一个会让每一行都判定为变过
+ *
+ * 宿主没装那个插件时 `ctx.get` 返回 undefined，此时本包只用自有的归组项
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { asMenuRegistry } from './menuRegistry.ts'
 import type { MenuRegistryFace } from './menuRegistry.ts'
 
 /**
@@ -18,7 +19,7 @@ export function menuRegistryActions(
 ): () => MenuRegistryFace | undefined {
   let cached: { readonly service: MenuRegistryFace; readonly value: MenuRegistryFace } | undefined
   return () => {
-    const service = asMenuRegistry(ctx.get('contextMenus'))
+    const service = ctx.get('contextMenus')
     if (service === undefined) return undefined
     if (cached !== undefined && cached.service === service) return cached.value
     cached = { service, value: service }

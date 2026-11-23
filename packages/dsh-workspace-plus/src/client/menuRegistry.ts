@@ -8,74 +8,88 @@
  * 因此这里只借它的**条目来源**：解析一次拿到动作列表，选中时按 id 交回给同一次解析
  * 于是第三方插件注册进 `session` 的条目会出现在本包的菜单里，本包自己的归组项追加在后面
  *
- * 服务不在场时 {@link openSessionMenu} 返回 undefined，调用方只用本包自有的归组项
+ * 服务不在场时渲染期解析的读取面返回 undefined，调用方只用本包自有的归组项
  * 官方 `ui-workspace` 把 `contextMenus` 声明为必需注入，因此它在场的那个版本起必然可用
  */
 import type { ReactNode } from 'react'
+import type {
+  ContextMenuTarget,
+  ContextMenuTargetMap,
+  ContextMenus,
+  MenuActionView,
+  MenuResolution,
+} from '@deepseek-ai/dsh-client-ui-context-menu/client'
+// 只为引入官方向 `ContextMenuTargetMap` 里那条 workspace 声明：
+// 它把 `path` 定成必填，本包少给一个字段会在 tsc 阶段就报出来
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 
 /** 注册表交来的一条动作的展示字段，回调不在这里 */
-export interface RegistryActionView {
-  readonly id: string
-  readonly label: string
-  readonly disabled?: boolean | undefined
-  readonly danger?: boolean | undefined
-  /** 在该项之前画一条分隔线 */
-  readonly separatorBefore?: boolean | undefined
-  /** 图标的键，由 `contextMenu.icon` 那个 keyed 插槽渲染 */
-  readonly icon?: { readonly key: string; readonly src?: string | undefined } | undefined
-}
+export type RegistryActionView = MenuActionView
 
 /** 一次解析的结果：可订阅的展示条目、执行入口与释放入口 */
-export interface RegistryResolution {
-  readonly source: {
-    getSnapshot: () => readonly RegistryActionView[]
-    subscribe: (listener: () => void) => () => void
-  }
-  readonly ready: Promise<void>
-  select: (id: string) => void
-  dispose: () => void
-}
+export type RegistryResolution = MenuResolution
 
-/** 一条会话行的身份与它当前显示的标题 */
-export interface SessionMenuTarget {
-  readonly sessionId: string
-  readonly displayTitle: string
-}
+/**
+ * 解析的对象：按 `kind` 区分是哪个目标种类
+ *
+ * 种类与各自的字段全由官方声明，本包不自带一份——`session` 与 `workspace` 之外还有
+ * `file` / `directory` / `url` / `image` / `tab` 五种，本包只解析前两种但类型不必砍窄
+ */
+export type MenuTarget = ContextMenuTarget
 
 /**
  * 一个工作区行的身份、目录与当前标题
  *
- * 三个字段都要给：`path` 不是可省的摆设——官方的 `open-in-app` 那个提供者按它 stat 目录再打开文件管理器，
- * 缺了它会静默退化成一个禁用的「在文件夹显示」
+ * 是官方 `workspace` 目标的那一格：三个字段都由官方声明，`path` 不是可省的摆设——
+ * 官方的 `open-in-app` 那个提供者按它 stat 目录再打开文件管理器，缺了它静默退化成禁用项
  */
-export interface WorkspaceMenuTarget {
+export type WorkspaceMenuTarget = ContextMenuTargetMap['workspace']
+
+/** 本模块用到的那部分注册表服务面 */
+export type MenuRegistryFace = Pick<ContextMenus, 'resolve'>
+
+/**
+ * 造一条会话行的解析目标
+ *
+ * 官方把 `sessionId` 声明成品牌类型，本包的 `SessionRow.id` 是普通串（它一路走 JSON，
+ * 品牌在序列化后就没了）。这个 cast 是那条边界上唯一的一处：行 id 来自宿主给的会话 id，
+ * 运行期就是合法的 `SessionId`，只是类型系统看不到这一层来历
+ * @param sessionId - 行上的会话 id
+ * @param displayTitle - 该行当前显示的标题
+ * @returns 注册表认得的会话目标
+ */
+export function sessionTarget(sessionId: string, displayTitle: string): MenuTarget {
+  return { kind: 'session', value: { sessionId: sessionId as never, displayTitle } }
+}
+
+/**
+ * 一条工作区行交给注册表的三个字段
+ *
+ * 不用官方的 {@link WorkspaceMenuTarget}：那上面的 `workspaceId` 是品牌类型，
+ * 而本包的行模型一路走 JSON，品牌在序列化时就没了。字段名与官方一致，少一个 tsc 就报
+ */
+export interface WorkspaceTargetInput {
   readonly workspaceId: string
   readonly path: string
   readonly displayTitle: string
 }
 
-/** 解析的对象：按 `kind` 区分是哪个目标种类 */
-export type MenuTarget =
-  | { readonly kind: 'session'; readonly value: SessionMenuTarget }
-  | { readonly kind: 'workspace'; readonly value: WorkspaceMenuTarget }
-
-/** 本模块用到的那部分注册表服务面 */
-export interface MenuRegistryFace {
-  resolve: (target: MenuTarget) => RegistryResolution
-}
-
 /**
- * 从注入面里取出注册表
+ * 造一条工作区行的解析目标
  *
- * 宿主没装那个插件时 `ctx.get('contextMenus')` 是 undefined，此时本包走静态条目那条路
- * 声明成结构类型而不是导入官方的服务类型：那个包不是本包的 peer，运行期由宿主解析
- * @param candidate - `ctx.get('contextMenus')` 的返回值
- * @returns 可用的注册表，形状不符时为 undefined
+ * 与 {@link sessionTarget} 同一处 cast，理由相同
+ * @param workspace - 工作区 id、目录与当前标题
+ * @returns 注册表认得的工作区目标
  */
-export function asMenuRegistry(candidate: unknown): MenuRegistryFace | undefined {
-  if (typeof candidate !== 'object' || candidate === null) return undefined
-  const resolve = (candidate as { resolve?: unknown }).resolve
-  return typeof resolve === 'function' ? (candidate as MenuRegistryFace) : undefined
+export function workspaceTarget(workspace: WorkspaceTargetInput): MenuTarget {
+  return {
+    kind: 'workspace',
+    value: {
+      workspaceId: workspace.workspaceId as never,
+      path: workspace.path,
+      displayTitle: workspace.displayTitle,
+    },
+  }
 }
 
 /**
