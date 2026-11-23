@@ -311,7 +311,19 @@ function SessionRowItemView({
     setMenuOpen((open) => !open)
   }
 
-  const contextMenu = useRowContextMenu({ items, onSelect: select })
+  // 条目要等注册表解析过才有，因此判据不是「眼下有没有条目」而是「这一行能不能有菜单」：
+  // 注册表在场时它的条目按需解析，第一次右键必须被接住并顺手补齐，否则浏览器会弹出自己的菜单
+  // 注册表不在场时只剩本包自有的那几个 id，一个都没有就让右键保持默认行为，不留一个空面板
+  // 空白会话没有会话可操作，与官方对它不渲染省略号同一取舍
+  const contextMenu = useRowContextMenu({
+    items,
+    onSelect: select,
+    enabled: !row.blank && (registry !== undefined || ownItems.length > 0),
+    // 两个面板共用同一次解析：右键打开的那次准备同样要在关掉时释放，
+    // 否则解析一直挂到行被卸载，注册表那边也就一直认为这次解析还有人在用
+    onPrepare: sessionMenu.prepare,
+    onClose: sessionMenu.release,
+  })
 
   /**
    * 双击标题进重命名
@@ -373,6 +385,15 @@ function SessionRowItemView({
     ? undefined
     : rowSlots.render(ROW_SLOTS.action, { sessionId: row.id }, standardHooks)
 
+  /**
+   * 官方自己往行尾按钮位注册了置顶按钮时，本包那枚让开
+   *
+   * 两枚图钉并排站在同一格，形状几乎一样、含义完全一样，点哪个都是同一次切换
+   * 官方那枚还带着自己的无障碍文案与工具提示，因此留下它
+   * 宿主没装官方 ui-workspace 时这一格是空的，本包那枚照旧是唯一的置顶入口
+   */
+  const officialPin = rowSlots?.has(ROW_SLOTS.action, 'pin') === true
+
   const line = (
     <SessionRowView
       {...rowProps}
@@ -385,6 +406,8 @@ function SessionRowItemView({
       onContextMenu={contextMenu.onContextMenu}
       // 双击标题是重命名的第二个入口，与菜单项落到同一个对话框
       onRenameRequest={renameRequest}
+      // 官方那枚图钉在场时本包不画自己那枚（见 officialPin）
+      onTogglePin={officialPin ? undefined : rowProps.onTogglePin}
       // 行首与行尾的占用者：空白会话那两格本来就是空的，不挂
       leadingSlot={row.blank || rowSlots === undefined ? undefined : rowSlots.render(ROW_SLOTS.leading, { sessionId: row.id }, standardHooks)}
       trailingSlot={row.blank || rowSlots === undefined ? undefined : rowSlots.render(ROW_SLOTS.trailing, { sessionId: row.id }, standardHooks)}

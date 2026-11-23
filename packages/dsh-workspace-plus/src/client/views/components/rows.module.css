@@ -281,17 +281,15 @@
 /* 悬停跑马灯移动期间两侧各淡出 12px，避免硬切掉半个字符
    左缘在文字离开起点后淡出（data-scrolled），右缘在右边仍有文字时淡出（data-clipped）
    移到最右端时右缘那一档撤掉，最后一个字符因此以全强度显示
-   淡出遮罩挂在标题自己身上，状态位与前面其余格子保持原样 */
+   淡出遮罩挂在标题自己身上，状态位与前面其余格子保持原样
+
+   移出期间还要摘掉省略号：它固在右缘，文字一挪就压在中间那截字身上，读起来是「字中间夹了三个点」。
+   静止时仍画省略号，被裁掉的地方因此有个「后面还有」的标记，两态各自成立
+   data-marquee 在开始移出那一刻就置上（不等第一帧），省略号因此不会在起步那一下闪一下 */
+.rowTitle[data-marquee] { text-overflow: clip; }
+
 .rowTitle[data-scrolled] {
   mask-image: linear-gradient(to right, transparent, #000 12px);
-}
-
-.rowTitle[data-clipped] {
-  mask-image: linear-gradient(to left, transparent, #000 12px);
-}
-
-.rowTitle[data-scrolled][data-clipped] {
-  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
 }
 
 /* 分组的会话数，与 session 行的 .rowTime 同格同形（tertiary、12px/20px），内容为纯数字
@@ -448,8 +446,18 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* 与官方 .rowActions 的 gap:13px 同值
+     官方那两枚按钮各带 -4px 外边距，落在流里的实际间距因此是 13 - 8 = 5px；
+     本包的省略号是裸 16px 按钮，两边的中心距仍与官方一致 */
+  gap: 13px;
   overflow: hidden;
 }
+
+/* 占用者的包裹层从流里摘出去，让它们和省略号一样成为槽的直接子项
+   否则那层 span 是一个 flex 项、里面又走行内排布，两枚按钮的间距由空白字符决定
+   官方给插槽锚点用的也是 display: contents（见渲染器的 ANCHOR_STYLE）
+   元素本身仍在文档里，按属性选中它照样选得到 */
+.rowActionSlot [data-wg-slot] { display: contents; }
 
 /* 时间与操作位共用同一组触发条件，保证任一时刻只有一方占据行尾
    菜单展开那条读锚点按钮自己的 aria-expanded
@@ -529,9 +537,12 @@
 .groupHead:has(.rowAction[aria-expanded='true']) .rowActionSlot,
 .groupHead:has(.rowAction:focus-visible) .rowActionSlot { width: auto; }
 
+/* 会话行也取自然宽：槽里不止省略号一枚，别的插件注册的行尾按钮排在它后面
+   写死一个图标列宽会把那几枚压扁在 16px 里，图标挤成一团、还被 overflow 裁掉一半
+   自然宽由内容决定，静止时仍是 0，行尾时间因此照旧贴着行的右内边距 */
 .row:hover .rowActionSlot,
 .row:has(.rowAction[aria-expanded='true']) .rowActionSlot,
-.row:has(.rowAction:focus-visible) .rowActionSlot { width: 16px; }
+.row:has(.rowAction:focus-visible) .rowActionSlot { width: auto; }
 
 /* 行内操作按钮
    默认隐藏，仅在该行悬停、菜单展开、或键盘聚焦时出现

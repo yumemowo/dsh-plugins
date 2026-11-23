@@ -106,7 +106,8 @@ function slots(occupied: readonly string[]): NonNullable<WorkspaceGroupsProps['r
         ? React.createElement('span', { 'data-wg-test-slot': key, key })
         : null,
     occupied: (key: string) => occupied.includes(key),
-  });
+    has: (key: string, id: string) => occupied.includes(key) && id === 'pin',
+  })
 }
 
 /** 一行会话在列表里的行元素 */

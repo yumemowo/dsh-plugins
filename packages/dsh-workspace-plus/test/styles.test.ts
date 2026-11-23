@@ -483,11 +483,19 @@ describe('client stylesheet', () => {
       const expands = rules.some(
         (rule) =>
           rule.selectors.some((s) => s.includes('.rowActionSlot') && s.includes(trigger)) &&
-          /width:\s*16px/.test(rule.body),
+          /width:\s*auto/.test(rule.body),
       )
       expect(hidesTime, `time must yield on ${trigger}`).toBe(true)
       expect(expands, `action slot must expand on ${trigger}`).toBe(true)
     }
+
+    // 展开宽度取自然宽而不是一个图标列宽：这一格里除了省略号还排着别的插件注册的行尾按钮
+    // 写死 16px 会把那几枚压扁，图标挤成一团还被 overflow 裁掉一半
+    const expanded = rules
+      .filter((rule) => rule.selectors.some((s) => s.includes('.rowActionSlot') && s.includes('hover')))
+      .map((rule) => rule.body)
+      .join('\n')
+    expect(expanded).not.toMatch(/width:\s*16px/)
   })
 
   it('takes the context menu root out of the row flex flow', () => {

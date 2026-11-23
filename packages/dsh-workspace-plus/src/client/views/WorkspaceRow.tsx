@@ -182,6 +182,7 @@ export function WorkspaceRow({
             onCreateSession === undefined ? undefined : labels.newSessionItem,
           ),
     onSelect: select,
+    enabled: menuItems !== undefined,
   })
 
   const row = (

@@ -333,6 +333,20 @@ export function rowSlotOccupied(slots: SlotRegistry, key: string): boolean {
 }
 
 /**
+ * 某个子插槽上有没有某一个占用者
+ *
+ * 占用者可以带 id（官方那几枚行内按钮就带了），本包据此知道「官方已经把这枚按钮放在这一格了」
+ * @param slots - 客户端插槽注册表
+ * @param key - 四个行级子插槽之一
+ * @param id - 注册时带的 id
+ * @returns 是否有这个 id 的占用者
+ */
+export function rowSlotHas(slots: SlotRegistry, key: string, id: string): boolean {
+  const entries = slots.entriesOfSlot(key as never) as readonly OccupantEntry[]
+  return entries.some((entry) => entry.options?.id === id)
+}
+
+/**
  * 按命名空间造一个翻译座位
  *
  * 绑出来的函数在调用时才读当前语言，因此同一份可以跨语言切换复用
@@ -376,4 +390,13 @@ export interface RowSlotFace {
    * @returns 是否至少有一个占用者
    */
   occupied: (key: string) => boolean
+  /**
+   * 这一格上有没有某一个占用者
+   *
+   * 行尾按钮位上的置顶与归档是官方自己注册的，本包据此裁掉自己那枚同名按钮，不留两枚
+   * @param key - 四个行级子插槽之一
+   * @param id - 注册时带的 id
+   * @returns 是否有这个 id 的占用者
+   */
+  has: (key: string, id: string) => boolean
 }

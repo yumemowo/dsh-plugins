@@ -40,7 +40,7 @@ import type { RegionActions, AddWorkspaceActions, OfficialSessionActions } from 
 import { directoryFlowOccupant, directoryFlowSource } from './directoryFlow.ts'
 import { menuRegistryActions } from './menuRegistrySource.ts'
 import { menuIconOf } from './menuIcon.ts'
-import { renderRowSlot, rowSlotOccupied } from './rowSlots.ts'
+import { renderRowSlot, rowSlotHas, rowSlotOccupied } from './rowSlots.ts'
 import type { RowSlotFace, RowSlotOwner, StandardHooks } from './rowSlots.ts'
 import { hostInfoSource } from './hostInfo.ts'
 import { createCopyNotice } from './copyNotice.ts'
@@ -353,6 +353,7 @@ export function apply(ctx: Context): void {
     render: (key: string, owner: RowSlotOwner, standard?: StandardHooks) =>
       renderRowSlot(ctx.slots, locale, key, { ...owner }, standard),
     occupied: (key: string) => rowSlotOccupied(ctx.slots, key),
+    has: (key: string, id: string) => rowSlotHas(ctx.slots, key, id),
   })
 
   const addWorkspaceActions = (

@@ -116,6 +116,7 @@ export function GroupSection({
       onCreateSession === undefined ? undefined : labels.newSessionItem,
     ),
     onSelect: select,
+    enabled: true,
   })
 
   return (

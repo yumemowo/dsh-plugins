@@ -30,6 +30,8 @@ export interface HoverMarquee {
  * 把文字的滚动位置放好，并写下样式表读的两格淡出钩子
  *
  * `data-scrolled` 表示文字已离开起点（左缘淡出），`data-clipped` 表示右侧还有字没露出来（右缘淡出）
+ * `data-marquee` 标记「正在移出」，由开始那一刻置上而不是等第一帧：省略号固在右缘，
+ * 留在那儿会压在挪到中间的半截字身上，因此这一态一置上就得摘掉它
  * @param text - 行上那个裁剪文字的元素
  * @param left - 滚动位置，CSS 像素
  * @param range - 这个元素的最大滚动距离，CSS 像素
@@ -45,7 +47,7 @@ function place(text: HTMLElement, left: number, range: number): void {
 }
 
 /**
- * 把文字送回静止态：回到起点、两格淡出钩子都摘掉，静止的省略号因此以全强度显示
+ * 把文字送回静止态：回到起点、三个钩子都摘掉，静止的省略号因此以全强度显示
  * @param text - 行上那个裁剪文字的元素
  */
 function rest(text: HTMLElement): void {
@@ -53,6 +55,7 @@ function rest(text: HTMLElement): void {
   else text.scrollLeft = 0
   delete text.dataset.scrolled
   delete text.dataset.clipped
+  delete text.dataset.marquee
 }
 
 /**
@@ -94,6 +97,8 @@ export function useHoverMarquee(
     const range = element.scrollWidth - element.clientWidth
     if (range <= MIN_REVEAL_PX) return
     revealing.current = true
+    // 先从第一帧之前就置上：省略号要在这段位移开始时就摘掉，而不是等文字挪开
+    element.dataset.marquee = ''
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       place(element, range, range)
       return

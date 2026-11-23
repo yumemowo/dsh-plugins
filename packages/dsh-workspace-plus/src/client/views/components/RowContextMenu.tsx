@@ -61,10 +61,26 @@ function rectAt(event: RowContextMenuEvent): AnchorRect {
 }
 
 export interface RowContextMenuOptions {
-  /** 菜单条目，缺省或为空表示该行没有右键菜单 */
+  /** 菜单条目，缺省或为空表示该行眼下没有条目 */
   items?: readonly MenuItem[] | undefined
   /** 选中项 id 的分派，与行内 `...` 菜单共用同一个函数 */
   onSelect: (id: string) => void
+  /**
+   * 这一行有没有右键入口
+   *
+   * 条目可能来自按需解析的注册表，解析之前它是空的
+   * 因此不能拿「眼下有没有条目」当判据：那样第一次右键会落空，浏览器弹出自己的菜单
+   * 由调用方说明「这一行能不能有菜单」，条目为空时由 {@link RowContextMenuOptions.onPrepare} 补齐
+   */
+  enabled: boolean
+  /**
+   * 打开前补齐条目
+   *
+   * 与行内 `...` 菜单同一个入口：两个面板共用同一批条目，因此准备动作也共用
+   */
+  onPrepare?: (() => void) | undefined
+  /** 面板关掉时调用，用来释放 `onPrepare` 那一次准备 */
+  onClose?: (() => void) | undefined
 }
 
 export interface RowContextMenu {
@@ -80,7 +96,13 @@ export interface RowContextMenu {
   open: boolean
 }
 
-export function useRowContextMenu({ items, onSelect }: RowContextMenuOptions): RowContextMenu {
+export function useRowContextMenu({
+  items,
+  onSelect,
+  enabled,
+  onPrepare,
+  onClose,
+}: RowContextMenuOptions): RowContextMenu {
   // 落点即开合状态：非空就是开着。菜单开着时再右键会换一个新的矩形对象，定位回调随之换引用，原语重新量一次，面板跟到新落点
   // 把落点单独放进 ref 的话这次重渲染会被 React 判定为状态未变而丢掉
   const [anchor, setAnchor] = useState<AnchorRect | null>(null)
@@ -90,30 +112,39 @@ export function useRowContextMenu({ items, onSelect }: RowContextMenuOptions): R
   const anchorPoint: AnchorPoint | undefined =
     anchor === null ? undefined : { x: anchor.left, y: anchor.top }
 
+  // 条目为空时仍是有效的一次打开：落点先记下，条目补齐后同一次渲染就把面板画出来
   const onContextMenu = useCallback((event: RowContextMenuEvent) => {
     // 没有这一层就没有自绘面板可言：浏览器会先弹出它自己的菜单
     event.preventDefault()
     // 行嵌在 shell 的区域里，不让它继续冒泡，否则外层若也认右键会同时开两个菜单
     event.stopPropagation()
+    onPrepare?.()
     setAnchor(rectAt(event))
-  }, [])
+  }, [onPrepare])
 
-  if (items === undefined || items.length === 0) {
+  if (!enabled) {
     return { onContextMenu: undefined, menu: null, open: false }
   }
 
+  // 条目一条都没有时面板不画：右键仍被接住，只是没有可点的东西，留一个空框比不弹更糟
+  const entries = items ?? []
+  const open = anchor !== null && entries.length > 0
+
   return {
     onContextMenu,
-    open: anchor !== null,
+    open,
     menu: (
       <Menu
-        open={anchor !== null}
-        onClose={() => setAnchor(null)}
+        open={open}
+        onClose={() => {
+          setAnchor(null)
+          onClose?.()
+        }}
         onSelect={(id: string) => {
           setAnchor(null)
           onSelect(id)
         }}
-        items={items}
+        items={entries}
         // 落点是指针而不是某个锚点元素，原语因此要求 anchor 为空
         // portal 之后行的裁剪容器不再裁到面板
         anchor={null}

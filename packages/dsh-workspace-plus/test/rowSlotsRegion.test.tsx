@@ -132,6 +132,7 @@ function face(hooks: StandardHooks): NonNullable<WorkspaceGroupsProps['rowSlots'
         standard ?? hooks,
       ),
     occupied: (key: string) => key === ROW_SLOTS.leading,
+    has: () => false,
   })
 }
 
@@ -175,6 +176,7 @@ describe('a row slot occupant over the region', () => {
             standard,
           ),
         occupied: (key: string) => key === ROW_SLOTS.leading,
+        has: () => false,
       }),
       useSessionAccess: () => true,
       // 宿主将来新增的标准 hook：本包不认识它，但它照样要转过去

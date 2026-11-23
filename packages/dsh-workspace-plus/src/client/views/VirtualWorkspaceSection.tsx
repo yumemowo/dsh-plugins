@@ -114,6 +114,7 @@ export function VirtualWorkspaceSection({
   const contextMenu = useRowContextMenu({
     items: buildRowContextMenuItems(menuItems),
     onSelect: select,
+    enabled: true,
   })
 
   return (
