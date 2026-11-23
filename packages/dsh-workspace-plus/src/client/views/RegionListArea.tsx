@@ -81,6 +81,8 @@ export interface SessionRowScope {
   statusSnapshot: SessionStatusSnapshot
   /** 行尾与卡片相对时间的基准时刻，渲染当刻取一次 */
   now: number
+  /** 宿主 home，会话卡片里的目录按它缩写成 `~` */
+  home: string | undefined
   /** 把一个标识写进剪贴板，会话行复制自己的 id 时用它 */
   copyId: CopyNoticeHandle['copy']
   revealSessionId: string | undefined
@@ -790,6 +792,7 @@ export function sessionRowElement(
       // 空白会话的标题是语言包的占位文案，不是会话内容，复制它没有意义
       card={
         context.official && {
+          path: row.cwd === undefined ? undefined : abbreviateHomePath(row.cwd, context.home),
           time: hoverTime,
           statuses: view.statuses,
           copy: row.blank ? undefined : row.title,

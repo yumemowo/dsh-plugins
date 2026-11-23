@@ -25,6 +25,7 @@ import { RowHeadShell } from './components/RowHeadShell.tsx'
 import { sameSessionStatus } from '../data/status.ts'
 import { useLocale } from '../hooks/useLocale.ts'
 import { useLocalViewOptions } from '../hooks/useLocalViewOptions.ts'
+import { useHoverMarquee } from '../hooks/useHoverMarquee.ts'
 import type { DragStartEvent } from '../hooks/useDnd.ts'
 import type { RowContextMenuEvent } from './components/RowContextMenu.tsx'
 import type { SessionStatus } from '../data/status.ts'
@@ -184,6 +185,9 @@ function SessionRowViewImpl({
   const disarmRename = useRef(() => {
     renameArmed.current = false
   }).current
+  // 标题被格子裁掉时指针停在行上把它挪出来看全；行菜单开着时保持移出，指针移到面板上也不算离开
+  const titleRef = useRef<HTMLSpanElement | null>(null)
+  const marquee = useHoverMarquee(titleRef, { hold: panelOpen })
 
   // 挂载后把自己滚进可视区，并立刻回报一次：请求方要在收到回报后清掉标记，否则该行会在后续每次重新挂载时再滚一次
   useEffect(() => {
@@ -241,10 +245,14 @@ function SessionRowViewImpl({
         'data-wg-clipped': clipped ? '' : undefined,
         'data-wg-panel-open': panelOpen ? '' : undefined,
       }}
+      // 跑马灯由行的指针进出驱动：标题自己裁掉超出的部分，进入时逐帧挪出来
+      onPointerEnter={marquee.onPointerEnter}
+      onPointerLeave={marquee.onPointerLeave}
     >
       <span className={clsx(styles.rowSurface, selected && styles.rowSelected)}>
         {status && <StatusIndicator status={status} />}
         <span
+          ref={titleRef}
           className={styles.rowTitle}
           onMouseDown={(event) => {
             if (event.detail !== 1) return

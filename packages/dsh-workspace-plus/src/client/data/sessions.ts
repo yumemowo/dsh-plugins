@@ -133,7 +133,8 @@ export function toSessionRow(
     cached !== undefined &&
     cached.running === facts.running &&
     cached.runningSubagentCount === facts.runningSubagentCount &&
-    cached.completed === facts.completed
+    cached.completed === facts.completed &&
+    cached.cwd === summary.cwd
   ) {
     return cached
   }
@@ -146,6 +147,8 @@ export function toSessionRow(
     blank,
     ...facts,
     updatedAt: summary.updatedAt,
+    // 空路径与没有路径在这里是同一件事：卡片不显示一行空白的目录
+    ...(summary.cwd === undefined || summary.cwd === '' ? {} : { cwd: summary.cwd }),
   }
   rowCache.set(summary, row)
   return row

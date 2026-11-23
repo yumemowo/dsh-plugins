@@ -83,6 +83,8 @@ type ComputedHere = 'sessionId' | 'action' | 'onContextMenu' | 'panelOpen' | 'on
  * 卡片由本组件挂而不是行组件，它要在行内 `...` 菜单或右键菜单开着时让位，而那两个状态都在本组件里
  */
 export interface SessionRowCardInput {
+  /** 会话的工作目录（已按宿主 home 缩写），缺省时卡片里不显示这一行 */
+  path?: string | undefined
   /** 相对时间文案（`5分钟前`），缺省时卡片里不显示这一行 */
   time?: string | undefined
   /**
@@ -163,7 +165,7 @@ function sameCard(
 ): boolean {
   if (a === b) return true
   if (a === undefined || b === undefined) return false
-  if (a.time !== b.time || a.copy !== b.copy) return false
+  if (a.time !== b.time || a.path !== b.path || a.copy !== b.copy) return false
   return sameSessionStatuses(a.statuses ?? [], b.statuses ?? [])
 }
 
@@ -374,6 +376,7 @@ function SessionRowItemView({
           content={
             <SessionHoverContent
               title={shownTitle}
+              path={card.path}
               time={card.time}
               statuses={card.statuses ?? (rowProps.status === undefined ? [] : [rowProps.status])}
             />

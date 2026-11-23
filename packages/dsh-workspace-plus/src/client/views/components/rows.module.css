@@ -278,6 +278,22 @@
 /* 会话标题的左外边距取官方 .title 的 4px：行的缩进下限是 24px，指示器占 4~20px，两者因此不会相撞 */
 .rowTitle { margin: 0 6px 0 4px; }
 
+/* 悬停跑马灯移动期间两侧各淡出 12px，避免硬切掉半个字符
+   左缘在文字离开起点后淡出（data-scrolled），右缘在右边仍有文字时淡出（data-clipped）
+   移到最右端时右缘那一档撤掉，最后一个字符因此以全强度显示
+   淡出遮罩挂在标题自己身上，状态位与前面其余格子保持原样 */
+.rowTitle[data-scrolled] {
+  mask-image: linear-gradient(to right, transparent, #000 12px);
+}
+
+.rowTitle[data-clipped] {
+  mask-image: linear-gradient(to left, transparent, #000 12px);
+}
+
+.rowTitle[data-scrolled][data-clipped] {
+  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+}
+
 /* 分组的会话数，与 session 行的 .rowTime 同格同形（tertiary、12px/20px），内容为纯数字
    它排在可收放的操作槽之前，正对 time 相对操作槽的位置
    槽位静止时不占宽，会话数因此贴在行右，悬停时槽位展开、会话数隐去，两者互换

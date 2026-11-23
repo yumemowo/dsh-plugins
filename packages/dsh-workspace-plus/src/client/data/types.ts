@@ -35,6 +35,12 @@ export interface SessionRow {
   runningSubagentCount: number
   completed: boolean
   updatedAt: number
+  /**
+   * 会话的工作目录
+   *
+   * 缺省表示宿主没有报告，悬停卡片因此不显示这一行
+   */
+  cwd?: string | undefined
 }
 
 /**

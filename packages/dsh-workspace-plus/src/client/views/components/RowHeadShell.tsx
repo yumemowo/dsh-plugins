@@ -10,7 +10,7 @@
  * 键盘激活与点击走同一个动作：行里按钮上的按键不该连带整行动作，那条判断在 `handleRowKeyDown` 里
  */
 import clsx from 'clsx'
-import type { ReactElement, ReactNode, Ref } from 'react'
+import type { PointerEvent as ReactPointerEvent, ReactElement, ReactNode, Ref } from 'react'
 import { handleRowKeyDown } from './rowKeyboard.ts'
 import { draggingProps } from '../../data/dnd/protocol.ts'
 import type { RowContextMenuEvent } from './RowContextMenu.tsx'
@@ -57,6 +57,10 @@ export interface RowHeadShellProps {
   dataProps?: Record<string, string | undefined> | undefined
   /** 行元素本身的引用，需要滚进可视区的行用 */
   elementRef?: Ref<HTMLDivElement> | undefined
+  /** 指针进入整行，行尾的跑马灯据此开始移出 */
+  onPointerEnter?: ((event: ReactPointerEvent<HTMLDivElement>) => void) | undefined
+  /** 指针离开整行，跑马灯据此回原位 */
+  onPointerLeave?: (() => void) | undefined
   children: ReactNode
 }
 
@@ -81,6 +85,8 @@ export function RowHeadShell({
   onDragEnd,
   dataProps,
   elementRef,
+  onPointerEnter,
+  onPointerLeave,
   children,
 }: RowHeadShellProps): ReactElement {
   // 排序段与「自己拼的那几格」互斥：前者是一整格，后者是会话行手工拼的三项
@@ -102,6 +108,8 @@ export function RowHeadShell({
       onClick={activate}
       onKeyDown={(event) => handleRowKeyDown(event, activate)}
       onContextMenu={onContextMenu}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
     >
       {menu}
       {children}

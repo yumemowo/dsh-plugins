@@ -67,6 +67,8 @@ export function WorkspaceHoverContent({
 export interface SessionHoverContentProps {
   /** 完整标题，空白会话是语言包的固定名 */
   title: string
+  /** 目录路径（已按宿主 home 缩写），缺省时整行不渲染 */
+  path?: string | undefined
   /** 相对时间文案，空白（新建中）会话没有可显示的时间，缺省即整行不渲染 */
   time?: string | undefined
   /** 该会话说要呈现的全部状态，逐条列出，空闲也有一条 */
@@ -75,12 +77,15 @@ export interface SessionHoverContentProps {
 
 export function SessionHoverContent({
   title,
+  path,
   time,
   statuses,
 }: SessionHoverContentProps): ReactElement {
   return (
     <div className={styles.hoverContent} ref={tagCard}>
       <div className={styles.hoverTitle}>{title}</div>
+      {/* 行上看不到会话在哪个目录里工作，卡片补上；与工作区卡片同一档排版 */}
+      {path === undefined ? null : <div className={styles.hoverPath}>{path}</div>}
       {time === undefined ? null : <div className={styles.hoverTime}>{time}</div>}
       {statuses.map((status) => (
         <div className={styles.hoverStatus} key={status.label}>

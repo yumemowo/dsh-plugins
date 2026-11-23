@@ -244,6 +244,7 @@ describe('hover cards in a real DOM', () => {
       second.render(
         React.createElement(SessionHoverContent, {
           title: '修复登录超时',
+          path: '~/src/dsh_plugins',
           time: '5分钟前',
           statuses: [
             { state: 'warning', label: '等待审批' },
@@ -253,6 +254,8 @@ describe('hover cards in a real DOM', () => {
       )
     })
 
+    // 会话卡片也带目录：行上看不到会话在哪个目录里工作
+    expect(sessionContainer.querySelector('.hoverPath')?.textContent).toBe('~/src/dsh_plugins')
     const statuses = sessionContainer.querySelectorAll('.hoverStatus')
     expect(statuses).toHaveLength(2)
     expect(statuses[0]?.textContent).toContain('等待审批')

@@ -1896,6 +1896,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     official,
     statusSnapshot,
     now,
+    home,
     revealSessionId: ui.revealSessionId,
     acknowledgeReveal: ui.acknowledgeReveal,
     openSession,
