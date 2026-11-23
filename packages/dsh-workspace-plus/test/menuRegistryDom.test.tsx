@@ -29,6 +29,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
       h(
         'div',
         { 'data-wg-test-menu': '' },
+        // 真原语把锚点按钮渲染在面板旁，这里照做：行尾那枚 `...` 因此留在文档里可点
         anchor,
         (items ?? []).map((item) =>
           h(
@@ -186,15 +187,18 @@ describe('session menu over the official context-menu registry', () => {
     expect(executed).toEqual(['pin'])
   })
 
-  it('falls back to the built-in entries when no registry is installed', async () => {
-    const container = await mount()
+  it('keeps only the grouping entries when no registry is installed', async () => {
+    // rc.1 起官方把 contextMenus 声明为必需注入，它不在场只可能是宿主拼装坏了
+    // 那时本包不出死按钮，只剩自己那几个归组项
+    const container = await mount({ menuRegistry: undefined })
     const row = container.querySelector<HTMLElement>('.workspaceBody .row')
     if (row === null) throw new Error('no row')
 
     await act(async () => actionButton(container).click())
 
-    // 宿主没装 ui-context-menu 时行为与改动前完全一致
-    expect(itemIds(row)).toContain('pin')
-    expect(itemIds(row)).toContain('rename')
+    const ids = itemIds(row)
+    expect(ids).toContain('group')
+    expect(ids).not.toContain('pin')
+    expect(ids).not.toContain('rename')
   })
 })

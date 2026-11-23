@@ -8,7 +8,8 @@
  * 因此这里只借它的**条目来源**：解析一次拿到动作列表，选中时按 id 交回给同一次解析
  * 于是第三方插件注册进 `session` 的条目会出现在本包的菜单里，本包自己的归组项追加在后面
  *
- * 服务不在场时（宿主没装 `ui-context-menu`）{@link openSessionMenu} 返回 undefined，调用方退回静态条目
+ * 服务不在场时 {@link openSessionMenu} 返回 undefined，调用方只用本包自有的归组项
+ * 官方 `ui-workspace` 把 `contextMenus` 声明为必需注入，因此它在场的那个版本起必然可用
  */
 import type { ReactNode } from 'react'
 

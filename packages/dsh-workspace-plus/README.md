@@ -30,7 +30,7 @@
 
 ## 安装
 
-需要 dsh `0.2.0-rc.1` 及以上，覆盖整个 `0.2.x`。
+需要 dsh `0.2.2-rc.1` 及以上。
 
 `@yumemowo/dsh-workspace-plus` 已发布到 npm，包内是预构建的 `lib/`，安装时不需要编译（下称 profile `web`，换成你自己的 profile 名即可）：
 

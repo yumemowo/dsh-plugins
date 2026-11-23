@@ -5,10 +5,9 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
-import { officialSessionLabels, timeLabel } from '../src/client/official.ts'
-import { workspaceTranslate } from './locale-stub.ts'
 import { setHoverCapable } from './matchMedia-stub.ts'
 import { snapshot } from './snapshot-stub.ts'
+import { registryStub } from './support/menuRegistryStub.ts'
 import { shellSeats, summary } from './support/dndDom.ts'
 import { pinnedOf } from '../src/client/store/viewMode.ts'
 import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
@@ -169,10 +168,25 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
+    // 官方那五项会话操作由注册表供（rc.1 起它必然在场），不给我就只剩本包的归组项
+    // 置顶项的文案与可用性跟着该行自己的状态走，因此这里按「已置顶行」的形态给一份
+    menuRegistry: registryStub({ pin: { pinned: true, canPin: true } }),
     ...shellSeats(),
     ...storeViewModeProps(viewModeStoreStub()),
     ...overrides,
   }
+}
+
+/**
+ * 展开一行自己的 `...` 菜单
+ *
+ * 官方那五项由注册表按需解析，解析发生在菜单打开那一刻，因此断言条目之前必须先开一次
+ * @param row - 会话行元素
+ */
+async function openRowMenu(row: HTMLElement): Promise<void> {
+  const button = row.querySelector<HTMLButtonElement>('.rowAction')
+  if (button === null) throw new Error('row has no action button')
+  await act(async () => button.click())
 }
 
 /** 挂载区域并等分组元数据落地 */
@@ -549,54 +563,51 @@ describe('pin in the row menu', () => {
     const { container, root } = await mount()
 
     // 官方 `PinSessionMenuItem` 排在最前，本包照它的次序
-    expect(itemIds(rowWithPin(container, false)).slice(0, 4)).toEqual([
-      'pin',
-      'rename',
-      'fork',
-      'archive',
-    ])
+    // 条目按需解析，因此先展开这一行的菜单
+    const row = rowWithPin(container, false)
+    await openRowMenu(row)
+    expect(itemIds(row).slice(0, 4)).toEqual(['pin', 'rename', 'fork', 'archive'])
     await act(async () => root.unmount())
   })
 
   it('switches the menu item to unpin on an already pinned row', async () => {
+    // 文案由官方注册表在解析时决定：已置顶的行拿到的是「取消置顶」
     const { container, root } = await mount()
     await expandSessionLists(container)
     const row = rowWithPin(container, true)
+    await openRowMenu(row)
 
     expect(item(row, 'pin').textContent).toBe('取消置顶')
     await act(async () => root.unmount())
   })
 
-  it('pins the row from the menu the same way the tail button does', async () => {
-    const pinned: { id: string; value: boolean }[] = []
+  it('hands the pin item back to the registry instead of running it here', async () => {
+    // 官方那五项由注册表执行：本包只把 id 交回去，不再自己调一次切换
+    const executed: string[] = []
     const { container, root } = await mount({
-      setSessionPinned: async (id, value) => {
-        pinned.push({ id, value })
-      },
+      menuRegistry: registryStub({ run: (id) => executed.push(id) }),
     })
     const row = rowWithPin(container, false)
-    const title = row.querySelector('.rowTitle')?.textContent
+    await openRowMenu(row)
 
     await act(async () => {
       item(row, 'pin').click()
       await Promise.resolve()
     })
 
-    // 点的是哪一行就置顶哪一行，标题与 fixture 的 `会话 <id>` 对得上即可确认
-    expect(pinned).toEqual([{ id: String(title).replace('会话 ', ''), value: true }])
+    expect(executed).toEqual(['pin'])
     await act(async () => root.unmount())
   })
 
-  it('disables the pin item at the limit while leaving unpinning available', async () => {
-    // 上限 2、已置顶 2 条
+  it('lets the registry decide when the pin item is unavailable', async () => {
+    // 上限由官方在解析时判断，禁用态随条目一起来，本包不自己算一遍
     const { container, root } = await mount({
-      loadGroups: async () => snapshot({ pinnedLimit: 2 }),
+      menuRegistry: registryStub({ pin: { pinned: false, canPin: false } }),
     })
-    await expandSessionLists(container)
+    const row = rowWithPin(container, false)
+    await openRowMenu(row)
 
-    // 上限只拦新增：未置顶行禁用，已置顶的照常可以取消
-    expect(item(rowWithPin(container, false), 'pin').disabled).toBe(true)
-    expect(item(rowWithPin(container, true), 'pin').disabled).toBe(false)
+    expect(item(row, 'pin').disabled).toBe(true)
     await act(async () => root.unmount())
   })
 })
@@ -622,16 +633,12 @@ describe('menu on a pinned row', () => {
 
   it('puts the action slot and the official items on a pinned row', async () => {
     const { container, root } = await mount()
+    const row = pinnedRows(container)[0] as HTMLElement
 
     // 行尾的操作位与列表里的会话行同形，条目也来自同一段构造
     expect(actionButton(container)).not.toBeNull()
-    expect(itemIds(pinnedRows(container)[0] as HTMLElement)).toEqual([
-      'pin',
-      'rename',
-      'fork',
-      'archive',
-      'copy-id',
-    ])
+    await openRowMenu(row)
+    expect(itemIds(row)).toEqual(['pin', 'rename', 'fork', 'archive', 'copy-id'])
     await act(async () => root.unmount())
   })
 
@@ -647,43 +654,37 @@ describe('menu on a pinned row', () => {
     await act(async () => root.unmount())
   })
 
-  it('pins a row from the menu the same way the tail button does', async () => {
-    const pinned: { id: string; value: boolean }[] = []
-    const { container, root } = await mount({
-      setSessionPinned: async (id, value) => {
-        pinned.push({ id, value })
-      },
-    })
+  it('hands a pinned row pin item back to the registry', async () => {
+    // 置顶区里的行本已置顶，注册表交来的那一项落到取消置顶；本包只把 id 交回去
+    const executed: string[] = []
+    const { container, root } = await mount({ menuRegistry: registryStub({ run: (id) => executed.push(id) }) })
     const row = pinnedRows(container)[0] as HTMLElement
+    await openRowMenu(row)
 
     await act(async () => {
       row.querySelector<HTMLButtonElement>('[data-wg-test-item="pin"]')?.click()
     })
 
-    // 置顶区里的行本已置顶，菜单项因此落到取消置顶
-    expect(pinned).toEqual([{ id: 'a', value: false }])
+    expect(executed).toEqual(['pin'])
     await act(async () => root.unmount())
   })
 
   it('opens a pinned row with the official fork instead of the row menu', async () => {
-    const forked: string[] = []
+    const executed: string[] = []
     const opened: string[] = []
     const { container, root } = await mount({
       openSession: (id) => opened.push(id),
-      official: () => ({
-        renameSession: async () => {},
-        forkSession: (id) => forked.push(id),
-        archiveSession: async () => {},
-        labels: officialSessionLabels(workspaceTranslate()),
-        relativeTime: (updatedAt, now) => timeLabel(updatedAt, now, workspaceTranslate()),
-      }),
+      menuRegistry: registryStub({ run: (id) => executed.push(id) }),
     })
 
+    const row = pinnedRows(container)[0] as HTMLElement
+    await openRowMenu(row)
     await act(async () => {
-      pinnedRows(container)[0]?.querySelector<HTMLButtonElement>('[data-wg-test-item="fork"]')?.click()
+      row.querySelector<HTMLButtonElement>('[data-wg-test-item="fork"]')?.click()
     })
 
-    expect(forked).toEqual(['a'])
+    // 分叉由注册表执行，本包只把 id 交回去
+    expect(executed).toEqual(['fork'])
     // 点菜单项不该连带把行打开：面板挂在行内，行本身也可点
     expect(opened).toEqual([])
     await act(async () => root.unmount())
@@ -744,9 +745,12 @@ describe('menu on a pinned row', () => {
   })
 
   it('renders a plain row while the official service is absent', async () => {
-    const { container, root } = await mount({ official: () => undefined })
+    const { container, root } = await mount({
+      official: () => undefined,
+      // 官方服务与注册表都缺席：本包这一段只剩归组项，置顶区里的行没有归组上下文，入口因此收掉
+      menuRegistry: undefined,
+    })
 
-    // 宿主未加载官方 ui-workspace 时菜单会是空的，那时不留点不动的省略号
     expect(container.querySelector('.pinScroll .rowAction')).toBeNull()
     expect(pinnedRows(container)).toHaveLength(2)
     await act(async () => root.unmount())

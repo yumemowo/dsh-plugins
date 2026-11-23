@@ -17,14 +17,9 @@ describe('officialSessionLabels', () => {
     const labels = officialSessionLabels(workspaceTranslate())
 
     expect(labels).toEqual({
-      pin: '置顶会话',
-      unpin: '取消置顶',
       rename: '重命名',
       renameTitle: '重命名会话',
       sessionNamePrompt: '会话名称',
-      fork: '分叉会话',
-      archive: '归档会话',
-      copySessionId: '复制 Session ID',
       sessionIdCopied: 'Session ID 已复制',
     })
   })

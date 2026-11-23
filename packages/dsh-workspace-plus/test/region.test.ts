@@ -19,10 +19,8 @@ import {
   parseParentGroupId,
 } from '../src/client/menus.tsx'
 import type { SessionRow } from '../src/client/data/types.ts'
-import { officialSessionLabels } from '../src/client/official.ts'
 import { normalizeSnapshot } from '../src/client/remote.ts'
 import { menuLabelArrow, menuLabelText } from './menu-label.ts'
-import { workspaceTranslate } from './locale-stub.ts'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 
@@ -73,135 +71,16 @@ describe('buildSessionMenuItems', () => {
     }
   }
 
-  /** 官方三项操作的文案（取自官方 workspace 命名空间） */
-  const official = officialSessionLabels(workspaceTranslate())
-
-  it('lists the official actions before the package own group item', () => {
-    const items = buildSessionMenuItems({
-      grouping: grouping(''),
-      official,
-      pin: { pinned: false, canPin: true },
-    })
-
-    // 官方操作块在前（它们作用于会话本身），分组项是叠加其上的归类操作
-    // 置顶在最前、复制 Session ID 在最后，两处都与官方会话菜单的 order 一致
-    expect(items.map((item) => (item as { id?: string }).id)).toEqual([
-      'pin',
-      'rename',
-      'fork',
-      'archive',
-      'copy-id',
-      'separator',
-      'group',
-    ])
-  })
-
-  it('reads the copy item from the official session-id wording', () => {
-    const items = buildSessionMenuItems({ official })
-
-    const item = items.find((entry) => (entry as { id?: string }).id === 'copy-id')
-    expect(item).toMatchObject({ label: '复制 Session ID' })
-  })
-
-  it('offers the pin item only when the row can toggle its pin', () => {
-    // 未给定置顶状态或切换动作时，菜单里不该出现一个点不动的入口
-    const items = buildSessionMenuItems({ grouping: grouping(''), official })
-
-    expect(items.map((item) => (item as { id?: string }).id)).toEqual([
-      'rename',
-      'fork',
-      'archive',
-      'copy-id',
-      'separator',
-      'group',
-    ])
-  })
-
-  it('switches the pin item to the unpin wording once the row is pinned', () => {
-    const items = buildSessionMenuItems({
-      official,
-      pin: { pinned: true, canPin: true },
-    })
-
-    const item = items.find((entry) => (entry as { id?: string }).id === 'pin')
-    expect(item).toMatchObject({ label: '取消置顶' })
-  })
-
-  it('disables the pin item at the limit but leaves unpinning available', () => {
-    const blocked = buildSessionMenuItems({ official, pin: { pinned: false, canPin: false } })
-    const pinnedRow = buildSessionMenuItems({ official, pin: { pinned: true, canPin: false } })
-
-    // 上限只拦新增：已置顶的行永远可以取消
-    expect(blocked.find((entry) => (entry as { id?: string }).id === 'pin')).toMatchObject({
-      disabled: true,
-    })
-    expect(pinnedRow.find((entry) => (entry as { id?: string }).id === 'pin')).toMatchObject({
-      disabled: false,
-    })
-  })
-
-  it('separates the official actions from the group item', () => {
-    const items = buildSessionMenuItems({ grouping: grouping(''), official })
-
-    // 两类操作之间必须有分隔线，否则会混成一个列表
-    const separator = items.find((item) => (item as { id?: string }).id === 'separator')
-    expect(separator).toMatchObject({ type: 'separator' })
-  })
-
-  it('draws no separator when only one section exists', () => {
-    const onlyOfficial = buildSessionMenuItems({ official })
-    const onlyGrouping = buildSessionMenuItems({ grouping: grouping('') })
-
-    // 分隔线是用来分两段的，只有一段时它是多余的空行
-    for (const items of [onlyOfficial, onlyGrouping]) {
-      expect(items.some((item) => (item as { type?: string }).type === 'separator')).toBe(false)
-    }
-  })
-
-  it('keeps the official actions for a row without grouping context', () => {
-    // 「未分组」桶里的会话没有分组可归，但官方三项照常可用
-    const items = buildSessionMenuItems({ official, pin: { pinned: false, canPin: true } })
-
-    expect(items.map((item) => (item as { id?: string }).id)).toEqual([
-      'pin',
-      'rename',
-      'fork',
-      'archive',
-      'copy-id',
-    ])
-  })
-
-  it('falls back to the group item alone when official services are absent', () => {
-    // 宿主未加载官方 ui-workspace 时不留点不动的死按钮
+  it('offers only the group item, never the official actions', () => {
+    // 官方那五项由官方右键菜单注册表供，本包不再自己拼一份——两处都拼会让同一项出现两次
     const items = buildSessionMenuItems({ grouping: grouping('') })
 
     expect(items.map((item) => (item as { id?: string }).id)).toEqual(['group'])
   })
 
-  it('keeps submenu groups in workspace view order', () => {
-    const items = buildSessionMenuItems({ grouping: grouping('') })
-
-    const groupItem = items.find((item) => (item as { id?: string }).id === 'group') as {
-      submenu?: { id: string }[]
-    }
-    expect(groupItem.submenu?.map((entry) => entry.id)).toEqual(['group:g1', 'group:g2', 'group:g3'])
-  })
-
-  it('gives the group item a trailing arrow because it opens a submenu', () => {
-    const items = buildSessionMenuItems({ grouping: grouping('') })
-    const groupItem = items.find((item) => (item as { id?: string }).id === 'group')
-
-    // 二级菜单只靠悬停展开，行尾箭头是菜单上唯一的可见提示
-    expect(menuLabelArrow((groupItem as { label?: unknown }).label)).toBeDefined()
-  })
-
-  it('hides the session own group from the submenu', () => {
-    const items = buildSessionMenuItems({ grouping: grouping('g2') })
-
-    const groupItem = items.find((item) => (item as { id?: string }).id === 'group') as {
-      submenu?: { id: string }[]
-    }
-    expect(groupItem.submenu?.map((entry) => entry.id)).toEqual(['group:g1', 'group:g3'])
+  it('returns an empty menu without a grouping context', () => {
+    // 「未分组」桶里的会话没有分组可归，此时本包这一段是空的
+    expect(buildSessionMenuItems({})).toEqual([])
   })
 
   it('shows the ungroup action right below the group item when grouped', () => {

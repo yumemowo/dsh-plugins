@@ -19,8 +19,7 @@
 import { memo, useMemo, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { HoverCard, IconEllipsisOutlineRegular, Menu } from '../runtime.ts'
-import { SESSION_COPY_ID, buildSessionMenuItems, sameMenuGroups } from '../menus.tsx'
-import type { SessionPinMenuInput } from '../menus.tsx'
+import { buildSessionMenuItems, sameMenuGroups } from '../menus.tsx'
 import { sameSessionStatus, sameSessionStatuses } from '../data/status.ts'
 import { SessionRowView } from './SessionRowView.tsx'
 import type { SessionRowViewProps } from './SessionRowView.tsx'
@@ -36,7 +35,6 @@ import { useDnd, useRowDragging } from '../hooks/useDnd.ts'
 import type { DragStartEvent } from '../hooks/useDnd.ts'
 import { rowIdProps } from '../data/dnd/protocol.ts'
 import type { DragPlan } from '../data/dnd/protocol.ts'
-import type { CopyNoticeHandle } from '../copyNotice.ts'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { SessionStatus } from '../data/status.ts'
 import type { MenuGroup } from '../menus.tsx'
@@ -104,7 +102,7 @@ export interface SessionRowCardInput {
 export interface SessionRowItemProps extends Omit<SessionRowViewProps, ComputedHere> {
   row: SessionRow
   /**
-   * 官方右键菜单注册表，缺省表示宿主没装 `ui-context-menu`
+   * 官方右键菜单注册表，缺省表示宿主没装 `ui-context-menu`（官方 `ui-workspace` 把它声明为必需注入，正常装配下必然在场）
    *
    * 在场时会话菜单以它为准：官方与第三方插件注册进 `session` 的动作都能出现，本包只追加归组项
    */
@@ -131,25 +129,8 @@ export interface SessionRowItemProps extends Omit<SessionRowViewProps, ComputedH
   dragPlan?: ((sessionId: string) => DragPlan) | undefined
   /** 官方会话操作，缺省时菜单里没有官方操作块 */
   official?: OfficialSessionActions | undefined
-  /** 把一个标识写进剪贴板 */
-  copyId: CopyNoticeHandle['copy']
   /** 悬停卡片，缺省表示这一行不挂卡片 */
   card?: SessionRowCardInput | undefined
-}
-
-/**
- * 菜单里置顶那一项的输入
- *
- * 三个字段都到齐才给：缺了切换动作就只是一个点不动的入口
- * @returns 置顶项的输入，该行不提供置顶入口时为 undefined
- */
-function pinMenuInput(
-  pinned: boolean | undefined,
-  canPin: boolean | undefined,
-  onTogglePin: ((sessionId: string) => void) | undefined,
-): SessionPinMenuInput | undefined {
-  if (pinned === undefined || canPin === undefined || onTogglePin === undefined) return undefined
-  return { pinned, canPin }
 }
 
 /**
@@ -213,7 +194,6 @@ function sameRowItemProps(prev: SessionRowItemProps, next: SessionRowItemProps):
     prev.menuIcon === next.menuIcon &&
     prev.rowSlots === next.rowSlots &&
     prev.standardHooks === next.standardHooks &&
-    prev.copyId === next.copyId &&
     prev.dragPlan === next.dragPlan &&
     sameCard(prev.card, next.card) &&
     sameGrouping(prev.grouping, next.grouping)
@@ -225,7 +205,6 @@ function SessionRowItemView({
   grouping,
   dragPlan,
   official,
-  copyId,
   card,
   registry,
   menuIcon,
@@ -241,8 +220,7 @@ function SessionRowItemView({
   // 新建中的空白会话没有会话可操作：官方对它整条省略号都不渲染
   // 条目在这里就清空，右键路径与行尾按钮才会一起落空——只拦按钮的话右键仍会弹出一份同样的菜单
   //
-  // 注册表在场时官方操作块由它供（置顶 / 重命名 / 分叉 / 归档 / 复制 Session ID 都是它注册的），
-  // 这里因此只拼本包自有的归组项，避免同一项出现两次
+  // 官方那五项（置顶 / 重命名 / 分叉 / 归档 / 复制 Session ID）由注册表供，这里只拼本包的归组项
   const ownItems = row.blank
     ? []
     : buildSessionMenuItems({
@@ -254,43 +232,16 @@ function SessionRowItemView({
                 groupLabel: labels.moveToGroup,
                 ungroupLabel: labels.ungroup,
               },
-        official: registry === undefined ? official?.labels : undefined,
-        pin: registry === undefined
-          ? pinMenuInput(rowProps.pinned, rowProps.canPin, rowProps.onTogglePin)
-          : undefined,
       })
 
   /**
    * 菜单选中项的分派
    *
    * 行内 `...` 菜单与右键菜单共用它：右键是行尾操作位的捷径，同一个 id 必须落到同一件事上
-   * 会话行没有行内新建入口，因此两份条目的集合相同
    *
-   * 注册表在场时它那段条目自己执行，本函数只接本包自有的那几个 id
+   * 官方那五项由注册表自己执行，落到这里的只有本包的归组项
    */
   const ownSelect = (id: string): void => {
-    if (id === 'pin') {
-      rowProps.onTogglePin?.(row.id)
-      return
-    }
-    if (id === 'rename') {
-      setRenameDraft(row.title)
-      return
-    }
-    if (id === 'fork') {
-      official?.forkSession(row.id)
-      return
-    }
-    if (id === 'archive') {
-      // 归档会改写会话列表快照，本区域订阅着它，因此不需要手动刷新
-      void official?.archiveSession(row.id)
-      return
-    }
-    if (id === SESSION_COPY_ID) {
-      // 复制的是会话 id 本身，不打开它，也不改动任何状态
-      if (official !== undefined) copyId(row.id, official.labels.sessionIdCopied)
-      return
-    }
     if (grouping !== undefined) grouping.onSelectGroup(grouping.workspaceId, row.id, id)
   }
 
@@ -378,7 +329,9 @@ function SessionRowItemView({
 
   const shownTitle = rowProps.title ?? labels.newSession
   // 条目为空时连锚点按钮一起不渲染，不留点不动的省略号
-  const hasMenu = items.length > 0
+  // 注册表在场时条目要等打开才解析，因此不能只看眼下有几条：那样第一条右键都点不到
+  // 空白会话没有会话可操作，官方对它整条省略号都不渲染，因此它也不靠注册表撑起入口
+  const hasMenu = items.length > 0 || (!row.blank && registry !== undefined)
 
   // 行尾那组悬停按钮：别的插件注册进行尾操作位的按钮挂在这里，排在省略号之后
   const rowActions = row.blank || rowSlots === undefined

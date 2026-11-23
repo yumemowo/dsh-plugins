@@ -806,7 +806,6 @@ export function sessionRowElement(
       menuIcon={context.menuIcon}
       rowSlots={context.rowSlots}
       standardHooks={context.standardHooks}
-      copyId={context.copyId}
       // 宿主没加载官方 ui-workspace 时官方文案整体拿不到，浮出一个空壳不如不浮
       // 空白会话的标题是语言包的占位文案，不是会话内容，复制它没有意义
       card={

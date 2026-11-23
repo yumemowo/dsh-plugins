@@ -10,6 +10,7 @@ import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRe
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import type { OutlineRow } from '../src/client/data/outline.ts'
 import { copyAction, copySeats } from './copy-stub.ts'
+import { registryFace } from './support/menuRegistryStub.ts'
 import { RegionLocaleProvider } from '../src/client/hooks/useLocale.ts'
 import { DndProvider } from '../src/client/hooks/useDnd.ts'
 import { regionLabels } from '../src/client/labels.ts'
@@ -528,12 +529,14 @@ function expansionStub(overrides: Partial<Expansion> = {}): Expansion {
  *
  * 直接渲染单行而不是整片区域：测试替身按组件类型给状态分桶
  * 同一类型的多个实例共用一份状态，整片列表里所有会话行会一起「被右键」
- * @param options.official - 是否给官方三项操作，false 时该行完全没有菜单
+ * 官方那五项会话操作由官方右键菜单注册表供，这里一律给一份注册表替身：
+ * rc.1 起官方 `ui-workspace` 把 `contextMenus` 声明为必需注入，它必然在场
+ * @param options.registry - 给不给注册表，false 用于验证「注册表缺席时只剩本包归组项」
  * @param options.grouping - 归组上下文，缺省表示该行没有分组可归
  * @param options.groupSections - 可移入的分组，只给 `grouping` 为真时有意义
  */
 function sessionRowNode(options: {
-  official?: boolean
+  registry?: boolean
   grouping?: boolean
   groupSections?: { id: string; label: string; sessions: [] }[]
 } = {}): unknown {
@@ -550,18 +553,14 @@ function sessionRowNode(options: {
     title: '会话一',
     selected: false,
     onOpenSession: () => {},
-    copyId: copyAction(),
-    ...(options.official === false
-      ? {}
-      : {
-          official: {
-            renameSession: async () => {},
-            forkSession: () => {},
-            archiveSession: async () => {},
-            labels: officialSessionLabels(workspaceTranslate()),
-            relativeTime: () => '',
-          },
-        }),
+    official: {
+      renameSession: async () => {},
+      forkSession: () => {},
+      archiveSession: async () => {},
+      labels: officialSessionLabels(workspaceTranslate()),
+      relativeTime: () => '',
+    },
+    ...(options.registry === false ? {} : { registry: registryFace() }),
     ...(options.grouping === true
       ? {
           grouping: {
@@ -1115,7 +1114,7 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(none.text).not.toContain('未分组')
   })
 
-  it('gives a workspace session row the official actions and the group item', () => {
+  it('gives a workspace session row only the group item of its own', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
@@ -1128,15 +1127,8 @@ describe('WorkspaceGroupsRegion render', () => {
       'separator-delete',
       'delete',
     ])
-    expect(menuItems(out)).toContainEqual([
-      'pin',
-      'rename',
-      'fork',
-      'archive',
-      'copy-id',
-      'separator',
-      'group',
-    ])
+    // 会话行这一份只有本包的归组项：官方那五项由官方右键菜单注册表供
+    expect(menuItems(out)).toContainEqual(['group'])
   })
 
   it('uses the generic rename verb in the workspace row menu, like official does', () => {
@@ -1204,12 +1196,16 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(items.every((item) => menuLabelArrow(item.label) === undefined)).toBe(true)
   })
 
-  it('gives the ungrouped row the official actions without a group item', () => {
+  it('omits the official actions from every row menu', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
-    // stray 会话没有分组可归，但官方操作块照常可用
-    expect(menuItems(out)).toContainEqual(['pin', 'rename', 'fork', 'archive', 'copy-id'])
+    // 官方那五项由官方右键菜单注册表供；本包任何一份菜单里都不该再出现它们的 id
+    for (const ids of menuItems(out)) {
+      for (const officialId of ['pin', 'fork', 'archive', 'copy-id']) {
+        expect(ids).not.toContain(officialId)
+      }
+    }
   })
 
   it('names the provisional blank session with the official fixed label', () => {
@@ -1241,15 +1237,7 @@ describe('WorkspaceGroupsRegion render', () => {
       'separator-delete',
       'delete',
     ])
-    expect(menuItems(withBlank)).toContainEqual([
-      'pin',
-      'rename',
-      'fork',
-      'archive',
-      'copy-id',
-      'separator',
-      'group',
-    ])
+    expect(menuItems(withBlank)).toContainEqual(['group'])
   })
 
   it('leaves the blank session row without a right-click menu either', () => {
@@ -1261,9 +1249,9 @@ describe('WorkspaceGroupsRegion render', () => {
     render(React.createElement(WorkspaceGroupsRegion, props(true)), without)
 
     // 多出这条占位行后右键菜单数不变：空白行一份都不贡献
-    // 三份分别是工作区行、那条常规会话行、未分组桶里的会话行
+    // 两份分别是工作区行与归组会话行；未分组桶里那条没有归组项，区域这一层又没给注册表，因此它没有菜单
     expect(withBlank.contextMenus).toHaveLength((without.contextMenus ?? []).length)
-    expect(withBlank.contextMenus).toHaveLength(3)
+    expect(withBlank.contextMenus).toHaveLength(2)
   })
 
   it('shows the summary title once the session leaves the blank state', () => {
@@ -1924,8 +1912,8 @@ describe('hover cards', () => {
       title: '会话一',
       selected: false,
       onOpenSession: () => {},
-      copyId: copyAction(),
       card: { statuses: [{ state: 'done', label: '空闲' }], time: '5分钟前' },
+      registry: registryFace(),
       official: {
         renameSession: async () => {},
         forkSession: () => {},
@@ -1970,8 +1958,8 @@ describe('hover cards', () => {
       title: '会话一',
       selected: false,
       onOpenSession: () => {},
-      copyId: copyAction(),
       card: { time: '5分钟前' },
+      registry: registryFace(),
       official: {
         renameSession: async () => {},
         forkSession: () => {},
@@ -2447,11 +2435,11 @@ describe('row context menu', () => {
   })
 
   it('gives the session row the same items as its own menu', () => {
-    // 没有归组上下文的会话行（「未分组」桶里的那种）只留官方三项
+    // 没有归组上下文的会话行（「未分组」桶里的那种）只剩注册表那几项
     // 且没有行内新建入口可补，右键菜单与它的 `...` 菜单条目集合因此完全相同
     const { after } = rightClick(sessionRowNode(), 'row')
 
-    expect(menuIdsOf(openMenu(after))).toEqual(['rename', 'fork', 'archive', 'copy-id'])
+    expect(menuIdsOf(openMenu(after))).toEqual(['pin', 'rename', 'fork', 'archive', 'copy-id'])
   })
 
   it('leaves a row without a create entry with the plain row menu', () => {

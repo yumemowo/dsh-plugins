@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client'
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import { snapshot } from './snapshot-stub.ts'
+import { registryStub } from './support/menuRegistryStub.ts'
 import { shellSeats, summary } from './support/dndDom.ts'
 import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
 
@@ -28,13 +29,17 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
     Menu: ({
       items,
       onSelect,
+      anchor,
     }: {
       items?: { id: string; label?: React.ReactNode; disabled?: boolean }[]
       onSelect?: (id: string) => void
+      anchor?: React.ReactNode
     }) =>
       h(
         'div',
         { 'data-wg-test-menu': '' },
+        // 真原语把锚点按钮渲染在面板旁，这里照做：行尾那枚 `...` 因此留在文档里可点
+        anchor,
         (items ?? []).map((item) =>
           h(
             'button',
@@ -78,7 +83,7 @@ const WORKSPACES = {
 const SESSIONS = { ids: ['a'], byId: { a: summary('a', 1_000) }, phase: 'ready' }
 
 /** 造一份注入面完整的数据：一个工作区、它体内一个会话分组、根节点一个工作区分组 */
-function props(): WorkspaceGroupsProps {
+function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsProps {
   return {
     wide: true,
     expandSidebar: () => {},
@@ -117,18 +122,23 @@ function props(): WorkspaceGroupsProps {
     insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
+    // 「复制 Session ID」那一项由官方注册表供（rc.1 起它必然在场），不给我就只剩本包的归组项
+    menuRegistry: registryStub(),
     ...shellSeats(),
     ...storeViewModeProps(viewModeStoreStub()),
+    ...overrides,
   }
 }
 
 /** 挂载区域并等分组元数据落地 */
-async function mount(): Promise<{ container: HTMLElement; root: ReturnType<typeof createRoot> }> {
+async function mount(
+  overrides: Partial<WorkspaceGroupsProps> = {},
+): Promise<{ container: HTMLElement; root: ReturnType<typeof createRoot> }> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   await act(async () => {
-    root.render(React.createElement(WorkspaceGroupsRegion, props()))
+    root.render(React.createElement(WorkspaceGroupsRegion, props(overrides)))
   })
   await act(async () => {
     await Promise.resolve()
@@ -161,15 +171,26 @@ function toastText(): string | undefined {
 }
 
 describe('copy id', () => {
-  it('writes the session id and reports the official copied wording', async () => {
-    const { container, root } = await mount()
+  it('leaves the session id copy to the official registry', async () => {
+    const executed: string[] = []
+    const { container, root } = await mount({
+      menuRegistry: registryStub({ run: (id) => executed.push(id) }),
+    })
 
-    // 会话行的那一份菜单里挂着「复制 Session ID」，与官方会话菜单同一条
-    const sessionRow = container.querySelector<HTMLElement>('.row')
-    await clickItem(sessionRow as HTMLElement, 'copy-id')
+    // 会话行的「复制 Session ID」由官方注册表那一项落地，本包不再自己拼一份
+    // 条目按需解析，因此先展开这一行的菜单
+    const sessionRow = container.querySelector<HTMLElement>('.row') as HTMLElement
+    await act(async () => sessionRow.querySelector<HTMLButtonElement>('.rowAction')?.click())
+    const ids = Array.from(sessionRow.querySelectorAll('[data-wg-test-item]')).map(
+      (entry) => entry.getAttribute('data-wg-test-item'),
+    )
+    const copy = sessionRow.querySelector<HTMLButtonElement>('[data-wg-test-item="copy-id"]')
+    expect(ids).toContain('copy-id')
+    await act(async () => copy?.click())
 
-    expect((globalThis as { __clipboard?: string }).__clipboard).toBe('a')
-    expect(toastText()).toBe('Session ID 已复制')
+    expect(executed).toEqual(['copy-id'])
+    // 本包不再写剪贴板：那次复制由官方完成
+    expect((globalThis as { __clipboard?: string }).__clipboard).toBeUndefined()
     await act(async () => root.unmount())
   })
 
@@ -202,13 +223,15 @@ describe('copy id', () => {
   })
 
   it('reports the shared failure wording when the clipboard refuses', async () => {
+    // 本包自己那一份复制（分组与工作区分组）仍在这里落地，失败提示取官方那句不点名对象的文案
     const { container, root } = await mount()
     ;(globalThis as { __clipboardOk?: boolean }).__clipboardOk = false
 
-    const sessionRow = container.querySelector<HTMLElement>('.row')
-    await clickItem(sessionRow as HTMLElement, 'copy-id')
+    const sessionGroup = Array.from(container.querySelectorAll<HTMLElement>('.groupHead')).find(
+      (head) => head.classList.contains('virtualWorkspaceHead') === false,
+    ) as HTMLElement
+    await clickItem(sessionGroup, 'copy-id')
 
-    // 失败提示取官方那句不点名对象的文案，三处复制共用
     expect(toastText()).toBe('复制失败，请重试')
     await act(async () => root.unmount())
   })

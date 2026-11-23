@@ -47,7 +47,7 @@ dsh plugin --profile web add "github:yumemowo/dsh-plugins#path:packages/dsh-work
 
 ## 版本兼容
 
-各插件需要 dsh `0.2.0-rc.1` 及以上，覆盖整个 `0.2.x`。
+各插件需要 dsh `0.2.2-rc.1` 及以上。
 
 ## 开发
 

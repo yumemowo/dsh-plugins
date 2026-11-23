@@ -7,6 +7,13 @@ import * as helloPlugin from '../src/index.ts'
 import { name as pluginName, Config } from '../src/index.ts'
 import type { HelloConfig } from '../src/index.ts'
 import type { Fiber } from '@deepseek-ai/cordis'
+import type {
+  ToolBatchInput,
+  ToolBatchResult,
+  ToolCallResult,
+  ToolDefinition,
+  ToolExecutor,
+} from '@deepseek-ai/dsh-tools'
 
 /**
  * 在最小但真实的依赖链上挂载插件。
@@ -21,7 +28,55 @@ async function mountHello(config?: HelloConfig) {
   await ctx.plugin(systemPrompt)
   await ctx.plugin(ToolRuntime)
   const fiber = await ctx.plugin(helloPlugin, config)
+  // 执行器要在工具注册之后装配：它按当时可见的定义建索引
+  ctx.tools.setExecutor(minimalExecutor(ctx.tools.definitions()))
   return { ctx, fiber }
+}
+
+
+/**
+ * 一个最小的工具执行器替身
+ *
+ * rc.1 起 `ctx.tools.execute` 只是把整批调用转给「当前装配里的执行器」，
+ * 那个执行器由部署侧提供；单独挂 `dsh-tools` 时它不在场，execute 会抛
+ * `ToolExecutorUnavailableError`。这个替身只做本用例要验的那一段：
+ * 按显示定义校验参数、调工具、把返回值铺成一条文本结果
+ * @param tools - 当前可见的工具定义
+ * @returns 可直接交给 `ctx.tools.setExecutor` 的执行器
+ */
+function minimalExecutor(tools: readonly ToolDefinition[]): ToolExecutor {
+  const byName = new Map(tools.map((tool) => [tool.name, tool]))
+  return {
+    describe: () => ({
+      schemas: tools.map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters })),
+      knownNames: tools.map((tool) => tool.name),
+    }),
+    async execute({ calls, signal }: ToolBatchInput): Promise<ToolBatchResult> {
+      const results: ToolCallResult[] = []
+      for (const call of calls) {
+        const tool = byName.get(call.name)
+        if (tool === undefined) throw new Error(`no such tool: ${call.name}`)
+        const args = JSON.parse(call.arguments) as unknown
+        try {
+          const value = await tool.execute(args, { signal } as never)
+          results.push({
+            callId: call.id,
+            result: { isError: false, value: value as never, content: [{ type: 'text', text: String(value) }] },
+          })
+        } catch (error) {
+          results.push({
+            callId: call.id,
+            result: {
+              isError: true,
+              error: { name: 'tool-error', message: error instanceof Error ? error.message : String(error) } as never,
+              content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }],
+            },
+          })
+        }
+      }
+      return { results, additionalContexts: [], concluded: false }
+    },
+  }
 }
 
 /** 释放已挂载的插件及其依赖链，避免残留挂起的 fiber。 */
@@ -68,15 +123,22 @@ describe('dsh-hello plugin', () => {
   it('greets the requested name when the tool runs', async () => {
     const { ctx, fiber } = await mountHello()
 
-    const result = await ctx.tools.execute({
-      callId: ToolCallId('test-call-1'),
-      name: 'hello_greet',
-      arguments: { who: 'DeepSeek Harness' },
+    const batch = await ctx.tools.execute({
+      calls: [
+        {
+          type: 'tool-call',
+          id: ToolCallId('test-call-1'),
+          name: 'hello_greet',
+          arguments: JSON.stringify({ who: 'DeepSeek Harness' }),
+        },
+      ],
       signal: new AbortController().signal,
     })
 
-    expect(result.isError).toBe(false)
-    expect(result.content).toEqual([{ type: 'text', text: 'Hello, DeepSeek Harness!' }])
+    expect(batch.results).toHaveLength(1)
+    const outcome = batch.results[0]?.result
+    expect(outcome?.isError).toBe(false)
+    expect(outcome?.content).toEqual([{ type: 'text', text: 'Hello, DeepSeek Harness!' }])
 
     await disposeAll(fiber, ctx)
   })
@@ -84,14 +146,19 @@ describe('dsh-hello plugin', () => {
   it('rejects a tool call that omits the who argument', async () => {
     const { ctx, fiber } = await mountHello()
 
-    const result = await ctx.tools.execute({
-      callId: ToolCallId('test-call-2'),
-      name: 'hello_greet',
-      arguments: {},
+    const batch = await ctx.tools.execute({
+      calls: [
+        {
+          type: 'tool-call',
+          id: ToolCallId('test-call-2'),
+          name: 'hello_greet',
+          arguments: JSON.stringify({}),
+        },
+      ],
       signal: new AbortController().signal,
     })
 
-    expect(result.isError).toBe(true)
+    expect(batch.results[0]?.result.isError).toBe(true)
 
     await disposeAll(fiber, ctx)
   })

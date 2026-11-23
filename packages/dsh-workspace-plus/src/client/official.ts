@@ -21,28 +21,14 @@ export type WorkspaceTranslate = TranslateNS<'workspace'>
  */
 export type SidebarTranslate = TranslateNS<'sidebar'>
 
-/** 官方那几项会话操作与相关对话框的文案 */
+/** 官方会话重命名对话框与复制提示的文案 */
 export interface OfficialSessionLabels {
-  /** 菜单里的「置顶会话」项，未置顶的行用它 */
-  pin: string
-  /** 菜单里的「取消置顶」项，已置顶的行用它 */
-  unpin: string
-  /** 菜单里的「重命名」项，也是重命名对话框的确认按钮 */
+  /** 重命名对话框的确认按钮 */
   rename: string
   /** 重命名会话对话框的标题 */
   renameTitle: string
   /** 会话名输入框的占位与无障碍标签 */
   sessionNamePrompt: string
-  /** 菜单里的「分叉会话」项 */
-  fork: string
-  /** 菜单里的「归档会话」项 */
-  archive: string
-  /**
-   * 菜单里的「复制 Session ID」项
-   *
-   * 官方把它排在归档之后，本包照同一次序
-   */
-  copySessionId: string
   /** 复制成功的提示，官方把它渲染成一条成功色的 toast */
   sessionIdCopied: string
 }
@@ -144,14 +130,9 @@ export interface OfficialHoverLabels {
  */
 export function officialSessionLabels(t: WorkspaceTranslate): OfficialSessionLabels {
   return {
-    pin: t('menu.pinSession'),
-    unpin: t('menu.unpinSession'),
     rename: t('rename'),
     renameTitle: t('rename.session.title'),
     sessionNamePrompt: t('field.sessionName'),
-    fork: t('menu.fork'),
-    archive: t('menu.archiveSession'),
-    copySessionId: t('menu.sessionId'),
     sessionIdCopied: t('toast.sessionIdCopied'),
   }
 }

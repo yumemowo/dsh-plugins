@@ -38,7 +38,6 @@ import { useLocalViewOptions } from '../hooks/useLocalViewOptions.ts'
 import type { DragPlan } from '../data/dnd/protocol.ts'
 import { scrollProps } from '../data/dnd/protocol.ts'
 import { SessionRowItem } from './SessionRowItem.tsx'
-import type { CopyNoticeHandle } from '../copyNotice.ts'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { MenuRegistryFace } from '../menuRegistry.ts'
 import type { RowSlotFace, StandardHooks } from '../rowSlots.ts'
@@ -82,8 +81,6 @@ export interface PinnedSectionProps {
   rowSlots?: RowSlotFace | undefined
   /** 交给行级子插槽占用者的全局标准 hook */
   standardHooks?: StandardHooks | undefined
-  /** 把会话 id 写进剪贴板 */
-  copyId: CopyNoticeHandle['copy']
   onOpenSession: (sessionId: string) => void
   /** 会话行状态快照，与列表里的行取同一份 */
   statuses: SessionStatusSnapshot
@@ -149,7 +146,6 @@ export function PinnedSection({
   menuIcon,
   rowSlots,
   standardHooks,
-  copyId,
   onOpenSession,
   statuses,
   zoneKey,
@@ -270,7 +266,6 @@ export function PinnedSection({
               menuIcon={menuIcon}
               rowSlots={rowSlots}
               standardHooks={standardHooks}
-              copyId={copyId}
               onOpenSession={onOpenSession}
               buildDragPlan={buildDragPlan}
             />
@@ -306,7 +301,6 @@ function PinnedRow({
   menuIcon,
   rowSlots,
   standardHooks,
-  copyId,
   onOpenSession,
   buildDragPlan,
 }: {
@@ -322,7 +316,6 @@ function PinnedRow({
   menuIcon: ((key: string) => ReactNode) | undefined
   rowSlots: RowSlotFace | undefined
   standardHooks: StandardHooks | undefined
-  copyId: CopyNoticeHandle['copy']
   onOpenSession: (sessionId: string) => void
   buildDragPlan: ((sessionId: string) => DragPlan) | undefined
 }): ReactElement {
@@ -339,7 +332,6 @@ function PinnedRow({
       menuIcon={menuIcon}
       rowSlots={rowSlots}
       standardHooks={standardHooks}
-      copyId={copyId}
       pinned
       canPin={canPin}
       clipped={clipped}

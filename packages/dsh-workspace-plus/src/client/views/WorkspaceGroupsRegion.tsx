@@ -2048,7 +2048,6 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             menuIcon={props.menuIcon}
             rowSlots={props.rowSlots?.()}
             standardHooks={standardHooks}
-            copyId={copyNotice.copy}
             onOpenSession={openSession}
             statuses={statusSnapshot}
             zoneKey={PINNED_KEY}

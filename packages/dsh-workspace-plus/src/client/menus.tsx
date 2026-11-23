@@ -10,21 +10,16 @@
  *   - `vw:` 只有构造在这里，解析由消费侧按前缀切分，改动时两处都要看
  */
 import {
-  IconArchiveOutlineRegular,
-  IconBranchOutlineRegular,
   IconChevronRightOutlineRegular,
   IconCopyOutlineRegular,
   IconEditOutlineRegular,
   IconNewChatOutlineRegular,
-  IconPinFillRegular,
-  IconPinOutlineRegular,
   IconPlusOutlineRegular,
   IconTrashOutlineRegular,
 } from './runtime.ts'
 import type { ReactNode } from 'react'
 import type { MenuActionItem, MenuItem } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconVirtualWorkspace16 } from './icons.tsx'
-import type { OfficialSessionLabels } from './official.ts'
 
 import styles from './menus.module.css'
 
@@ -87,27 +82,13 @@ export interface GroupMenuInput {
 }
 
 /**
- * 会话菜单里置顶项的输入
+ * 会话菜单的构造输入
  *
- * 该项与其余官方项同属官方操作块，缺省表示该行不提供置顶入口
- */
-export interface SessionPinMenuInput {
-  /** 该行是否已置顶，决定文案与字形取哪一态 */
-  pinned: boolean
-  /** 是否还能新增置顶，未置顶且已达上限时该项禁用 */
-  canPin: boolean
-}
-
-/**
- * 会话菜单的构造输入：三段都可缺省
- *
- * `grouping` 缺省表示该行没有分组可归（「未分组」桶），`official` 缺省表示宿主未提供官方会话操作
- * 三段都缺时菜单为空，`SessionRowItem` 据此连锚点按钮与右键面板一起不挂
+ * `grouping` 缺省表示该行没有分组可归（「未分组」桶）
+ * 两段都缺时菜单为空，`SessionRowItem` 据此连锚点按钮与右键面板一起不挂
  */
 export interface SessionMenuInput {
   grouping?: GroupMenuInput | undefined
-  official?: OfficialSessionLabels | undefined
-  pin?: SessionPinMenuInput | undefined
 }
 
 /**
@@ -130,56 +111,22 @@ export function buildGroupMenuItem(input: GroupMenuInput): MenuActionItem {
 }
 
 /**
- * 构造会话「更多操作」菜单的完整条目
+ * 构造会话「更多操作」菜单里本包自己的那一部分
  *
- * 排列依次是官方操作块（置顶 / 重命名 / 分叉 / 归档）、一条分隔线、以及本包自有的分组项（其下「取消分组」仅当会话已归组）
- * 官方操作块在前：它们作用于会话本身，分组项是叠加在此之上的归类操作
- * 分隔线把「官方能力」与「本包扩展」分成两段，避免两类操作混成一个列表
- *
- * 官方操作块的文案与图标都取自官方 `ui-workspace`（见 `official.ts`）
- * 宿主未提供官方服务时整体省略，只留分组项，不留点不动的死按钮
- * 反之「未分组」桶里的会话没有分组上下文，只留官方操作块
- * 分隔线只在两段都存在时才画
- * @returns Menu items 列表
+ * 只剩分组项：官方那几项（置顶 / 重命名 / 分叉 / 归档 / 复制 Session ID）由官方右键菜单注册表供，
+ * 本包把它们接在前面，见 {@link composeSessionMenu}
+ * @returns Menu items 列表，没有分组上下文时为空
  */
 export function buildSessionMenuItems(input: SessionMenuInput): readonly MenuItem[] {
   const items: MenuItem[] = []
-  const { grouping, official, pin } = input
-
-  if (official !== undefined) {
-    // 与官方 `PinSessionMenuItem` 同序：置顶在最前
-    if (pin !== undefined) {
-      items.push({
-        id: 'pin',
-        label: pin.pinned ? official.unpin : official.pin,
-        disabled: !pin.pinned && !pin.canPin,
-        icon: pin.pinned ? <IconPinFillRegular /> : <IconPinOutlineRegular />,
-      })
-    }
-    items.push(
-      { id: 'rename', label: official.rename, icon: <IconEditOutlineRegular /> },
-      { id: 'fork', label: official.fork, icon: <IconBranchOutlineRegular /> },
-      // 官方会话菜单的归档项传 size=14，照它取同一个值
-      { id: 'archive', label: official.archive, icon: <IconArchiveOutlineRegular size={14} /> },
-      { id: SESSION_COPY_ID, label: official.copySessionId, icon: <IconCopyOutlineRegular /> },
-    )
-  }
-
-  if (official !== undefined && grouping !== undefined) {
-    items.push({ type: 'separator', id: 'separator' })
-  }
-
-  if (grouping !== undefined) {
-    items.push(buildGroupMenuItem(grouping))
-    if (grouping.currentGroupId !== '') {
-      items.push({ id: 'ungroup', label: grouping.ungroupLabel })
-    }
+  const { grouping } = input
+  if (grouping === undefined) return items
+  items.push(buildGroupMenuItem(grouping))
+  if (grouping.currentGroupId !== '') {
+    items.push({ id: 'ungroup', label: grouping.ungroupLabel })
   }
   return items
 }
-
-/** 会话菜单里「复制 Session ID」项的 id，构造与分派共用它 */
-export const SESSION_COPY_ID = 'copy-id'
 
 /** 会话分组菜单条目 id，与 `GroupSection` 的分派一一对应 */
 export const GROUP_MENU = {
