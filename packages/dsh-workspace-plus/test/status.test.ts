@@ -29,6 +29,9 @@ const labels: SessionStatusLabels = {
   waitingAnswer: '等待回答',
   completed: '已完成',
   idle: '空闲',
+  compactApproval: '待审批',
+  compactPlanReview: '计划待审',
+  compactAnswer: '待回答',
 }
 
 /**
@@ -60,10 +63,18 @@ describe('rowStatusDot', () => {
     })
   })
 
+  it('gives a trailing label only to the pending interactions', () => {
+    // 行尾那一格只在「在等我」时换成紧凑文案，运行与完成仍显示相对时间
+    expect(dot(row({ running: true }), undefined)?.trailingLabel).toBeUndefined()
+    expect(dot(row({ completed: true }), undefined)?.trailingLabel).toBeUndefined()
+    expect(dot(row(), undefined)?.trailingLabel).toBeUndefined()
+  })
+
   it('reports a warning for a session awaiting approval', () => {
     expect(dot(row(), 'approval')).toEqual({
       state: 'warning',
       label: '等待审批',
+      trailingLabel: '待审批',
     })
   })
 
@@ -71,6 +82,7 @@ describe('rowStatusDot', () => {
     expect(dot(row(), 'plan-review')).toEqual({
       state: 'warning',
       label: '计划待审',
+      trailingLabel: '计划待审',
     })
   })
 
@@ -78,6 +90,7 @@ describe('rowStatusDot', () => {
     expect(dot(row(), 'question')).toEqual({
       state: 'warning',
       label: '等待回答',
+      trailingLabel: '待回答',
     })
   })
 
@@ -133,6 +146,7 @@ describe('sessionStatuses', () => {
   it('lists the idle state that the row dot omits', () => {
     const statuses = sessionStatuses(row(), undefined, labels)
 
+    // 空闲不带行尾文案，行尾保持相对时间
     expect(statuses).toEqual([{ state: 'done', label: '空闲' }])
     // 同一次推导在行上被折成「不画点」
     expect(rowStatusDot(row(), statuses)).toBeUndefined()

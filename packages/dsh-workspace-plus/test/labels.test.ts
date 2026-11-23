@@ -173,6 +173,9 @@ describe('regionLabels', () => {
     expect(labels.status.planReview).toBe('计划待审')
     expect(labels.status.waitingAnswer).toBe('等待回答')
     expect(labels.status.completed).toBe('已完成')
+    expect(labels.status.compactApproval).toBe('待审批')
+    expect(labels.status.compactPlanReview).toBe('计划待审')
+    expect(labels.status.compactAnswer).toBe('待回答')
   })
 
   it('reads the add-workspace copy from the official keys', () => {

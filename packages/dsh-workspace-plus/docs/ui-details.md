@@ -201,6 +201,8 @@
 
 格式化完全复用官方：分桶交给 primitives 的 `relativeTime`（官方 `ui-workspace` 的 `timeLabel` 用的同一个函数），文案交给官方 `workspace` 命名空间的 `time.now` / `time.minutes` / … 键。基准时刻与官方一样在渲染时取 `Date.now()`，官方没有 ticker，本包也不自造一个：分钟级的精度跟着其他重渲染刷新足够。空白（新建中）会话行不显示时间，与官方一致。
 
+**三态待交互会顶掉这一格的时间。** 等待审批 / 计划待审 / 等待回答时行尾改显示官方 `status.compact.*` 的紧凑文案（`待审批` / `计划待审` / `待回答`），与官方同一取舍：那三件事要用户当场处理，压过「多久以前更新过」。这一格因此总是被同一批 CSS 管着显隐，运行与完成仍显示相对时间。紧凑文案对读屏隐藏——行首指示器的 `aria-label` 已经是完整说法，行尾只做视觉补充。
+
 ## 会话状态点
 
 行首那一列放官方 `@deepseek-ai/dsh-client-ui-primitives` 的 `StateDot`，判定规则与官方 `ui-workspace` 的 `sessionStatuses` 逐条对齐：

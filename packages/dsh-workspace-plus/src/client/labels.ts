@@ -42,6 +42,12 @@ export interface SessionStatusLabels {
    * 行首不画点，但悬停卡片要像官方一样把它列成一条，因此这一格仍需有文案
    */
   idle: string
+  /** 待审批的行尾紧凑文案，行尾时间让位给它 */
+  compactApproval: string
+  /** 计划待审的行尾紧凑文案，同上 */
+  compactPlanReview: string
+  /** 待回答的行尾紧凑文案，同上 */
+  compactAnswer: string
 }
 
 /** 区域组件消费的文案表 */
@@ -388,6 +394,9 @@ export function regionLabels(
       waitingAnswer: tw('status.waitingAnswer'),
       completed: tw('status.completed'),
       idle: tw('status.idle'),
+      compactApproval: tw('status.compact.approval'),
+      compactPlanReview: tw('status.compact.planReview'),
+      compactAnswer: tw('status.compact.answer'),
     },
     hover: officialHoverLabels(tw),
     compareTabDescription: t('compareTabDescription'),

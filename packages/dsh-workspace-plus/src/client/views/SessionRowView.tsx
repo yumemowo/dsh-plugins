@@ -231,7 +231,13 @@ function SessionRowViewImpl({
       <span className={clsx(styles.rowSurface, selected && styles.rowSelected)}>
         {status && <StatusIndicator status={status} />}
         <span className={styles.rowTitle}>{shownTitle}</span>
-        {time && <span className={styles.rowTime}>{time}</span>}
+        {/* 行尾那一格先给待交互的紧凑文案，没有才显示相对时间
+            待交互的语义已由行首指示器承担，这一格重复它，因此对读屏隐藏 */}
+        {status?.trailingLabel !== undefined ? (
+          <span className={styles.rowTime} aria-hidden="true">{status.trailingLabel}</span>
+        ) : time === undefined ? null : (
+          <span className={styles.rowTime}>{time}</span>
+        )}
         {/* 行尾两段：操作位在左、图钉在右
             已置顶的图钉常驻可见并占宽，因此它的位置不随时间隐去、操作位展开而变；
             未置顶的图钉与操作位一起显隐，静止时连宽度一起收掉 */}

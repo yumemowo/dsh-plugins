@@ -17,6 +17,13 @@ export interface SessionStatus {
   state: StatusState
   /** 无障碍文案，点本身是纯视觉元素，语义由它承担 */
   label: string
+  /**
+   * 行尾的紧凑文案，占据相对时间那一格
+   *
+   * 只有待交互三态给：那三件事要用户当场处理，把行尾的时间换成它比多画一个点更早被看到
+   * 其余状态不给，行尾保持相对时间
+   */
+  trailingLabel?: string
 }
 
 /**
@@ -28,11 +35,11 @@ export interface SessionStatus {
 function pendingStatus(kind: string, labels: SessionStatusLabels): SessionStatus | undefined {
   switch (kind) {
     case 'approval':
-      return { state: 'warning', label: labels.waitingApproval }
+      return { state: 'warning', label: labels.waitingApproval, trailingLabel: labels.compactApproval }
     case 'plan-review':
-      return { state: 'warning', label: labels.planReview }
+      return { state: 'warning', label: labels.planReview, trailingLabel: labels.compactPlanReview }
     case 'question':
-      return { state: 'warning', label: labels.waitingAnswer }
+      return { state: 'warning', label: labels.waitingAnswer, trailingLabel: labels.compactAnswer }
     default:
       return undefined
   }
@@ -89,7 +96,7 @@ export function rowStatusDot(
 /**
  * 比较两个状态位是否表示同一件事
  *
- * 供行级 memo 的比较器使用：决定显示结果的只有状态与文案这两格
+ * 供行级 memo 的比较器使用：决定显示结果的只有状态与两条文案
  */
 export function sameSessionStatus(
   a: SessionStatus | undefined,
@@ -97,7 +104,7 @@ export function sameSessionStatus(
 ): boolean {
   if (a === b) return true
   if (a === undefined || b === undefined) return false
-  return a.state === b.state && a.label === b.label
+  return a.state === b.state && a.label === b.label && a.trailingLabel === b.trailingLabel
 }
 
 /**
