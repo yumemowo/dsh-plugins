@@ -14,9 +14,10 @@
 import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import { useCallback, useMemo, useRef } from 'react'
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import type { CopyNoticeHandle } from '../copyNotice.ts'
 import type { OfficialSessionActions } from '../actions.ts'
+import type { MenuRegistryFace } from '../menuRegistry.ts'
 import { containsSession } from '../data/rows.ts'
 import { groupIdOfSession } from '../data/sessions.ts'
 import type { Outline } from '../hooks/useOutline.ts'
@@ -83,6 +84,10 @@ export interface SessionRowScope {
   now: number
   /** 宿主 home，会话卡片里的目录按它缩写成 `~` */
   home: string | undefined
+  /** 官方右键菜单注册表，缺省时会话菜单只用本包自带的条目 */
+  registry: MenuRegistryFace | undefined
+  /** 按图标键取字形，注册表条目只给键 */
+  menuIcon: ((key: string) => ReactNode) | undefined
   /** 把一个标识写进剪贴板，会话行复制自己的 id 时用它 */
   copyId: CopyNoticeHandle['copy']
   revealSessionId: string | undefined
@@ -787,6 +792,8 @@ export function sessionRowElement(
       time={time}
       grouping={grouping}
       official={context.official}
+      registry={context.registry}
+      menuIcon={context.menuIcon}
       copyId={context.copyId}
       // 宿主没加载官方 ui-workspace 时官方文案整体拿不到，浮出一个空壳不如不浮
       // 空白会话的标题是语言包的占位文案，不是会话内容，复制它没有意义

@@ -17,7 +17,7 @@
  * 重命名对话框也留在这里——只有真正打开过的行才付出这份状态
  */
 import { memo, useMemo, useState } from 'react'
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { HoverCard, IconEllipsisOutlineRegular, Menu } from '../runtime.ts'
 import { SESSION_COPY_ID, buildSessionMenuItems, sameMenuGroups } from '../menus.tsx'
 import type { SessionPinMenuInput } from '../menus.tsx'
@@ -25,6 +25,8 @@ import { sameSessionStatus, sameSessionStatuses } from '../data/status.ts'
 import { SessionRowView } from './SessionRowView.tsx'
 import type { SessionRowViewProps } from './SessionRowView.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
+import { useSessionMenu } from '../hooks/useSessionMenu.ts'
+import type { MenuRegistryFace } from '../menuRegistry.ts'
 import { SessionHoverContent } from './components/HoverCards.tsx'
 import { NameDialog } from './components/dialogs/NameDialog.tsx'
 import { useLocale } from '../hooks/useLocale.ts'
@@ -99,6 +101,14 @@ export interface SessionRowCardInput {
 
 export interface SessionRowItemProps extends Omit<SessionRowViewProps, ComputedHere> {
   row: SessionRow
+  /**
+   * 官方右键菜单注册表，缺省表示宿主没装 `ui-context-menu`
+   *
+   * 在场时会话菜单以它为准：官方与第三方插件注册进 `session` 的动作都能出现，本包只追加归组项
+   */
+  registry?: MenuRegistryFace | undefined
+  /** 按图标键取字形，注册表条目只给键 */
+  menuIcon?: ((key: string) => ReactNode) | undefined
   /** 归组上下文，缺省时菜单里没有归组项 */
   grouping?: SessionGroupingContext | undefined
   /**
@@ -189,6 +199,8 @@ function sameRowItemProps(prev: SessionRowItemProps, next: SessionRowItemProps):
     prev.onOpenSession === next.onOpenSession &&
     prev.onReveal === next.onReveal &&
     prev.official === next.official &&
+    prev.registry === next.registry &&
+    prev.menuIcon === next.menuIcon &&
     prev.copyId === next.copyId &&
     prev.dragPlan === next.dragPlan &&
     sameCard(prev.card, next.card) &&
@@ -203,6 +215,8 @@ function SessionRowItemView({
   official,
   copyId,
   card,
+  registry,
+  menuIcon,
   ...rowProps
 }: SessionRowItemProps): ReactElement {
   const { labels } = useLocale()
@@ -212,7 +226,10 @@ function SessionRowItemView({
 
   // 新建中的空白会话没有会话可操作：官方对它整条省略号都不渲染
   // 条目在这里就清空，右键路径与行尾按钮才会一起落空——只拦按钮的话右键仍会弹出一份同样的菜单
-  const items = row.blank
+  //
+  // 注册表在场时官方操作块由它供（置顶 / 重命名 / 分叉 / 归档 / 复制 Session ID 都是它注册的），
+  // 这里因此只拼本包自有的归组项，避免同一项出现两次
+  const ownItems = row.blank
     ? []
     : buildSessionMenuItems({
         grouping:
@@ -223,8 +240,10 @@ function SessionRowItemView({
                 groupLabel: labels.moveToGroup,
                 ungroupLabel: labels.ungroup,
               },
-        official: official?.labels,
-        pin: pinMenuInput(rowProps.pinned, rowProps.canPin, rowProps.onTogglePin),
+        official: registry === undefined ? official?.labels : undefined,
+        pin: registry === undefined
+          ? pinMenuInput(rowProps.pinned, rowProps.canPin, rowProps.onTogglePin)
+          : undefined,
       })
 
   /**
@@ -232,9 +251,10 @@ function SessionRowItemView({
    *
    * 行内 `...` 菜单与右键菜单共用它：右键是行尾操作位的捷径，同一个 id 必须落到同一件事上
    * 会话行没有行内新建入口，因此两份条目的集合相同
+   *
+   * 注册表在场时它那段条目自己执行，本函数只接本包自有的那几个 id
    */
-  const select = (id: string): void => {
-    setMenuOpen(false)
+  const ownSelect = (id: string): void => {
     if (id === 'pin') {
       rowProps.onTogglePin?.(row.id)
       return
@@ -258,6 +278,23 @@ function SessionRowItemView({
       return
     }
     if (grouping !== undefined) grouping.onSelectGroup(grouping.workspaceId, row.id, id)
+  }
+
+  // 注册表在场时它那段条目由注册表执行，本包自己的那几个 id 交给 ownSelect
+  const sessionMenu = useSessionMenu(registry, menuIcon, { sessionId: row.id, displayTitle: row.title }, ownItems)
+  const items = row.blank ? [] : sessionMenu.items
+
+  const select = (id: string): void => {
+    setMenuOpen(false)
+    // 先执行再释放：注册表选中时会检查这次解析是否还有效，先释放就点不动了
+    sessionMenu.select(id, ownSelect)
+    sessionMenu.release()
+  }
+
+  // 面板开合时同步解析的生命周期：打开前解析一次，关掉就释放
+  const toggleMenu = (): void => {
+    sessionMenu.prepare()
+    setMenuOpen((open) => !open)
   }
 
   const contextMenu = useRowContextMenu({ items, onSelect: select })
@@ -352,7 +389,7 @@ function SessionRowItemView({
                 aria-expanded={menuOpen}
                 onClick={(event) => {
                   event.stopPropagation()
-                  setMenuOpen((open) => !open)
+                  toggleMenu()
                 }}
               >
                 <IconEllipsisOutlineRegular />

@@ -38,6 +38,8 @@ import { NS, en, zh } from './locales.ts'
 import { officialAddLabels, officialSessionLabels, timeLabel } from './official.ts'
 import type { RegionActions, AddWorkspaceActions, OfficialSessionActions } from './actions.ts'
 import { directoryFlowOccupant, directoryFlowSource } from './directoryFlow.ts'
+import { menuRegistryActions } from './menuRegistrySource.ts'
+import { menuIconOf } from './menuIcon.ts'
 import { hostInfoSource } from './hostInfo.ts'
 import { createCopyNotice } from './copyNotice.ts'
 import { WorkspaceGroupsRegion } from './views/WorkspaceGroupsRegion.tsx'
@@ -334,6 +336,11 @@ export function apply(ctx: Context): void {
    * @param onAdopted - 采纳成功后的回调，区域组件用它展开新工作区并判断该不该嵌进某个分组
    * @returns 添加工作区的动作，控制器或洞占用者缺失时为 undefined
    */
+  /** 官方右键菜单注册表的解析器，宿主没装它时返回 undefined（见 RegionActions.menuRegistry） */
+  const menuRegistry = menuRegistryActions(ctx)
+  /** 注册表条目的图标键 -> 字形，字形由官方那个 keyed 插槽的占用者渲染 */
+  const menuIcon = menuIconOf(ctx.slots)
+
   const addWorkspaceActions = (
     onAdopted: AddWorkspaceActions['onAdopted'],
   ): AddWorkspaceActions | undefined => {
@@ -493,6 +500,9 @@ export function apply(ctx: Context): void {
       tSidebar,
       // 传解析器而不是值：渲染时才去读 ctx.uiWorkspace（见 RegionActions）
       official: officialActions,
+      // 同为解析器：注册表由 ui-context-menu 提供，加载顺序不受本包约束
+      menuRegistry,
+      menuIcon,
       // 同为解析器：它还要去读官方 directoryFlow 洞的占用者
       addWorkspace: addWorkspaceActions,
       hooks,

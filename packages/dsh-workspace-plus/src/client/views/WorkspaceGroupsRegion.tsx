@@ -1897,6 +1897,9 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     statusSnapshot,
     now,
     home,
+    // 注册表与服务都在 inject 面里延迟解析：它们的服务可能晚于本包加载
+    registry: props.menuRegistry?.(),
+    menuIcon: props.menuIcon,
     revealSessionId: ui.revealSessionId,
     acknowledgeReveal: ui.acknowledgeReveal,
     openSession,
@@ -2036,6 +2039,8 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             onTogglePin={toggleSessionPin}
             canPin={canPin}
             official={official}
+            registry={props.menuRegistry?.()}
+            menuIcon={props.menuIcon}
             copyId={copyNotice.copy}
             onOpenSession={openSession}
             statuses={statusSnapshot}

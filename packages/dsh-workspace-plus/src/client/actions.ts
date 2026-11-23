@@ -4,7 +4,7 @@
  * 数据走 shell 注入的全局 hook，动作与文案由插件入口闭合而成，因此区域组件不依赖 `ctx`
  * 既能渲染进 `sidebar.workspaces` 插槽，也能被对照模式挂进右侧栏 tab
  */
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceListPhase, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
@@ -14,6 +14,7 @@ import type { HostInfo } from './hostInfo.ts'
 import type { GroupChoice } from './data/types.ts'
 import type { OfficialAddLabels, OfficialSessionLabels, SidebarTranslate, WorkspaceTranslate } from './official.ts'
 import type { CopyNoticeHandle } from './copyNotice.ts'
+import type { MenuRegistryFace } from './menuRegistry.ts'
 
 /** 工作区状态快照里区域用到的部分 */
 export interface WorkspaceState {
@@ -279,6 +280,23 @@ export interface RegionActions {
    * 此时菜单里那三项与行尾时间整体不渲染，而不是留下点不动的入口
    */
   official?: (() => OfficialSessionActions | undefined) | undefined
+  /**
+   * 官方右键菜单注册表的解析器
+   *
+   * 与 `official` 同为延迟解析器：那个服务由 `ui-context-menu` 提供，加载顺序不受本包约束
+   * 解析结果为空表示宿主没装它，此时会话菜单退回本包自带的那份静态条目
+   *
+   * 拿到之后本包的会话菜单只借它的条目来源：官方与第三方插件注册进 `session` 的动作都会出现，
+   * 本包的归组项接在后面。面板仍由本包渲染，外观与行几何因此不受官方菜单那一套约束
+   */
+  menuRegistry?: (() => MenuRegistryFace | undefined) | undefined
+  /**
+   * 官方 `contextMenu.icon` 那个 keyed 插槽里的字形
+   *
+   * 注册表条目只给图标键，字形由那个插槽的占用者渲染；本包的面板自己渲染，因此要按 key 取一次
+   * 取不到时该条目只剩文字，不阻断菜单本身
+   */
+  menuIcon?: ((key: string) => ReactNode) | undefined
   /**
    * 「添加工作区」所需的官方服务面
    *

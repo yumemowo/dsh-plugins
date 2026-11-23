@@ -25,7 +25,7 @@
  *
  * 无置顶项时整块返回 `null`，段头与分隔都不出现，那一段空间完整交还给列表
  */
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { IconTriangleRightFillRegular } from '../runtime.ts'
 import { statusViewOfRow } from '../data/rows.ts'
 import type { PinnedEntry } from '../data/pinned.ts'
@@ -40,6 +40,7 @@ import { scrollProps } from '../data/dnd/protocol.ts'
 import { SessionRowItem } from './SessionRowItem.tsx'
 import type { CopyNoticeHandle } from '../copyNotice.ts'
 import type { OfficialSessionActions } from '../actions.ts'
+import type { MenuRegistryFace } from '../menuRegistry.ts'
 import type { PinnedLabels, RegionLabels } from '../labels.ts'
 import styles from './PinnedSection.module.css'
 import clsx from 'clsx'
@@ -72,6 +73,10 @@ export interface PinnedSectionProps {
   canPin: boolean
   /** 官方会话操作，缺省时行上不挂菜单 */
   official?: OfficialSessionActions | undefined
+  /** 官方右键菜单注册表，缺省时行菜单只用本包自带的条目 */
+  registry?: MenuRegistryFace | undefined
+  /** 按图标键取字形，注册表条目只给键 */
+  menuIcon?: ((key: string) => ReactNode) | undefined
   /** 把会话 id 写进剪贴板 */
   copyId: CopyNoticeHandle['copy']
   onOpenSession: (sessionId: string) => void
@@ -135,6 +140,8 @@ export function PinnedSection({
   onTogglePin,
   canPin,
   official,
+  registry,
+  menuIcon,
   copyId,
   onOpenSession,
   statuses,
@@ -252,6 +259,8 @@ export function PinnedSection({
               onTogglePin={onTogglePin}
               canPin={canPin}
               official={official}
+              registry={registry}
+              menuIcon={menuIcon}
               copyId={copyId}
               onOpenSession={onOpenSession}
               buildDragPlan={buildDragPlan}
@@ -284,6 +293,8 @@ function PinnedRow({
   onTogglePin,
   canPin,
   official,
+  registry,
+  menuIcon,
   copyId,
   onOpenSession,
   buildDragPlan,
@@ -296,6 +307,8 @@ function PinnedRow({
   onTogglePin: (sessionId: string) => void
   canPin: boolean
   official: OfficialSessionActions | undefined
+  registry: MenuRegistryFace | undefined
+  menuIcon: ((key: string) => ReactNode) | undefined
   copyId: CopyNoticeHandle['copy']
   onOpenSession: (sessionId: string) => void
   buildDragPlan: ((sessionId: string) => DragPlan) | undefined
@@ -309,6 +322,8 @@ function PinnedRow({
       selected={entry.current}
       status={view.dot}
       official={official}
+      registry={registry}
+      menuIcon={menuIcon}
       copyId={copyId}
       pinned
       canPin={canPin}
