@@ -72,8 +72,9 @@ export interface SessionGroupingContext {
  *
  * `sessionId` 由 `row` 派生，`action` 与 `onContextMenu` 就是下面那两个面板本身，调用方给不了
  * `panelOpen` 同理：它由这两个面板的开合状态算出来，收下来既会被覆盖、又让调用方以为它说了算
+ * `onRenameRequest` 也一样：改名对话框在本组件里，双击标题只是它的另一个入口
  */
-type ComputedHere = 'sessionId' | 'action' | 'onContextMenu' | 'panelOpen'
+type ComputedHere = 'sessionId' | 'action' | 'onContextMenu' | 'panelOpen' | 'onRenameRequest'
 
 /**
  * 悬停卡片的输入
@@ -259,6 +260,22 @@ function SessionRowItemView({
 
   const contextMenu = useRowContextMenu({ items, onSelect: select })
 
+  /**
+   * 双击标题进重命名
+   *
+   * 与菜单项落到同一个对话框，因此两条入口不会各说一套
+   * 空白会话没有可改的名字，宿主未提供官方会话服务时也没有提交路径，两种情形都不给这个入口
+   * 记忆一份：行级 memo 按引用比对 props，每次渲染新建的闭包会让它整行失效
+   */
+  const renameRequest = useMemo(
+    () => (row.blank || official === undefined
+      ? undefined
+      : (): void => {
+          setRenameDraft(row.title)
+        }),
+    [row.blank, row.title, official],
+  )
+
   // 两种面板任一开着都算「行上有面板」，卡片与行尾锚点的显隐都据它让位
   const panelOpen = menuOpen || contextMenu.open
 
@@ -308,6 +325,8 @@ function SessionRowItemView({
       // 面板开合下发给行：置顶区靠行上的标记判断浮出要不要留住（两种面板都 portal 到 body）
       panelOpen={panelOpen}
       onContextMenu={contextMenu.onContextMenu}
+      // 双击标题是重命名的第二个入口，与菜单项落到同一个对话框
+      onRenameRequest={renameRequest}
       action={
         hasMenu ? (
           <Menu

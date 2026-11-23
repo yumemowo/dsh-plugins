@@ -61,6 +61,13 @@ export interface SessionRowViewProps {
    */
   onOpenSession: (sessionId: string) => void
   /**
+   * 双击标题请求重命名
+   *
+   * 缺省表示这一行不改名（新建中的空白行、宿主没提供官方会话服务）
+   * 同样传动作本身，id 与当前标题由行在组件内绑上去
+   */
+  onRenameRequest?: ((sessionId: string, currentTitle: string) => void) | undefined
+  /**
    * 请求把这一行滚进可视区
    *
    * 只在从搜索结果打开会话时下发，缺省表示这一行没有待揭示的请求
@@ -164,12 +171,19 @@ function SessionRowViewImpl({
   onDragStart,
   onDragEnd,
   onOpenSession,
+  onRenameRequest,
   onReveal,
 }: SessionRowViewProps): ReactElement {
   const { labels } = useLocale()
   const open = () => onOpenSession(sessionId)
   const rowRef = useRef<HTMLDivElement | null>(null)
   const shownTitle = title ?? labels.newSession
+  // macOS 上「点进来那一击」不会送达，紧接着那一次按下已经是 detail 2 并直接触发 dblclick
+  // 因此要求这扇窗口失焦以来先有过一次 detail 1 的按下，否则只是把一个后台窗口点到前面就进了改名
+  const renameArmed = useRef(false)
+  const disarmRename = useRef(() => {
+    renameArmed.current = false
+  }).current
 
   // 挂载后把自己滚进可视区，并立刻回报一次：请求方要在收到回报后清掉标记，否则该行会在后续每次重新挂载时再滚一次
   useEffect(() => {
@@ -230,7 +244,26 @@ function SessionRowViewImpl({
     >
       <span className={clsx(styles.rowSurface, selected && styles.rowSelected)}>
         {status && <StatusIndicator status={status} />}
-        <span className={styles.rowTitle}>{shownTitle}</span>
+        <span
+          className={styles.rowTitle}
+          onMouseDown={(event) => {
+            if (event.detail !== 1) return
+            renameArmed.current = true
+            // 同一个函数与同一组选项：重复的按下只多挂一个监听，不会累积
+            window.addEventListener('blur', disarmRename, { once: true })
+          }}
+          onDoubleClick={onRenameRequest === undefined
+            ? undefined
+            : (event) => {
+              // 双击那一下不再往上冒：行自己的单击是「打开会话」，改名不该顺带把它打开
+              event.stopPropagation()
+              if (!renameArmed.current) return
+              renameArmed.current = false
+              onRenameRequest(sessionId, title ?? '')
+            }}
+        >
+          {shownTitle}
+        </span>
         {/* 行尾那一格先给待交互的紧凑文案，没有才显示相对时间
             待交互的语义已由行首指示器承担，这一格重复它，因此对读屏隐藏 */}
         {status?.trailingLabel !== undefined ? (
