@@ -43,13 +43,14 @@ export interface SessionMenuTarget {
 }
 
 /**
- * 一个工作区行的身份与它当前显示的标题
+ * 一个工作区行的身份、目录与当前标题
  *
- * 官方的同形取值是 `workspaceId` / `path` / `displayTitle`，其中 `path` 只有官方那两项的解析会读
- * 本包自己执行那两项，因此这里只要身份与标题
+ * 三个字段都要给：`path` 不是可省的摆设——官方的 `open-in-app` 那个提供者按它 stat 目录再打开文件管理器，
+ * 缺了它会静默退化成一个禁用的「在文件夹显示」
  */
 export interface WorkspaceMenuTarget {
   readonly workspaceId: string
+  readonly path: string
   readonly displayTitle: string
 }
 

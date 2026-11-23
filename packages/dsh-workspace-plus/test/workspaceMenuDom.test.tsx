@@ -174,14 +174,14 @@ describe('workspace row over the official context-menu registry', () => {
     const container = await mount({
       menuRegistry: registryStub({
         targets: targets as never,
-        byKind: { workspace: [{ id: 'plugin-action', label: '第三方动作' }] },
+        byKind: { workspace: [{ id: 'thing', provider: 'plugin.workspace', label: '第三方动作' }] },
       }),
     })
     const head = workspaceHead(container)
     await openHeadMenu(head)
 
     // 第三方注册进 workspace 目标的条目出现了
-    expect(itemIds(head)).toContain('plugin-action')
+    expect(itemIds(head)).toContain('plugin.workspace/thing')
     // 解析用的是 workspace 这一类目标，不是 session
     expect(targets.map((target) => target.kind)).toContain('workspace')
   })
@@ -191,27 +191,28 @@ describe('workspace row over the official context-menu registry', () => {
     const container = await mount({
       menuRegistry: registryStub({
         run: (id) => executed.push(id),
-        byKind: { workspace: [{ id: 'plugin-action', label: '第三方动作' }] },
+        byKind: { workspace: [{ id: 'thing', provider: 'plugin.workspace', label: '第三方动作' }] },
       }),
     })
     const head = workspaceHead(container)
     await openHeadMenu(head)
 
     await act(async () =>
-      head.querySelector<HTMLButtonElement>('[data-wg-test-item="plugin-action"]')?.click(),
+      head.querySelector<HTMLButtonElement>('[data-wg-test-item="plugin.workspace/thing"]')?.click(),
     )
 
     // 官方那两项在本包走自己的实现，因此注册表只收到第三方的这一项
-    expect(executed).toEqual(['plugin-action'])
+    expect(executed).toEqual(['plugin.workspace/thing'])
   })
 
   it('drops the registry copies of rename and delete, keeping its own', async () => {
+    // 提供者 id 与动作 id 都照官方那两条给，投影后正是 workspace.rename/rename 与 workspace.delete/delete
     const container = await mount({
       menuRegistry: registryStub({
         byKind: {
           workspace: [
-            { id: 'rename', label: '注册表的重命名' },
-            { id: 'delete', label: '注册表的删除' },
+            { id: 'rename', provider: 'workspace.rename', label: '注册表的重命名' },
+            { id: 'delete', provider: 'workspace.delete', label: '注册表的删除' },
           ],
         },
       }),
@@ -226,6 +227,54 @@ describe('workspace row over the official context-menu registry', () => {
     // 文案取自本包，不是注册表交来的那份
     const rename = head.querySelector('[data-wg-test-item="rename"]')
     expect(rename?.textContent).toBe('重命名')
+  })
+
+  it('shows a real third-party workspace entry alongside the own ones', async () => {
+    // 官方生态里 open-in-app 注册进 workspace 目标的正是「在文件夹显示」这一条
+    const executed: string[] = []
+    const container = await mount({
+      menuRegistry: registryStub({
+        run: (id) => executed.push(id),
+        byKind: {
+          workspace: [
+            { id: 'rename', provider: 'workspace.rename', label: '重命名' },
+            { id: 'reveal', provider: 'open-in-app.workspace', label: '在文件夹显示' },
+            { id: 'delete', provider: 'workspace.delete', label: '删除工作区' },
+          ],
+        },
+      }),
+    })
+    const head = workspaceHead(container)
+    await openHeadMenu(head)
+
+    const ids = itemIds(head)
+    // 第三方那条在，官方那两条被排掉换成本包的
+    expect(ids).toContain('open-in-app.workspace/reveal')
+    expect(ids).not.toContain('workspace.rename/rename')
+    expect(ids).not.toContain('workspace.delete/delete')
+    // 本包的删除只出现一次，不是「官方那条 + 本包那条」
+    expect(ids.filter((id) => id === 'delete')).toHaveLength(1)
+
+    await act(async () =>
+      head.querySelector<HTMLButtonElement>('[data-wg-test-item="open-in-app.workspace/reveal"]')?.click(),
+    )
+    expect(executed).toEqual(['open-in-app.workspace/reveal'])
+  })
+
+  it('passes the workspace path to the registry', async () => {
+    // 官方的 open-in-app 按 path stat 目录再打开文件管理器，缺了它会静默退化成禁用项
+    const targets: { kind: string; value: Record<string, unknown> }[] = []
+    const container = await mount({
+      menuRegistry: registryStub({
+        targets: targets as never,
+        byKind: { workspace: [] },
+      }),
+    })
+    await openHeadMenu(workspaceHead(container))
+
+    const workspaceTarget = targets.find((target) => target.kind === 'workspace')
+    expect(workspaceTarget?.value['path']).toBe('/tmp/w1')
+    expect(workspaceTarget?.value['workspaceId']).toBe('w1')
   })
 
   it('keeps the own entries when no registry is installed', async () => {

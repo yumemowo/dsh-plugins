@@ -566,7 +566,12 @@ describe('pin in the row menu', () => {
     // 条目按需解析，因此先展开这一行的菜单
     const row = rowWithPin(container, false)
     await openRowMenu(row)
-    expect(itemIds(row).slice(0, 4)).toEqual(['pin', 'rename', 'fork', 'archive'])
+    expect(itemIds(row).slice(0, 4)).toEqual([
+      'session.pin/pin',
+      'session.rename/rename',
+      'session.fork/fork',
+      'session.archive/archive',
+    ])
     await act(async () => root.unmount())
   })
 
@@ -577,7 +582,7 @@ describe('pin in the row menu', () => {
     const row = rowWithPin(container, true)
     await openRowMenu(row)
 
-    expect(item(row, 'pin').textContent).toBe('取消置顶')
+    expect(item(row, 'session.pin/pin').textContent).toBe('取消置顶')
     await act(async () => root.unmount())
   })
 
@@ -591,11 +596,11 @@ describe('pin in the row menu', () => {
     await openRowMenu(row)
 
     await act(async () => {
-      item(row, 'pin').click()
+      item(row, 'session.pin/pin').click()
       await Promise.resolve()
     })
 
-    expect(executed).toEqual(['pin'])
+    expect(executed).toEqual(['session.pin/pin'])
     await act(async () => root.unmount())
   })
 
@@ -607,7 +612,7 @@ describe('pin in the row menu', () => {
     const row = rowWithPin(container, false)
     await openRowMenu(row)
 
-    expect(item(row, 'pin').disabled).toBe(true)
+    expect(item(row, 'session.pin/pin').disabled).toBe(true)
     await act(async () => root.unmount())
   })
 })
@@ -638,7 +643,13 @@ describe('menu on a pinned row', () => {
     // 行尾的操作位与列表里的会话行同形，条目也来自同一段构造
     expect(actionButton(container)).not.toBeNull()
     await openRowMenu(row)
-    expect(itemIds(row)).toEqual(['pin', 'rename', 'fork', 'archive', 'copy-id'])
+    expect(itemIds(row)).toEqual([
+      'session.pin/pin',
+      'session.rename/rename',
+      'session.fork/fork',
+      'session.archive/archive',
+      'session.id/copy-id',
+    ])
     await act(async () => root.unmount())
   })
 
@@ -662,10 +673,10 @@ describe('menu on a pinned row', () => {
     await openRowMenu(row)
 
     await act(async () => {
-      row.querySelector<HTMLButtonElement>('[data-wg-test-item="pin"]')?.click()
+      row.querySelector<HTMLButtonElement>('[data-wg-test-item="session.pin/pin"]')?.click()
     })
 
-    expect(executed).toEqual(['pin'])
+    expect(executed).toEqual(['session.pin/pin'])
     await act(async () => root.unmount())
   })
 
@@ -680,11 +691,11 @@ describe('menu on a pinned row', () => {
     const row = pinnedRows(container)[0] as HTMLElement
     await openRowMenu(row)
     await act(async () => {
-      row.querySelector<HTMLButtonElement>('[data-wg-test-item="fork"]')?.click()
+      row.querySelector<HTMLButtonElement>('[data-wg-test-item="session.fork/fork"]')?.click()
     })
 
     // 分叉由注册表执行，本包只把 id 交回去
-    expect(executed).toEqual(['fork'])
+    expect(executed).toEqual(['session.fork/fork'])
     // 点菜单项不该连带把行打开：面板挂在行内，行本身也可点
     expect(opened).toEqual([])
     await act(async () => root.unmount())
@@ -699,7 +710,13 @@ describe('menu on a pinned row', () => {
     })
 
     // 右键是行尾操作位的捷径，同一批条目因此在右键下也拿得到
-    expect(itemIds(row)).toEqual(['pin', 'rename', 'fork', 'archive', 'copy-id'])
+    expect(itemIds(row)).toEqual([
+      'session.pin/pin',
+      'session.rename/rename',
+      'session.fork/fork',
+      'session.archive/archive',
+      'session.id/copy-id',
+    ])
     await act(async () => root.unmount())
   })
 
@@ -724,7 +741,7 @@ describe('menu on a pinned row', () => {
     expect(row.hasAttribute('data-wg-panel-open')).toBe(true)
 
     await act(async () => {
-      row.querySelector<HTMLButtonElement>('[data-wg-test-item="rename"]')?.click()
+      row.querySelector<HTMLButtonElement>('[data-wg-test-item="session.rename/rename"]')?.click()
     })
     expect(row.hasAttribute('data-wg-panel-open')).toBe(false)
     await act(async () => root.unmount())

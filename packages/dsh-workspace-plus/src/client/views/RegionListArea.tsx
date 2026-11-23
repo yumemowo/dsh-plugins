@@ -614,7 +614,8 @@ function WorkspaceNode({
         // 注册表按 workspace 目标解析：第三方插件注册进这个目标的行只有这里能出现
         registry: scope.session.registry,
         menuIcon: scope.session.menuIcon,
-        workspaceTarget: { workspaceId, displayTitle: workspace.title },
+        // path 不是可省的：官方的 open-in-app 那个提供者按它 stat 目录再打开文件管理器
+        workspaceTarget: { workspaceId, path: workspace.path, displayTitle: workspace.title },
       }}
       workspaceDragging={workspaceDragging}
     >

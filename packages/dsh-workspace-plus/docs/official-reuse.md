@@ -143,7 +143,19 @@ run: () => requestWorkspaceAction(workspaceId, displayTitle, 'rename')
 
 会话那五项没有这个问题：它们的 `run` 落在官方注册进 `shell.overlay` 的 `SessionRenameDialog` / `SessionArchiveConfirmDialog`，而本包不动那个插槽，对话框照旧由宿主渲染。
 
-因此工作区行的做法是：注册表交来的 `rename` / `delete` 按 id 排掉（见 `WORKSPACE_MENU_OFFICIAL_IDS`），换成本包自己的实现；**其余条目一律交给注册表执行**——第三方插件注册进 `workspace` 的项本包自己做不出来，只能这样出现。
+因此工作区行的做法是：注册表交来的那两条按 id 排掉（见 `WORKSPACE_MENU_OFFICIAL_IDS`），换成本包自己的实现；**其余条目一律交给注册表执行**——第三方插件注册进 `workspace` 的项本包自己做不出来，只能这样出现。
+
+### 排掉哪一条要按投影后的 id 写
+
+注册表 `resolve` 交出的条目 id 不是动作自己的 id，而是 `<提供者 id>/<动作 id>`：
+
+```js
+const id = `${encodeURIComponent(action.provider.id)}/${encodeURIComponent(action.id)}`
+```
+
+官方那两条的提供者是 `workspace.rename` / `workspace.delete`，动作 id 是 `rename` / `delete`，投影后因此是 `workspace.rename/rename` 与 `workspace.delete/delete`。**按裸 id 排一条都匹配不上**，同一件事就会在菜单里出现两次（官方那条点了没反应、本包那条正常）。
+
+同一个目标上还有别的提供者，它们不可省：官方生态里 `open-in-app` 注册了 `open-in-app.workspace`（`order: 200`），交出的就是「在文件夹显示」那一条，按 `path` 去 stat 目录再唤起文件管理器。因此 `WorkspaceMenuTarget` 必须带 `path`，缺了它会静默退化成一个禁用项。
 
 官方 `ui-workspace` 把 `contextMenus` 声明为必需注入，因此装了它的宿主必然有这个服务；万一不在场，本包只留自己的那几条，不留点不动的死按钮。
 
@@ -321,4 +333,3 @@ primitives 的值导入集中在 `src/client/runtime.ts`，打包脚本把它标
 - 官方 `sidebar` 同样只读：行右键菜单的「新建会话」项取它新建按钮的动词短语 `session.new.label`（见 [交互细节与官方对齐依据](ui-details.md) 的「行右键菜单」）。这个键在 `sidebar` 而不在 `workspace` 里——后者只有名词形态的 `session.new`（「新会话」）。
 
 通用词（`ok` / `cancel` / `close`）不在本包字典里：它们走官方 `common` 命名空间，由拿到 `t` 座位的对话框组件直接解析，查找链在命名空间未命中后回退到 `common`。
-

@@ -184,11 +184,11 @@ describe('copy id', () => {
     const ids = Array.from(sessionRow.querySelectorAll('[data-wg-test-item]')).map(
       (entry) => entry.getAttribute('data-wg-test-item'),
     )
-    const copy = sessionRow.querySelector<HTMLButtonElement>('[data-wg-test-item="copy-id"]')
-    expect(ids).toContain('copy-id')
+    const copy = sessionRow.querySelector<HTMLButtonElement>('[data-wg-test-item="session.id/copy-id"]')
+    expect(ids).toContain('session.id/copy-id')
     await act(async () => copy?.click())
 
-    expect(executed).toEqual(['copy-id'])
+    expect(executed).toEqual(['session.id/copy-id'])
     // 本包不再写剪贴板：那次复制由官方完成
     expect((globalThis as { __clipboard?: string }).__clipboard).toBeUndefined()
     await act(async () => root.unmount())

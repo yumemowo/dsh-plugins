@@ -2439,7 +2439,13 @@ describe('row context menu', () => {
     // 且没有行内新建入口可补，右键菜单与它的 `...` 菜单条目集合因此完全相同
     const { after } = rightClick(sessionRowNode(), 'row')
 
-    expect(menuIdsOf(openMenu(after))).toEqual(['pin', 'rename', 'fork', 'archive', 'copy-id'])
+    expect(menuIdsOf(openMenu(after))).toEqual([
+      'session.pin/pin',
+      'session.rename/rename',
+      'session.fork/fork',
+      'session.archive/archive',
+      'session.id/copy-id',
+    ])
   })
 
   it('leaves a row without a create entry with the plain row menu', () => {
