@@ -41,6 +41,7 @@ import { SessionRowItem } from './SessionRowItem.tsx'
 import type { CopyNoticeHandle } from '../copyNotice.ts'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { MenuRegistryFace } from '../menuRegistry.ts'
+import type { RowSlotFace } from '../rowSlots.ts'
 import type { PinnedLabels, RegionLabels } from '../labels.ts'
 import styles from './PinnedSection.module.css'
 import clsx from 'clsx'
@@ -77,6 +78,8 @@ export interface PinnedSectionProps {
   registry?: MenuRegistryFace | undefined
   /** 按图标键取字形，注册表条目只给键 */
   menuIcon?: ((key: string) => ReactNode) | undefined
+  /** 四个行级子插槽的读取面，缺省表示宿主没声明它们 */
+  rowSlots?: RowSlotFace | undefined
   /** 把会话 id 写进剪贴板 */
   copyId: CopyNoticeHandle['copy']
   onOpenSession: (sessionId: string) => void
@@ -142,6 +145,7 @@ export function PinnedSection({
   official,
   registry,
   menuIcon,
+  rowSlots,
   copyId,
   onOpenSession,
   statuses,
@@ -261,6 +265,7 @@ export function PinnedSection({
               official={official}
               registry={registry}
               menuIcon={menuIcon}
+              rowSlots={rowSlots}
               copyId={copyId}
               onOpenSession={onOpenSession}
               buildDragPlan={buildDragPlan}
@@ -295,6 +300,7 @@ function PinnedRow({
   official,
   registry,
   menuIcon,
+  rowSlots,
   copyId,
   onOpenSession,
   buildDragPlan,
@@ -309,6 +315,7 @@ function PinnedRow({
   official: OfficialSessionActions | undefined
   registry: MenuRegistryFace | undefined
   menuIcon: ((key: string) => ReactNode) | undefined
+  rowSlots: RowSlotFace | undefined
   copyId: CopyNoticeHandle['copy']
   onOpenSession: (sessionId: string) => void
   buildDragPlan: ((sessionId: string) => DragPlan) | undefined
@@ -324,6 +331,7 @@ function PinnedRow({
       official={official}
       registry={registry}
       menuIcon={menuIcon}
+      rowSlots={rowSlots}
       copyId={copyId}
       pinned
       canPin={canPin}

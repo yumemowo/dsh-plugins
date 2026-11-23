@@ -10,7 +10,7 @@
  *
  * 入场前的 `data-wg-stagger` 标记不打在这里：卡片内容是 portal 到 body 的浮层，与撑开体的逐个淡入无关
  */
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { StateDot } from '../../runtime.ts'
 import type { SessionStatus } from '../../data/status.ts'
 import { CARD_ATTRIBUTE } from '../../utils/flip.ts'
@@ -73,6 +73,12 @@ export interface SessionHoverContentProps {
   time?: string | undefined
   /** 该会话说要呈现的全部状态，逐条列出，空闲也有一条 */
   statuses: readonly SessionStatus[]
+  /**
+   * 排在时间与状态之间的那一段
+   *
+   * 官方 `sidebar.session.row.hover` 的占用者挂在这里，缺省表示这一格没有占用者
+   */
+  extra?: ReactNode
 }
 
 export function SessionHoverContent({
@@ -80,6 +86,7 @@ export function SessionHoverContent({
   path,
   time,
   statuses,
+  extra,
 }: SessionHoverContentProps): ReactElement {
   return (
     <div className={styles.hoverContent} ref={tagCard}>
@@ -87,6 +94,7 @@ export function SessionHoverContent({
       {/* 行上看不到会话在哪个目录里工作，卡片补上；与工作区卡片同一档排版 */}
       {path === undefined ? null : <div className={styles.hoverPath}>{path}</div>}
       {time === undefined ? null : <div className={styles.hoverTime}>{time}</div>}
+      {extra}
       {statuses.map((status) => (
         <div className={styles.hoverStatus} key={status.label}>
           <StateDot state={status.state} />

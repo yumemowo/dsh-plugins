@@ -40,6 +40,32 @@
 
 **入口只在洞被占用时渲染**：宿主没装目录选择器插件时洞是空的，按钮随之消失，不留点不动的死按钮（与官方 `directoryFlowAvailable` 的守卫同一语义）。这条占用事实是可订阅的（`hooks.directoryFlow` → `useDirectoryFlow`），因此目录选择器插件晚于本包加载时按钮照样会出现。
 
+## 行级子插槽：借官方声明的那几格，自己渲染占用者
+
+官方 `ui-workspace` 注册 `sidebar.workspaces` 时一并声明了四个行级子插槽：
+
+| 子插槽 | 位置 |
+| --- | --- |
+| `sidebar.session.row.leading` | 行首状态位那一格，只在行自身的主状态是空闲时交给它 |
+| `sidebar.session.row.trailing` | 行尾时间与图钉之间的图标位 |
+| `sidebar.session.row.hover` | 悬停卡片里时间与状态之间那一段 |
+| `sidebar.workspaces.session.row.action` | 行尾 `...` 之后的悬停按钮 |
+
+它们正是 Schedule 告警标记、子代理面板等插件落地的位置。本包接替父插槽后官方那条注册仍在 ledger 里，**声明因此仍然有效**——但它不再渲染，那几格上的占用者也就无处可去。
+
+本包**不能自己声明**它们：一个插槽只能有一个声明者，官方那条还在，重复声明直接抛错（`test/slotDeclaration.test.ts` 钉住这条）。而 `renderSlot` 只授权给自己 `children` 表里声明过的键，本包这张表是空的。
+
+于是走与 `directoryFlow.ts` 同一条路：从 ledger 的条目表里取出占用者，按渲染器传播 props 的同一套做法自己渲染（见 `src/client/rowSlots.ts`）。
+
+| 环节 | 做法 |
+| --- | --- |
+| 取占用者 | `slots.entriesOfSlot(key)`，渲染期读，因此晚于本包加载的插件也认得 |
+| inject 面 | 按注册时那个稳定函数缓存整个注册生命周期，与渲染器一致 |
+| `t` 座位 | 占用者声明了 `locale` 时按命名空间 bind，绑定结果在调用时才读当前语言 |
+| owner | 只交 `{ sessionId }`，与官方那四个子的 owner 同形 |
+
+三处与真渲染器的差距，都只影响个别占用者：占用者自己再调 `renderSlot` 会抛错（它没有声明权）、`store` 座位不装配、标准 hook 不注入。
+
 ## 会话菜单：借官方的注册表，面板仍由本包渲染
 
 官方 `ui-context-menu` 提供 `ctx.contextMenus`：任何插件按目标种类注册一批动作，由它合并成一份弹出面板。官方 `ui-workspace` 自己的那五项会话操作就是注册进去的，第三方插件的追加项走的也是同一条路。

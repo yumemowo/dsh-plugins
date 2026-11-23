@@ -15,6 +15,7 @@ import type { GroupChoice } from './data/types.ts'
 import type { OfficialAddLabels, OfficialSessionLabels, SidebarTranslate, WorkspaceTranslate } from './official.ts'
 import type { CopyNoticeHandle } from './copyNotice.ts'
 import type { MenuRegistryFace } from './menuRegistry.ts'
+import type { RowSlotFace } from './rowSlots.ts'
 
 /** 工作区状态快照里区域用到的部分 */
 export interface WorkspaceState {
@@ -290,6 +291,15 @@ export interface RegionActions {
    * 本包的归组项接在后面。面板仍由本包渲染，外观与行几何因此不受官方菜单那一套约束
    */
   menuRegistry?: (() => MenuRegistryFace | undefined) | undefined
+ /**
+  * 行级子插槽的读取面
+  *
+  * 官方 `ui-workspace` 声明了四个行级子插槽，别的插件注册进它们；本包接替父插槽后那些注册仍在 ledger 里
+  * 本包不能自己声明它们（一个插槽只能有一个声明者），因此从条目表里取出占用者自己渲染
+  *
+  * 与 `official` 同一理由传解析器：占用者可能晚于本包加载
+  */
+  rowSlots?: (() => RowSlotFace | undefined) | undefined
   /**
    * 官方 `contextMenu.icon` 那个 keyed 插槽里的字形
    *

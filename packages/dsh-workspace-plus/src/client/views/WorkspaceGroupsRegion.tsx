@@ -1900,6 +1900,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     // 注册表与服务都在 inject 面里延迟解析：它们的服务可能晚于本包加载
     registry: props.menuRegistry?.(),
     menuIcon: props.menuIcon,
+    rowSlots: props.rowSlots?.(),
     revealSessionId: ui.revealSessionId,
     acknowledgeReveal: ui.acknowledgeReveal,
     openSession,
@@ -2041,6 +2042,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             official={official}
             registry={props.menuRegistry?.()}
             menuIcon={props.menuIcon}
+            rowSlots={props.rowSlots?.()}
             copyId={copyNotice.copy}
             onOpenSession={openSession}
             statuses={statusSnapshot}

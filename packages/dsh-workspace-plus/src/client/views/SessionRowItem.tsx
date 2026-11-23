@@ -27,6 +27,8 @@ import type { SessionRowViewProps } from './SessionRowView.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { useSessionMenu } from '../hooks/useSessionMenu.ts'
 import type { MenuRegistryFace } from '../menuRegistry.ts'
+import { ROW_SLOTS } from '../rowSlots.ts'
+import type { RowSlotFace } from '../rowSlots.ts'
 import { SessionHoverContent } from './components/HoverCards.tsx'
 import { NameDialog } from './components/dialogs/NameDialog.tsx'
 import { useLocale } from '../hooks/useLocale.ts'
@@ -109,6 +111,12 @@ export interface SessionRowItemProps extends Omit<SessionRowViewProps, ComputedH
   registry?: MenuRegistryFace | undefined
   /** 按图标键取字形，注册表条目只给键 */
   menuIcon?: ((key: string) => ReactNode) | undefined
+  /**
+   * 四个行级子插槽的读取面，缺省表示宿主没声明它们（本包只渲染自己的行）
+   *
+   * 由区域在渲染期闭合，占用者可能晚于本包加载
+   */
+  rowSlots?: RowSlotFace | undefined
   /** 归组上下文，缺省时菜单里没有归组项 */
   grouping?: SessionGroupingContext | undefined
   /**
@@ -201,6 +209,7 @@ function sameRowItemProps(prev: SessionRowItemProps, next: SessionRowItemProps):
     prev.official === next.official &&
     prev.registry === next.registry &&
     prev.menuIcon === next.menuIcon &&
+    prev.rowSlots === next.rowSlots &&
     prev.copyId === next.copyId &&
     prev.dragPlan === next.dragPlan &&
     sameCard(prev.card, next.card) &&
@@ -217,6 +226,7 @@ function SessionRowItemView({
   card,
   registry,
   menuIcon,
+  rowSlots,
   ...rowProps
 }: SessionRowItemProps): ReactElement {
   const { labels } = useLocale()
@@ -354,6 +364,11 @@ function SessionRowItemView({
   // 条目为空时连锚点按钮一起不渲染，不留点不动的省略号
   const hasMenu = items.length > 0
 
+  // 行尾那组悬停按钮：别的插件注册进行尾操作位的按钮挂在这里，排在省略号之后
+  const rowActions = row.blank || rowSlots === undefined
+    ? undefined
+    : rowSlots.render(ROW_SLOTS.action, { sessionId: row.id })
+
   const line = (
     <SessionRowView
       {...rowProps}
@@ -366,6 +381,10 @@ function SessionRowItemView({
       onContextMenu={contextMenu.onContextMenu}
       // 双击标题是重命名的第二个入口，与菜单项落到同一个对话框
       onRenameRequest={renameRequest}
+      // 行首与行尾的占用者：空白会话那两格本来就是空的，不挂
+      leadingSlot={row.blank || rowSlots === undefined ? undefined : rowSlots.render(ROW_SLOTS.leading, { sessionId: row.id })}
+      trailingSlot={row.blank || rowSlots === undefined ? undefined : rowSlots.render(ROW_SLOTS.trailing, { sessionId: row.id })}
+      quickActions={rowActions}
       action={
         hasMenu ? (
           <Menu
@@ -402,6 +421,7 @@ function SessionRowItemView({
     />
   )
 
+
   return (
     <>
       {/* 卡片只包住行本身：右键面板与重命名对话框都是行外的浮层，包进去会多出两个子节点 */}
@@ -416,6 +436,8 @@ function SessionRowItemView({
               path={card.path}
               time={card.time}
               statuses={card.statuses ?? (rowProps.status === undefined ? [] : [rowProps.status])}
+              // 悬停卡片里时间与状态之间那一段，由占用者自己决定要不要画
+              extra={rowSlots === undefined ? undefined : rowSlots.render(ROW_SLOTS.hover, { sessionId: row.id })}
             />
           }
           // 行内 `...` 菜单与行右键菜单开着时都让位，否则同一处会叠两层浮层

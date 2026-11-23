@@ -18,6 +18,7 @@ import type { ReactElement, ReactNode } from 'react'
 import type { CopyNoticeHandle } from '../copyNotice.ts'
 import type { OfficialSessionActions } from '../actions.ts'
 import type { MenuRegistryFace } from '../menuRegistry.ts'
+import type { RowSlotFace } from '../rowSlots.ts'
 import { containsSession } from '../data/rows.ts'
 import { groupIdOfSession } from '../data/sessions.ts'
 import type { Outline } from '../hooks/useOutline.ts'
@@ -88,6 +89,8 @@ export interface SessionRowScope {
   registry: MenuRegistryFace | undefined
   /** 按图标键取字形，注册表条目只给键 */
   menuIcon: ((key: string) => ReactNode) | undefined
+  /** 四个行级子插槽的读取面，缺省表示宿主没声明它们 */
+  rowSlots: RowSlotFace | undefined
   /** 把一个标识写进剪贴板，会话行复制自己的 id 时用它 */
   copyId: CopyNoticeHandle['copy']
   revealSessionId: string | undefined
@@ -794,6 +797,7 @@ export function sessionRowElement(
       official={context.official}
       registry={context.registry}
       menuIcon={context.menuIcon}
+      rowSlots={context.rowSlots}
       copyId={context.copyId}
       // 宿主没加载官方 ui-workspace 时官方文案整体拿不到，浮出一个空壳不如不浮
       // 空白会话的标题是语言包的占位文案，不是会话内容，复制它没有意义

@@ -40,6 +40,8 @@ import type { RegionActions, AddWorkspaceActions, OfficialSessionActions } from 
 import { directoryFlowOccupant, directoryFlowSource } from './directoryFlow.ts'
 import { menuRegistryActions } from './menuRegistrySource.ts'
 import { menuIconOf } from './menuIcon.ts'
+import { renderRowSlot, rowSlotOccupied } from './rowSlots.ts'
+import type { RowSlotFace, RowSlotOwner } from './rowSlots.ts'
 import { hostInfoSource } from './hostInfo.ts'
 import { createCopyNotice } from './copyNotice.ts'
 import { WorkspaceGroupsRegion } from './views/WorkspaceGroupsRegion.tsx'
@@ -341,6 +343,17 @@ export function apply(ctx: Context): void {
   /** 注册表条目的图标键 -> 字形，字形由官方那个 keyed 插槽的占用者渲染 */
   const menuIcon = menuIconOf(ctx.slots)
 
+  /**
+   * 四个行级子插槽的读取面
+   *
+   * 占用者是别的插件注册的，加载顺序不受本包约束，因此渲染期才去条目表里读
+   * 占用者声明了命名空间才需要语言服务那一格，绑定结果在调用时才读当前语言
+   */
+  const rowSlotFace = (): RowSlotFace => ({
+    render: (key: string, owner: RowSlotOwner) => renderRowSlot(ctx.slots, locale, key, { ...owner }),
+    occupied: (key: string) => rowSlotOccupied(ctx.slots, key),
+  })
+
   const addWorkspaceActions = (
     onAdopted: AddWorkspaceActions['onAdopted'],
   ): AddWorkspaceActions | undefined => {
@@ -503,6 +516,7 @@ export function apply(ctx: Context): void {
       // 同为解析器：注册表由 ui-context-menu 提供，加载顺序不受本包约束
       menuRegistry,
       menuIcon,
+      rowSlots: rowSlotFace,
       // 同为解析器：它还要去读官方 directoryFlow 洞的占用者
       addWorkspace: addWorkspaceActions,
       hooks,

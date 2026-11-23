@@ -49,6 +49,22 @@ export interface SessionRowViewProps {
   /** 行尾操作位，缺省表示该行没有任何可用操作（如未分组桶里的会话） */
   action?: ReactNode
   /**
+   * 行首那个状态位里要追加的内容
+   *
+   * 官方 `sidebar.session.row.leading` 的占用者挂在这里：那一格只在行自身的主状态是空闲时交给它
+   * 缺省表示这一格没有占用者
+   */
+  leadingSlot?: ReactNode
+  /** 行尾时间与图钉之间的图标位，官方 `sidebar.session.row.trailing` 的占用者挂在这里 */
+  trailingSlot?: ReactNode
+  /**
+   * 行尾操作位里、`...` 之后的悬停按钮
+   *
+   * 官方 `sidebar.workspaces.session.row.action` 的占用者挂在这里，与 `...` 同一格展开
+   * 缺省表示这一格没有占用者
+   */
+  quickActions?: ReactNode
+  /**
    * 行右键处理，缺省表示该行没有右键菜单，右键保持浏览器默认行为
    *
    * 通过 props 下发而不是在行内自建：菜单条目与分派都属于「这一行有哪些操作」，由持有菜单的组件决定
@@ -160,6 +176,9 @@ function SessionRowViewImpl({
   status,
   time,
   action,
+  leadingSlot,
+  trailingSlot,
+  quickActions,
   pinned = false,
   canPin = true,
   clipped = false,
@@ -215,10 +234,12 @@ function SessionRowViewImpl({
       </button>
     )
 
+  // 操作位与 `...` 同一格展开：占用者的按钮排在它之后，悬停时一起浮现
   const actionSlot =
-    action === undefined ? null : (
+    action === undefined && quickActions === undefined ? null : (
       <span className={styles.rowActionSlot} onClick={(event) => event.stopPropagation()}>
         {action}
+        {quickActions}
       </span>
     )
 
@@ -250,7 +271,8 @@ function SessionRowViewImpl({
       onPointerLeave={marquee.onPointerLeave}
     >
       <span className={clsx(styles.rowSurface, selected && styles.rowSelected)}>
-        {status && <StatusIndicator status={status} />}
+        {/* 行首那一格：有主状态时画状态位，空闲时才让给占用者——与官方同一条取舍，两者不共享同一格 */}
+        {status ? <StatusIndicator status={status} /> : leadingSlot}
         <span
           ref={titleRef}
           className={styles.rowTitle}
@@ -279,6 +301,8 @@ function SessionRowViewImpl({
         ) : time === undefined ? null : (
           <span className={styles.rowTime}>{time}</span>
         )}
+        {/* 行尾的图标位：排在时间与图钉之间，占用者自己决定要不要画 */}
+        {trailingSlot}
         {/* 行尾两段：操作位在左、图钉在右
             已置顶的图钉常驻可见并占宽，因此它的位置不随时间隐去、操作位展开而变；
             未置顶的图钉与操作位一起显隐，静止时连宽度一起收掉 */}
@@ -301,6 +325,9 @@ function sameRowViewProps(prev: SessionRowViewProps, next: SessionRowViewProps):
     prev.title === next.title &&
     prev.selected === next.selected &&
     prev.time === next.time &&
+    prev.leadingSlot === next.leadingSlot &&
+    prev.trailingSlot === next.trailingSlot &&
+    prev.quickActions === next.quickActions &&
     sameSessionStatus(prev.status, next.status) &&
     prev.pinned === next.pinned &&
     prev.canPin === next.canPin &&
