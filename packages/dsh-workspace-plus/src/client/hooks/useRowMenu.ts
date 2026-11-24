@@ -39,19 +39,21 @@ export interface RowMenuHandle {
 
 /**
  * 装配一行的菜单
- * @param registry - 官方菜单注册表，缺省表示宿主没装它
+ * @param registry - 官方菜单注册表
  * @param iconOf - 按图标键取字形，缺省时注册表条目只剩文字
- * @param target - 这一行的目标种类与身份
+ * @param target - 这一行的身份，缺省表示该行没有可解析的身份（如「未分组」桶标题）
  * @param ownItems - 本包自有的条目，接在注册表那段之后
  * @param excluded - 注册表交来但本包自己实现、不该重复出现的条目 id
+ * @param leading - 本包的条目里要排在注册表之前的那几项，没有时为空数组
  * @returns 菜单面
  */
 export function useRowMenu(
-  registry: MenuRegistryFace | undefined,
+  registry: MenuRegistryFace,
   iconOf: ((key: string) => ReactNode) | undefined,
-  target: MenuTarget,
+  target: MenuTarget | undefined,
   ownItems: readonly MenuItem[],
   excluded: readonly string[] = [],
+  leading: readonly MenuItem[] = [],
 ): RowMenuHandle {
   const resolution = useRef<RegistryResolution | null>(null)
   const unsubscribe = useRef<(() => void) | null>(null)
@@ -68,7 +70,7 @@ export function useRowMenu(
   useEffect(() => release, [release])
 
   const prepare = useCallback((): void => {
-    if (registry === undefined || resolution.current !== null) return
+    if (target === undefined || resolution.current !== null) return
     const opened = resolveMenu(registry, target)
     resolution.current = opened
     const apply = (): void => { setViews(opened.source.getSnapshot()) }
@@ -93,7 +95,12 @@ export function useRowMenu(
     : registryMenuItems(shown, iconOf)
 
   return {
-    items: composeSessionMenu(registryItems, ownItems as RegistryMenuItem[], shown) as readonly MenuItem[],
+    items: composeSessionMenu(
+      registryItems,
+      ownItems as RegistryMenuItem[],
+      shown,
+      leading as RegistryMenuItem[],
+    ) as readonly MenuItem[],
     select,
     prepare,
     release,

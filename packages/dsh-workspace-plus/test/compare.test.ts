@@ -5,7 +5,9 @@ import {
   registerCompareTab,
 } from '../src/client/compare.tsx'
 import type { RegionActions } from '../src/client/actions.ts'
+import { officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { sidebarTranslate, translateFor, workspaceTranslate } from './locale-stub.ts'
+import { registryStub } from './support/menuRegistryStub.ts'
 import { snapshot } from './snapshot-stub.ts'
 import { createViewModeStore } from '../src/client/store/viewMode.ts'
 import { createCopyNotice } from '../src/client/copyNotice.ts'
@@ -44,6 +46,16 @@ function actions(): RegionActions {
     searchResultLimit: 20,
     tWorkspace: workspaceTranslate(),
     tSidebar: sidebarTranslate(),
+    official: () => ({
+      renameSession: async () => {},
+      forkSession: () => {},
+      archiveSession: async () => {},
+      labels: officialSessionLabels(workspaceTranslate()),
+      relativeTime: (updatedAt: number, now: number) =>
+        timeLabel(updatedAt, now, workspaceTranslate()),
+    }),
+    menuRegistry: registryStub(),
+    rowSlots: () => ({ render: () => null }),
   }
 }
 

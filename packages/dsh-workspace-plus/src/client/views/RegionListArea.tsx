@@ -79,18 +79,18 @@ export interface SessionRowLabels {
  */
 export interface SessionRowScope {
   currentSessionId: string | undefined
-  official: OfficialSessionActions | undefined
+  official: OfficialSessionActions
   statusSnapshot: SessionStatusSnapshot
   /** 行尾与卡片相对时间的基准时刻，渲染当刻取一次 */
   now: number
   /** 宿主 home，会话卡片里的目录按它缩写成 `~` */
   home: string | undefined
-  /** 官方右键菜单注册表，缺省时会话菜单只用本包自带的条目 */
-  registry: MenuRegistryFace | undefined
+  /** 官方右键菜单注册表，会话菜单的条目来源 */
+  registry: MenuRegistryFace
   /** 按图标键取字形，注册表条目只给键 */
   menuIcon: ((key: string) => ReactNode) | undefined
-  /** 四个行级子插槽的读取面，缺省表示宿主没声明它们 */
-  rowSlots: RowSlotFace | undefined
+  /** 四个行级子插槽的读取面 */
+  rowSlots: RowSlotFace
   /**
    * 交给子插槽占用者的全局标准 hook
    *
@@ -340,6 +340,7 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
         * 序列里没有这一段时整段不渲染，聚焦时它本来就不进序列 */}
       {strayHead === undefined ? null : (
         <section className={rowsStyles.workspace}>
+          {/* 「未分组」桶不是真实工作区：没有身份可交给注册表，因此只挂注册表面与自有的开关 */}
           <WorkspaceRow
             title={labels.ungrouped}
             expanded={expansion.isWorkspaceExpanded(UNGROUPED_KEY)}
@@ -348,11 +349,12 @@ export function RegionListArea(props: RegionListAreaProps): ReactElement {
               containsSession(props.stray, currentSessionId)
             }
             onToggle={() => expansion.toggleWorkspace(UNGROUPED_KEY)}
+            registry={session.registry}
+            menuIcon={session.menuIcon}
           />
           <ExpandableBody open={expansion.isWorkspaceExpanded(UNGROUPED_KEY)}>
             <div className={rowsStyles.workspaceBody}>
-              {/* 这些会话不属于任何工作区，没有分组可归，因此菜单里只有官方操作块（归组项无处落）
-                * 宿主未提供官方服务时菜单会是空的，那时直接渲染无菜单的行，不留点不动的省略号 */}
+              {/* 这些会话不属于任何工作区，没有分组可归，因此菜单里只有官方操作块（归组项无处落） */}
               <div className={rowsStyles.sessions}>
                 <SessionList
                   scope={{ kind: 'stray' }}
@@ -596,15 +598,12 @@ function WorkspaceNode({
         // 「移动工作区分组」入口：把该工作区放进某个根节点分组，或先建一个再放
         onSelectVirtualWorkspace: (id) => commands.selectVirtualWorkspace(workspaceId, id),
         onSelectParentGroup: (id) => commands.selectParentGroup(workspaceId, id),
-        // 官方服务不在场时官方卡片文案整体拿不到，整卡因此不挂
-        hover:
-          scope.session.official === undefined
-            ? undefined
-            : {
-                label: workspace.title,
-                path: abbreviateHomePath(workspace.path, scope.home),
-                created: labels.hover.created(Date.parse(workspace.createdAt)),
-              },
+        // 卡片文案走官方 workspace 语言包，它必然在场（见 RegionActions.official）
+        hover: {
+          label: workspace.title,
+          path: abbreviateHomePath(workspace.path, scope.home),
+          created: labels.hover.created(Date.parse(workspace.createdAt)),
+        },
         hoverCopy: workspace.path,
         onToggle: () => expansion.toggleWorkspace(workspaceId),
         onCreateSession: () => commands.createSessionIn(workspaceId, ''),
@@ -747,7 +746,6 @@ function GroupNode({
  * 一个会话行行尾与卡片要用的时间文案
  *
  * 两处只在格式化函数上不同：行尾是官方的紧凑形态，卡片要套「…前」模板
- * 官方服务不在场时两者都不渲染，卡片那份也因此跟着缺席
  */
 function rowTimes(
   row: SessionRow,
@@ -759,8 +757,8 @@ function rowTimes(
 } {
   const { official, now } = context
   return {
-    time: relativeTimeOfRow(row, official?.relativeTime, now),
-    hoverTime: relativeTimeOfRow(row, official === undefined ? undefined : labels.hoverTimeAgo, now),
+    time: relativeTimeOfRow(row, official.relativeTime, now),
+    hoverTime: relativeTimeOfRow(row, labels.hoverTimeAgo, now),
   }
 }
 
@@ -811,16 +809,13 @@ export function sessionRowElement(
       menuIcon={context.menuIcon}
       rowSlots={context.rowSlots}
       standardHooks={context.standardHooks}
-      // 宿主没加载官方 ui-workspace 时官方文案整体拿不到，浮出一个空壳不如不浮
       // 空白会话的标题是语言包的占位文案，不是会话内容，复制它没有意义
-      card={
-        context.official && {
-          path: row.cwd === undefined ? undefined : abbreviateHomePath(row.cwd, context.home),
-          time: hoverTime,
-          statuses: view.statuses,
-          copy: row.blank ? undefined : row.title,
-        }
-      }
+      card={{
+        path: row.cwd === undefined ? undefined : abbreviateHomePath(row.cwd, context.home),
+        time: hoverTime,
+        statuses: view.statuses,
+        copy: row.blank ? undefined : row.title,
+      }}
       {...pin}
       onOpenSession={context.openSession}
       onReveal={reveal}

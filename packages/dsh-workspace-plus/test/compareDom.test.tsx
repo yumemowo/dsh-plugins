@@ -10,7 +10,9 @@ import { createViewModeStore } from '../src/client/store/viewMode.ts'
 import { viewModeProps } from './viewMode-stub.ts'
 import { copySeats } from './copy-stub.ts'
 import { createCopyNotice } from '../src/client/copyNotice.ts'
+import { officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { sidebarTranslate, translateFor, workspaceTranslate } from './locale-stub.ts'
+import { registryStub } from './support/menuRegistryStub.ts'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { Context } from '@deepseek-ai/cordis'
 
@@ -59,6 +61,16 @@ function actions(): RegionActions {
     searchResultLimit: 20,
     tWorkspace: workspaceTranslate(),
     tSidebar: sidebarTranslate(),
+    official: () => ({
+      renameSession: async () => {},
+      forkSession: () => {},
+      archiveSession: async () => {},
+      labels: officialSessionLabels(workspaceTranslate()),
+      relativeTime: (updatedAt: number, now: number) =>
+        timeLabel(updatedAt, now, workspaceTranslate()),
+    }),
+    menuRegistry: registryStub(),
+    rowSlots: () => ({ render: () => null }),
   }
 }
 

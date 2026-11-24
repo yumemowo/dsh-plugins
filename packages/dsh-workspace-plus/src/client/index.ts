@@ -30,8 +30,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 // 仅用于引入官方 workspace 语言包的键域声明（LocaleNamespaceMap）与 ctx.uiWorkspace 的服务类型
 // 本包复用官方文案与官方动作，靠这份声明让官方改键名时在 tsc 阶段就暴露，而不是运行期显示原始键名
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
-import { DEFAULT_PINNED_LIMIT, DEFAULT_PINNED_VISIBLE_COUNT, REMOTE_CONTRIBUTION, SERVICE, callRemote, normalizeSnapshot } from './remote.ts'
-import { EMPTY_PICKER_STATE } from '../pickerState.ts'
+import { REMOTE_CONTRIBUTION, SERVICE, callRemote, normalizeSnapshot } from './remote.ts'
 import type { WorkspaceGroupsSnapshot } from './remote.ts'
 import { registerCompareTab } from './compare.tsx'
 import { NS, en, zh } from './locales.ts'
@@ -40,15 +39,31 @@ import type { RegionActions, AddWorkspaceActions, OfficialSessionActions } from 
 import { directoryFlowOccupant, directoryFlowSource } from './directoryFlow.ts'
 import { menuRegistryActions } from './menuRegistrySource.ts'
 import { menuIconOf } from './menuIcon.ts'
-import { renderRowSlot, rowSlotHas, rowSlotOccupied } from './rowSlots.ts'
+import { renderRowSlot } from './rowSlots.ts'
 import type { RowSlotFace, RowSlotOwner, StandardHooks } from './rowSlots.ts'
 import { hostInfoSource } from './hostInfo.ts'
 import { createCopyNotice } from './copyNotice.ts'
 import { WorkspaceGroupsRegion } from './views/WorkspaceGroupsRegion.tsx'
 import { createViewModeStore, sharedViewModeStore } from './store/viewMode.ts'
 
-/** 浏览器半边声明的服务依赖 */
-export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'remote']
+/**
+ * 浏览器半边声明的服务依赖
+ *
+ * `uiWorkspace` 与 `contextMenus` 在这里声明而不是运行期去试
+ * 官方 `ui-workspace` 也把它们列进自己的 `inject`，本包接替它渲染的那一片区域
+ * 两者缺一个，区域就没有可转调的导航或菜单来源
+ * 声明之后 cordis 保证 `apply` 跑起来时它们都在场
+ * 后面各处读它们不必再留「可能没有」的分支
+ */
+export const inject = [
+  'slots',
+  'sessions',
+  'workspaces',
+  'uiWorkspace',
+  'contextMenus',
+  'locale',
+  'remote',
+]
 
 /**
  * 设置页里本包那一条的命名空间
@@ -57,19 +72,6 @@ export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'remote']
  * 客户端不得引用宿主那半边的模块，因此这一格在这里另写一份、不导入 `../index.ts`
  */
 const SETTINGS_NS = 'workspace-plus'
-
-/** 远程面缺失或依赖不全时的空快照：字段都空，界面退化成全部平铺 */
-const EMPTY_SNAPSHOT: WorkspaceGroupsSnapshot = {
-  byWorkspace: {},
-  nesting: {},
-  workspaceGroups: [],
-  picker: EMPTY_PICKER_STATE,
-  nested: true,
-  // 空表即「每一段都没有手动顺序」，界面因此按时间序渲染
-  orderSlots: {},
-  pinnedVisibleCount: DEFAULT_PINNED_VISIBLE_COUNT,
-  pinnedLimit: DEFAULT_PINNED_LIMIT,
-}
 
 /**
  * 对照模式开关
@@ -87,10 +89,10 @@ export const COMPARE_MODE = false
  * 插件入口
  */
 export function apply(ctx: Context): void {
-  const sessions = ctx.get('sessions') as ISessions | undefined
-  const workspaces = ctx.get('workspaces') as IWorkspaces | undefined
-  const locale = ctx.get('locale') as LocaleRuntime | undefined
-  if (locale === undefined) return
+  // 这几个服务都在 `inject` 里声明，cordis 因此在它们齐备时才跑 apply，这里取到的必然在场
+  const sessions = ctx.get('sessions') as unknown as ISessions
+  const workspaces = ctx.get('workspaces') as unknown as IWorkspaces
+  const locale = ctx.get('locale') as LocaleRuntime
 
   // 两种注册形式：带类型合并的整表形式按内置语言 id 传字典
   ctx.effect(
@@ -287,13 +289,11 @@ export function apply(ctx: Context): void {
    * 文案与相对时间在这里按调用时的语言投影，本函数由区域组件在每次渲染时调用（见 `RegionActions.official`）
    * 因此语言切换后重新投影，不会冻结在注册那一刻
    *
-   * 官方 `ui-workspace` 不在场时返回 undefined，本包的区域本来就依赖它供的 `useWorkspaces` 全局 hook
-   * 正常情况下它必然加载，真缺失时菜单里那三项与行尾时间整体不渲染，不留点不动的入口
-   * @returns 官方动作，官方服务或控制器缺失时为 undefined
+   * `uiWorkspace` 在 `inject` 里声明，因此这里必然是同一个服务，不必再判有没有
+   * @returns 官方动作，同一个服务期间复用同一个对象
    */
-  const officialActions = (): OfficialSessionActions | undefined => {
-    const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace | undefined
-    if (uiWorkspace === undefined || sessions === undefined) return undefined
+  const officialActions = (): OfficialSessionActions => {
+    const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace
 
     // 服务没换人时复用同一个对象：这一格会传进行级 memo 的比对，每次渲染新建一个会让每一行都判定为变过
     if (cachedOfficial !== undefined && cachedOfficial.service === uiWorkspace) {
@@ -337,10 +337,8 @@ export function apply(ctx: Context): void {
    * 占用者声明了命名空间才需要语言服务那一格，绑定结果在调用时才读当前语言
    */
   const rowSlotFace = (): RowSlotFace => ({
-    render: (key: string, owner: RowSlotOwner, standard?: StandardHooks) =>
-      renderRowSlot(ctx.slots, locale, key, { ...owner }, standard),
-    occupied: (key: string) => rowSlotOccupied(ctx.slots, key),
-    has: (key: string, id: string) => rowSlotHas(ctx.slots, key, id),
+    render: (key: string, owner: RowSlotOwner, standard?: StandardHooks, omit?: readonly string[]) =>
+      renderRowSlot(ctx.slots, locale, key, { ...owner }, standard, omit),
   })
 
   /**
@@ -359,13 +357,11 @@ export function apply(ctx: Context): void {
   const addWorkspaceActions = (
     onAdopted: AddWorkspaceActions['onAdopted'],
   ): AddWorkspaceActions | undefined => {
-    if (workspaces === undefined) return undefined
     if (directoryFlowOccupant(ctx.slots) === undefined) return undefined
-    const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace | undefined
     return {
       createWorkspace: (path) => workspaces.create({ path }),
-      // 官方在采纳成功后立刻在新工作区开会话，uiWorkspace 缺失时退化为只添加，不替它找一个「差不多」的替代入口
-      startSession: (workspaceId) => uiWorkspace?.startSession(workspaceId as never),
+      // 官方在采纳成功后立刻在新工作区开会话，与官方 WorkspacePickFlow 里那条一致
+      startSession: (workspaceId) => void (ctx.get('uiWorkspace') as UiWorkspace).startSession(workspaceId as never),
       // 传解析器而不是当次读数，占用者可能在两次渲染之间换人
       occupant: () => directoryFlowOccupant(ctx.slots),
       // 区域组件把「刚采纳了哪个工作区」接回去，据此判断它在新会话打开那一刻可不可见
@@ -391,54 +387,16 @@ export function apply(ctx: Context): void {
   }
 
   const injected = (): InjectedFace => {
+    const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace
     const hooks = {
       directoryFlow: directoryFlowSource(ctx.slots),
       hostInfo: hostInfoSource(ctx),
-    }
-    if (sessions === undefined || workspaces === undefined) {
-      // 依赖缺失时给出空实现：组件仍可渲染，只是没有可操作的动作
-      return {
-        openSession: () => {},
-        startSession: async () => {
-          throw new Error('workspace-plus requires the workspace and session controllers')
-        },
-        onReady: () => () => {},
-        loadGroups: async () => EMPTY_SNAPSHOT,
-        createGroup: async () => EMPTY_SNAPSHOT,
-        renameGroup: async () => EMPTY_SNAPSHOT,
-        deleteGroup: async () => EMPTY_SNAPSHOT,
-        moveSession: async () => EMPTY_SNAPSHOT,
-        setSegmentOrder: async () => EMPTY_SNAPSHOT,
-        moveGroupBefore: async () => EMPTY_SNAPSHOT,
-        createVirtualWorkspace: async () => EMPTY_SNAPSHOT,
-        moveVirtualWorkspaceBefore: async () => EMPTY_SNAPSHOT,
-        renameVirtualWorkspace: async () => EMPTY_SNAPSHOT,
-        deleteVirtualWorkspace: async () => EMPTY_SNAPSHOT,
-        moveWorkspace: async () => EMPTY_SNAPSHOT,
-        forgetWorkspace: async () => EMPTY_SNAPSHOT,
-        nestWorkspaces: async () => EMPTY_SNAPSHOT,
-        unnestWorkspaces: async () => EMPTY_SNAPSHOT,
-        setNested: async () => EMPTY_SNAPSHOT,
-        focusEntry: async () => EMPTY_SNAPSHOT,
-        togglePinned: async () => EMPTY_SNAPSHOT,
-        setSessionPinned: async () => {},
-        insertWorkspaceBefore: async () => {},
-        renameWorkspace: async () => {},
-        deleteWorkspace: async () => {},
-        copyNotice,
-        // 会话控制器缺失时退回线上契约里那个固定值（见 RegionActions）
-        searchResultLimit: 20,
-        tWorkspace,
-        tSidebar,
-        hooks,
-      }
     }
     return {
       openSession: (sessionId: string) => {
         // 选中会话是导航事实，归官方 `uiWorkspace` 独占，本包不自行改选中态
         // 直接转调它，官方改导航行为时本包自动跟随
-        const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace | undefined
-        uiWorkspace?.openSession(sessionId as never)
+        uiWorkspace.openSession(sessionId as never)
       },
       startSession: async (workspaceId: string) => {
         // 新建会话整段走官方导航服务：`openWorkspace` 复用该工作区已有的空白会话，没有才新建
@@ -447,10 +405,6 @@ export function apply(ctx: Context): void {
         //
         // 它返回 void，会话 id 因此从 `beforeOpen` 回调里取，官方只在这轮导航仍有效时才回调
         // 被取代时回调不触发，id 停在 undefined
-        const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace | undefined
-        if (uiWorkspace === undefined) {
-          throw new Error('workspace-plus requires the uiWorkspace service')
-        }
         let target: string | undefined
         await uiWorkspace.openWorkspace(workspaceId as never, (sessionId) => {
           target = String(sessionId)
@@ -492,9 +446,6 @@ export function apply(ctx: Context): void {
       // 置顶集合归官方注册表，直接调官方工作区控制器，不另造 RPC
       // 不接返回值：置顶集合由官方快照下发，这里已经读同一份
       setSessionPinned: async (sessionId: string, pinned: boolean) => {
-        if (workspaces === undefined) {
-          throw new Error('workspace-plus requires the workspace controller')
-        }
         if (pinned) await workspaces.pinSession(sessionId as never)
         else await workspaces.unpinSession(sessionId as never)
       },
@@ -513,9 +464,9 @@ export function apply(ctx: Context): void {
       searchResultLimit: sessions.searchResultLimit,
       tWorkspace,
       tSidebar,
-      // 传解析器而不是值：渲染时才去读 ctx.uiWorkspace（见 RegionActions）
+      // 传解析器而不是值：文案按调用当刻的语言投影（见 RegionActions.official）
       official: officialActions,
-      // 同为解析器：注册表由 ui-context-menu 提供，加载顺序不受本包约束
+      // 同为解析器：与 official 一起在区域渲染期取一次
       menuRegistry,
       menuIcon,
       rowSlots: rowSlotFace,

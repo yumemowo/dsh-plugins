@@ -209,12 +209,4 @@ describe('renaming a session by double-clicking its title', () => {
     expect(document.body.querySelector('[data-wg-test-modal]')).toBeNull()
   })
 
-  it('has no rename dialog while the official service is absent', async () => {
-    const container = await mount({ official: () => undefined })
-
-    await doubleClick(titleOf(container, '修复登录超时'))
-
-    // 没有官方服务就没有提交路径，弹出对话框只会点了没反应
-    expect(document.body.querySelector('[data-wg-test-modal]')).toBeNull()
-  })
 })

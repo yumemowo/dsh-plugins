@@ -93,7 +93,7 @@ export interface SessionRowViewProps {
   /**
    * 该行是否已置顶
    *
-   * 已置顶时图钉常驻可见并占宽，未置顶时与操作位一起显隐，两态的先后顺序相同
+   * 已置顶时静止格里多一枚只读图钉标记，它随静止格一起让位给操作位
    */
   pinned?: boolean | undefined
   /**
@@ -103,7 +103,7 @@ export interface SessionRowViewProps {
    * 缺省表示不涉及上限
    */
   canPin?: boolean | undefined
-  /** 切换这一行的置顶，缺省表示该行不提供置顶入口 */
+  /** 切换这一行的置顶，缺省表示该行不提供置顶入口（操作位里因此没有那一枚） */
   onTogglePin?: ((sessionId: string) => void) | undefined
   /**
    * 该行是否被容器裁在高度之外
@@ -215,11 +215,19 @@ function SessionRowViewImpl({
     onReveal()
   }, [onReveal])
 
-  const pin =
+  // 已置顶的只读标记：静止时与相对时间同处行尾，与官方 .pinIndicator 同形同尺寸域
+  // 它不是入口，切换那件事在操作位里那一枚上，两者因此不会同时可见
+  const pinMark = pinned ? (
+    <span className={styles.rowPinMark} role="img" aria-label={labels.pinned.mark}>
+      <IconPinFillRegular size={14} />
+    </span>
+  ) : null
+
+  const pinButton =
     onTogglePin === undefined ? null : (
       <button
         type="button"
-        className={clsx(styles.rowPin, pinned ? styles.rowPinOn : styles.rowPinOff)}
+        className={styles.rowPin}
         // 上限只拦新增：已置顶的行永远可以点它取消，因此禁用判据只看「未置顶且到上限」
         disabled={!pinned && !canPin}
         aria-pressed={pinned}
@@ -230,16 +238,36 @@ function SessionRowViewImpl({
           onTogglePin(sessionId)
         }}
       >
-        {pinned ? <IconPinFillRegular size={13} /> : <IconPinOutlineRegular size={13} />}
+        {pinned ? <IconPinFillRegular size={14} /> : <IconPinOutlineRegular size={14} />}
       </button>
     )
 
-  // 操作位与 `...` 同一格展开：占用者的按钮排在它之后，悬停时一起浮现
+  // 静止态那一格：相对时间、行尾图标位与已置顶标记，三者由同一个容器按 6px 排开
+  // 官方 .rowResting 就是这一格，悬停时整格让位给操作位
+  // 一格内容都没有时整格不渲染，不留一个空盒占着那 6px
+  const restingContent = (
+    <>
+      {status?.trailingLabel !== undefined ? (
+        <span className={styles.rowTime} aria-hidden="true">{status.trailingLabel}</span>
+      ) : time === undefined ? null : (
+        <span className={styles.rowTime}>{time}</span>
+      )}
+      {trailingSlot}
+      {pinMark}
+    </>
+  )
+  const resting =
+    time === undefined && status?.trailingLabel === undefined && trailingSlot === undefined && pinMark === null
+      ? null
+      : <span className={styles.rowResting}>{restingContent}</span>
+
+  // 操作位与 `...` 同一格展开：占用者的按钮与本包的图钉排在它之后，悬停时一起浮现
   const actionSlot =
-    action === undefined && quickActions === undefined ? null : (
+    action === undefined && quickActions === undefined && pinButton === null ? null : (
       <span className={styles.rowActionSlot} onClick={(event) => event.stopPropagation()}>
         {action}
         {quickActions}
+        {pinButton}
       </span>
     )
 
@@ -294,20 +322,10 @@ function SessionRowViewImpl({
         >
           {shownTitle}
         </span>
-        {/* 行尾那一格先给待交互的紧凑文案，没有才显示相对时间
-            待交互的语义已由行首指示器承担，这一格重复它，因此对读屏隐藏 */}
-        {status?.trailingLabel !== undefined ? (
-          <span className={styles.rowTime} aria-hidden="true">{status.trailingLabel}</span>
-        ) : time === undefined ? null : (
-          <span className={styles.rowTime}>{time}</span>
-        )}
-        {/* 行尾的图标位：排在时间与图钉之间，占用者自己决定要不要画 */}
-        {trailingSlot}
-        {/* 行尾两段：操作位在左、图钉在右
-            已置顶的图钉常驻可见并占宽，因此它的位置不随时间隐去、操作位展开而变；
-            未置顶的图钉与操作位一起显隐，静止时连宽度一起收掉 */}
+        {/* 待交互的语义已由行首指示器承担，静止格那一份重复它，因此对读屏隐藏（见上面 .rowTime） */}
+        {resting}
+        {/* 操作位：省略号、占用者的按钮，以及本包的图钉 */}
         {actionSlot}
-        {pin}
       </span>
     </RowHeadShell>
   )

@@ -418,9 +418,19 @@
   background-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 26%, transparent);
 }
 
-/* 行尾相对时间，官方 .time 的几何与色阶（12px/20px、label-tertiary）
-   悬停、菜单展开、键盘聚焦时让位给操作位——官方是同一处 CSS 互换（time -> ellipsis）
-   本包把「键盘聚焦」也列为一条显隐路径 */
+/* 静止态那一格：时间、行尾图标位与已置顶标记由它按同一档间距排开
+   官方 .rowResting 同形——gap 6px、与会话行同样 flex:none
+   悬停、菜单展开、键盘聚焦时整格让位给操作位（官方是同一处 CSS 互换） */
+.rowResting {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 行尾相对时间，官方 .time 的色阶（label-tertiary）
+   字号是文档里记过的一处有意偏离：官方 0.2 压到 10px/16px，配合它自己那套跑马灯标题
+   本包这份在侧栏里偏小，因此留在 12px/20px */
 .rowTime,
 .groupCount {
   flex: none;
@@ -428,6 +438,10 @@
   font-size: 12px;
   line-height: 20px;
 }
+
+/* 官方 .time 带一个 -1px 的尾距，它把静止格里 6px 的间距在视觉上收成 5px
+   这一格只给会话行的时间：分组行的会话数自己用 margin-right 归还了另一份 gap（见下面那条规则） */
+.rowTime { margin-inline-end: -1px; }
 
 /* 操作位容器：静止时宽度收成 0，行尾时间因此贴住行的右内边距，随之显隐，展开成图标列宽
    时间与操作按钮的右缘因此始终落在同一条竖线
@@ -447,8 +461,7 @@
   align-items: center;
   justify-content: center;
   /* 与官方 .rowActions 的 gap:13px 同值
-     官方那两枚按钮各带 -4px 外边距，落在流里的实际间距因此是 13 - 8 = 5px；
-     本包的省略号是裸 16px 按钮，两边的中心距仍与官方一致 */
+     格里的按钮各带 -4px 外边距，落在流里的视觉间距因此是 13 - 8 = 5px，与官方一致 */
   gap: 13px;
   overflow: hidden;
 }
@@ -465,65 +478,53 @@
 
    判等是必须的：React 把闭合态渲染成 aria-expanded="false"，属性照旧在场
    写成 [aria-expanded]（只判存在）会让每一行都命中，操作位与图钉从此常驻 */
-.row:hover .rowTime,
-.row:has(.rowAction[aria-expanded='true']) .rowTime,
-.row:has(.rowAction:focus-visible) .rowTime { display: none; }
+/* 让位是整格的事：容器一收，里面的时间、图标位与标记一起消失
+   键盘焦点那一档要连图钉按钮自己也算进来：它一旦拿到焦点，静止格就得让位给它 */
+.row:hover .rowResting,
+.row:has(.rowAction[aria-expanded='true']) .rowResting,
+.row:has(.rowAction:focus-visible) .rowResting,
+.row:has(.rowPin:focus-visible) .rowResting { display: none; }
 
-/* ── 行尾的图钉 ───────────────────────────────────────────
-   操作位在左、图钉在右
+/* ── 行尾的图钉：静止一枚只读标记，悬停一枚按钮 ──────────
+   与官方同一套分工（.pinIndicator 与操作位里的 .pinnedAction）
+   静止时标记在 .rowResting 里与时间、图标位按 6px 排开，它只说明状态、不可点
+   悬停时整格让位给操作位，切换入口在那里
 
-   已置顶的图钉常驻可见并占着 16px：它的位置因此不随时间隐去、操作位展开而变
-   未置顶的图钉与操作位一起显隐，静止时连宽度一起收成 0——不为一个看不见的状态图标留空位
+   标记取官方 .pinIndicator 的几何与色阶：16×20、label-caption
+   与时间之间那 6px 由容器给出，不在这一格上另加外边距 */
+.rowPinMark {
+  flex: none;
+  width: 16px;
+  height: 20px;
+  color: var(--dsw-alias-label-caption);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 
-   颜色取官方那次置顶标记用的同一档色阶（label-caption），不另造一套，两态共用，只有悬停时提亮
-   overflow 与操作位槽同理：裁掉收起时溢出的图标，并把 flex 项的自动最小尺寸归零，否则子项 16px 会把 width: 0 顶回去 */
+/* 操作位里的那一枚：官方 .iconButton 的几何（24×24、radius-xs、tertiary）
+   负 4px 外边距是官方那一套的关键：它让相邻两枚的视觉间距是 gap 减去两侧各 4px
+   少了它，本包这枚与省略号之间会多出 8px */
 .rowPin {
   flex: none;
   cursor: pointer;
-  height: 16px;
-  color: var(--dsw-alias-label-caption);
+  width: 24px;
+  height: 24px;
+  margin: -4px;
   padding: 0;
   background: 0 0;
   border: none;
   border-radius: var(--dsw-radius-xs);
+  color: var(--dsw-alias-label-tertiary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
 }
 
-/* 已置顶：常驻可见，因此它读起来是「这一行的状态」而不是一个待点的入口 */
-.rowPinOn {
-  width: 16px;
-  opacity: 1;
-}
+.rowPin:hover { color: var(--dsw-alias-label-primary); }
 
-.rowPinOn:hover {
-  color: var(--dsw-alias-label-primary);
-}
-
-/* 未置顶：静止时不占宽也不可见，与操作位同时展开 */
-.rowPinOff {
-  width: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* 三条触发条件与 .rowTime / .rowActionSlot 那两组一一对应，保证行尾在任一时刻只有一套控件占位
-   图钉排在操作位之后，但仍读行自身的悬停与行内键盘焦点
-   它在药丸里，因此这一档写成后代选择器：仍是「行尾那一格」，只是隔了一层盒子 */
-.row:hover .rowPinOff,
-.row:focus-within .rowPinOff,
-.rowPinOff:focus-visible {
-  width: 16px;
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* 达到上限时未置顶的图钉禁用，指针事件一并去掉，不留看不见却能点中的热区 */
-.rowPinOff:disabled {
-  cursor: default;
-}
+/* 达到上限时未置顶的图钉禁用，指针样式跟着退掉，不留一个看起来能点的热区 */
+.rowPin:disabled { cursor: default; }
 
 /* 分组的会话数与 time 一样让位，三条触发条件与上面那组一一对应，行类换成分组行 */
 .groupHead:hover .groupCount,
@@ -542,7 +543,25 @@
    自然宽由内容决定，静止时仍是 0，行尾时间因此照旧贴着行的右内边距 */
 .row:hover .rowActionSlot,
 .row:has(.rowAction[aria-expanded='true']) .rowActionSlot,
-.row:has(.rowAction:focus-visible) .rowActionSlot { width: auto; }
+.row:has(.rowAction:focus-visible) .rowActionSlot,
+.row:has(.rowPin:focus-visible) .rowActionSlot { width: auto; }
+
+/* 会话行操作位里的按钮取官方 .iconButton 那一套盒模型
+   24×24 加 -4px 外边距，外框因此仍是 16px
+   槽的 gap 是 13px，两边各让出 4px 之后视觉间距就是 5px，与官方同格内那几枚一致
+   不这么做时省略号（16px、无外边距）与图钉（外框 16px）之间会多出 8px，整排看起来松散
+   只作用于会话行：容器行的操作位在 .rowActions 里，排布另有一套 */
+.row .rowActionSlot .rowAction,
+.row .rowActionSlot .rowPin {
+  width: 24px;
+  height: 24px;
+  margin: -4px;
+}
+
+/* 会话行的槽因此不能再定死 20px 高：24px 的按钮会被 overflow:hidden 裁掉上下各 2px
+   官方那里也只有工作区行（projectRow）给 .rowActions 写死高度，会话行不给
+   高度交给内容，收起态仍是 width:0 + overflow:hidden，占位与键盘可达性都不受影响 */
+.row .rowActionSlot { height: auto; }
 
 /* 行内操作按钮
    默认隐藏，仅在该行悬停、菜单展开、或键盘聚焦时出现

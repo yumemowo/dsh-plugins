@@ -14,6 +14,8 @@ import {
   IconCopyOutlineRegular,
   IconEditOutlineRegular,
   IconNewChatOutlineRegular,
+  IconPinFillRegular,
+  IconPinOutlineRegular,
   IconPlusOutlineRegular,
   IconTrashOutlineRegular,
 } from './runtime.ts'
@@ -92,6 +94,25 @@ export interface SessionMenuInput {
 }
 
 /**
+ * 会话菜单里置顶项的输入
+ *
+ * 这一项由本包自己造：官方在同一个目标上也注册了一条，但那条只按官方自己的置顶集合判断
+ * 它不认本包的 `pinnedLimit`（见 `config.ts`），上限在它那里形同虚设
+ */
+export interface SessionPinMenuInput {
+  /** 该行是否已置顶，决定文案与字形取哪一态 */
+  pinned: boolean
+  /** 是否还能新增置顶，未置顶且已达上限时该项禁用 */
+  canPin: boolean
+  /** 两态文案，取官方 `workspace` 语言包的 `menu.pinSession` / `menu.unpinSession` */
+  pinLabel: string
+  unpinLabel: string
+}
+
+/** 会话菜单里置顶项的 id */
+export const SESSION_PIN_ITEM = 'session-pin'
+
+/**
  * 构造会话「更多操作」菜单里的分组一级项
  *
  * 二级子菜单保持传入（即工作区视图）的分组顺序，并剔除当前会话所在的分组——把自己移动到自己是无意义的操作
@@ -111,10 +132,26 @@ export function buildGroupMenuItem(input: GroupMenuInput): MenuActionItem {
 }
 
 /**
+ * 构造会话菜单里的置顶项
+ *
+ * 这一项排在注册表那段之前，与官方 `PinSessionMenuItem` 占据的位置相同
+ * 它由本包自己执行，因此不从注册表取（理由见 {@link SessionPinMenuInput}）
+ * @returns 可放进 Menu items 的置顶项
+ */
+export function buildSessionPinItem(input: SessionPinMenuInput): MenuActionItem {
+  return {
+    id: SESSION_PIN_ITEM,
+    label: input.pinned ? input.unpinLabel : input.pinLabel,
+    disabled: !input.pinned && !input.canPin,
+    icon: input.pinned ? <IconPinFillRegular /> : <IconPinOutlineRegular />,
+  }
+}
+
+/**
  * 构造会话「更多操作」菜单里本包自己的那一部分
  *
- * 只剩分组项：官方那几项（置顶 / 重命名 / 分叉 / 归档 / 复制 Session ID）由官方右键菜单注册表供
- * 本包把它们接在前面，见 {@link composeSessionMenu}
+ * 只剩归组项：其余四项（重命名 / 分叉 / 归档 / 复制 Session ID）由官方右键菜单注册表供
+ * 置顶项单独由 {@link buildSessionPinItem} 造，它排在注册表那段之前
  * @returns Menu items 列表，没有分组上下文时为空
  */
 export function buildSessionMenuItems(input: SessionMenuInput): readonly MenuItem[] {

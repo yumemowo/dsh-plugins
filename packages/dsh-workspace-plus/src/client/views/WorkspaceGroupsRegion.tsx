@@ -133,8 +133,8 @@ interface RegionSources {
   sessions: SessionListState
   statusSnapshot: SessionStatusSnapshot
   home: string | undefined
-  /** 官方会话操作与相对时间，官方服务不在场时缺省 */
-  official: OfficialSessionActions | undefined
+  /** 官方会话操作与相对时间 */
+  official: OfficialSessionActions
   /** directoryFlow 洞是否被占用，决定「添加工作区」入口是否出现 */
   flowOccupied: boolean
 }
@@ -279,9 +279,9 @@ function useRegionSources(props: WorkspaceGroupsProps): RegionSources {
   // 渲染器会缓存注册项的 inject 结果整个注册周期，在 inject 里读会冻结在首次渲染那一刻
   const home = useHostInfo((info: HostInfo) => info.home) as string | undefined
 
-  // 官方动作与文案的解析时机放在渲染期，渲染器会缓存注册项的 inject 结果
-  // 在 inject 里读服务会冻结在首次渲染那一刻，而官方 ui-workspace 的加载顺序不受本包约束
-  const official = props.official?.()
+  // 官方动作与文案的解析放在渲染期：渲染器会缓存注册项的 inject 结果
+  // 在 inject 里投影文案会冻结在首次渲染那一刻
+  const official = props.official()
 
   return {
     labels,
@@ -1901,9 +1901,9 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     now,
     home,
     // 注册表与服务都在 inject 面里延迟解析：它们的服务可能晚于本包加载
-    registry: props.menuRegistry?.(),
+    registry: props.menuRegistry(),
     menuIcon: props.menuIcon,
-    rowSlots: props.rowSlots?.(),
+    rowSlots: props.rowSlots(),
     standardHooks,
     revealSessionId: ui.revealSessionId,
     acknowledgeReveal: ui.acknowledgeReveal,
@@ -2044,9 +2044,9 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             onTogglePin={toggleSessionPin}
             canPin={canPin}
             official={official}
-            registry={props.menuRegistry?.()}
+            registry={props.menuRegistry()}
             menuIcon={props.menuIcon}
-            rowSlots={props.rowSlots?.()}
+            rowSlots={props.rowSlots()}
             standardHooks={standardHooks}
             onOpenSession={openSession}
             statuses={statusSnapshot}

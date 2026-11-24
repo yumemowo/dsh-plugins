@@ -31,6 +31,10 @@ export interface OfficialSessionLabels {
   sessionNamePrompt: string
   /** 复制成功的提示，官方把它渲染成一条成功色的 toast */
   sessionIdCopied: string
+  /** 菜单里「置顶会话」一项，行未置顶时用它 */
+  pinSession: string
+  /** 菜单里「取消置顶」一项，行已置顶时用它 */
+  unpinSession: string
 }
 
 /** 官方 section header 与「添加工作区」流程的文案 */
@@ -134,6 +138,8 @@ export function officialSessionLabels(t: WorkspaceTranslate): OfficialSessionLab
     renameTitle: t('rename.session.title'),
     sessionNamePrompt: t('field.sessionName'),
     sessionIdCopied: t('toast.sessionIdCopied'),
+    pinSession: t('menu.pinSession'),
+    unpinSession: t('menu.unpinSession'),
   }
 }
 

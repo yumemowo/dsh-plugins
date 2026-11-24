@@ -21,6 +21,9 @@ describe('officialSessionLabels', () => {
       renameTitle: '重命名会话',
       sessionNamePrompt: '会话名称',
       sessionIdCopied: 'Session ID 已复制',
+      // 置顶项由本包自己造（要守置顶上限），文案仍逐键取官方那一份
+      pinSession: '置顶会话',
+      unpinSession: '取消置顶',
     })
   })
 

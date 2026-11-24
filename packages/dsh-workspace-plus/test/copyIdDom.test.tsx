@@ -122,8 +122,6 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
-    // 「复制 Session ID」那一项由官方注册表供（rc.1 起它必然在场），不给我就只剩本包的归组项
-    menuRegistry: registryStub(),
     ...shellSeats(),
     ...storeViewModeProps(viewModeStoreStub()),
     ...overrides,

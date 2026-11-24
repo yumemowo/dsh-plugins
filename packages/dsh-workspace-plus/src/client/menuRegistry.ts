@@ -6,10 +6,10 @@
  *
  * 本包接替了工作区浏览区域，菜单面板仍由本包渲染（外观与行几何要对齐自己的行）
  * 因此这里只借它的条目来源：解析一次拿到动作列表，选中时按 id 交回给同一次解析
- * 于是第三方插件注册进 `session` 的条目会出现在本包的菜单里，本包自己的归组项追加在后面
+ * 于是第三方插件注册进 `session` 的条目会出现在本包的菜单里，本包的条目排在它两端
  *
- * 服务不在场时渲染期解析的读取面返回 undefined，调用方只用本包自有的归组项
- * 官方 `ui-workspace` 把 `contextMenus` 声明为必需注入，因此它在场的那个版本起必然可用
+ * 官方条目里有几项换成本包自己的实现（见 `menus.tsx`）
+ * 会话置顶那条要守 `pinnedLimit`，工作区的重命名与删除要落到本包自己的对话框上
  */
 import type { ReactNode } from 'react'
 import type {
@@ -22,6 +22,15 @@ import type {
 // 只为引入官方向 `ContextMenuTargetMap` 里那条 workspace 声明
 // 它把 `path` 定成必填，本包少给一个字段会在 tsc 阶段就报出来
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
+
+/**
+ * 官方注册进 `session` 目标的置顶项，投影后的 id
+ *
+ * 注册表把条目 id 投影成 `<提供者 id>/<动作 id>`
+ * 官方那条的提供者是 `session.pin`、动作 id 是 `pin`
+ * 本包自己实现了一份（它要守住 `pinnedLimit`），排掉官方那份时按这个完整形式匹配
+ */
+export const OFFICIAL_PIN_MENU_ID = 'session.pin/pin'
 
 /** 注册表交来的一条动作的展示字段，回调不在这里 */
 export type RegistryActionView = MenuActionView
@@ -158,23 +167,26 @@ export function separatorBeforeAt(
   return views[index]?.separatorBefore === true && index > 0
 }
 /**
- * 把注册表条目与本包自有的归组项接成一份菜单
+ * 把注册表条目与本包自有的条目接成一份菜单
  *
- * 注册表那段整体在前：它的条目由官方与第三方插件共同声明，本包不参与排序，只按它给的先后渲染
- * 本包的归组项接在后面，两者之间画一条分隔线，与原先「官方操作块 + 分隔线 + 归组项」的形状一致
- * 注册表条目里自带 `separatorBefore` 的那一项前面也补一条线：官方用它给自己的操作分段
+ * 排布是「本包的前置项 → 注册表那段 → 分隔线 → 本包的归组项」
+ * 前置项排在注册表之前，因为官方把置顶放在它那一组的最前（`order: 100`）
+ * 本包接替那一项时位置要对上
+ * 注册表那段不参与排序，只按它给的先后渲染
+ * 自带 `separatorBefore` 的那一项前面补一条线，官方用它给自己的操作分段
  * @param registryItems - 注册表那段，已换成菜单行
- * @param ownItems - 本包自有的条目，没有时为空数组
+ * @param ownItems - 本包自有的归组项，没有时为空数组
  * @param registryViews - 与 `registryItems` 一一对应的原始条目，用来读 `separatorBefore`
+ * @param leading - 排在注册表之前的前置项，没有时为空数组
  * @returns 拼好的菜单行
  */
 export function composeSessionMenu(
   registryItems: readonly RegistryMenuItem[],
   ownItems: readonly RegistryMenuItem[],
   registryViews: readonly RegistryActionView[],
+  leading: readonly RegistryMenuItem[] = [],
 ): RegistryMenuEntry[] {
-  if (registryItems.length === 0) return [...ownItems]
-  const merged: RegistryMenuEntry[] = []
+  const merged: RegistryMenuEntry[] = [...leading]
   registryItems.forEach((item, index) => {
     if (separatorBeforeAt(registryViews, index)) {
       merged.push({ type: 'separator', id: `separator:${item.id}` })
@@ -182,7 +194,8 @@ export function composeSessionMenu(
     merged.push(item)
   })
   if (ownItems.length > 0) {
-    merged.push({ type: 'separator', id: 'separator:own' })
+    // 注册表那段为空时不必画线：前置项与归组项之间本来就不同类，但空线连着两处空白更难看
+    if (registryItems.length > 0) merged.push({ type: 'separator', id: 'separator:own' })
     merged.push(...ownItems)
   }
   return merged

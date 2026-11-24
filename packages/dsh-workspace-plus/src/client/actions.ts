@@ -288,23 +288,24 @@ export interface RegionActions {
   /**
    * 官方会话操作与相对时间的解析器
    *
-   * 是函数而不是值，渲染器会把注册项的 inject 结果缓存整个注册生命周期，因此在 inject 里读到的服务会冻结在首次渲染那一刻
-   * 而官方 `ui-workspace` 的加载顺序并不受本包约束，延迟到渲染时解析才能拿到真正在场的服务
+   * 是函数而不是值：官方文案由 `t` 在调用时投影
+   * 渲染器会把注册项的 inject 结果缓存整个注册生命周期
+   * 在 inject 里投影会冻结在首次渲染那一刻
    *
-   * 解析结果为空表示宿主没有加载官方 `ui-workspace`（本包用它供的 `useWorkspaces` 等全局 hook，正常情况下必然在场）
-   * 此时菜单里那三项与行尾时间整体不渲染，而不是留下点不动的入口
+   * 官方 `ui-workspace` 必然在场：本包的区域靠它供的 `useWorkspaces` 等全局 hook 运转
+   * 宿主装配里两者同生同灭，因此不另留「它不在场」的退路，缺它就是装配错误
    */
-  official?: (() => OfficialSessionActions | undefined) | undefined
+  official: () => OfficialSessionActions
   /**
    * 官方右键菜单注册表的解析器
    *
-   * 与 `official` 同为延迟解析器：那个服务由 `ui-context-menu` 提供，加载顺序不受本包约束
-   * 解析结果为空表示宿主没装它，此时会话菜单退回本包自带的那份静态条目
+   * 与 `official` 同为延迟解析器，那个服务由 `ui-context-menu` 提供
+   * 官方 `ui-workspace` 与本包都把它列进 `inject`，读到的必然是同一个服务
    *
-   * 拿到之后本包的会话菜单只借它的条目来源：官方与第三方插件注册进 `session` 的动作都会出现
-   * 本包的归组项接在后面，面板仍由本包渲染，外观与行几何因此不受官方菜单那一套约束
+   * 本包的会话菜单只借它的条目来源：官方与第三方插件注册进 `session` 的动作都会出现
+   * 本包的条目接在它两端，面板仍由本包渲染，外观与行几何因此不受官方菜单那一套约束
    */
-  menuRegistry?: (() => MenuRegistryFace | undefined) | undefined
+  menuRegistry: () => MenuRegistryFace
   /**
    * 行级子插槽的读取面
    *
@@ -314,7 +315,7 @@ export interface RegionActions {
    *
    * 与 `official` 同一理由传解析器：占用者可能晚于本包加载
    */
-  rowSlots?: (() => RowSlotFace | undefined) | undefined
+  rowSlots: () => RowSlotFace
   /**
    * 官方 `contextMenu.icon` 那个 keyed 插槽里的字形
    *

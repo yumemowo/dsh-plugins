@@ -4,13 +4,15 @@
  * 行本身就是 `SessionRowView`，本组件补的是「这一行能做什么」：
  *   - 行尾 `...` 菜单与行右键菜单，两者共用同一批条目与同一段分派，因此同一个 id 在两个入口下落到同一件事
  *   - 悬停卡片，整卡可点即复制标题
- * 菜单内容分两段：官方操作块（置顶 / 重命名 / 分叉 / 归档 / 复制 Session ID，转调官方控制器与官方服务）与一条分隔线之后的归组项
- * 归组项只在有分组上下文的行上出现——「未分组」桶里的会话不属于任何工作区，没有分组可落，因此那些行只保留官方操作块
- * 宿主未提供官方服务时官方操作块整体隐藏，同样不留点不动的入口
+ * 菜单内容分三段：本包的置顶项、官方那四项、一条分隔线之后的归组项
+ * 官方那四项（重命名 / 分叉 / 归档 / 复制 Session ID）由官方右键菜单注册表供
+ * 置顶项由本包自己实现，官方那份不认本包的置顶上限（见 `SessionPinMenuInput`）
+ * 归组项只在有分组上下文的行上出现
+ * 「未分组」桶里的会话不属于任何工作区，没有分组可落，因此那些行只有前两段
  *
  * 新建中（空白）会话行没有会话可操作，与官方一样整条行都不挂菜单，那条行只是「准备开始一个新会话」的占位，对它重命名或归档都无从谈起
  *
- * 置顶区里的行也走这一个组件：那些行只给官方操作块，也不给卡片
+ * 置顶区里的行也走这一个组件：那些行不给归组项，也不给卡片
  * 它们的拖拽计划单独经 `dragPlan` 给，没有归组上下文
  *
  * 菜单开合状态收敛在本组件内：行组件在 map 回调里生成，把 useState 留在行内会让每行无条件多挂一组 hook 状态，独立组件则按需挂载
@@ -19,15 +21,15 @@
 import { memo, useMemo, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import { HoverCard, IconEllipsisOutlineRegular, Menu } from '../runtime.ts'
-import { buildSessionMenuItems, sameMenuGroups } from '../menus.tsx'
+import { SESSION_PIN_ITEM, buildSessionMenuItems, buildSessionPinItem, sameMenuGroups } from '../menus.tsx'
 import { sameSessionStatus, sameSessionStatuses } from '../data/status.ts'
 import { SessionRowView } from './SessionRowView.tsx'
 import type { SessionRowViewProps } from './SessionRowView.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { useRowMenu } from '../hooks/useRowMenu.ts'
-import { sessionTarget } from '../menuRegistry.ts'
+import { OFFICIAL_PIN_MENU_ID, sessionTarget } from '../menuRegistry.ts'
 import type { MenuRegistryFace } from '../menuRegistry.ts'
-import { ROW_SLOTS } from '../rowSlots.ts'
+import { OFFICIAL_PIN_SLOT_ID, ROW_SLOTS } from '../rowSlots.ts'
 import type { RowSlotFace, StandardHooks } from '../rowSlots.ts'
 import { SessionHoverContent } from './components/HoverCards.tsx'
 import { NameDialog } from './components/dialogs/NameDialog.tsx'
@@ -103,21 +105,22 @@ export interface SessionRowCardInput {
 export interface SessionRowItemProps extends Omit<SessionRowViewProps, ComputedHere> {
   row: SessionRow
   /**
-   * 官方右键菜单注册表，缺省表示宿主没装 `ui-context-menu`（官方 `ui-workspace` 把它声明为必需注入，正常装配下必然在场）
+   * 官方右键菜单注册表
    *
-   * 在场时会话菜单以它为准：官方与第三方插件注册进 `session` 的动作都能出现，本包只追加归组项
+   * 会话菜单以它为准：官方与第三方插件注册进 `session` 的动作都能出现
+   * 本包的置顶项与归组项分别接在它前后两端
    */
-  registry?: MenuRegistryFace | undefined
+  registry: MenuRegistryFace
   /** 按图标键取字形，注册表条目只给键 */
   menuIcon?: ((key: string) => ReactNode) | undefined
   /**
-   * 四个行级子插槽的读取面，缺省表示宿主没声明它们（本包只渲染自己的行）
+   * 四个行级子插槽的读取面
    *
    * 由区域在渲染期闭合，占用者可能晚于本包加载
    */
-  rowSlots?: RowSlotFace | undefined
-  /** 交给行级子插槽占用者的全局标准 hook，缺省表示宿主没提供 */
-  standardHooks?: StandardHooks | undefined
+  rowSlots: RowSlotFace
+  /** 交给行级子插槽占用者的全局标准 hook */
+  standardHooks: StandardHooks
   /** 归组上下文，缺省时菜单里没有归组项 */
   grouping?: SessionGroupingContext | undefined
   /**
@@ -128,8 +131,8 @@ export interface SessionRowItemProps extends Omit<SessionRowViewProps, ComputedH
    * 两格都在时以归组上下文为准，列表里的行走的都是它
    */
   dragPlan?: ((sessionId: string) => DragPlan) | undefined
-  /** 官方会话操作，缺省时菜单里没有官方操作块 */
-  official?: OfficialSessionActions | undefined
+  /** 官方会话操作与文案 */
+  official: OfficialSessionActions
   /** 悬停卡片，缺省表示这一行不挂卡片 */
   card?: SessionRowCardInput | undefined
 }
@@ -221,7 +224,8 @@ function SessionRowItemView({
   // 新建中的空白会话没有会话可操作：官方对它整条省略号都不渲染
   // 条目在这里就清空，右键路径与行尾按钮才会一起落空——只拦按钮的话右键仍会弹出一份同样的菜单
   //
-  // 官方那五项（置顶 / 重命名 / 分叉 / 归档 / 复制 Session ID）由注册表供，这里只拼本包的归组项
+  // 官方那四项（重命名 / 分叉 / 归档 / 复制 Session ID）由注册表供，本包只拼自己的那几项
+  // 置顶项由本包自己造（见 `SessionPinMenuInput` 里那条理由），它排在注册表那段之前
   const ownItems = row.blank
     ? []
     : buildSessionMenuItems({
@@ -235,19 +239,44 @@ function SessionRowItemView({
               },
       })
 
+  const leadingItems =
+    row.blank || rowProps.onTogglePin === undefined
+      ? []
+      : [
+          buildSessionPinItem({
+            pinned: rowProps.pinned === true,
+            canPin: rowProps.canPin !== false,
+            pinLabel: official.labels.pinSession,
+            unpinLabel: official.labels.unpinSession,
+          }),
+        ]
+
   /**
    * 菜单选中项的分派
    *
    * 行内 `...` 菜单与右键菜单共用它：右键是行尾操作位的捷径，同一个 id 必须落到同一件事上
    *
-   * 官方那五项由注册表自己执行，落到这里的只有本包的归组项
+   * 本包的置顶项落到行的切换回调上，归组项落到归组上下文
+   * 官方那四项由注册表自己执行
    */
   const ownSelect = (id: string): void => {
+    if (id === SESSION_PIN_ITEM) {
+      if (rowProps.onTogglePin !== undefined) rowProps.onTogglePin(row.id)
+      return
+    }
     if (grouping !== undefined) grouping.onSelectGroup(grouping.workspaceId, row.id, id)
   }
 
-  // 注册表在场时它那段条目由注册表执行，本包自己的那几个 id 交给 ownSelect
-  const sessionMenu = useRowMenu(registry, menuIcon, sessionTarget(row.id, row.title), ownItems)
+  // 注册表那段条目由注册表执行，本包自己的那几个 id 交给 ownSelect
+  // 官方那条置顶按投影后的 id 排掉：它不认本包的上限，本包那一项因此在 leadingItems 里
+  const sessionMenu = useRowMenu(
+    registry,
+    menuIcon,
+    sessionTarget(row.id, row.title),
+    ownItems,
+    rowProps.onTogglePin === undefined ? [] : [OFFICIAL_PIN_MENU_ID],
+    leadingItems,
+  )
   const items = row.blank ? [] : sessionMenu.items
 
   const select = (id: string): void => {
@@ -264,13 +293,12 @@ function SessionRowItemView({
   }
 
   // 条目要等注册表解析过才有，因此判据不是「眼下有没有条目」而是「这一行能不能有菜单」
-  // 注册表在场时它的条目按需解析，第一次右键必须被接住并顺手补齐，否则浏览器会弹出自己的菜单
-  // 注册表不在场时只剩本包自有的那几个 id，一个都没有就让右键保持默认行为，不留一个空面板
+  // 它的条目按需解析，第一次右键必须被接住并顺手补齐，否则浏览器会弹出自己的菜单
   // 空白会话没有会话可操作，与官方对它不渲染省略号同一取舍
   const contextMenu = useRowContextMenu({
     items,
     onSelect: select,
-    enabled: !row.blank && (registry !== undefined || ownItems.length > 0),
+    enabled: !row.blank,
     // 两个面板共用同一次解析：右键打开的那次准备同样要在关掉时释放
     // 否则解析一直挂到行被卸载，注册表那边也就一直认为这次解析还有人在用
     onPrepare: sessionMenu.prepare,
@@ -281,16 +309,16 @@ function SessionRowItemView({
    * 双击标题进重命名
    *
    * 与菜单项落到同一个对话框，因此两条入口不会各说一套
-   * 空白会话没有可改的名字，宿主未提供官方会话服务时也没有提交路径，两种情形都不给这个入口
+   * 空白会话没有可改的名字，因此不给这个入口
    * 记忆一份：行级 memo 按引用比对 props，每次渲染新建的闭包会让它整行失效
    */
   const renameRequest = useMemo(
-    () => (row.blank || official === undefined
+    () => (row.blank
       ? undefined
       : (): void => {
           setRenameDraft(row.title)
         }),
-    [row.blank, row.title, official],
+    [row.blank, row.title],
   )
 
   // 两种面板任一开着都算「行上有面板」，卡片与行尾锚点的显隐都据它让位
@@ -329,24 +357,25 @@ function SessionRowItemView({
   }, [dnd, drag.onDragStart, drag.onDragEnd])
 
   const shownTitle = rowProps.title ?? labels.newSession
-  // 条目为空时连锚点按钮一起不渲染，不留点不动的省略号
-  // 注册表在场时条目要等打开才解析，因此不能只看眼下有几条：那样第一条右键都点不到
+  // 条目要等打开才解析，因此不能只看眼下有几条：那样第一条右键都点不到
   // 空白会话没有会话可操作，官方对它整条省略号都不渲染，因此它也不靠注册表撑起入口
-  const hasMenu = items.length > 0 || (!row.blank && registry !== undefined)
-
-  // 行尾那组悬停按钮：别的插件注册进行尾操作位的按钮挂在这里，排在省略号之后
-  const rowActions = row.blank || rowSlots === undefined
-    ? undefined
-    : rowSlots.render(ROW_SLOTS.action, { sessionId: row.id }, standardHooks)
+  const hasMenu = !row.blank
 
   /**
-   * 官方自己往行尾按钮位注册了置顶按钮时，本包那枚让开
+   * 行尾那组悬停按钮：别的插件注册进行尾操作位的按钮挂在这里，排在省略号之后
    *
-   * 两枚图钉并排站在同一格，形状几乎一样、含义完全一样，点哪个都是同一次切换
-   * 官方那枚还带着自己的无障碍文案与工具提示，因此留下它
-   * 宿主没装官方 ui-workspace 时这一格是空的，本包那枚照旧是唯一的置顶入口
+   * 官方那枚置顶按 {@link OFFICIAL_PIN_SLOT_ID} 排掉，因为它只看官方自己的置顶集合
+   * 它不认本包的置顶上限，留两枚就成了一枚守住上限、另一枚绕过它
+   * 没有置顶入口的行（空白会话）不排，那一格原样交给占用者
    */
-  const officialPin = rowSlots?.has(ROW_SLOTS.action, 'pin') === true
+  const rowActions = row.blank
+    ? undefined
+    : rowSlots.render(
+        ROW_SLOTS.action,
+        { sessionId: row.id },
+        standardHooks,
+        rowProps.onTogglePin === undefined ? [] : [OFFICIAL_PIN_SLOT_ID],
+      )
 
   const line = (
     <SessionRowView
@@ -360,11 +389,9 @@ function SessionRowItemView({
       onContextMenu={contextMenu.onContextMenu}
       // 双击标题是重命名的第二个入口，与菜单项落到同一个对话框
       onRenameRequest={renameRequest}
-      // 官方那枚图钉在场时本包不画自己那枚（见 officialPin）
-      onTogglePin={officialPin ? undefined : rowProps.onTogglePin}
       // 行首与行尾的占用者：空白会话那两格本来就是空的，不挂
-      leadingSlot={row.blank || rowSlots === undefined ? undefined : rowSlots.render(ROW_SLOTS.leading, { sessionId: row.id }, standardHooks)}
-      trailingSlot={row.blank || rowSlots === undefined ? undefined : rowSlots.render(ROW_SLOTS.trailing, { sessionId: row.id }, standardHooks)}
+      leadingSlot={row.blank ? undefined : rowSlots.render(ROW_SLOTS.leading, { sessionId: row.id }, standardHooks)}
+      trailingSlot={row.blank ? undefined : rowSlots.render(ROW_SLOTS.trailing, { sessionId: row.id }, standardHooks)}
       quickActions={rowActions}
       action={
         hasMenu ? (
@@ -418,7 +445,7 @@ function SessionRowItemView({
               time={card.time}
               statuses={card.statuses ?? (rowProps.status === undefined ? [] : [rowProps.status])}
               // 悬停卡片里时间与状态之间那一段，由占用者自己决定要不要画
-              extra={rowSlots === undefined ? undefined : rowSlots.render(ROW_SLOTS.hover, { sessionId: row.id }, standardHooks)}
+              extra={rowSlots.render(ROW_SLOTS.hover, { sessionId: row.id }, standardHooks)}
             />
           }
           // 行内 `...` 菜单与行右键菜单开着时都让位，否则同一处会叠两层浮层
@@ -429,7 +456,7 @@ function SessionRowItemView({
         />
       )}
       {contextMenu.menu}
-      {renameDraft === null || official === undefined ? null : (
+      {renameDraft === null ? null : (
         <NameDialog
           title={official.labels.renameTitle}
           value={renameDraft}

@@ -81,6 +81,7 @@ export const zh = {
   'pinned.more': '{total} 条 · 还有 {more} 条',
   'pinned.pin': '置顶“{name}”',
   'pinned.unpin': '取消置顶“{name}”',
+  'pinned.mark': '已置顶',
   'pinned.limitReached': '置顶数量已达上限，请先取消一条',
 }
 
@@ -155,6 +156,7 @@ export const en = {
   'pinned.more': '{total} · {more} more',
   'pinned.pin': 'Pin {name}',
   'pinned.unpin': 'Unpin {name}',
+  'pinned.mark': 'Pinned',
   'pinned.limitReached': 'Pinned limit reached. Unpin one first.',
 } as const
 

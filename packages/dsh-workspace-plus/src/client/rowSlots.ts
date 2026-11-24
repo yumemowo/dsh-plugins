@@ -37,6 +37,15 @@ export const ROW_SLOTS = {
   action: 'sidebar.workspaces.session.row.action',
 } as const
 
+/**
+ * 官方注册进行尾按钮位的置顶按钮 id
+ *
+ * 官方那枚只按自己的置顶集合与对端权限判断，没有本包的置顶上限这回事
+ * 本包的行尾已经有同一枚按钮，两枚并排时一枚守住上限、另一枚绕过它，因此由本包的那枚接替这一格
+ * 它注册在同一个插槽上、用的是这个 id，排掉时按 id 匹配
+ */
+export const OFFICIAL_PIN_SLOT_ID = 'pin'
+
 // ── 可订阅源到选择器 hook ──
 
 /** 一个可订阅源，与渲染器认的形状一致 */
@@ -278,6 +287,7 @@ class OccupantBoundary extends Component<{ slotKey: string; children?: ReactNode
  * @param key - 四个行级子插槽之一
  * @param owner - 这一格的主人数据，如 `{ sessionId }`
  * @param standard - 全局标准 hook（如 `useSessions`），与渲染器给每个插槽注册项的那一份同形
+ * @param omit - 排掉这几个 id 的占用者，见 {@link RowSlotFace.render}
  * @returns 渲染好的节点，没有占用者时为 null
  */
 export function renderRowSlot(
@@ -286,12 +296,14 @@ export function renderRowSlot(
   key: string,
   owner: Record<string, unknown>,
   standard: StandardHooks = {},
+  omit: readonly string[] = [],
 ): ReactNode {
   const entries = slots.entriesOfSlot(key as never) as readonly OccupantEntry[]
   if (entries.length === 0) return null
   const rendered: ReactNode[] = []
   for (const entry of entries) {
     if (typeof entry.component !== 'function') continue
+    if (omit.length > 0 && entry.options?.id !== undefined && omit.includes(entry.options.id)) continue
     const inject = entry.inject
     let face: Record<string, unknown> = {}
     if (inject !== undefined) {
@@ -315,32 +327,6 @@ export function renderRowSlot(
     rendered.push(createElement(OccupantBoundary, { slotKey: key, key: id }, occupant))
   }
   return rendered.length === 0 ? null : createElement('span', { 'data-wg-slot': key }, ...rendered)
-}
-
-/**
- * 某个子插槽上有没有占用者
- *
- * 行尾那段空间要按有没有内容决定让不让出来，因此这是一个可订阅的事实
- * @param slots - 客户端插槽注册表
- * @param key - 四个行级子插槽之一
- * @returns 是否至少有一个占用者
- */
-export function rowSlotOccupied(slots: SlotRegistry, key: string): boolean {
-  return slots.entriesOfSlot(key as never).length > 0
-}
-
-/**
- * 某个子插槽上有没有某一个占用者
- *
- * 占用者可以带 id（官方那几枚行内按钮就带了），本包据此知道「官方已经把这枚按钮放在这一格了」
- * @param slots - 客户端插槽注册表
- * @param key - 四个行级子插槽之一
- * @param id - 注册时带的 id
- * @returns 是否有这个 id 的占用者
- */
-export function rowSlotHas(slots: SlotRegistry, key: string, id: string): boolean {
-  const entries = slots.entriesOfSlot(key as never) as readonly OccupantEntry[]
-  return entries.some((entry) => entry.options?.id === id)
 }
 
 /**
@@ -375,25 +361,19 @@ export interface RowSlotOwner {
 export interface RowSlotFace {
   /**
    * 渲染一个子插槽
+   *
+   * `omit` 里的 id 不渲染：本包自己就有那枚按钮的入口时用它排掉官方同名的那个
+   * 排掉整条注册而不是让本包那枚让开，是因为官方那枚不看本包的约束——置顶上限只有本包知道
    * @param key - 四个行级子插槽之一，见 {@link ROW_SLOTS}
    * @param owner - 这一格的主人数据
    * @param standard - 全局标准 hook，宿主没提供时缺省
+   * @param omit - 注册时带的 id，命中的占用者不渲染
    * @returns 渲染好的节点，没有占用者时为 null
    */
-  render: (key: string, owner: RowSlotOwner, standard?: StandardHooks) => ReactNode
-  /**
-   * 这一格上有没有占用者
-   * @param key - 四个行级子插槽之一
-   * @returns 是否至少有一个占用者
-   */
-  occupied: (key: string) => boolean
-  /**
-   * 这一格上有没有某一个占用者
-   *
-   * 行尾按钮位上的置顶与归档是官方自己注册的，本包据此裁掉自己那枚同名按钮，不留两枚
-   * @param key - 四个行级子插槽之一
-   * @param id - 注册时带的 id
-   * @returns 是否有这个 id 的占用者
-   */
-  has: (key: string, id: string) => boolean
+  render: (
+    key: string,
+    owner: RowSlotOwner,
+    standard?: StandardHooks,
+    omit?: readonly string[],
+  ) => ReactNode
 }

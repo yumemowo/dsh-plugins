@@ -255,6 +255,8 @@ export interface PinnedLabels {
   pin: (name: string) => string
   /** 已置顶行的图钉按钮标签，会话标题由调用方传入 */
   unpin: (name: string) => string
+  /** 静止态那枚只读图钉标记的标签，它只报状态、不接受点击 */
+  mark: string
   /** 置顶数量已达上限时的提示 */
   limitReached: string
 }
@@ -467,6 +469,7 @@ export function regionLabels(
       more: (total: number, more: number) => t('pinned.more', { total, more }),
       pin: (name: string) => t('pinned.pin', { name }),
       unpin: (name: string) => t('pinned.unpin', { name }),
+      mark: t('pinned.mark'),
       limitReached: t('pinned.limitReached'),
     },
   }

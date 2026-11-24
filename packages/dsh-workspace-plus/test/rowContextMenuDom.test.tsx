@@ -5,7 +5,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { WorkspaceGroupsRegion } from '../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRegion.tsx'
-import { ROW_SLOTS } from '../src/client/rowSlots.ts'
+import { OFFICIAL_PIN_SLOT_ID, ROW_SLOTS } from '../src/client/rowSlots.ts'
 import { snapshot } from './snapshot-stub.ts'
 import { shellSeats, summary } from './support/dndDom.ts'
 import { viewModeProps } from './viewMode-stub.ts'
@@ -253,39 +253,54 @@ describe('session row right click over the official registry', () => {
 /**
  * 行尾按钮位的占用者
  *
- * 官方自己往这一格注册了置顶按钮，本包那枚图钉因此要让开
- * 两枚同形同义的按钮并排站着，点哪个都是同一次切换
+ * 官方自己往这一格注册了一枚置顶按钮，它与本包那枚同形同义
+ * 但官方那枚只按官方自己的置顶集合判断，不认本包的置顶上限，因此由本包那枚接替这一格
  */
 describe('the row action slot with an official pin occupant', () => {
-  it('drops the built-in pin when the official one occupies the slot', async () => {
-    const container = await mount({
-      rowSlots: () => ({
-        render: (key: string) =>
-          key === ROW_SLOTS.action
-            ? React.createElement('button', { 'data-wg-test-official-pin': '', type: 'button' })
-            : null,
-        occupied: (key: string) => key === ROW_SLOTS.action,
-        has: (key: string, id: string) => key === ROW_SLOTS.action && id === 'pin',
-      }),
+  /** 照官方那枚的形状造一个能分辨来源的按钮，并记下排掉的 id */
+  function officialPinSlot(omit: (string[] | undefined)[]): NonNullable<WorkspaceGroupsProps['rowSlots']> {
+    return () => ({
+      render: (key: string, _owner: unknown, _standard?: unknown, omits?: readonly string[]) => {
+        omit.push(omits === undefined ? undefined : [...omits])
+        if (key !== ROW_SLOTS.action) return null
+        if (omits?.includes(OFFICIAL_PIN_SLOT_ID) === true) return null
+        return React.createElement('button', { 'data-wg-test-official-pin': '', type: 'button' })
+      },
     })
+  }
+
+  it('leaves the official pin out of the action slot', async () => {
+    const omits: (string[] | undefined)[] = []
+    const container = await mount({ rowSlots: officialPinSlot(omits) })
     const row = rowOf(container)
 
-    // 官方那枚在场，本包那枚不画：行尾只留一处置顶入口
-    expect(row.querySelector('[data-wg-test-official-pin]')).not.toBeNull()
-    expect(row.querySelector('.rowPin')).toBeNull()
+    // 行尾只有本包那枚图钉：官方那枚按 id 排掉了，两枚不会并排站成「一枚守上限、一枚绕过它」
+    expect(row.querySelector('[data-wg-test-official-pin]')).toBeNull()
+    expect(row.querySelector('.rowPin')).not.toBeNull()
+    expect(omits.flat()).toContain(OFFICIAL_PIN_SLOT_ID)
   })
 
-  it('keeps the built-in pin when the slot has no official pin', async () => {
-    // 宿主没装官方 ui-workspace 时那一格是空的，本包那枚照旧是唯一的入口
+  it('keeps the rest of the action slot intact', async () => {
+    // 排的只有置顶那一条，同格其余条目照旧渲染
     const container = await mount({
       rowSlots: () => ({
-        render: () => null,
-        occupied: () => false,
-        has: () => false,
+        render: (key: string, _owner: unknown, _standard?: unknown, omits?: readonly string[]) =>
+          key !== ROW_SLOTS.action
+            ? null
+            : React.createElement(
+                'span',
+                null,
+                ...['pin', 'archive'].map((id) =>
+                  omits?.includes(id) === true
+                    ? null
+                    : React.createElement('button', { key: id, 'data-wg-test-slot': id, type: 'button' }),
+                ),
+              ),
       }),
     })
     const row = rowOf(container)
 
-    expect(row.querySelector('.rowPin')).not.toBeNull()
+    expect(row.querySelector('[data-wg-test-slot="archive"]')).not.toBeNull()
+    expect(row.querySelector('[data-wg-test-slot="pin"]')).toBeNull()
   })
 })

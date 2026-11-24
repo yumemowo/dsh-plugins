@@ -104,11 +104,11 @@ export interface WorkspaceRowProps {
    */
   dnd?: WorkspaceRowDnd | undefined
   /**
-   * 官方右键菜单注册表，缺省表示宿主没装 `ui-context-menu`
+   * 官方右键菜单注册表
    *
    * 第三方插件注册进 `workspace` 目标的条目靠它出现，那批条目本包自己做不出来
    */
-  registry?: MenuRegistryFace | undefined
+  registry: MenuRegistryFace
   /** 按图标键取字形，注册表条目只给键 */
   menuIcon?: ((key: string) => ReactNode) | undefined
   /**
@@ -221,8 +221,8 @@ export function WorkspaceRow({
    * 官方那两项与本包实现重复，因此用 `excluded` 排掉，其余条目一律交给注册表执行
    */
   const target = useMemo(
-    () => workspaceTargetOf(workspaceTarget ?? { workspaceId: '', path: '', displayTitle: title }),
-    [workspaceTarget, title],
+    () => (workspaceTarget === undefined ? undefined : workspaceTargetOf(workspaceTarget)),
+    [workspaceTarget],
   )
   const rowMenu = useRowMenu(
     registry,
@@ -249,7 +249,7 @@ export function WorkspaceRow({
       rowMenu.release()
     },
     // 条目可能来自按需解析的注册表，因此判据不是「眼下有没有条目」，而是「这一行能不能有菜单」
-    enabled: menuItems !== undefined || (registry !== undefined && workspaceTarget !== undefined),
+    enabled: menuItems !== undefined || workspaceTarget !== undefined,
     onPrepare: rowMenu.prepare,
     onClose: rowMenu.release,
   })

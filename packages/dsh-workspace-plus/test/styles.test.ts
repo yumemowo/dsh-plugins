@@ -475,9 +475,10 @@ describe('client stylesheet', () => {
     // 时间隐藏与操作位展开必须由同一组触发条件驱动，任一时刻只有一方占行尾
     const triggers = ['hover', ".rowAction[aria-expanded='true']", 'focus-visible']
     for (const trigger of triggers) {
+      // 会话行那一格是容器（.rowResting）：时间、图标位与标记一起让位
       const hidesTime = rules.some(
         (rule) =>
-          rule.selectors.some((s) => s.includes('.rowTime') && s.includes(trigger)) &&
+          rule.selectors.some((s) => s.includes('.rowResting') && s.includes(trigger)) &&
           /display:\s*none/.test(rule.body),
       )
       const expands = rules.some(
@@ -747,8 +748,8 @@ describe('client stylesheet', () => {
     expect(hides('.groupHead:hover .groupCount')).toBe(true)
     expect(hides(".groupHead:has(.rowAction[aria-expanded='true']) .groupCount")).toBe(true)
     expect(hides('.groupHead:has(.rowAction:focus-visible) .groupCount')).toBe(true)
-    // 会话行的时间也走同一组触发条件，两者互换关系一致
-    expect(hides('.row:hover .rowTime')).toBe(true)
+    // 会话行那一侧是整格让位（时间、图标位与标记同在一格），触发条件仍是同一组
+    expect(hides('.row:hover .rowResting')).toBe(true)
   })
 
   it('gives the group row the same collapsible action slot as the session row', () => {
@@ -1602,8 +1603,9 @@ describe('client stylesheet', () => {
     expect(reduced).toMatch(/transition-delay:\s*0s/)
   })
 
-  it('collapses the unpinned pin instead of reserving a slot for it', () => {
-    // 不为一个看不见的状态图标留空位：未置顶时宽度也收成 0，悬停才展开
+  it('separates the resting pin mark from the hover-only pin button', () => {
+    // 官方那套是两件东西：静止一枚只读标记（.pinIndicator），悬停一枚按钮（操作位里的 .pinnedAction）
+    // 两者不同时可见，因此标记与时间共用同一条让位规则，而按钮跟着操作位走
     const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
       selectors: (m[1] ?? '').split(',').map((x) => x.trim().replace(/\s+/g, ' ')),
@@ -1612,18 +1614,31 @@ describe('client stylesheet', () => {
     const bodyOf = (selector: string): string =>
       rules.find((rule) => rule.selectors.includes(selector))?.body ?? ''
 
-    expect(bodyOf('.rowPinOff')).toMatch(/width:\s*0/)
-    expect(bodyOf('.rowPinOn')).toMatch(/width:\s*16px/)
+    // 标记取官方 .pinIndicator 的几何与色阶
+    const mark = bodyOf('.rowPinMark')
+    expect(mark).toMatch(/width:\s*16px/)
+    expect(mark).toMatch(/height:\s*20px/)
+    expect(mark).toMatch(/label-caption/)
 
-    // 收成 0 的前提是容器 overflow 非 visible，否则 flex 项的自动最小尺寸会把子项顶回去
-    const base = bodyOf('.rowPin')
-    expect(base).toMatch(/overflow:\s*hidden/)
-    // 宽度由 0 变 16px，不能只切不透明度
-    const reveal = rules
-      .filter((rule) => rule.selectors.some((x) => x.includes('.rowPinOff')))
-      .map((rule) => rule.body)
-      .join('\n')
-    expect(reveal).toMatch(/width:\s*16px/)
+    // 与时间之间那 6px 由静止格给出（官方 .rowResting 的 gap），标记自己不另加外边距
+    const resting = bodyOf('.rowResting')
+    expect(resting).toMatch(/gap:\s*6px/)
+    expect(resting).toMatch(/inline-flex/)
+    expect(mark).not.toMatch(/margin-left/)
+
+    // 悬停时整格让位，标记因此不必自己再写一条隐藏规则
+    const hides = rules.filter(
+      (rule) =>
+        rule.selectors.some((s) => s.includes('.rowResting') && s.includes('hover')) &&
+        /display:\s*none/.test(rule.body),
+    )
+    expect(hides).toHaveLength(1)
+
+    // 按钮取官方 .iconButton 的盒模型：24×24 加 -4px 外边距，外框因此仍是 16px
+    const button = bodyOf('.rowPin')
+    expect(button).toMatch(/width:\s*24px/)
+    expect(button).toMatch(/height:\s*24px/)
+    expect(button).toMatch(/margin:\s*-4px/)
   })
 
   /** 落点线那几条规则，剥掉注释后按选择器与声明体拆开 */

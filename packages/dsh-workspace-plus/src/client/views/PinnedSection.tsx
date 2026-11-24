@@ -71,16 +71,16 @@ export interface PinnedSectionProps {
   onTogglePin: (sessionId: string) => void
   /** 是否还能新增置顶，达到上限时该项禁用 */
   canPin: boolean
-  /** 官方会话操作，缺省时行上不挂菜单 */
-  official?: OfficialSessionActions | undefined
-  /** 官方右键菜单注册表，缺省时行菜单只用本包自带的条目 */
-  registry?: MenuRegistryFace | undefined
+  /** 官方会话操作与文案 */
+  official: OfficialSessionActions
+  /** 官方右键菜单注册表 */
+  registry: MenuRegistryFace
   /** 按图标键取字形，注册表条目只给键 */
   menuIcon?: ((key: string) => ReactNode) | undefined
-  /** 四个行级子插槽的读取面，缺省表示宿主没声明它们 */
-  rowSlots?: RowSlotFace | undefined
+  /** 四个行级子插槽的读取面 */
+  rowSlots: RowSlotFace
   /** 交给行级子插槽占用者的全局标准 hook */
-  standardHooks?: StandardHooks | undefined
+  standardHooks: StandardHooks
   onOpenSession: (sessionId: string) => void
   /** 会话行状态快照，与列表里的行取同一份 */
   statuses: SessionStatusSnapshot
@@ -281,12 +281,12 @@ export function PinnedSection({
  * 置顶区里的一行
  *
  * 复用会话行条目组件，因此状态位、几何与键盘行为与列表里的行完全一致
- * 每一条本就已置顶，于是走「已置顶」那条排布：图钉钉在最右，位置不随时间与操作位变
+ * 每一条本就已置顶，于是静止格里带一枚只读图钉标记，与列表里已置顶的行同一形态
  * 不挂悬停卡片：这些行已经钉在一段固定的区里，来源由位置说明，卡片在这里只多一层浮层
  *
  * 拖拽计划单独经 `dragPlan` 交给条目组件：这些行没有归组上下文，但仍是置顶那一段的成员
  *
- * 官方服务不在场、或这一条是新建中的空白会话时，条目组件自己就不生成菜单，这里因此不分叉
+ * 新建中的空白会话没有会话可操作，条目组件自己就不生成菜单，这里因此不分叉
  * 取消置顶必须仍然可点：图钉与菜单的有无无关，不受影响
  */
 function PinnedRow({
@@ -311,11 +311,11 @@ function PinnedRow({
   clipped: boolean
   onTogglePin: (sessionId: string) => void
   canPin: boolean
-  official: OfficialSessionActions | undefined
-  registry: MenuRegistryFace | undefined
+  official: OfficialSessionActions
+  registry: MenuRegistryFace
   menuIcon: ((key: string) => ReactNode) | undefined
-  rowSlots: RowSlotFace | undefined
-  standardHooks: StandardHooks | undefined
+  rowSlots: RowSlotFace
+  standardHooks: StandardHooks
   onOpenSession: (sessionId: string) => void
   buildDragPlan: ((sessionId: string) => DragPlan) | undefined
 }): ReactElement {

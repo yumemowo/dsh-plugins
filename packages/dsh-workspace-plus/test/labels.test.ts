@@ -89,6 +89,7 @@ describe('locales', () => {
       'pinScope.section',
       'pinned.count',
       'pinned.limitReached',
+      'pinned.mark',
       'pinned.more',
       'pinned.pin',
       'pinned.section',

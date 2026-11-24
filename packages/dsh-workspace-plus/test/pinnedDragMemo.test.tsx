@@ -4,6 +4,7 @@ import * as React from 'react'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { SessionRowItemProps } from '../src/client/views/SessionRowItem.tsx'
+import { registryStub } from './support/menuRegistryStub.ts'
 
 /**
  * 置顶行拖拽计划的身份稳定性
@@ -132,6 +133,8 @@ const BASE = {
     relativeTime: (updatedAt: number, now: number) =>
       timeLabel(updatedAt, now, workspaceTranslate()),
   }),
+menuRegistry: registryStub(),
+  rowSlots: () => ({ render: () => null }),
   addWorkspace: () => ({
     createWorkspace: async (path: string) => ({ workspaceId: `ws-${path}`, title: path }),
     startSession: () => {},

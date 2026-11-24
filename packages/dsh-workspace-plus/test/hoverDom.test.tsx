@@ -203,17 +203,6 @@ describe('hover cards in a real DOM', () => {
     expect(workspace.children.length).toBe(2)
   })
 
-  it('renders neither card nor wrapper when the official copy is missing', async () => {
-    const container = await mount({ official: undefined })
-
-    // 官方文案拿不到时不挂浮层，行因此退回直接子项，结构没有任何包装层
-    expect(container.querySelectorAll('.row').length).toBeGreaterThan(0)
-    const sessions = container.querySelector('.sessions') as HTMLElement
-    for (const row of Array.from(sessions.children)) {
-      expect(row.className).toContain('row')
-    }
-  })
-
   it('lays out both card bodies with the classes the stylesheet targets', async () => {
     // 卡片正文本身是 portal 到 body 的，挂载时看不到，这里直接渲染两个正文组件
     // 断言样式表依赖的那几个类真的落到了节点上、文本也照常渲染

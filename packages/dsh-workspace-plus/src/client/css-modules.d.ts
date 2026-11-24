@@ -163,8 +163,8 @@ declare module '*/rows.module.css' {
     readonly "rowActions": string
     readonly "rowDragging": string
     readonly "rowPin": string
-    readonly "rowPinOff": string
-    readonly "rowPinOn": string
+    readonly "rowPinMark": string
+    readonly "rowResting": string
     readonly "rowSelected": string
     readonly "rowSurface": string
     readonly "rowTime": string

@@ -347,9 +347,4 @@ describe.skipIf(COMPARE_MODE)('client half session creation', () => {
     expect(opened).toEqual(['session-1'])
   })
 
-  it('fails loud when the official navigation service is absent', async () => {
-    const startSession = await startSessionWith(undefined)
-
-    await expect(startSession('w1')).rejects.toThrow('uiWorkspace')
-  })
 })

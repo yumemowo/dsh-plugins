@@ -13,10 +13,22 @@ import * as React from 'react'
 import { WorkspaceGroupsRegion } from '../../src/client/views/WorkspaceGroupsRegion.tsx'
 import type { WorkspaceGroupsProps } from '../../src/client/views/WorkspaceGroupsRegion.tsx'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../../src/client/official.ts'
+import type { RowSlotFace } from '../../src/client/rowSlots.ts'
 import { copySeats } from '../copy-stub.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from '../locale-stub.ts'
+import { registryStub } from './menuRegistryStub.ts'
 import { snapshot } from '../snapshot-stub.ts'
 import { storeViewModeProps, viewModeStoreStub } from '../viewMode-stub.ts'
+
+/**
+ * 四个行级子插槽的读取面替身，一格都没有占用者
+ *
+ * 宿主装了官方 `ui-workspace` 时这四格里必然有它自己那几枚行内按钮，但绝大多数用例不关心它们
+ * 关心的用例自己传一份 `rowSlots` 覆盖这一格
+ */
+export function emptyRowSlots(): RowSlotFace {
+  return { render: () => null }
+}
 
 /**
  * 一条会话摘要
@@ -150,14 +162,23 @@ export function band(element: HTMLElement, top: number, height = 10): void {
 }
 
 /**
- * 六格恒定的座位：文案、搜索额度、官方会话动作、添加工作区入口
+ * 与用例无关的那几格座位：文案、搜索额度、官方会话动作、添加工作区入口、注册表与行级插槽
  *
- * 每个 DOM 测试都要写一遍这六格，而它们与用例关心的东西无关
+ * 每个 DOM 测试都要写一遍这几格，而它们与用例关心的东西无关
+ * 关心的用例自己传一份覆盖它
  * 展示方式的 store 座位不在这里：那一格各文件用法不同（有的要可订阅读数，有的要可控初值）
  */
 export function shellSeats(): Pick<
   WorkspaceGroupsProps,
-  'searchResultLimit' | 't' | 'tWorkspace' | 'tSidebar' | 'official' | 'addWorkspace' | 'copyNotice'
+  | 'searchResultLimit'
+  | 't'
+  | 'tWorkspace'
+  | 'tSidebar'
+  | 'official'
+  | 'addWorkspace'
+  | 'copyNotice'
+  | 'menuRegistry'
+  | 'rowSlots'
 > {
   return {
     ...copySeats(),
@@ -165,6 +186,8 @@ export function shellSeats(): Pick<
     t: regionTranslate(),
     tWorkspace: workspaceTranslate(),
     tSidebar: sidebarTranslate(),
+    menuRegistry: registryStub(),
+    rowSlots: emptyRowSlots,
     official: () => ({
       renameSession: async () => {},
       forkSession: () => {},
@@ -248,6 +271,8 @@ export function regionProps(overrides: Partial<WorkspaceGroupsProps> = {}): Work
       occupant: () => ({ component: (() => null) as never, inject: () => ({}) }),
       labels: officialAddLabels(workspaceTranslate()),
     }),
+    menuRegistry: registryStub(),
+    rowSlots: emptyRowSlots,
     ...overrides,
   }
 }

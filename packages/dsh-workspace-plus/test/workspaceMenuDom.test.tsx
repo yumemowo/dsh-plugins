@@ -277,13 +277,4 @@ describe('workspace row over the official context-menu registry', () => {
     expect(workspaceTarget?.value['workspaceId']).toBe('w1')
   })
 
-  it('keeps the own entries when no registry is installed', async () => {
-    const container = await mount({ menuRegistry: undefined })
-    const head = workspaceHead(container)
-    await openHeadMenu(head)
-
-    // 没有注册表时本包那几条照常可用
-    expect(itemIds(head)).toContain('rename')
-    expect(itemIds(head)).toContain('delete')
-  })
 })

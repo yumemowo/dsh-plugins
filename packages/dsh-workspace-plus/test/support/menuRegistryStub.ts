@@ -125,7 +125,7 @@ function project(item: StubItem, fallbackProvider: string): StubItem {
  * @returns 注册表面
  */
 export function registryFace(options: StubOptions = {}): MenuRegistryFace {
-  return registryStub(options)() as MenuRegistryFace
+  return registryStub(options)()
 }
 
 /**
@@ -133,9 +133,7 @@ export function registryFace(options: StubOptions = {}): MenuRegistryFace {
  * @param options - 替身的选项
  * @returns 区域 props 认识的菜单注册表入口
  */
-export function registryStub(
-  options: StubOptions = {},
-): NonNullable<{ menuRegistry?: () => MenuRegistryFace | undefined }['menuRegistry']> {
+export function registryStub(options: StubOptions = {}): () => MenuRegistryFace {
   const fallback = options.items ?? defaultItems(options.pin ?? { pinned: false, canPin: true })
   const face: MenuRegistryFace = {
     resolve: (target: MenuTarget) => {

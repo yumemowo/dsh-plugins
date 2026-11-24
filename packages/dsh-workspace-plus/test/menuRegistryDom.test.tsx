@@ -166,10 +166,10 @@ describe('session menu over the official context-menu registry', () => {
 
     await act(async () => actionButton(container).click())
 
-    // 注册表那段在前，本包的归组项接在后面
+    // 本包的置顶项排在最前（它接替官方那一项），注册表那段紧随其后，归组项收尾
     const ids = itemIds(row)
-    expect(ids.slice(0, 2)).toEqual(['pin', 'rename'])
-    expect(ids.length).toBeGreaterThan(2)
+    expect(ids.slice(0, 3)).toEqual(['session-pin', 'pin', 'rename'])
+    expect(ids.length).toBeGreaterThan(3)
   })
 
   it('runs the registry action instead of the built-in one', async () => {
@@ -187,18 +187,4 @@ describe('session menu over the official context-menu registry', () => {
     expect(executed).toEqual(['pin'])
   })
 
-  it('keeps only the grouping entries when no registry is installed', async () => {
-    // rc.1 起官方把 contextMenus 声明为必需注入，它不在场只可能是宿主拼装坏了
-    // 那时本包不出死按钮，只剩自己那几个归组项
-    const container = await mount({ menuRegistry: undefined })
-    const row = container.querySelector<HTMLElement>('.workspaceBody .row')
-    if (row === null) throw new Error('no row')
-
-    await act(async () => actionButton(container).click())
-
-    const ids = itemIds(row)
-    expect(ids).toContain('group')
-    expect(ids).not.toContain('pin')
-    expect(ids).not.toContain('rename')
-  })
 })

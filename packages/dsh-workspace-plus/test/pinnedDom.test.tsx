@@ -168,10 +168,9 @@ function props(overrides: Partial<WorkspaceGroupsProps> = {}): WorkspaceGroupsPr
     insertWorkspaceBefore: async () => {},
     renameWorkspace: async () => {},
     deleteWorkspace: async () => {},
-    // 官方那五项会话操作由注册表供（rc.1 起它必然在场），不给我就只剩本包的归组项
+    ...shellSeats(),
     // 置顶项的文案与可用性跟着该行自己的状态走，因此这里按「已置顶行」的形态给一份
     menuRegistry: registryStub({ pin: { pinned: true, canPin: true } }),
-    ...shellSeats(),
     ...storeViewModeProps(viewModeStoreStub()),
     ...overrides,
   }
@@ -549,12 +548,10 @@ describe('pin in the row menu', () => {
     return found
   }
 
-  /** 列表里的会话行，按图钉状态挑（`on` 为真挑已置顶的） */
+  /** 列表里的会话行，按置顶状态挑（静止态那枚只读标记只在已置顶的行上出现） */
   function rowWithPin(container: HTMLElement, on: boolean): HTMLElement {
     const rows = Array.from(container.querySelectorAll<HTMLElement>('.workspaceBody .row'))
-    const found = rows.find((entry) =>
-      on ? entry.querySelector('.rowPinOn') : entry.querySelector('.rowPinOff'),
-    )
+    const found = rows.find((entry) => (entry.querySelector('.rowPinMark') !== null) === on)
     if (found === undefined) throw new Error(`no row with pin ${on ? 'on' : 'off'}`)
     return found
   }
@@ -562,12 +559,12 @@ describe('pin in the row menu', () => {
   it('puts the pin item first among the official actions', async () => {
     const { container, root } = await mount()
 
-    // 官方 `PinSessionMenuItem` 排在最前，本包照它的次序
+    // 置顶项排在最前，与官方 `PinSessionMenuItem` 同序
     // 条目按需解析，因此先展开这一行的菜单
     const row = rowWithPin(container, false)
     await openRowMenu(row)
     expect(itemIds(row).slice(0, 4)).toEqual([
-      'session.pin/pin',
+      'session-pin',
       'session.rename/rename',
       'session.fork/fork',
       'session.archive/archive',
@@ -575,44 +572,76 @@ describe('pin in the row menu', () => {
     await act(async () => root.unmount())
   })
 
+  it('leaves the official pin entry out of the menu', async () => {
+    // 官方那份置顶项不认本包的上限，留着就有两处置顶入口
+    // 注册表照常交它那一份，本包按投影后的 id 排掉
+    const { container, root } = await mount()
+    const row = rowWithPin(container, false)
+    await openRowMenu(row)
+
+    expect(itemIds(row)).not.toContain('session.pin/pin')
+    await act(async () => root.unmount())
+  })
+
   it('switches the menu item to unpin on an already pinned row', async () => {
-    // 文案由官方注册表在解析时决定：已置顶的行拿到的是「取消置顶」
+    // 文案取官方 `workspace` 语言包的 `menu.unpinSession`：已置顶的行拿到的是「取消置顶」
     const { container, root } = await mount()
     await expandSessionLists(container)
     const row = rowWithPin(container, true)
     await openRowMenu(row)
 
-    expect(item(row, 'session.pin/pin').textContent).toBe('取消置顶')
+    expect(item(row, 'session-pin').textContent).toBe('取消置顶')
     await act(async () => root.unmount())
   })
 
-  it('hands the pin item back to the registry instead of running it here', async () => {
-    // 官方那五项由注册表执行：本包只把 id 交回去，不再自己调一次切换
+  it('runs the pin switch itself instead of handing it to the registry', async () => {
+    // 官方那四项由注册表执行；置顶项是本包实现的，因此选中时落到本包的切换回调上
     const executed: string[] = []
+    const pinned: { id: string; value: boolean }[] = []
     const { container, root } = await mount({
       menuRegistry: registryStub({ run: (id) => executed.push(id) }),
+      setSessionPinned: async (id, value) => {
+        pinned.push({ id, value })
+      },
     })
     const row = rowWithPin(container, false)
     await openRowMenu(row)
 
     await act(async () => {
-      item(row, 'session.pin/pin').click()
+      item(row, 'session-pin').click()
       await Promise.resolve()
     })
 
-    expect(executed).toEqual(['session.pin/pin'])
+    // 交给注册表的一次都没有；切换落到本包那一边，且是「置顶」而不是取消
+    expect(executed).toEqual([])
+    expect(pinned).toHaveLength(1)
+    expect(pinned[0]?.value).toBe(true)
     await act(async () => root.unmount())
   })
 
-  it('lets the registry decide when the pin item is unavailable', async () => {
-    // 上限由官方在解析时判断，禁用态随条目一起来，本包不自己算一遍
+  it('disables the pin item once the limit is reached', async () => {
+    // 上限是本包自己实施的：官方 `pinSession` 没有上限参数，因此判据只在置顶按钮这一处
     const { container, root } = await mount({
-      menuRegistry: registryStub({ pin: { pinned: false, canPin: false } }),
+      loadGroups: async () => snapshot({ pinnedLimit: 2 }),
     })
+    await expandSessionLists(container)
     const row = rowWithPin(container, false)
     await openRowMenu(row)
 
-    expect(item(row, 'session.pin/pin').disabled).toBe(true)
+    expect(item(row, 'session-pin').disabled).toBe(true)
+    await act(async () => root.unmount())
+  })
+
+  it('leaves the unpin item clickable even at the limit', async () => {
+    // 上限只拦新增：已置顶的行照常可以取消
+    const { container, root } = await mount({
+      loadGroups: async () => snapshot({ pinnedLimit: 2 }),
+    })
+    await expandSessionLists(container)
+    const row = rowWithPin(container, true)
+    await openRowMenu(row)
+
+    expect(item(row, 'session-pin').disabled).toBe(false)
     await act(async () => root.unmount())
   })
 })
@@ -644,7 +673,7 @@ describe('menu on a pinned row', () => {
     expect(actionButton(container)).not.toBeNull()
     await openRowMenu(row)
     expect(itemIds(row)).toEqual([
-      'session.pin/pin',
+      'session-pin',
       'session.rename/rename',
       'session.fork/fork',
       'session.archive/archive',
@@ -665,18 +694,27 @@ describe('menu on a pinned row', () => {
     await act(async () => root.unmount())
   })
 
-  it('hands a pinned row pin item back to the registry', async () => {
-    // 置顶区里的行本已置顶，注册表交来的那一项落到取消置顶，本包只把 id 交回去
+  it('runs the pin switch of a pinned row here instead of the registry', async () => {
+    // 置顶区里的行本已置顶，本包那一项落到取消置顶
+    // 由本包执行而不是交回注册表：官方那份不认本包的上限
     const executed: string[] = []
-    const { container, root } = await mount({ menuRegistry: registryStub({ run: (id) => executed.push(id) }) })
+    const pinned: { id: string; value: boolean }[] = []
+    const { container, root } = await mount({
+      menuRegistry: registryStub({ run: (id) => executed.push(id) }),
+      setSessionPinned: async (id, value) => {
+        pinned.push({ id, value })
+      },
+    })
     const row = pinnedRows(container)[0] as HTMLElement
     await openRowMenu(row)
 
     await act(async () => {
-      row.querySelector<HTMLButtonElement>('[data-wg-test-item="session.pin/pin"]')?.click()
+      row.querySelector<HTMLButtonElement>('[data-wg-test-item="session-pin"]')?.click()
+      await Promise.resolve()
     })
 
-    expect(executed).toEqual(['session.pin/pin'])
+    expect(executed).toEqual([])
+    expect(pinned).toEqual([{ id: 'a', value: false }])
     await act(async () => root.unmount())
   })
 
@@ -711,7 +749,7 @@ describe('menu on a pinned row', () => {
 
     // 右键是行尾操作位的捷径，同一批条目因此在右键下也拿得到
     expect(itemIds(row)).toEqual([
-      'session.pin/pin',
+      'session-pin',
       'session.rename/rename',
       'session.fork/fork',
       'session.archive/archive',
@@ -761,18 +799,6 @@ describe('menu on a pinned row', () => {
     await act(async () => root.unmount())
   })
 
-  it('renders a plain row while the official service is absent', async () => {
-    const { container, root } = await mount({
-      official: () => undefined,
-      // 官方服务与注册表都缺席：本包这一段只剩归组项，置顶区里的行没有归组上下文，入口因此收掉
-      menuRegistry: undefined,
-    })
-
-    expect(container.querySelector('.pinScroll .rowAction')).toBeNull()
-    expect(pinnedRows(container)).toHaveLength(2)
-    await act(async () => root.unmount())
-  })
-
   it('leaves a blank pinned session without a menu but keeps its unpin button', async () => {
     // 新建中的空白会话可以置顶，但它只是「准备开始一个新会话」的占位，没有会话可重命名或归档
     const subs = ['blank', 'a']
@@ -790,8 +816,9 @@ describe('menu on a pinned row', () => {
     // 只有这一行没有菜单，同一个区里那条普通会话照常带着操作位
     expect(pinnedRows(container)[0]?.querySelector('.rowAction')).toBeNull()
     expect(pinnedRows(container)[1]?.querySelector('.rowAction')).not.toBeNull()
-    // 取消置顶必须仍然可点
-    expect(pinnedRows(container)[0]?.querySelector('.rowPinOn')).not.toBeNull()
+    // 取消置顶必须仍然可点：静止态那枚图钉是只读标记，入口在操作位里
+    expect(pinnedRows(container)[0]?.querySelector('.rowPinMark')).not.toBeNull()
+    expect(pinnedRows(container)[0]?.querySelector('.rowPin')).not.toBeNull()
     await act(async () => root.unmount())
   })
 })
@@ -803,28 +830,25 @@ describe('session row pin', () => {
     const rows = Array.from(container.querySelectorAll<HTMLElement>('.workspaceBody .row'))
 
     /**
-     * 一行里图钉与操作位的先后
+     * 一行里各段的先后
      *
      * 读药丸那一层：行的外层带着与上一行之间的间距，内容都在内层的 .rowSurface 里
      */
     const order = (row: HTMLElement): string[] =>
       Array.from(row.querySelector('.rowSurface')?.children ?? [])
         .map((child) => {
-          if (child.classList.contains('rowPin')) return 'pin'
+          if (child.classList.contains('rowResting')) return 'resting'
           if (child.classList.contains('rowActionSlot')) return 'action'
           return ''
         })
         .filter((part) => part !== '')
 
-    // 两态都是「操作位在左、图钉在右」：图钉占的是最右那一格，位置与是否置顶无关
-    expect(order(rows.find((row) => row.querySelector('.rowPinOn')) as HTMLElement)).toEqual([
-      'action',
-      'pin',
-    ])
-    expect(order(rows.find((row) => row.querySelector('.rowPinOff')) as HTMLElement)).toEqual([
-      'action',
-      'pin',
-    ])
+    // 与官方同一分工：静止格在前、操作位在后，两段不同时占位
+    // 已置顶的标记在静止格里，因此它不入这一段顺序
+    const pinnedRow = rows.find((row) => row.querySelector('.rowPinMark') !== null) as HTMLElement
+    expect(order(pinnedRow)).toEqual(['resting', 'action'])
+    // 标记确实落在静止格里，而不是散在行尾
+    expect(pinnedRow.querySelector('.rowResting .rowPinMark')).not.toBeNull()
     await act(async () => root.unmount())
   })
 
@@ -837,10 +861,10 @@ describe('session row pin', () => {
 
     const rows = Array.from(container.querySelectorAll<HTMLElement>('.workspaceBody .row'))
     const plain = rows
-      .find((row) => row.querySelector('.rowPinOff'))
+      .find((row) => row.querySelector('.rowPinMark') === null)
       ?.querySelector<HTMLButtonElement>('.rowPin')
     const on = rows
-      .find((row) => row.querySelector('.rowPinOn'))
+      .find((row) => row.querySelector('.rowPinMark') !== null)
       ?.querySelector<HTMLButtonElement>('.rowPin')
 
     expect(plain?.disabled).toBe(true)

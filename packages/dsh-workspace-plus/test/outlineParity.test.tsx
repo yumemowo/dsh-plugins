@@ -15,6 +15,7 @@ import type { SessionRow } from '../src/client/data/types.ts'
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import { copySeats } from './copy-stub.ts'
 import { regionTranslate, sidebarTranslate, workspaceTranslate } from './locale-stub.ts'
+import { registryStub } from './support/menuRegistryStub.ts'
 import { snapshot } from './snapshot-stub.ts'
 import { storeViewModeProps, viewModeStoreStub } from './viewMode-stub.ts'
 
@@ -184,6 +185,8 @@ function props(focused: RootEntryAddress = ALL_ENTRIES): WorkspaceGroupsProps {
       relativeTime: (updatedAt: number, now: number) =>
         timeLabel(updatedAt, now, workspaceTranslate()),
     }),
+    menuRegistry: registryStub(),
+    rowSlots: () => ({ render: () => null }),
     addWorkspace: () => ({
       createWorkspace: async (path: string) => ({ workspaceId: 'ws-' + path, title: path }),
       startSession: () => {},

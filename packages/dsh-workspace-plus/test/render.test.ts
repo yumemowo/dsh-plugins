@@ -10,7 +10,7 @@ import type { WorkspaceGroupsProps } from '../src/client/views/WorkspaceGroupsRe
 import { officialAddLabels, officialSessionLabels, timeLabel } from '../src/client/official.ts'
 import type { OutlineRow } from '../src/client/data/outline.ts'
 import { copyAction, copySeats } from './copy-stub.ts'
-import { registryFace } from './support/menuRegistryStub.ts'
+import { registryFace, registryStub } from './support/menuRegistryStub.ts'
 import { RegionLocaleProvider } from '../src/client/hooks/useLocale.ts'
 import { DndProvider } from '../src/client/hooks/useDnd.ts'
 import { regionLabels } from '../src/client/labels.ts'
@@ -22,6 +22,7 @@ import { SessionScopesProvider } from '../src/client/hooks/useSessionScopes.ts'
 import type { SessionScopes } from '../src/client/hooks/useSessionScopes.ts'
 import type { Expansion } from '../src/client/hooks/useExpansion.ts'
 import type { DragPlan } from '../src/client/data/dnd/protocol.ts'
+import type { MenuRegistryFace } from '../src/client/menuRegistry.ts'
 import { viewModeProps } from './viewMode-stub.ts'
 
 /**
@@ -530,13 +531,10 @@ function expansionStub(overrides: Partial<Expansion> = {}): Expansion {
  * 直接渲染单行而不是整片区域：测试替身按组件类型给状态分桶
  * 同一类型的多个实例共用一份状态，整片列表里所有会话行会一起「被右键」
  * 官方那五项会话操作由官方右键菜单注册表供，这里一律给一份注册表替身
- * rc.1 起官方 `ui-workspace` 把 `contextMenus` 声明为必需注入，它必然在场
- * @param options.registry - 给不给注册表，false 用于验证「注册表缺席时只剩本包归组项」
  * @param options.grouping - 归组上下文，缺省表示该行没有分组可归
  * @param options.groupSections - 可移入的分组，只给 `grouping` 为真时有意义
  */
 function sessionRowNode(options: {
-  registry?: boolean
   grouping?: boolean
   groupSections?: { id: string; label: string; sessions: [] }[]
 } = {}): unknown {
@@ -560,7 +558,9 @@ function sessionRowNode(options: {
       labels: officialSessionLabels(workspaceTranslate()),
       relativeTime: () => '',
     },
-    ...(options.registry === false ? {} : { registry: registryFace() }),
+    registry: registryFace(),
+    rowSlots: { render: () => null },
+    standardHooks: {},
     ...(options.grouping === true
       ? {
           grouping: {
@@ -695,6 +695,7 @@ function renderWorkspaceSection(expanded: boolean, looseCount = 1) {
       onNewGroup: () => {},
       onRename: () => {},
       onDelete: () => {},
+      registry: registryFace(),
     },
     head: workspaceHeadRow(loose.length),
     hasBody: loose.length > 0,
@@ -785,7 +786,8 @@ function props(
     home?: string | undefined
     /** 会话 a 的最近更新时间，用于断言卡片里的相对时间与行尾那份不同 */
     updatedAt?: number
-
+    /** 换一份右键菜单注册表替身，缺省交一份按 `session` 目标造的 */
+    menuRegistry?: () => MenuRegistryFace
   } = {},
 ): WorkspaceGroupsProps {
   /**
@@ -922,18 +924,16 @@ function props(
     tWorkspace: workspaceTranslate(),
     tSidebar: sidebarTranslate(),
     ...viewModeProps(),
-    // 官方三项操作与相对时间：缺省不给，用于验证降级路径
-    ...(options.official === false
-      ? {}
-      : {
-          official: () => ({
-            renameSession: async () => {},
-            forkSession: () => {},
-            archiveSession: async () => {},
-            labels: officialSessionLabels(workspaceTranslate()),
-            relativeTime: (updatedAt, now) => timeLabel(updatedAt, now, workspaceTranslate()),
-          }),
-        }),
+    // 官方三项操作与相对时间：宿主装的是官方 ui-workspace，它必然在场
+    official: () => ({
+      renameSession: async () => {},
+      forkSession: () => {},
+      archiveSession: async () => {},
+      labels: officialSessionLabels(workspaceTranslate()),
+      relativeTime: (updatedAt, now) => timeLabel(updatedAt, now, workspaceTranslate()),
+    }),
+    menuRegistry: options.menuRegistry ?? registryFace,
+    rowSlots: () => ({ render: () => null }),
     ...(options.add === false
       ? {}
       : {
@@ -1127,8 +1127,8 @@ describe('WorkspaceGroupsRegion render', () => {
       'separator-delete',
       'delete',
     ])
-    // 会话行这一份只有本包的归组项：官方那五项由官方右键菜单注册表供
-    expect(menuItems(out)).toContainEqual(['group'])
+    // 会话行这一份是本包的置顶项加归组项：其余四项由官方右键菜单注册表供
+    expect(menuItems(out)).toContainEqual(['session-pin', 'group'])
   })
 
   it('uses the generic rename verb in the workspace row menu, like official does', () => {
@@ -1237,7 +1237,7 @@ describe('WorkspaceGroupsRegion render', () => {
       'separator-delete',
       'delete',
     ])
-    expect(menuItems(withBlank)).toContainEqual(['group'])
+    expect(menuItems(withBlank)).toContainEqual(['session-pin', 'group'])
   })
 
   it('leaves the blank session row without a right-click menu either', () => {
@@ -1249,10 +1249,9 @@ describe('WorkspaceGroupsRegion render', () => {
     render(React.createElement(WorkspaceGroupsRegion, props(true)), without)
 
     // 多出这条占位行后右键菜单数不变：空白行一份都不贡献
-    // 两份分别是工作区行与归组会话行
-    // 未分组桶里那条没有归组项，区域这一层又没给注册表，因此它没有菜单
+    // 三份分别是工作区行、归组会话行与未分组桶里的会话行（后者只有注册表那几项）
     expect(withBlank.contextMenus).toHaveLength((without.contextMenus ?? []).length)
-    expect(withBlank.contextMenus).toHaveLength(2)
+    expect(withBlank.contextMenus).toHaveLength(3)
   })
 
   it('shows the summary title once the session leaves the blank state', () => {
@@ -1458,29 +1457,12 @@ describe('WorkspaceGroupsRegion render', () => {
     expect(moves).toEqual([])
   })
 
-  it('renders no session menu at all when official services are absent', () => {
-    const out = { menus: [] as unknown[], text: [] as string[] }
-    render(React.createElement(WorkspaceGroupsRegion, props(true, { official: false })), out)
-
-    // 官方缺失时会话行只剩归组菜单，stray 行两项都没有，因此完全不挂菜单
-    expect(menuItems(out)).toContainEqual(['group'])
-    expect(menuItems(out)).toHaveLength(2)
-  })
-
   it('renders the relative time on session rows when official services are present', () => {
     const out = { menus: [] as unknown[], text: [] as string[] }
     render(React.createElement(WorkspaceGroupsRegion, props(true)), out)
 
     // 行尾时间来自官方格式化（替身固定返回 5分钟）
     expect(out.text).toContain('5分钟')
-  })
-
-  it('renders no relative time when official services are absent', () => {
-    const out = { menus: [] as unknown[], text: [] as string[] }
-    render(React.createElement(WorkspaceGroupsRegion, props(true, { official: false })), out)
-
-    // 时间文案也归官方语言包，缺失时整列不渲染
-    expect(out.text).not.toContain('5分钟')
   })
 
   it('reads the package-owned copy from the seat at render time', () => {
@@ -1859,14 +1841,6 @@ describe('hover cards', () => {
     expect(cardText(cards[0])).toContain('空闲')
   })
 
-  it('hangs no card at all when the official copy is unavailable', () => {
-    const out = { menus: [] as unknown[], text: [] as string[], cards: [] as unknown[] }
-    render(React.createElement(WorkspaceGroupsRegion, props(true, { official: false })), out)
-
-    // 官方文案拿不到时浮出来的只是空壳，因此整体不挂
-    expect(out.cards).toEqual([])
-  })
-
   it('gives the ungrouped bucket workspace row no card', () => {
     const out = { menus: [] as unknown[], text: [] as string[], cards: [] as unknown[] }
     // props 里那条 orphan 会话无所属，末尾的隐式「未分组」区段因此出现
@@ -1915,6 +1889,8 @@ describe('hover cards', () => {
       onOpenSession: () => {},
       card: { statuses: [{ state: 'done', label: '空闲' }], time: '5分钟前' },
       registry: registryFace(),
+      rowSlots: { render: () => null },
+      standardHooks: {},
       official: {
         renameSession: async () => {},
         forkSession: () => {},
@@ -1961,6 +1937,8 @@ describe('hover cards', () => {
       onOpenSession: () => {},
       card: { time: '5分钟前' },
       registry: registryFace(),
+      rowSlots: { render: () => null },
+      standardHooks: {},
       official: {
         renameSession: async () => {},
         forkSession: () => {},
@@ -2297,30 +2275,6 @@ describe('row context menu', () => {
     )
   }
 
-  /** 一行的某个 prop，用于按标题之类的内容挑出具体某一行 */
-  function propOf(row: unknown, name: string): unknown {
-    return (row as { props: Record<string, unknown> }).props[name]
-  }
-
-  /**
-   * 一行上显示的标题
-   *
-   * 标题是行里那颗药丸（`.rowSurface`）的一个子节点，不是行元素自己的 prop
-   */
-  function rowTitle(row: unknown): string | undefined {
-    const children = (row as { props: { children?: unknown } }).props.children
-    for (const child of Array.isArray(children) ? children : [children]) {
-      const surface = child as { props?: { className?: unknown; children?: unknown } } | null
-      if (surface?.props?.className !== 'rowSurface') continue
-      const inner = surface.props.children
-      for (const part of Array.isArray(inner) ? inner : [inner]) {
-        const element = part as { props?: { className?: unknown; children?: unknown } } | null
-        if (element?.props?.className === 'rowTitle') return String(element.props.children)
-      }
-    }
-    return undefined
-  }
-
   /** 当下开着的那张右键菜单，未打开或没有菜单时为 undefined */
   function openMenu(out: Collected): unknown {
     return out.contextMenus.find(
@@ -2356,8 +2310,9 @@ describe('row context menu', () => {
   }
 
   /** 在区域里右键工作区行 */
-  function region() {
-    return React.createElement(WorkspaceGroupsRegion, props(true))
+  /** 区域元素，可覆盖其中几格 props（如换一份注册表替身） */
+  function region(overrides: Parameters<typeof props>[1] = {}) {
+    return React.createElement(WorkspaceGroupsRegion, props(true, overrides))
   }
 
   it('attaches a right-click handler to every kind of row', () => {
@@ -2421,7 +2376,9 @@ describe('row context menu', () => {
   })
 
   it('keeps the row menu items and adds only the new-session entry', () => {
-    const { after } = rightClick(region(), 'workspaceHead')
+    // 这条用例只关心本包自有条目与「新建会话」的位置，因此注册表交空
+    // 它默认那份是按 `session` 目标造的，挂在工作区行上会多出一段与会话有关的条目
+    const { after } = rightClick(region({ menuRegistry: registryStub({ items: [] }) }), 'workspaceHead')
 
     // 右键菜单 = 行内 `...` 菜单 + 行内 `+` 那一项
     expect(menuIdsOf(openMenu(after))).toEqual([
@@ -2468,16 +2425,4 @@ describe('row context menu', () => {
     expect(created).toEqual(['g1'])
   })
 
-  it('hangs no right-click handler on a row that has no menu at all', () => {
-    // 「未分组」桶里的会话既没有工作区归属（没有归组项）又拿不到官方服务（没有官方三项）
-    // 菜单条目因此是空的。那时右键保持浏览器默认行为，而不是弹出空面板
-    const out = emptyOut()
-    render(React.createElement(WorkspaceGroupsRegion, props(true, { official: false })), out)
-
-    const stray = (out.rows ?? []).find((row) => rowTitle(row) === 'Orphan')
-    expect(stray).toBeDefined()
-    expect(propOf(stray, 'onContextMenu')).toBeUndefined()
-    // 它确实是一条会话行，只是没有入口——不是因为整片列表都没渲染
-    expect(rowsOf(out, 'row').length).toBeGreaterThan(0)
-  })
 })
