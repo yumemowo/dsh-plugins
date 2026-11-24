@@ -27,7 +27,7 @@ import { SessionRowView } from './SessionRowView.tsx'
 import type { SessionRowViewProps } from './SessionRowView.tsx'
 import { useRowContextMenu } from './components/RowContextMenu.tsx'
 import { useRowMenu } from '../hooks/useRowMenu.ts'
-import { OFFICIAL_PIN_MENU_ID, sessionTarget } from '../menuRegistry.ts'
+import { OFFICIAL_FORK_MENU_ID, OFFICIAL_PIN_MENU_ID, sessionTarget } from '../menuRegistry.ts'
 import type { MenuRegistryFace } from '../menuRegistry.ts'
 import { OFFICIAL_PIN_SLOT_ID, ROW_SLOTS } from '../rowSlots.ts'
 import type { RowSlotFace, StandardHooks } from '../rowSlots.ts'
@@ -133,9 +133,24 @@ export interface SessionRowItemProps extends Omit<SessionRowViewProps, ComputedH
   dragPlan?: ((sessionId: string) => DragPlan) | undefined
   /** 官方会话操作与文案 */
   official: OfficialSessionActions
+  /**
+   * 分叉项是否由本包接管
+   *
+   * 打开时本包执行分叉，好把分叉出的会话落进源会话所在的分组
+   * 关闭时交回注册表，与官方其他条目一样，落位因此是宿主自己的行为
+   */
+  forkFollowsSourceGroup: boolean
   /** 悬停卡片，缺省表示这一行不挂卡片 */
   card?: SessionRowCardInput | undefined
 }
+
+/** 接管分叉项时的拦截名单；开关关着时交回注册表执行 */
+const INTERCEPTED_MENU_IDS: readonly string[] = [OFFICIAL_FORK_MENU_ID]
+const NOTHING_INTERCEPTED: readonly string[] = []
+
+/** 排掉官方置顶项时的名单；行没有置顶入口时用空数组 */
+const OFFICIAL_PIN_ONLY: readonly string[] = [OFFICIAL_PIN_MENU_ID]
+const NOTHING_EXCLUDED: readonly string[] = []
 
 /**
  * 比较两次归组上下文是否表示同一件事
@@ -194,6 +209,7 @@ function sameRowItemProps(prev: SessionRowItemProps, next: SessionRowItemProps):
     prev.onOpenSession === next.onOpenSession &&
     prev.onReveal === next.onReveal &&
     prev.official === next.official &&
+    prev.forkFollowsSourceGroup === next.forkFollowsSourceGroup &&
     prev.registry === next.registry &&
     prev.menuIcon === next.menuIcon &&
     prev.rowSlots === next.rowSlots &&
@@ -209,6 +225,7 @@ function SessionRowItemView({
   grouping,
   dragPlan,
   official,
+  forkFollowsSourceGroup,
   card,
   registry,
   menuIcon,
@@ -257,11 +274,17 @@ function SessionRowItemView({
    * 行内 `...` 菜单与右键菜单共用它：右键是行尾操作位的捷径，同一个 id 必须落到同一件事上
    *
    * 本包的置顶项落到行的切换回调上，归组项落到归组上下文
-   * 官方那四项由注册表自己执行
+   * 分叉项只在开关打开时要由本包执行：官方的分叉入口在回调里看不到子会话 id，而落位正需要它
+   * 其余官方条目由注册表自己执行
    */
   const ownSelect = (id: string): void => {
     if (id === SESSION_PIN_ITEM) {
       if (rowProps.onTogglePin !== undefined) rowProps.onTogglePin(row.id)
+      return
+    }
+    if (id === OFFICIAL_FORK_MENU_ID) {
+      // 开关关着时这一支到不了：那时这项交给注册表执行
+      official.forkSession(row.id)
       return
     }
     if (grouping !== undefined) grouping.onSelectGroup(grouping.workspaceId, row.id, id)
@@ -269,13 +292,15 @@ function SessionRowItemView({
 
   // 注册表那段条目由注册表执行，本包自己的那几个 id 交给 ownSelect
   // 官方那条置顶按投影后的 id 排掉：它不认本包的上限，本包那一项因此在 leadingItems 里
+  // 分叉项不排掉而是在原位接管（仅开关打开时）：官方那一项的位置、文案与字形都对，只是执行权要收回来
   const sessionMenu = useRowMenu(
     registry,
     menuIcon,
     sessionTarget(row.id, row.title),
     ownItems,
-    rowProps.onTogglePin === undefined ? [] : [OFFICIAL_PIN_MENU_ID],
+    rowProps.onTogglePin === undefined ? NOTHING_EXCLUDED : OFFICIAL_PIN_ONLY,
     leadingItems,
+    forkFollowsSourceGroup ? INTERCEPTED_MENU_IDS : NOTHING_INTERCEPTED,
   )
   const items = row.blank ? [] : sessionMenu.items
 

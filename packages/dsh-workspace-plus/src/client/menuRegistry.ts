@@ -32,6 +32,15 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
  */
 export const OFFICIAL_PIN_MENU_ID = 'session.pin/pin'
 
+/**
+ * 官方注册进 `session` 目标的分叉项，投影后的 id
+ *
+ * 官方那条的提供者是 `session.fork`、动作 id 是 `fork`
+ * 官方那份执行时直接调 `uiWorkspace.forkSession(id)`，插件因此看不到子会话 id
+ * 分叉跟随开关打开时，本包要把分叉出的会话落进源会话所在的分组，于是按这个 id 把它拦下来、在原位接管执行
+ */
+export const OFFICIAL_FORK_MENU_ID = 'session.fork/fork'
+
 /** 注册表交来的一条动作的展示字段，回调不在这里 */
 export type RegistryActionView = MenuActionView
 

@@ -23,18 +23,29 @@ export const DEFAULT_PINNED_VISIBLE_COUNT = 5
 export const DEFAULT_PINNED_LIMIT = 20
 
 /**
+ * 分叉出的会话是否跟随源会话落进同一个分组
+ *
+ * 默认关：打开时本包会接管会话菜单里的「分叉会话」那一项
+ * 接管只对本包自己那个菜单入口有效，官方侧边栏的省略号、聊天面板回合末尾的分叉按钮、以及 `session.fork` 快捷键都走各自的原生入口，不经过本包
+ * 因此打开之后同一个分叉动作在不同入口下的落位会不一致，这是本功能默认关闭的原因
+ */
+export const DEFAULT_FORK_FOLLOWS_SOURCE_GROUP = false
+
+/**
  * 本包的行配置 schema
  *
  * 加载器在插件启动前用它校验行配置，因此 apply 不会收到非法值
- * 两个字段都带默认值，`cordis.patch.yml` 里可以整段省略
+ * 各字段都带默认值，`cordis.patch.yml` 里可以整段省略
  */
 export const Config = z.object({
   pinnedVisibleCount: z.number().min(1).default(DEFAULT_PINNED_VISIBLE_COUNT).volatile(),
   pinnedLimit: z.number().min(1).default(DEFAULT_PINNED_LIMIT).volatile(),
+  forkFollowsSourceGroup: z.boolean().default(DEFAULT_FORK_FOLLOWS_SOURCE_GROUP).volatile(),
 })
 
 /** 校验后的行配置，与 {@link Config} 的输出一致 */
 export interface WorkspacePlusConfig {
   readonly pinnedVisibleCount: Volatile<number>
   readonly pinnedLimit: Volatile<number>
+  readonly forkFollowsSourceGroup: Volatile<boolean>
 }

@@ -31,8 +31,15 @@ function regionRegistrations(registered: readonly unknown[]): unknown[] {
  * 挂载时撞上「方法已挂载」而整体失效——分组读不出、一切写操作都抛错
  */
 
-/** 造一个记录 effect 的客户端 context，并按需交出 `$mount` 的行为 */
-function fakeContext(options: { mount?: () => Promise<() => Promise<void>> } = {}) {
+/**
+ * 造一个记录 effect 的客户端 context，并按需交出 `$mount` 的行为
+ * @param options.mount - `$mount` 替身
+ * @param options.services - 覆盖或补充服务表，分叉落位那几条用例要从这里塞官方服务与宿主方法
+ */
+function fakeContext(options: {
+  mount?: () => Promise<() => Promise<void>>
+  services?: Record<string, unknown>
+} = {}) {
   const effects: (() => unknown)[] = []
   const disposers: (() => unknown)[] = []
   const warnings: unknown[][] = []
@@ -74,6 +81,7 @@ function fakeContext(options: { mount?: () => Promise<() => Promise<void>> } = {
       entriesOfSlot: () => [],
       subscribe: () => () => {},
     },
+    ...options.services,
   }
   const ctx = {
     get: (name: string) => services[name],
@@ -347,4 +355,173 @@ describe.skipIf(COMPARE_MODE)('client half session creation', () => {
     expect(opened).toEqual(['session-1'])
   })
 
+})
+
+describe.skipIf(COMPARE_MODE)('client half fork placement', () => {
+  /** 一次分叉调用记下的现场 */
+  interface ForkCall {
+    /** 传进官方 `forkSession` 的来源会话 */
+    source: string
+    /** 官方回调是否已经交出了子会话 */
+    observed: boolean
+  }
+
+  /**
+   * 挂上分叉落位那几条用例要的服务
+   *
+   * 官方的 `forkSession` 在这里被接住：它照官方那样在创建之后调一次 `onCreated`，
+   * 顺序因此与真实链路一致——落位写在子会话 id 交回来那一刻
+   * @param moves - 记录每一次 `moveSession` 的入参
+   * @param calls - 记录每一次分叉的现场
+   * @param groups - 宿主侧的分组元数据，缺省是「源会话在 ws-1 的 group-a 里」
+   */
+  function forkHarness(options: {
+    moves: unknown[][]
+    calls: ForkCall[]
+    groups?: Record<string, unknown[]>
+    failMove?: Error
+    /** 让落位前那次快照读取失败 */
+    failLoad?: boolean
+  }) {
+    return fakeContext({
+      services: {
+        uiWorkspace: {
+          forkSession: async (source: unknown, onCreated?: (child: unknown) => void) => {
+            const call: ForkCall = { source: String(source), observed: false }
+            options.calls.push(call)
+            // 官方在 fork 之后、改标题之前调一次，落位就写在这一刻
+            onCreated?.('s-child')
+            call.observed = true
+            return 's-child'
+          },
+        },
+        'remote.workspacePlus': {
+          list: async () => {
+            if (options.failLoad === true) throw new Error('snapshot unavailable')
+            return {
+              ok: true,
+              value: { byWorkspace: options.groups ?? { 'ws-1': [{ id: 'group-a', name: 'A', sessionIds: ['s-source'] }] } },
+            }
+          },
+          moveSession: async (...args: unknown[]) => {
+            if (options.failMove !== undefined) throw options.failMove
+            options.moves.push(args)
+            return { ok: true, value: { byWorkspace: {} } }
+          },
+        },
+      },
+    })
+  }
+
+  /**
+   * 等分叉那条链走完
+   *
+   * 比 {@link settle} 多等几轮：落位目标在分叉之前要先读一次快照，那一步自己就是一次 remote 调用
+   */
+  async function settleFork(): Promise<void> {
+    for (let turn = 0; turn < 10; turn += 1) await Promise.resolve()
+  }
+
+  /** 取回分叉动作并让它落地 */
+  async function forkWith(
+    options: Parameters<typeof forkHarness>[0],
+  ): Promise<{ fork: (id: string) => void; harness: ReturnType<typeof fakeContext> }> {
+    const harness = forkHarness(options)
+    apply(harness.ctx)
+    await settle()
+    const entry = harness.registered[0] as {
+      inject: () => { official: () => { forkSession: (id: string) => void } }
+    }
+    return { fork: entry.inject().official().forkSession, harness }
+  }
+
+  it('places the forked child in the group that holds its source', async () => {
+    const moves: unknown[][] = []
+    const calls: ForkCall[] = []
+    const { fork } = await forkWith({ moves, calls })
+
+    fork('s-source')
+    await settleFork()
+
+    expect(calls.map((call) => call.source)).toEqual(['s-source'])
+    // 子会话落进源会话那一组，源会话本身不动
+    expect(moves).toEqual([['ws-1', 's-child', 'group-a']])
+  })
+
+  it('writes the placement before the fork call settles', async () => {
+    // 分叉的创建与挂载之间隔着一次往返；晚写的话子会话会先在未分组区露一下再跳进分组
+    // 这份现场在官方回调里就已经为真，因此判据要落在那一刻而不是整次调用之后
+    const moves: unknown[][] = []
+    const calls: ForkCall[] = []
+    let movesAtObservation: number | undefined
+    const harness = fakeContext({
+      services: {
+        uiWorkspace: {
+          forkSession: async (_source: unknown, onCreated?: (child: unknown) => void) => {
+            onCreated?.('s-child')
+            movesAtObservation = moves.length
+            return 's-child'
+          },
+        },
+        'remote.workspacePlus': {
+          list: async () => ({
+            ok: true,
+            value: { byWorkspace: { 'ws-1': [{ id: 'group-a', name: 'A', sessionIds: ['s-source'] }] } },
+          }),
+          moveSession: async (...args: unknown[]) => {
+            moves.push(args)
+            return { ok: true, value: { byWorkspace: {} } }
+          },
+        },
+      },
+    })
+    apply(harness.ctx)
+    await settle()
+    const entry = harness.registered[0] as {
+      inject: () => { official: () => { forkSession: (id: string) => void } }
+    }
+
+    entry.inject().official().forkSession('s-source')
+    await settleFork()
+
+    expect(calls).toEqual([])
+    expect(movesAtObservation).toBe(1)
+  })
+
+  it('leaves the child ungrouped when the source sits in no group', async () => {
+    const moves: unknown[][] = []
+    const { fork } = await forkWith({ moves, calls: [], groups: {} })
+
+    fork('s-source')
+    await settleFork()
+
+    // 源会话自己在未分组区里，子会话跟着它待在那儿，没有可写的归属
+    expect(moves).toEqual([])
+  })
+
+  it('still forks when the placement snapshot cannot be read', async () => {
+    // 分叉是用户的意图，归组只是附带的：落位前那次快照读不到时就当作「没有可落的分组」，照常发起分叉
+    const moves: unknown[][] = []
+    const calls: ForkCall[] = []
+    const { fork } = await forkWith({ moves, calls, failLoad: true })
+
+    fork('s-source')
+    await settleFork()
+
+    expect(calls.map((call) => call.source)).toEqual(['s-source'])
+    expect(moves).toEqual([])
+  })
+
+  it('reports a failed placement without failing the fork', async () => {
+    // 子会话已经建好了，归组只是锦上添花：写入失败不该冒泡成分叉失败
+    const failure = new Error('move rejected')
+    const { fork, harness } = await forkWith({ moves: [], calls: [], failMove: failure })
+
+    fork('s-source')
+    // 失败要穿过写入与它那层 catch，比成功路径多一次微任务
+    await settleFork()
+    await settle()
+
+    expect(harness.warnings.flat()).toContain(failure)
+  })
 })

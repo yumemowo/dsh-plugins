@@ -11,7 +11,6 @@ src/
 ├── rootEntry.ts                根节点条目地址的形状与纯变换（宿主与浏览器共用）
 ├── pickerState.ts              菜单状态的形状与纯变换（同上，见 [数据存储](data-storage.md)）
 ├── order.ts                    一段顺序的换位换算（挪到某成员之前 / 之后 / 末尾，拖拽与宿主写入共用）
-├── forkPlacement.ts            分叉出的会话落回源会话所在的分组（判定与写入，见[界面细节](ui-details.md#分叉出的会话落在源会话的分组里)）
 ├── snapshotFeed.ts             分组快照的写入信号通道（宿主落盘后推帧，浏览器据此 reload ）
 └── client/
     ├── index.ts                插件入口：语言包注册、remote 挂载、插槽注册、对照开关
@@ -34,6 +33,7 @@ src/
     │   ├── types.ts            SessionRow 与三类草稿、展示方式与指示器样式
     │   ├── nest.ts             子工作区嵌套推导（路径祖先关系、容器归属、段内森林）
     │   ├── move.ts             一次移动要写哪几笔（虚拟分组归属、会话分组归属、跟随的后代）
+    │   ├── forkPlacement.ts    分叉出的会话落回源会话所在的分组（判据见[界面细节](ui-details.md#分叉出的会话落在源会话的分组里)）
     │   ├── status.ts           会话状态位推导（待交互 / 运行 / 完成）
     │   ├── search.ts           按标题搜索（查询净化、匹配、排序与截断）
     │   ├── pinned.ts           置顶集合的投影与合成（pinnedEntries、reconcilePinned、pinRanks、置顶段键）
@@ -133,7 +133,7 @@ src/
 
 | 产物 | 内容 |
 | --- | --- |
-| `lib/index.js` | 宿主半边：存储、服务、typert 绑定、分叉落位 |
+| `lib/index.js` | 宿主半边：存储、服务、typert 绑定 |
 | `lib/typert.js` | Host 面 Typert 清单，被 `typert-loader` 自动发现 |
 | `lib/client.js` | 浏览器半边，包成 `window.__ModuleLoader__.load({ id, factory })` |
 

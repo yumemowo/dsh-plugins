@@ -108,7 +108,7 @@
 | 置顶区显示条数 | `5` | 超出部分按上面的模式给 |
 | 置顶数量上限 | `20` | 达到上限后置顶按钮转为禁用态 |
 
-这两项声明成插件的 Config 字段，取值经本包既有的 remote 快照下发到浏览器半边。
+这两项声明成插件的 Config 字段，取值经本包既有的 remote 快照下发到浏览器半边。同一份配置里还有 `forkFollowsSourceGroup`（默认 `false`），它不属于置顶这件事，说明见 [README](../README.md#分叉出的会话跟随源会话的分组)。
 
 改法是编辑 profile 的 `cordis.patch.yml`（不是设置页——dsh 不给插件自动生成配置表单，本包也没有注册渲染页，原因见[实现记录](implementation-notes.md)）：
 

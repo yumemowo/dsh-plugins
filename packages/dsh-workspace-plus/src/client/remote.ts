@@ -54,6 +54,7 @@ const snapshotSchema = z.object({
   orderSlots: z.record(z.string(), z.array(z.string())),
   pinnedVisibleCount: z.number(),
   pinnedLimit: z.number(),
+  forkFollowsSourceGroup: z.boolean(),
 })
 
 /**
@@ -253,6 +254,13 @@ export interface PickerSnapshot {
 export const DEFAULT_PINNED_VISIBLE_COUNT = 5
 export const DEFAULT_PINNED_LIMIT = 20
 
+/**
+ * 分叉跟随开关的缺省值
+ *
+ * 与宿主 `config.ts` 一致，是「关」：打开后同一个分叉动作在不同入口下的落位会不一致（见那里）
+ */
+export const DEFAULT_FORK_FOLLOWS_SOURCE_GROUP = false
+
 export interface WorkspaceGroupsSnapshot {
   byWorkspace: Record<string, Group[]>
   /** 子工作区 -> 它被放进的那个分组，开关关着时是空表 */
@@ -267,6 +275,8 @@ export interface WorkspaceGroupsSnapshot {
   pinnedVisibleCount: number
   /** 置顶数量的上限，达到后置顶入口转禁用态 */
   pinnedLimit: number
+  /** 分叉出的会话是否跟随源会话落进同一个分组，缺省当关闭 */
+  forkFollowsSourceGroup: boolean
 }
 
 /**
@@ -291,6 +301,8 @@ export function normalizeSnapshot(value: unknown): WorkspaceGroupsSnapshot {
     orderSlots: raw.orderSlots ?? {},
     pinnedVisibleCount: raw.pinnedVisibleCount ?? DEFAULT_PINNED_VISIBLE_COUNT,
     pinnedLimit: raw.pinnedLimit ?? DEFAULT_PINNED_LIMIT,
+    // 旧宿主不知道这一格，缺格时按缺省值（关闭）读：这个功能只在明确打开时接管分叉项
+    forkFollowsSourceGroup: raw.forkFollowsSourceGroup ?? DEFAULT_FORK_FOLLOWS_SOURCE_GROUP,
   }
 }
 

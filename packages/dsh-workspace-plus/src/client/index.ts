@@ -32,6 +32,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { REMOTE_CONTRIBUTION, SERVICE, callRemote, normalizeSnapshot } from './remote.ts'
 import type { WorkspaceGroupsSnapshot } from './remote.ts'
+import { forkPlacement } from './data/forkPlacement.ts'
 import { registerCompareTab } from './compare.tsx'
 import { NS, en, zh } from './locales.ts'
 import { officialAddLabels, officialSessionLabels, timeLabel } from './official.ts'
@@ -282,6 +283,36 @@ export function apply(ctx: Context): void {
   }
 
   /**
+   * 分叉一条会话，并把分叉出的会话落进源会话所在的分组
+   *
+   * 分叉本身走官方 `uiWorkspace.forkSession`，另接一个 `onCreated` 取回子会话 id
+   * 官方自己的入口也传了这个回调（给埋点用），但插件接不到别人发起的调用——只有本包自己发起时才拿得到子会话 id
+   *
+   * 落位目标在分叉之前算好，回调一到就写：分叉的创建与挂载之间隔着一次往返
+   * 晚写的话子会话会先在未分组区露一下再跳进分组
+   *
+   * 读快照失败不能让分叉也跟着失败：分叉是用户的意图，归组只是附带的
+   * 因此那一格失败时按「没有可落的分组」处理，照常发起分叉
+   * @param sourceId - 分叉的来源会话
+   */
+  const forkSessionIntoSourceGroup = async (sourceId: string): Promise<void> => {
+    const uiWorkspace = ctx.get('uiWorkspace') as UiWorkspace
+    const placement = await loadGroups()
+      .then((groups) => forkPlacement({ sourceId, byWorkspace: groups.byWorkspace }))
+      .catch(() => undefined)
+    let moved: Promise<unknown> | undefined
+    await uiWorkspace.forkSession(sourceId as never, (created) => {
+      if (placement === undefined) return
+      moved = callSnapshot('moveSession', [placement.workspaceId, String(created), placement.groupId])
+    })
+    // 子会话已经建好了，归组失败不该冒泡成分叉失败
+    await moved?.catch((reason: unknown) => {
+      ctx.logger.warn('workspace-plus: fork placement failed')
+      ctx.logger.warn(reason)
+    })
+  }
+
+  /**
    * 官方会话操作的复用面
    *
    * 动作直接调官方服务（`ctx.uiWorkspace` 的分叉/归档、`ctx.sessions` 绑定的重命名）
@@ -310,9 +341,10 @@ export function apply(ctx: Context): void {
         if (!result.ok) throw new Error(result.error.message)
       },
       // 官方菜单把 fork 的失败咽掉（分叉失败不该弹错），这里保持同一行为
-      // 只发起，落位由宿主半边在会话创建时写（见 `src/forkPlacement.ts`）
+      // 开关打开时执行权收在本包：官方的分叉入口不给回调，而落位正需要子会话 id（见 `data/forkPlacement.ts`）
+      // 开关关着时这一支不会被调到，菜单里那一项仍在注册表手里
       forkSession: (sessionId) => {
-        void uiWorkspace.forkSession(sessionId as never).catch(() => {})
+        void forkSessionIntoSourceGroup(sessionId).catch(() => {})
       },
       archiveSession: (sessionId) => uiWorkspace.archiveSession(sessionId as never),
       // 文案在取用时才投影，不是在造这个对象时，绑定结果在调用时才读当前语言，写成取值器就能既复用对象、又让切换语言后的下一次读取拿到新译文

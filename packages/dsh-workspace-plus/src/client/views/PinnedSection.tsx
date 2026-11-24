@@ -73,6 +73,8 @@ export interface PinnedSectionProps {
   canPin: boolean
   /** 官方会话操作与文案 */
   official: OfficialSessionActions
+  /** 分叉项是否由本包接管，见 `SessionRowItemProps.forkFollowsSourceGroup` */
+  forkFollowsSourceGroup: boolean
   /** 官方右键菜单注册表 */
   registry: MenuRegistryFace
   /** 按图标键取字形，注册表条目只给键 */
@@ -142,6 +144,7 @@ export function PinnedSection({
   onTogglePin,
   canPin,
   official,
+  forkFollowsSourceGroup,
   registry,
   menuIcon,
   rowSlots,
@@ -262,6 +265,7 @@ export function PinnedSection({
               onTogglePin={onTogglePin}
               canPin={canPin}
               official={official}
+              forkFollowsSourceGroup={forkFollowsSourceGroup}
               registry={registry}
               menuIcon={menuIcon}
               rowSlots={rowSlots}
@@ -297,6 +301,7 @@ function PinnedRow({
   onTogglePin,
   canPin,
   official,
+  forkFollowsSourceGroup,
   registry,
   menuIcon,
   rowSlots,
@@ -312,6 +317,7 @@ function PinnedRow({
   onTogglePin: (sessionId: string) => void
   canPin: boolean
   official: OfficialSessionActions
+  forkFollowsSourceGroup: boolean
   registry: MenuRegistryFace
   menuIcon: ((key: string) => ReactNode) | undefined
   rowSlots: RowSlotFace
@@ -328,6 +334,7 @@ function PinnedRow({
       selected={entry.current}
       status={view.dot}
       official={official}
+      forkFollowsSourceGroup={forkFollowsSourceGroup}
       registry={registry}
       menuIcon={menuIcon}
       rowSlots={rowSlots}

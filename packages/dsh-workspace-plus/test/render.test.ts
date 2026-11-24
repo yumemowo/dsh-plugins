@@ -558,6 +558,8 @@ function sessionRowNode(options: {
       labels: officialSessionLabels(workspaceTranslate()),
       relativeTime: () => '',
     },
+    // 默认关：分叉项由注册表执行，行组件不接管
+    forkFollowsSourceGroup: false,
     registry: registryFace(),
     rowSlots: { render: () => null },
     standardHooks: {},
@@ -1898,6 +1900,7 @@ describe('hover cards', () => {
         labels: officialSessionLabels(workspaceTranslate()),
         relativeTime: () => '',
       },
+      forkFollowsSourceGroup: false,
     }))
 
     const harness = renderingDispatcher()
@@ -1946,6 +1949,7 @@ describe('hover cards', () => {
         labels: officialSessionLabels(workspaceTranslate()),
         relativeTime: () => '',
       },
+      forkFollowsSourceGroup: false,
     }))
 
     const harness = renderingDispatcher()

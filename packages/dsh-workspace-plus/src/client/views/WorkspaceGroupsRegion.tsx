@@ -69,7 +69,12 @@ import { regionLabels } from '../labels.ts'
 import type { RegionLabels } from '../labels.ts'
 import type { RegionTranslate } from '../locales.ts'
 import { PARENT_GROUP_ITEM, VIRTUAL_WORKSPACE_ITEM, VIRTUAL_WORKSPACE_PREFIX, parseParentGroupId } from '../menus.tsx'
-import { DEFAULT_PINNED_LIMIT, DEFAULT_PINNED_VISIBLE_COUNT, normalizeSnapshot } from '../remote.ts'
+import {
+  DEFAULT_FORK_FOLLOWS_SOURCE_GROUP,
+  DEFAULT_PINNED_LIMIT,
+  DEFAULT_PINNED_VISIBLE_COUNT,
+  normalizeSnapshot,
+} from '../remote.ts'
 import type { Group, WorkspaceGroupsSnapshot } from '../remote.ts'
 import { ALL_ENTRIES, sameAddress, virtualAddress, workspaceAddress } from '../../rootEntry.ts'
 import type { RootEntryAddress } from '../../rootEntry.ts'
@@ -335,6 +340,7 @@ const EMPTY_SNAPSHOT: WorkspaceGroupsSnapshot = {
   orderSlots: {},
   pinnedVisibleCount: DEFAULT_PINNED_VISIBLE_COUNT,
   pinnedLimit: DEFAULT_PINNED_LIMIT,
+  forkFollowsSourceGroup: DEFAULT_FORK_FOLLOWS_SOURCE_GROUP,
 }
 
 /**
@@ -1912,6 +1918,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
     canPin,
     onTogglePin: toggleSessionPin,
     copyId: copyNotice.copy,
+    forkFollowsSourceGroup: snapshot.forkFollowsSourceGroup,
   }
   // 列表侧收的是「编辑哪个对象」，浮层的形状因此不出这一层
   const edits: RegionListEdits = {
@@ -2044,6 +2051,7 @@ export function WorkspaceGroupsRegion(props: WorkspaceGroupsProps): ReactElement
             onTogglePin={toggleSessionPin}
             canPin={canPin}
             official={official}
+            forkFollowsSourceGroup={snapshot.forkFollowsSourceGroup}
             registry={props.menuRegistry()}
             menuIcon={props.menuIcon}
             rowSlots={props.rowSlots()}

@@ -45,6 +45,7 @@ export interface RowMenuHandle {
  * @param ownItems - 本包自有的条目，接在注册表那段之后
  * @param excluded - 注册表交来但本包自己实现、不该重复出现的条目 id
  * @param leading - 本包的条目里要排在注册表之前的那几项，没有时为空数组
+ * @param intercepted - 注册表交来但要由本包执行的条目 id，见 {@link RowMenuHandle.select}
  * @returns 菜单面
  */
 export function useRowMenu(
@@ -54,6 +55,7 @@ export function useRowMenu(
   ownItems: readonly MenuItem[],
   excluded: readonly string[] = [],
   leading: readonly MenuItem[] = [],
+  intercepted: readonly string[] = [],
 ): RowMenuHandle {
   const resolution = useRef<RegistryResolution | null>(null)
   const unsubscribe = useRef<(() => void) | null>(null)
@@ -79,13 +81,18 @@ export function useRowMenu(
   }, [registry, target])
 
   const select = useCallback((id: string, ownSelect: (id: string) => void): void => {
+    // 拦截项在条目表里、执行却归本包：官方那份执行时看不到要处理的东西（如分叉出的子会话 id）
+    if (intercepted.includes(id)) {
+      ownSelect(id)
+      return
+    }
     const opened = resolution.current
     if (opened !== null && views.some((view) => view.id === id)) {
       opened.select(id)
       return
     }
     ownSelect(id)
-  }, [views])
+  }, [views, intercepted])
 
   const shown = excluded.length === 0
     ? views

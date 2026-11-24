@@ -109,6 +109,13 @@ export interface SessionRowScope {
   canPin: boolean
   /** 切换一条会话的置顶 */
   onTogglePin: (sessionId: string) => void
+  /**
+   * 分叉出的会话是否跟随源会话落进同一个分组
+   *
+   * 关闭时分叉项交回注册表执行，与官方其他条目一样；打开时由本包接管，因为落位需要子会话 id
+   * 它只影响本包这个菜单入口，同一件事在别的入口下仍是宿主自己的行为
+   */
+  forkFollowsSourceGroup: boolean
 }
 
 /** 列表侧消费的派生布局 */
@@ -805,6 +812,7 @@ export function sessionRowElement(
       time={time}
       grouping={grouping}
       official={context.official}
+      forkFollowsSourceGroup={context.forkFollowsSourceGroup}
       registry={context.registry}
       menuIcon={context.menuIcon}
       rowSlots={context.rowSlots}

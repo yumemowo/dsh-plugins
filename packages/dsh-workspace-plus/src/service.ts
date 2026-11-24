@@ -1,5 +1,9 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { DEFAULT_PINNED_LIMIT, DEFAULT_PINNED_VISIBLE_COUNT } from './config.ts'
+import {
+  DEFAULT_FORK_FOLLOWS_SOURCE_GROUP,
+  DEFAULT_PINNED_LIMIT,
+  DEFAULT_PINNED_VISIBLE_COUNT,
+} from './config.ts'
 import type { WorkspacePlusConfig } from './config.ts'
 import { workspaceGroupsSpec } from './spec.ts'
 import type {
@@ -195,7 +199,7 @@ function sameOrder(a: readonly string[], b: readonly string[]): boolean {
  *
  * 每次变更都以整份快照返回，调用方直接替换本地状态即可，无需自行推导差量
  * @param ctx - 已就绪 `storageDomain` 的插件上下文
- * @param pinnedConfig - 两个可调项的现场读数，缺省时按各自默认值
+ * @param pinnedConfig - 三个可调项的现场读数，缺省时按各自默认值
  * @returns 服务实现
  */
 export async function createWorkspaceGroupsService(
@@ -233,15 +237,21 @@ export async function createWorkspaceGroupsService(
   const tree = domain.global
 
   /**
-   * 两个可调项，每次下发快照时现场读一次
+   * 三个可调项，每次下发快照时现场读一次
    *
    * 配置字段是 volatile 引用：改动不会重跑 apply，写进去的新值直接落在同一个引用上
    * 因此这里必须现读而不是在构造时取一次快照
    */
-  function pinnedSettings(): { pinnedVisibleCount: number; pinnedLimit: number } {
+  function runtimeSettings(): {
+    pinnedVisibleCount: number
+    pinnedLimit: number
+    forkFollowsSourceGroup: boolean
+  } {
     return {
       pinnedVisibleCount: pinnedConfig?.pinnedVisibleCount.get() ?? DEFAULT_PINNED_VISIBLE_COUNT,
       pinnedLimit: pinnedConfig?.pinnedLimit.get() ?? DEFAULT_PINNED_LIMIT,
+      forkFollowsSourceGroup:
+        pinnedConfig?.forkFollowsSourceGroup.get() ?? DEFAULT_FORK_FOLLOWS_SOURCE_GROUP,
     }
   }
 
@@ -266,7 +276,7 @@ export async function createWorkspaceGroupsService(
       nested: global.nested !== false,
       // 这一格由 schema 的默认值补齐，旧 global 里没有它时读到的就是空表
       orderSlots: global.orderSlots,
-      ...pinnedSettings(),
+      ...runtimeSettings(),
     }
   }
 

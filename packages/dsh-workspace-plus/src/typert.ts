@@ -357,7 +357,7 @@ export const TYPERT = {
           {
             name: 'WorkspaceGroupsSnapshot',
             declaration:
-              'export interface WorkspaceGroupsSnapshot { byWorkspace: Record<string, Group[]>; nesting: Record<string, WorkspaceNesting>; workspaceGroups: VirtualWorkspace[]; picker: PickerSnapshot; nested: boolean; orderSlots: Record<string, string[]>; pinnedVisibleCount: number; pinnedLimit: number }',
+              'export interface WorkspaceGroupsSnapshot { byWorkspace: Record<string, Group[]>; nesting: Record<string, WorkspaceNesting>; workspaceGroups: VirtualWorkspace[]; picker: PickerSnapshot; nested: boolean; orderSlots: Record<string, string[]>; pinnedVisibleCount: number; pinnedLimit: number; forkFollowsSourceGroup: boolean }',
           },
           {
             name: 'SnapshotChange',

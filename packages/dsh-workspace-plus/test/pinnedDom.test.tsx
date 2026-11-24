@@ -718,12 +718,14 @@ describe('menu on a pinned row', () => {
     await act(async () => root.unmount())
   })
 
-  it('opens a pinned row with the official fork instead of the row menu', async () => {
+  it('leaves the fork to the registry while the follow switch is off', async () => {
+    // 默认关：分叉项与其他官方条目一样交回注册表，落位是宿主自己的行为
     const executed: string[] = []
-    const opened: string[] = []
+    const forked: string[] = []
+    const seats = shellSeats()
     const { container, root } = await mount({
-      openSession: (id) => opened.push(id),
       menuRegistry: registryStub({ run: (id) => executed.push(id) }),
+      official: () => ({ ...seats.official(), forkSession: (id) => forked.push(id) }),
     })
 
     const row = pinnedRows(container)[0] as HTMLElement
@@ -732,8 +734,33 @@ describe('menu on a pinned row', () => {
       row.querySelector<HTMLButtonElement>('[data-wg-test-item="session.fork/fork"]')?.click()
     })
 
-    // 分叉由注册表执行，本包只把 id 交回去
     expect(executed).toEqual(['session.fork/fork'])
+    expect(forked).toEqual([])
+    await act(async () => root.unmount())
+  })
+
+  it('forks a pinned row here once the follow switch is on', async () => {
+    const executed: string[] = []
+    const forked: string[] = []
+    const opened: string[] = []
+    const seats = shellSeats()
+    const { container, root } = await mount({
+      openSession: (id) => opened.push(id),
+      loadGroups: async () => snapshot({ forkFollowsSourceGroup: true }),
+      menuRegistry: registryStub({ run: (id) => executed.push(id) }),
+      // 分叉由本包执行：官方的分叉入口不给回调，子会话 id 因此拿不到，落位也就无从判起
+      official: () => ({ ...seats.official(), forkSession: (id) => forked.push(id) }),
+    })
+
+    const row = pinnedRows(container)[0] as HTMLElement
+    await openRowMenu(row)
+    await act(async () => {
+      row.querySelector<HTMLButtonElement>('[data-wg-test-item="session.fork/fork"]')?.click()
+    })
+
+    expect(forked).toEqual(['a'])
+    // 条目仍在原位由注册表交来，只是不再由它执行
+    expect(executed).toEqual([])
     // 点菜单项不该连带把行打开：面板挂在行内，行本身也可点
     expect(opened).toEqual([])
     await act(async () => root.unmount())

@@ -1,5 +1,6 @@
 import { ALL_ENTRIES } from '../src/rootEntry.ts'
 import {
+  DEFAULT_FORK_FOLLOWS_SOURCE_GROUP,
   DEFAULT_PINNED_LIMIT,
   DEFAULT_PINNED_VISIBLE_COUNT,
 } from '../src/client/remote.ts'
@@ -33,6 +34,8 @@ export interface SnapshotInit {
   pinnedVisibleCount?: number
   /** 置顶数量上限，未给时取本包默认值 */
   pinnedLimit?: number
+  /** 分叉是否跟随源会话的分组，未给时取本包默认值（关闭） */
+  forkFollowsSourceGroup?: boolean
 }
 
 /** 造一份分组快照，未给的部分按空 */
@@ -46,6 +49,7 @@ export function snapshot(init: SnapshotInit = {}): WorkspaceGroupsSnapshot {
     orderSlots: init.orderSlots ?? {},
     pinnedVisibleCount: init.pinnedVisibleCount ?? DEFAULT_PINNED_VISIBLE_COUNT,
     pinnedLimit: init.pinnedLimit ?? DEFAULT_PINNED_LIMIT,
+    forkFollowsSourceGroup: init.forkFollowsSourceGroup ?? DEFAULT_FORK_FOLLOWS_SOURCE_GROUP,
   }
 }
 

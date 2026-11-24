@@ -48,7 +48,7 @@
 | --- | --- | --- |
 | 本包 | 置顶会话 / 取消置顶 | 官方工作区控制器的 `pinSession` / `unpinSession`，文案与图钉两态字形取自官方；**执行由本包分派**，因为要守 `pinnedLimit` |
 | 官方 | 重命名 | 打开重命名对话框，提交走官方会话对象 |
-| 官方 | 分叉会话 | 官方 `ctx.uiWorkspace.forkSession`，分叉后打开子会话 |
+| 官方 | 分叉会话 | 官方 `ctx.uiWorkspace.forkSession`，分叉后打开子会话。**开关 `forkFollowsSourceGroup` 打开时改由本包执行**：子会话 id 只有回调拿得到，而落位正需要它（见下文「分叉出的会话落在源会话的分组里」） |
 | 官方 | 归档会话 | 官方 `ctx.uiWorkspace.archiveSession` |
 | 官方 | 复制 Session ID | 官方的 `writeClipboard`，复制会话 id 本身，不打开它；成功与失败各弹一条提示 |
 | — | *分隔线* | 只在两段都存在时画 |
@@ -59,7 +59,7 @@
 
 **官方操作块不抄官方实现，而是直接复用官方接口**（本仓库「优先复用官方既有接口」约定的延伸）：
 
-- 动作调用官方既有面 —— 分叉/归档走 `ctx.uiWorkspace` 服务，重命名走 `ctx.sessions.binding(id).session.rename()`，复制走 primitives 的 `writeClipboard`。这几处正是官方会话菜单内部调的同一批接口，因此官方改行为时本包**自动跟随**，不需要重新对齐。
+- 动作调用官方既有面 —— 分叉/归档走 `ctx.uiWorkspace` 服务（分叉多接一个 `onCreated` 回调），重命名走 `ctx.sessions.binding(id).session.rename()`，复制走 primitives 的 `writeClipboard`。这几处正是官方会话菜单内部调的同一批接口，因此官方改行为时本包**自动跟随**，不需要重新对齐。
 - 文案与图标取官方 —— 绑官方 `workspace` 命名空间（`menu.pinSession` / `menu.unpinSession` / `rename` / `menu.fork` / `menu.archiveSession` / `menu.sessionId` / `toast.sessionIdCopied` / `rename.session.title` / `field.sessionName`），图标取 primitives 的 `IconPinOutlineRegular` / `IconPinFillRegular` / `IconEditOutlineRegular` / `IconBranchOutlineRegular` / `IconArchiveOutlineRegular` / `IconCopyOutlineRegular`。重命名对话框的「取消 / 关闭」是通用词，走官方 `common` 命名空间的回退链。
 - **只在类型层依赖官方包**：`package.json` 把 `dsh-client-ui-workspace` 列为 peer + dev 依赖，但只 import type。因此官方一旦改键名或改服务签名，`tsc` 会直接报错，而不是运行期静默显示成原始键名。运行期产物里不含官方代码（bundle 的 `require` 仍只有 primitives / react / react/jsx-runtime）。
 
@@ -97,23 +97,19 @@
 
 ### 分叉出的会话落在源会话的分组里
 
-分叉的落位由**宿主半边**写（`src/forkPlacement.ts`），不在本包的菜单分派里。`session/fork` 是宿主侧的 remote endpoint，发起方除了本包的菜单，还有官方侧边栏、聊天面板的回合末尾，以及任何走网关的调用方；它们都汇到宿主的会话创建路径，只有那一处能一次覆盖全部入口。菜单里的 `forkSession` 因此只负责发起，落位不归它管。
+**这是一个默认关闭的开关**（`forkFollowsSourceGroup`，见 [README 的配置说明](../README.md#分叉出的会话跟随源会话的分组)）。不打开时，分叉项与菜单里其他官方条目一样交回注册表执行，落位完全是宿主自己的行为，本包不参与。
 
-宿主的落位判据是三条同时成立：
+**宿主已经判不出这件事了。** dsh 从 `0.2.1-rc.3` 起把普通分叉做成独立会话：`SessionHeader.parentSession` 与列表里的 `parentId` 都不再写来源，`isSeeded` 是唯一留下的痕迹。早先那条监听 `session/created`、按 `header.parentSession` 判来源的宿主侧路径因此在当前宿主上**永远不会命中**——它也不报错，只是每次都在函数第一行返回。
 
-| 判据 | 排除的情况 |
-| --- | --- |
-| 创建时 `header.parentSession` 在场 | 新建会话 |
-| `header.origin` 不是 `subagent` | 子代理会话（它们在侧边栏本就不渲染，写进去只是一份读不到的归属） |
-| 创建那一刻该会话还不属于任何工作区 | 重新打开一条已存盘的会话 |
+打开之后，分叉条的**执行权收到本包**：官方也往 `session` 目标注册了一条，位置、文案与字形都对，但它的 `run` 直接调 `uiWorkspace.forkSession(id)`，插件看不到子会话 id。本包因此不排掉它，而是在原位接管执行——按投影后的 id（`session.fork/fork`）拦下来，改走自己那次 `uiWorkspace.forkSession(id, onCreated)`，`onCreated` 里就拿到了子会话 id。
 
-第三条不只为省一次写入。重新打开一条会话同样走会话创建，那时它早已挂在工作区名下；只按「有来源会话」判的话，用户手动把分叉出的会话移出分组之后，下次打开它又会被挪回去。
+落位判据只有一条：**源会话此刻在哪个分组**。判不出可落的分组（源会话自己就在未分组区）时什么都不写，分叉出的会话跟着它待在那儿。
 
-「创建那一刻」的读法有讲究：宿主的 `fork` 先建会话、再把它 `attachSession` 进工作区，而 `session/created` 在建立会话那一轮就发出了。因此成员表必须在监听器的**同步段**读定，不能挪到任何 `await` 之后——晚读读到的是挂载之后的值，新分叉会被判成「不是新分叉」而落不了位。`placeForkedSession` 因此把存储以 `Promise` 的形式收进来，等存储就绪这件事压在函数内部的 `await` 里。
+目标在分叉**之前**算好、回调一到就写。分叉的创建与挂载之间隔着一次往返，晚写的话分叉出的会话会先在未分组区露一下再跳进分组（那段空窗由 `settlingSessionIds` 摘出来，但那条判据只挡得住「已归组、尚未挂载」，挡不住「还没归组」）。
 
-源会话在未分组区时什么都不写：分叉出的会话跟着它待在未分组区，没有可落的归属。
+读快照失败或写入失败都只让这一步作废，不让分叉失败：分叉是用户的意图，归组只是附带的。子会话建好之后归组失败只留痕。
 
-写入失败只留痕，不让分叉失败：`session/created` 的同步抛出会否决这次会话创建并连带回滚，因此监听器整体异步并把 rejection 接住。
+**适用范围只有本包这一个菜单入口。** 打开后天平并不平：本包会话行（含置顶区里的行，两者用同一套菜单）分叉出的会话会归组，而官方侧边栏的省略号、聊天面板回合末尾的分叉按钮、`session.fork` 快捷键这三处都不经过本包，分叉出的会话仍由宿主自己落位。这是默认关闭的原因——同一个动作在不同入口下表现不同，而差异只在打开之后才出现。
 
 ### 快照迁入的调度规则
 
@@ -130,7 +126,7 @@
 
 ### 归位中的会话不画进未分组桶
 
-宿主分叉时先 `agents.create` 建会话、再 `attachSession` 挂进工作区（`dsh-api-session-controller/lib/index.js` 的 883 与 903 行附近），而本包的落位写在会话创建那一刻，因此挂载完成之前有一段空窗：**分组元数据里已经有它，工作区的成员表里还没有**。
+宿主分叉时先 `agents.create` 建会话、再 `attachSession` 挂进工作区（`dsh-api-session-controller/lib/types/commands.js` 的 `fork` 里那两步），而本包的落位写在官方 `onCreated` 回调里——那一步比 `attachSession` 更早，因此挂载完成之前有一段空窗：**分组元数据里已经有它，工作区的成员表里还没有**。
 
 那段时间它既不属于任何工作区、又立刻就会有归属。若按「不属于任何工作区」画进末尾的未分组桶，用户看到的就是「先出现在最下面，一跳回到源会话旁边」。
 
@@ -142,7 +138,7 @@
 
 **attach 本身没有完成信号可用作「落位时机」。** `workspace/follow` 确实会在 attach 后推一次 upsert，但它是官方内部流，本包只是被动消费；想「等 attach 完成再写落位」需要宿主的公开钩子，目前没有。
 
-因此这一版是「落位照旧在创建时写 + 归位中的会话暂不渲染」。两条各自成立：前者让元数据尽早就位，后者让空窗期不显示错位置。
+因此这一版是「落位尽早就写 + 归位中的会话暂不渲染」。两条各自成立：前者让元数据尽早就位，后者让空窗期不显示错位置。
 
 ## 行右键菜单
 

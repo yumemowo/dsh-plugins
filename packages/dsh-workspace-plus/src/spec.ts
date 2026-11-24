@@ -150,6 +150,8 @@ export const snapshotSchema = z.object({
   orderSlots: z.record(z.string(), z.array(z.string())),
   pinnedVisibleCount: z.number(),
   pinnedLimit: z.number(),
+  /** 分叉出的会话是否跟随源会话落进同一个分组 */
+  forkFollowsSourceGroup: z.boolean(),
 })
 
 export type Group = z.infer<typeof groupSchema>

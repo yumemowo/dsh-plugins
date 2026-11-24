@@ -97,24 +97,32 @@ describe('workspace groups service', () => {
       orderSlots: {},
       pinnedVisibleCount: 5,
       pinnedLimit: 20,
+      // 分叉跟随默认关：打开之后分叉动作在不同入口下的落位会不一致
+      forkFollowsSourceGroup: false,
     })
   })
 
-  it('reports the two pinned settings from the live config', async () => {
+  it('reports the runtime settings from the live config', async () => {
     const { ctx } = createFakeContext()
-    // 两个可调项是 volatile 引用：改动不重跑 apply，因此服务必须每次现读
+    // 可调项是 volatile 引用：改动不重跑 apply，因此服务必须每次现读
     let visible = 3
+    let forkFollows = false
     const config = {
       pinnedVisibleCount: { get: () => visible },
       pinnedLimit: { get: () => 7 },
+      forkFollowsSourceGroup: { get: () => forkFollows },
     } as unknown as Parameters<typeof createWorkspaceGroupsService>[1]
     const service = await createWorkspaceGroupsService(ctx, config)
 
     expect((await service.list()).pinnedVisibleCount).toBe(3)
     expect((await service.list()).pinnedLimit).toBe(7)
+    expect((await service.list()).forkFollowsSourceGroup).toBe(false)
 
     visible = 8
+    forkFollows = true
     expect((await service.list()).pinnedVisibleCount).toBe(8)
+    // 开关同样现读：打开之后下一次快照就带上
+    expect((await service.list()).forkFollowsSourceGroup).toBe(true)
   })
 
   it('creates a group under its workspace', async () => {
